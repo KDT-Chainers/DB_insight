@@ -1,0 +1,184 @@
+<html class="dark"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200;300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "inverse-surface": "#faf8ff",
+                        "primary-container": "#6e9fff",
+                        "surface-tint": "#85adff",
+                        "secondary-fixed-dim": "#ceb9ff",
+                        "on-primary-fixed-variant": "#002a62",
+                        "error-dim": "#d7383b",
+                        "on-primary-container": "#002150",
+                        "surface-variant": "#1c253e",
+                        "surface-container": "#11192e",
+                        "on-surface": "#dfe4fe",
+                        "on-secondary-fixed-variant": "#5f28c8",
+                        "on-tertiary": "#5b5f65",
+                        "on-error-container": "#ffa8a3",
+                        "secondary": "#ac8aff",
+                        "on-background": "#dfe4fe",
+                        "on-tertiary-container": "#53575c",
+                        "on-surface-variant": "#a5aac2",
+                        "on-secondary-container": "#d9c8ff",
+                        "outline": "#6f758b",
+                        "surface-dim": "#070d1f",
+                        "surface-container-highest": "#1c253e",
+                        "error": "#ff716c",
+                        "background": "#070d1f",
+                        "inverse-on-surface": "#4f5469",
+                        "on-secondary-fixed": "#40009b",
+                        "error-container": "#9f0519",
+                        "surface": "#070d1f",
+                        "primary-fixed": "#6e9fff",
+                        "tertiary": "#f6f9ff",
+                        "secondary-container": "#5516be",
+                        "on-tertiary-fixed": "#474c51",
+                        "on-tertiary-fixed-variant": "#64686e",
+                        "secondary-dim": "#8455ef",
+                        "outline-variant": "#41475b",
+                        "primary": "#85adff",
+                        "surface-container-high": "#171f36",
+                        "on-primary-fixed": "#000000",
+                        "tertiary-fixed-dim": "#e5e8ee",
+                        "primary-fixed-dim": "#5391ff",
+                        "tertiary-dim": "#e5e8ee",
+                        "tertiary-container": "#e7ebf1",
+                        "on-secondary": "#280067",
+                        "secondary-fixed": "#dac9ff",
+                        "primary-dim": "#699cff",
+                        "inverse-primary": "#005bc4",
+                        "surface-container-lowest": "#000000",
+                        "tertiary-fixed": "#f3f7fd",
+                        "on-error": "#490006",
+                        "surface-container-low": "#0c1326",
+                        "on-primary": "#002c66",
+                        "surface-bright": "#222b47"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "1.5rem",
+                        "full": "9999px"
+                    },
+                    "fontFamily": {
+                        "headline": ["Manrope"],
+                        "body": ["Manrope"],
+                        "label": ["Manrope"]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .glass-panel {
+            background: rgba(28, 37, 62, 0.6);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+        .nebula-glow {
+            background: radial-gradient(circle at 50% 50%, rgba(133, 173, 255, 0.15) 0%, rgba(172, 138, 255, 0.1) 30%, transparent 70%);
+        }
+        .grid-pattern {
+            background-image: linear-gradient(to right, rgba(65, 71, 91, 0.1) 1px, transparent 1px),
+                              linear-gradient(to bottom, rgba(65, 71, 91, 0.1) 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+    </style>
+</head>
+<body class="bg-surface-dim text-on-surface font-body overflow-hidden">
+<!-- Atmospheric Background Layers -->
+<div class="fixed inset-0 grid-pattern pointer-events-none"></div>
+<div class="fixed inset-0 nebula-glow pointer-events-none"></div>
+<div class="fixed -top-40 -left-40 w-96 h-96 bg-primary/20 blur-[120px] rounded-full"></div>
+<div class="fixed -bottom-40 -right-40 w-96 h-96 bg-secondary/10 blur-[120px] rounded-full"></div>
+<main class="relative z-10 min-h-screen flex flex-col items-center justify-center p-6">
+<!-- Brand Header (Top-Level Suppression applied as per Login instructions) -->
+<div class="absolute top-12 flex flex-col items-center">
+<h1 class="text-3xl font-black tracking-tighter text-blue-100 font-headline">DB_insight</h1>
+<p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-primary mt-2">Local Intelligence Protocol</p>
+</div>
+<!-- Login Card -->
+<div class="glass-panel w-full max-w-md rounded-xl p-10 shadow-[0_0_50px_rgba(0,0,0,0.3)] flex flex-col items-center gap-8 border border-white/5">
+<!-- Profile Section -->
+<div class="relative">
+<div class="w-24 h-24 rounded-full p-1 bg-gradient-to-tr from-primary to-secondary overflow-hidden">
+<div class="w-full h-full rounded-full bg-surface-container overflow-hidden">
+<img alt="User Avatar" class="w-full h-full object-cover" data-alt="professional male portrait with minimalist lighting, high-end corporate aesthetic, sharp focus, clean indigo and black studio background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDcqVcHTqkmru32FXrnszNK91vNN86khTYULzjknfsu03LA7IjQCbU2NZfQgRYxNJES1FK3RU7hF-9ZDS6A2f5QlKRNrZPNDOkZC792fkVNbGhW9CR6fKcjn7diXhs4Ej7I4jX8FD4I0uUyUj7kBL8OeYnnDUXfD2MlFSC22XcdaE49AfMEXSJ-gY_NMRmVeJMAnXDMJxaDdhLu5As7XzHwD57_-9wg8tYJawyfyeoVt0RTEeAmqDTPEy-r3POiVEF21kXwe_gidOvh"/>
+</div>
+</div>
+<div class="absolute bottom-0 right-0 bg-primary text-on-primary-fixed w-7 h-7 rounded-full flex items-center justify-center shadow-lg border-2 border-surface-container-highest">
+<span class="material-symbols-outlined text-sm font-bold" style="font-variation-settings: 'FILL' 1;">verified</span>
+</div>
+</div>
+<div class="text-center">
+<h2 class="text-xl font-bold text-on-surface tracking-tight">Security Clearance Required</h2>
+<p class="text-sm text-on-surface-variant mt-1">Authorized access to Neural Explorer</p>
+</div>
+<!-- Input Fields -->
+<div class="w-full space-y-6">
+<div class="relative group">
+<label class="text-[10px] uppercase font-bold tracking-widest text-primary mb-2 block ml-1">Access Token</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-0 top-1/2 -translate-y-1/2 text-on-surface-variant group-focus-within:text-primary transition-colors">key</span>
+<input class="w-full bg-transparent border-b border-outline-variant py-3 pl-8 text-on-surface focus:outline-none focus:border-primary transition-all placeholder:text-outline/40" placeholder="••••••••••••" type="password"/>
+<div class="absolute bottom-0 left-0 w-0 h-[2px] bg-primary transition-all duration-500 group-focus-within:w-full"></div>
+</div>
+</div>
+<button class="w-full h-14 rounded-full bg-gradient-to-r from-primary to-secondary text-on-primary-fixed font-bold tracking-tight shadow-[0_4px_20px_rgba(133,173,255,0.3)] hover:shadow-[0_4px_30px_rgba(172,138,255,0.5)] transition-all active:scale-95 flex items-center justify-center gap-2 group">
+                    Initialize Insight
+                    <span class="material-symbols-outlined transition-transform group-hover:translate-x-1">arrow_forward</span>
+</button>
+</div>
+<!-- Secondary Actions -->
+<div class="flex justify-between w-full px-1">
+<button class="text-xs text-on-surface-variant hover:text-primary transition-colors font-medium">Reset Credentials</button>
+<button class="text-xs text-on-surface-variant hover:text-primary transition-colors font-medium">Protocol Docs</button>
+</div>
+</div>
+<!-- System Intelligence Footer (Bento Style Layout for Stats) -->
+<div class="mt-12 flex items-center gap-4">
+<div class="glass-panel px-4 py-2 rounded-full border border-white/5 flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-primary animate-pulse"></div>
+<span class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Node Status: <span class="text-primary">Optimal</span></span>
+</div>
+<div class="glass-panel px-4 py-2 rounded-full border border-white/5 flex items-center gap-2">
+<span class="material-symbols-outlined text-xs text-secondary" style="font-variation-settings: 'FILL' 1;">verified_user</span>
+<span class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Encrypted</span>
+</div>
+</div>
+</main>
+<!-- Side Status Bar (Right side aesthetic) -->
+<div class="fixed right-6 top-1/2 -translate-y-1/2 flex flex-col gap-8 opacity-20 hover:opacity-50 transition-opacity">
+<div class="flex flex-col items-center gap-1">
+<span class="text-[8px] vertical-text font-bold uppercase tracking-[0.4em] text-outline">Latency</span>
+<div class="w-[1px] h-12 bg-outline-variant"></div>
+<span class="text-[10px] font-mono text-primary">04ms</span>
+</div>
+<div class="flex flex-col items-center gap-1">
+<span class="text-[8px] vertical-text font-bold uppercase tracking-[0.4em] text-outline">Uptime</span>
+<div class="w-[1px] h-12 bg-outline-variant"></div>
+<span class="text-[10px] font-mono text-primary">99.9%</span>
+</div>
+</div>
+<!-- Decorative Corner Accents -->
+<div class="fixed bottom-0 left-0 p-8">
+<div class="flex items-center gap-4">
+<div class="w-8 h-8 rounded-lg bg-surface-container-highest border border-white/5 flex items-center justify-center">
+<span class="material-symbols-outlined text-sm text-primary">terminal</span>
+</div>
+<div class="hidden md:block">
+<p class="text-[8px] font-bold text-outline uppercase tracking-widest">Active Sequence</p>
+<p class="text-[10px] font-mono text-on-surface-variant">LOG_AUTH_INIT_PRIME</p>
+</div>
+</div>
+</div>
+</body></html>

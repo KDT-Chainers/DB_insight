@@ -1,0 +1,632 @@
+<!doctype html>
+
+<html class="dark" lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Main - AI Mode Search Results</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@200;300;400;500;600;700;800&amp;display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+      rel="stylesheet"
+    />
+    <script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "surface-container-highest": "#1c253e",
+              "surface-tint": "#85adff",
+              "tertiary-fixed": "#f3f7fd",
+              "on-background": "#dfe4fe",
+              "on-secondary-fixed": "#40009b",
+              outline: "#6f758b",
+              surface: "#070d1f",
+              "primary-fixed-dim": "#5391ff",
+              "on-tertiary-fixed": "#474c51",
+              "tertiary-container": "#e7ebf1",
+              "surface-container-low": "#0c1326",
+              "secondary-fixed-dim": "#ceb9ff",
+              error: "#ff716c",
+              "on-tertiary": "#5b5f65",
+              "primary-dim": "#699cff",
+              "outline-variant": "#41475b",
+              "on-primary-fixed": "#000000",
+              "on-error-container": "#ffa8a3",
+              "on-surface": "#dfe4fe",
+              tertiary: "#f6f9ff",
+              "surface-container-high": "#171f36",
+              "inverse-primary": "#005bc4",
+              "surface-dim": "#070d1f",
+              "inverse-surface": "#faf8ff",
+              "secondary-fixed": "#dac9ff",
+              "on-secondary-fixed-variant": "#5f28c8",
+              "on-primary-container": "#002150",
+              "inverse-on-surface": "#4f5469",
+              "secondary-container": "#5516be",
+              "error-dim": "#d7383b",
+              "on-secondary": "#280067",
+              "secondary-dim": "#8455ef",
+              "surface-container-lowest": "#000000",
+              "primary-fixed": "#6e9fff",
+              primary: "#85adff",
+              "on-primary": "#002c66",
+              secondary: "#ac8aff",
+              "on-secondary-container": "#d9c8ff",
+              "on-error": "#490006",
+              "tertiary-fixed-dim": "#e5e8ee",
+              "on-tertiary-fixed-variant": "#64686e",
+              "on-tertiary-container": "#53575c",
+              "on-surface-variant": "#a5aac2",
+              "tertiary-dim": "#e5e8ee",
+              "surface-variant": "#1c253e",
+              "surface-container": "#11192e",
+              background: "#070d1f",
+              "surface-bright": "#222b47",
+              "error-container": "#9f0519",
+              "primary-container": "#6e9fff",
+              "on-primary-fixed-variant": "#002a62",
+            },
+            borderRadius: {
+              DEFAULT: "0.25rem",
+              lg: "0.5rem",
+              xl: "0.75rem",
+              full: "9999px",
+            },
+            fontFamily: {
+              headline: ["Manrope"],
+              body: ["Manrope"],
+              label: ["Manrope"],
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      body {
+        font-family: "Manrope", sans-serif;
+      }
+      .material-symbols-outlined {
+        font-variation-settings:
+          "FILL" 0,
+          "wght" 400,
+          "GRAD" 0,
+          "opsz" 24;
+      }
+      .glow-violet {
+        box-shadow: 0 0 20px rgba(172, 138, 255, 0.15);
+      }
+      .ai-shimmer {
+        background: linear-gradient(
+          90deg,
+          transparent,
+          rgba(172, 138, 255, 0.1),
+          transparent
+        );
+        background-size: 200% 100%;
+      }
+    </style>
+  </head>
+  <body class="bg-surface text-on-surface selection:bg-secondary/30">
+    <!-- TopNavBar -->
+    <header
+      class="fixed top-0 w-full z-50 bg-[#070d1f]/60 backdrop-blur-xl shadow-[0_4px_30px_rgba(172,138,255,0.1)]"
+    >
+      <div
+        class="flex justify-between items-center px-8 h-16 w-full font-manrope tracking-tight"
+      >
+        <div class="flex items-center gap-8">
+          <span
+            class="text-xl font-bold tracking-tighter bg-gradient-to-r from-violet-400 to-fuchsia-400 bg-clip-text text-transparent"
+            >Obsidian Intelligence</span
+          >
+          <div class="hidden md:flex items-center gap-6">
+            <a
+              class="text-slate-400 hover:text-slate-200 transition-colors"
+              href="#"
+              >Models</a
+            >
+            <a
+              class="text-slate-400 hover:text-slate-200 transition-colors"
+              href="#"
+              >Datasets</a
+            >
+            <a
+              class="text-slate-400 hover:text-slate-200 transition-colors"
+              href="#"
+              >Neural Logs</a
+            >
+          </div>
+        </div>
+        <div class="flex items-center gap-4">
+          <div class="relative group">
+            <span
+              class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-violet-400/50"
+              >search</span
+            >
+            <input
+              class="bg-white/5 border-none rounded-full pl-10 pr-4 py-1.5 text-sm w-64 focus:ring-1 focus:ring-violet-500/50 transition-all outline-none"
+              placeholder="Neural Search..."
+              type="text"
+            />
+          </div>
+          <button
+            class="p-2 text-slate-400 hover:bg-white/5 rounded-full transition-all duration-300"
+          >
+            <span class="material-symbols-outlined" data-icon="notifications"
+              >notifications</span
+            >
+          </button>
+          <button
+            class="p-2 text-slate-400 hover:bg-white/5 rounded-full transition-all duration-300"
+          >
+            <span class="material-symbols-outlined" data-icon="settings"
+              >settings</span
+            >
+          </button>
+          <div
+            class="h-8 w-8 rounded-full overflow-hidden border border-violet-500/30"
+          >
+            <img
+              alt="User intelligence profile"
+              class="w-full h-full object-cover"
+              data-alt="close-up portrait of a high-tech digital human avatar with subtle glowing violet data patterns on skin"
+              src="https://lh3.googleusercontent.com/aida-public/AB6AXuAWDgtLqZ56mIoA7MpQxkBT9vs4LezyA2Vl_ffrHCq1hQGxr5JT8dChFMheDN8h8x0roJGnCIVq6jDi4swxDazBfwUPm6MamFYTxesLaAfMiDO3zV5cBUGq19ztmCiWwKgDK6YLRXrZY0IQzLgjLOx0KlBI1j1nj5hADNXW7lMVUOkjlLOM_2qRPPOVQF4e1RVlhZptEyRhyD0m0aHjGW2F46tP9M-_kZmHhV0diXhjkTOqMr4y2jIH1nEpIxXWrcStaIjROXWZHZ9e"
+            />
+          </div>
+        </div>
+      </div>
+      <div
+        class="bg-gradient-to-b from-violet-500/10 to-transparent h-[1px]"
+      ></div>
+    </header>
+    <!-- SideNavBar -->
+    <aside
+      class="fixed left-0 top-0 h-full w-64 z-40 bg-[#000000] shadow-[10px_0_40px_rgba(172,138,255,0.05)] border-r border-outline-variant/10"
+    >
+      <div class="flex flex-col h-full py-8">
+        <div class="px-6 mb-10">
+          <div class="flex items-center gap-3 mb-2">
+            <div class="w-2 h-2 rounded-full bg-violet-400 animate-pulse"></div>
+            <span class="text-lg font-black text-violet-400"
+              >Core Terminal</span
+            >
+          </div>
+          <p
+            class="text-[10px] uppercase tracking-[0.2em] text-violet-400/60 font-bold"
+          >
+            AI Mode Active
+          </p>
+        </div>
+        <nav class="flex-1 space-y-1">
+          <a
+            class="bg-gradient-to-r from-violet-900/40 to-transparent text-violet-200 border-l-4 border-violet-500 flex items-center gap-3 px-6 py-4 font-manrope text-sm font-medium uppercase tracking-widest group"
+            href="#"
+          >
+            <span
+              class="material-symbols-outlined text-violet-400"
+              data-icon="search"
+              >search</span
+            >
+            <span class="group-hover:translate-x-1 duration-300"
+              >Neural Search</span
+            >
+          </a>
+          <a
+            class="text-slate-500 flex items-center gap-3 px-6 py-4 font-manrope text-sm font-medium uppercase tracking-widest hover:bg-violet-900/20 hover:text-violet-300 transition-all group"
+            href="#"
+          >
+            <span class="material-symbols-outlined" data-icon="folder_open"
+              >folder_open</span
+            >
+            <span class="group-hover:translate-x-1 duration-300"
+              >File Vault</span
+            >
+          </a>
+          <a
+            class="text-slate-500 flex items-center gap-3 px-6 py-4 font-manrope text-sm font-medium uppercase tracking-widest hover:bg-violet-900/20 hover:text-violet-300 transition-all group"
+            href="#"
+          >
+            <span class="material-symbols-outlined" data-icon="memory"
+              >memory</span
+            >
+            <span class="group-hover:translate-x-1 duration-300"
+              >Processing</span
+            >
+          </a>
+          <a
+            class="text-slate-500 flex items-center gap-3 px-6 py-4 font-manrope text-sm font-medium uppercase tracking-widest hover:bg-violet-900/20 hover:text-violet-300 transition-all group"
+            href="#"
+          >
+            <span class="material-symbols-outlined" data-icon="history"
+              >history</span
+            >
+            <span class="group-hover:translate-x-1 duration-300">History</span>
+          </a>
+          <a
+            class="text-slate-500 flex items-center gap-3 px-6 py-4 font-manrope text-sm font-medium uppercase tracking-widest hover:bg-violet-900/20 hover:text-violet-300 transition-all group"
+            href="#"
+          >
+            <span class="material-symbols-outlined" data-icon="insights"
+              >insights</span
+            >
+            <span class="group-hover:translate-x-1 duration-300"
+              >Analytics</span
+            >
+          </a>
+        </nav>
+        <div class="px-6 mt-auto pt-8">
+          <button
+            class="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-secondary-container to-secondary text-on-secondary font-bold text-xs tracking-widest uppercase hover:opacity-90 active:scale-95 transition-all glow-violet"
+          >
+            Initialize Sync
+          </button>
+          <div class="mt-8 space-y-4">
+            <a
+              class="flex items-center gap-3 text-slate-500 hover:text-violet-300 transition-all text-xs tracking-widest uppercase font-bold"
+              href="#"
+            >
+              <span class="material-symbols-outlined text-sm" data-icon="help"
+                >help</span
+              >
+              Support
+            </a>
+            <a
+              class="flex items-center gap-3 text-slate-500 hover:text-violet-300 transition-all text-xs tracking-widest uppercase font-bold"
+              href="#"
+            >
+              <span
+                class="material-symbols-outlined text-sm"
+                data-icon="sensors"
+                >sensors</span
+              >
+              Status
+            </a>
+          </div>
+        </div>
+      </div>
+    </aside>
+    <!-- Main Content -->
+    <main class="pl-64 pt-16 min-h-screen">
+      <div class="p-10 max-w-7xl mx-auto">
+        <!-- Header Section -->
+        <div class="mb-12 relative">
+          <div
+            class="absolute -top-20 -left-20 w-96 h-96 bg-secondary/10 blur-[100px] rounded-full"
+          ></div>
+          <div class="relative z-10">
+            <span
+              class="text-secondary text-xs font-bold tracking-[0.3em] uppercase mb-4 block"
+              >Refined Intelligence Output</span
+            >
+            <h1
+              class="text-5xl font-extrabold tracking-tighter text-on-surface mb-4"
+            >
+              Neural Search Results
+            </h1>
+            <div class="flex items-center gap-4 text-on-surface-variant">
+              <span
+                class="flex items-center gap-2 px-3 py-1 bg-surface-container-high rounded-full border border-outline-variant/20 text-sm"
+              >
+                <span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+                342 Matches Found
+              </span>
+              <span class="text-sm">Processed in 124ms</span>
+            </div>
+          </div>
+        </div>
+        <!-- Bento Grid Layout -->
+        <div class="grid grid-cols-12 gap-6">
+          <!-- AI Insight Card (Feature) -->
+          <div
+            class="col-span-12 lg:col-span-8 bg-surface-variant/60 backdrop-blur-2xl rounded-xl p-8 border border-secondary/20 relative overflow-hidden group"
+          >
+            <div class="absolute top-0 right-0 p-4">
+              <span
+                class="material-symbols-outlined text-secondary opacity-50 text-4xl"
+                style="font-variation-settings: &quot;FILL&quot; 1"
+                >auto_awesome</span
+              >
+            </div>
+            <div class="relative z-10">
+              <h3
+                class="text-secondary text-xs font-black tracking-widest uppercase mb-6"
+              >
+                AI Contextual Synthesis
+              </h3>
+              <p
+                class="text-2xl font-light text-on-surface leading-relaxed mb-8"
+              >
+                Based on your recent
+                <span class="text-secondary font-medium">Neural Logs</span> and
+                the refinement of
+                <span class="text-secondary font-medium">Processing Nodes</span
+                >, the system has identified a strong correlation between the
+                selected datasets and your current trajectory in "Predictive
+                Analytics Phase 4".
+              </p>
+              <div class="flex gap-3">
+                <button
+                  class="bg-secondary text-on-secondary px-6 py-2.5 rounded-full font-bold text-sm tracking-tight active:scale-95 transition-all"
+                >
+                  Expand Synthesis
+                </button>
+                <button
+                  class="bg-surface-container-highest text-on-surface px-6 py-2.5 rounded-full font-bold text-sm tracking-tight border border-outline-variant/30 hover:bg-surface-bright transition-all"
+                >
+                  Audit Logic
+                </button>
+              </div>
+            </div>
+          </div>
+          <!-- Active Model Stats -->
+          <div
+            class="col-span-12 lg:col-span-4 bg-surface-container-high rounded-xl p-6 border border-outline-variant/10 flex flex-col justify-between"
+          >
+            <div>
+              <h4
+                class="text-on-surface-variant text-[10px] font-black tracking-[0.2em] uppercase mb-6"
+              >
+                Model Integrity
+              </h4>
+              <div class="space-y-6">
+                <div>
+                  <div class="flex justify-between text-xs mb-2">
+                    <span class="text-on-surface/80">Coherence Level</span>
+                    <span class="text-secondary">98.4%</span>
+                  </div>
+                  <div
+                    class="h-1.5 w-full bg-surface-container-highest rounded-full overflow-hidden"
+                  >
+                    <div
+                      class="h-full bg-secondary w-[98%] shadow-[0_0_10px_rgba(172,138,255,0.5)]"
+                    ></div>
+                  </div>
+                </div>
+                <div>
+                  <div class="flex justify-between text-xs mb-2">
+                    <span class="text-on-surface/80">Latency Shift</span>
+                    <span class="text-secondary">-12ms</span>
+                  </div>
+                  <div
+                    class="h-1.5 w-full bg-surface-container-highest rounded-full overflow-hidden"
+                  >
+                    <div
+                      class="h-full bg-secondary w-[75%] shadow-[0_0_10px_rgba(172,138,255,0.5)]"
+                    ></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="mt-8 pt-6 border-t border-outline-variant/10">
+              <div class="flex items-center gap-3">
+                <div class="p-2 bg-secondary/10 rounded-lg">
+                  <span
+                    class="material-symbols-outlined text-secondary"
+                    style="font-variation-settings: &quot;FILL&quot; 1"
+                    >bolt</span
+                  >
+                </div>
+                <div>
+                  <p class="text-xs font-bold text-on-surface">Obsidian-v4.2</p>
+                  <p class="text-[10px] text-on-surface-variant">
+                    LATEST REFINEMENT
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- Result Card 1 -->
+          <div
+            class="col-span-12 md:col-span-6 lg:col-span-4 group cursor-pointer"
+          >
+            <div
+              class="bg-surface-container-low rounded-xl overflow-hidden border border-outline-variant/10 hover:border-secondary/30 transition-all duration-500 hover:-translate-y-1"
+            >
+              <div class="h-48 relative">
+                <img
+                  alt="Neural Visualization"
+                  class="w-full h-full object-cover grayscale opacity-50 group-hover:grayscale-0 group-hover:opacity-80 transition-all duration-700"
+                  data-alt="Abstract 3D neural network visualization with glowing violet nodes and interconnected filaments against a deep obsidian background"
+                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuBiusmUQ-dF9m6N2dat_eOi8PeAoliSDsbJq4jNjPUMeLdXktUuZ0dHPASMIqM6HxhOFd_BRotNPPM6fK9p-x5FPhrSJnCnR7zxeBt-3NQMG1LK8RWuj3Q2N_XJXFJcQcNIcCpmZrMUB1BkVkXnIYeipnjBZkJfeYwHyIQcQC064JM4zpL5IVLiQEzGmp8JHFb4G2I8EKZAnkfPT1R_WDK_WmT290fPuMpL6yQ0FeI38nkMQ2cxf8FvKKbnJKTS75oONti5_kSDnsRs"
+                />
+                <div
+                  class="absolute inset-0 bg-gradient-to-t from-surface-container-low to-transparent"
+                ></div>
+                <span
+                  class="absolute top-4 left-4 bg-secondary/20 backdrop-blur-md border border-secondary/40 text-secondary text-[10px] font-bold px-2 py-1 rounded"
+                  >DATAPACK_772</span
+                >
+              </div>
+              <div class="p-6">
+                <h3
+                  class="text-lg font-bold text-on-surface mb-2 group-hover:text-secondary transition-colors"
+                >
+                  Quantum Memory Allocation
+                </h3>
+                <p
+                  class="text-sm text-on-surface-variant line-clamp-2 mb-4 leading-relaxed"
+                >
+                  Structural analysis of distributed memory nodes across the
+                  fuchsia quadrant. High redundancy detected in sector 9.
+                </p>
+                <div class="flex justify-between items-center">
+                  <span
+                    class="text-[10px] font-bold text-outline uppercase tracking-widest"
+                    >Modified: 2h ago</span
+                  >
+                  <span
+                    class="material-symbols-outlined text-on-surface-variant group-hover:translate-x-1 transition-transform"
+                    >arrow_forward</span
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- Result Card 2 -->
+          <div
+            class="col-span-12 md:col-span-6 lg:col-span-4 group cursor-pointer"
+          >
+            <div
+              class="bg-surface-container-low rounded-xl overflow-hidden border border-outline-variant/10 hover:border-secondary/30 transition-all duration-500 hover:-translate-y-1"
+            >
+              <div class="h-48 relative">
+                <img
+                  alt="Processing stream"
+                  class="w-full h-full object-cover grayscale opacity-50 group-hover:grayscale-0 group-hover:opacity-80 transition-all duration-700"
+                  data-alt="Fluid simulation of liquid data streams flowing in violet and dark indigo with ethereal bioluminescent glow effects"
+                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuDSfkJz1BrXhj8JKwbl2czpkysEDmYSvRLX2WptNVJq5GJscS_bMt0Yw0409-4Mz39isL0K_hQ8FdKu5lqkvABJ8n0vJHnxybkP8aHVBwk42jjs9TxiSkwRM5gmboyIByUnkBup1-2dfsuTIA2ZL_U1UW1oUgTyhfO9XnDgBvSbCDE4_wPvHvzmY6pcCN5UCVYvdxM_xBYnyJlEGKcxDuMKDjNexPXPd4pe3wHFrDnUjk-UKfmY889GTbwLU_SFHcsBdwqZzG8nKGRr"
+                />
+                <div
+                  class="absolute inset-0 bg-gradient-to-t from-surface-container-low to-transparent"
+                ></div>
+                <span
+                  class="absolute top-4 left-4 bg-secondary/20 backdrop-blur-md border border-secondary/40 text-secondary text-[10px] font-bold px-2 py-1 rounded"
+                  >LOG_STREAM</span
+                >
+              </div>
+              <div class="p-6">
+                <h3
+                  class="text-lg font-bold text-on-surface mb-2 group-hover:text-secondary transition-colors"
+                >
+                  Cognitive Load Distribution
+                </h3>
+                <p
+                  class="text-sm text-on-surface-variant line-clamp-2 mb-4 leading-relaxed"
+                >
+                  Real-time balancing of heuristic weights in active thinking
+                  cycles. Optimization protocol initiated.
+                </p>
+                <div class="flex justify-between items-center">
+                  <span
+                    class="text-[10px] font-bold text-outline uppercase tracking-widest"
+                    >Status: Active</span
+                  >
+                  <span
+                    class="material-symbols-outlined text-on-surface-variant group-hover:translate-x-1 transition-transform"
+                    >arrow_forward</span
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- Result Card 3 -->
+          <div
+            class="col-span-12 md:col-span-6 lg:col-span-4 group cursor-pointer"
+          >
+            <div
+              class="bg-surface-container-low rounded-xl overflow-hidden border border-outline-variant/10 hover:border-secondary/30 transition-all duration-500 hover:-translate-y-1"
+            >
+              <div class="h-48 relative">
+                <img
+                  alt="Data Vault"
+                  class="w-full h-full object-cover grayscale opacity-50 group-hover:grayscale-0 group-hover:opacity-80 transition-all duration-700"
+                  data-alt="Macro photography of futuristic black crystalline structures with violet internal light reflections and sharp geometric edges"
+                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuBXIIVVDVBdpsRK-VyjwcBDfX5m0q1aGVB7lNkqsmY3dnaihm7xe0kRv0F5SB93RYrEFiaVKDroBKUb0yqjB14Q3hUTiu_9wYEmnleWOuLQgAic_0PcIER1IlnGP2ap7aQAAAnTRu7-AujKhHzk5MJQmkbfFPbVlZfq7edimXxeOIbqjUX22lvKQ8LbHkTBm_mOcQeleA8WE2d-S1rVKWTZYJFPQt29wNzi9wc-qgwniGitShIKul7FnudpG4SUfJyEO8K5OwYnH2E6"
+                />
+                <div
+                  class="absolute inset-0 bg-gradient-to-t from-surface-container-low to-transparent"
+                ></div>
+                <span
+                  class="absolute top-4 left-4 bg-secondary/20 backdrop-blur-md border border-secondary/40 text-secondary text-[10px] font-bold px-2 py-1 rounded"
+                  >VAULT_ARCHIVE</span
+                >
+              </div>
+              <div class="p-6">
+                <h3
+                  class="text-lg font-bold text-on-surface mb-2 group-hover:text-secondary transition-colors"
+                >
+                  Crystalline Knowledge Base
+                </h3>
+                <p
+                  class="text-sm text-on-surface-variant line-clamp-2 mb-4 leading-relaxed"
+                >
+                  Deep-storage retrieval of historical training sets. Integrity
+                  verified through multi-pass hash check.
+                </p>
+                <div class="flex justify-between items-center">
+                  <span
+                    class="text-[10px] font-bold text-outline uppercase tracking-widest"
+                    >Size: 4.2 PB</span
+                  >
+                  <span
+                    class="material-symbols-outlined text-on-surface-variant group-hover:translate-x-1 transition-transform"
+                    >arrow_forward</span
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- Action Strip (Bottom) -->
+          <div
+            class="col-span-12 bg-surface-container-highest/40 border border-outline-variant/20 rounded-xl p-4 flex items-center justify-between"
+          >
+            <div class="flex items-center gap-6">
+              <p class="text-xs text-on-surface-variant font-medium">
+                Page 1 of 34
+              </p>
+              <div class="flex gap-2">
+                <button
+                  class="w-8 h-8 rounded-lg bg-surface-container flex items-center justify-center text-on-surface-variant hover:text-secondary transition-colors border border-outline-variant/10"
+                >
+                  1
+                </button>
+                <button
+                  class="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center text-on-secondary font-bold"
+                >
+                  2
+                </button>
+                <button
+                  class="w-8 h-8 rounded-lg bg-surface-container flex items-center justify-center text-on-surface-variant hover:text-secondary transition-colors border border-outline-variant/10"
+                >
+                  3
+                </button>
+                <span class="text-on-surface-variant px-1">...</span>
+                <button
+                  class="w-8 h-8 rounded-lg bg-surface-container flex items-center justify-center text-on-surface-variant hover:text-secondary transition-colors border border-outline-variant/10"
+                >
+                  34
+                </button>
+              </div>
+            </div>
+            <div class="flex gap-4">
+              <button
+                class="flex items-center gap-2 px-4 py-2 text-xs font-bold uppercase tracking-widest text-on-surface-variant hover:text-secondary transition-all"
+              >
+                Export Manifest
+                <span class="material-symbols-outlined text-sm">download</span>
+              </button>
+              <button
+                class="flex items-center gap-2 px-4 py-2 text-xs font-bold uppercase tracking-widest text-on-surface-variant hover:text-secondary transition-all"
+              >
+                Neural Sync
+                <span class="material-symbols-outlined text-sm">sync</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+    <!-- Floating AI Sparkle -->
+    <div class="fixed bottom-10 right-10 z-50">
+      <button
+        class="w-14 h-14 rounded-full bg-gradient-to-tr from-secondary to-fuchsia-500 text-on-secondary shadow-[0_0_30px_rgba(172,138,255,0.4)] flex items-center justify-center active:scale-90 transition-all group"
+      >
+        <span
+          class="material-symbols-outlined text-3xl group-hover:rotate-12 transition-transform"
+          style="font-variation-settings: &quot;FILL&quot; 1"
+          >auto_awesome</span
+        >
+      </button>
+    </div>
+  </body>
+</html>

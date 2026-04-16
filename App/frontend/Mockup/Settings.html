@@ -1,0 +1,388 @@
+<!doctype html>
+
+<html class="dark" lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>DB_insight | System Settings</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@200;300;400;500;600;700;800&amp;display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        font-family: "Manrope", sans-serif;
+        background-color: #070d1f;
+        color: #dfe4fe;
+        margin: 0;
+        overflow-x: hidden;
+      }
+      .glass-panel {
+        background: rgba(28, 37, 62, 0.6);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+      }
+      .material-symbols-outlined {
+        font-variation-settings:
+          "FILL" 0,
+          "wght" 400,
+          "GRAD" 0,
+          "opsz" 24;
+      }
+      .glow-border:focus-within {
+        box-shadow: 0 0 20px rgba(133, 173, 255, 0.15);
+      }
+    </style>
+    <script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "surface-tint": "#85adff",
+              "surface-variant": "#1c253e",
+              "on-primary": "#002c66",
+              "primary-fixed": "#6e9fff",
+              "secondary-container": "#5516be",
+              "surface-container-high": "#171f36",
+              "surface-container-lowest": "#000000",
+              secondary: "#ac8aff",
+              "on-primary-fixed-variant": "#002a62",
+              "tertiary-container": "#e7ebf1",
+              primary: "#85adff",
+              tertiary: "#f6f9ff",
+              "outline-variant": "#41475b",
+              "tertiary-dim": "#e5e8ee",
+              "on-primary-fixed": "#000000",
+              "tertiary-fixed": "#f3f7fd",
+              "surface-container-low": "#0c1326",
+              "error-dim": "#d7383b",
+              "surface-container": "#11192e",
+              surface: "#070d1f",
+              outline: "#6f758b",
+              "on-tertiary-fixed": "#474c51",
+              "on-secondary": "#280067",
+              "primary-container": "#6e9fff",
+              "secondary-fixed-dim": "#ceb9ff",
+              "on-error-container": "#ffa8a3",
+              "on-secondary-fixed-variant": "#5f28c8",
+              "surface-bright": "#222b47",
+              "secondary-fixed": "#dac9ff",
+              "tertiary-fixed-dim": "#e5e8ee",
+              "on-tertiary-container": "#53575c",
+              "inverse-on-surface": "#4f5469",
+              "surface-container-highest": "#1c253e",
+              "on-error": "#490006",
+              "primary-dim": "#699cff",
+              "on-background": "#dfe4fe",
+              "on-secondary-fixed": "#40009b",
+              "on-secondary-container": "#d9c8ff",
+              "surface-dim": "#070d1f",
+              "inverse-primary": "#005bc4",
+              "primary-fixed-dim": "#5391ff",
+              "error-container": "#9f0519",
+              "on-surface": "#dfe4fe",
+              "on-primary-container": "#002150",
+              "inverse-surface": "#faf8ff",
+              error: "#ff716c",
+              "secondary-dim": "#8455ef",
+              "on-tertiary": "#5b5f65",
+              background: "#070d1f",
+              "on-tertiary-fixed-variant": "#64686e",
+              "on-surface-variant": "#a5aac2",
+            },
+            fontFamily: {
+              headline: ["Manrope"],
+              body: ["Manrope"],
+              label: ["Manrope"],
+            },
+          },
+        },
+      };
+    </script>
+  </head>
+  <body class="bg-surface text-on-surface antialiased">
+    <!-- Sidebar Navigation -->
+    <aside
+      class="h-screen w-64 fixed left-0 border-r border-outline-variant/15 bg-[#070d1f] flex flex-col py-8 px-4 gap-4 z-50"
+    >
+      <div class="mb-8 px-4">
+        <h1 class="text-[#85adff] font-bold text-xl tracking-tighter">
+          Obsidian Intelligence
+        </h1>
+        <p
+          class="font-manrope uppercase tracking-widest text-[0.7rem] text-on-surface-variant mt-1"
+        >
+          DB_insight v.2.0.4
+        </p>
+      </div>
+      <nav class="flex flex-col gap-2">
+        <div
+          class="text-[#a5aac2] px-4 py-3 hover:text-[#dfe4fe] hover:bg-[#1c253e]/20 transition-all duration-200 cursor-pointer flex items-center gap-3 rounded-xl group hover:translate-x-1"
+        >
+          <span class="material-symbols-outlined text-lg">psychology</span>
+          <span class="font-manrope uppercase tracking-widest text-[0.75rem]"
+            >Intelligence</span
+          >
+        </div>
+        <div
+          class="text-[#a5aac2] px-4 py-3 hover:text-[#dfe4fe] hover:bg-[#1c253e]/20 transition-all duration-200 cursor-pointer flex items-center gap-3 rounded-xl group hover:translate-x-1"
+        >
+          <span class="material-symbols-outlined text-lg">folder_open</span>
+          <span class="font-manrope uppercase tracking-widest text-[0.75rem]"
+            >Files</span
+          >
+        </div>
+        <div
+          class="text-[#85adff] bg-[#1c253e]/40 rounded-xl px-4 py-3 border-l-2 border-[#ac8aff] flex items-center gap-3 translate-x-1"
+        >
+          <span
+            class="material-symbols-outlined text-lg"
+            style="font-variation-settings: &quot;FILL&quot; 1"
+            >tune</span
+          >
+          <span
+            class="font-manrope uppercase tracking-widest text-[0.75rem] font-semibold"
+            >Settings</span
+          >
+        </div>
+        <div
+          class="text-[#a5aac2] px-4 py-3 hover:text-[#dfe4fe] hover:bg-[#1c253e]/20 transition-all duration-200 cursor-pointer flex items-center gap-3 rounded-xl group hover:translate-x-1"
+        >
+          <span class="material-symbols-outlined text-lg">help_outline</span>
+          <span class="font-manrope uppercase tracking-widest text-[0.75rem]"
+            >Support</span
+          >
+        </div>
+      </nav>
+      <div class="mt-auto px-4 py-6 border-t border-outline-variant/10">
+        <div class="flex items-center gap-3">
+          <div
+            class="w-10 h-10 rounded-full overflow-hidden border border-primary/30"
+          >
+            <img
+              alt="User Profile"
+              class="w-full h-full object-cover"
+              data-alt="Close up portrait of a professional man with sharp features, soft dramatic studio lighting, deep blue atmospheric background"
+              src="https://lh3.googleusercontent.com/aida-public/AB6AXuClIcmT2pR8LTlGHfcS1gznaqzkkAzHPL2jwvs6dr2Xjvu1xJzSdXlaoLqX0Of00Ca8TZeJxd59PXIAWC5acFNV4UbPdQTh9QOXHr7HM4XAXZhaKCezEbd4GUTuVXeFsvcwSXZ1f6nBqD6I_Yfwh05ESMbQJ7urS97v5IhfCSRKVbnGyRcofWxdK4EWFZ_zkYcTJh8h7j9rlcJUBdCMNVdXp8pO86RBvmd5Y1VgmyQFIx98R_l7KSir8uJPJ6nSKM8Gxpfg0XfSr8Hd"
+            />
+          </div>
+          <div>
+            <p class="text-sm font-bold text-on-surface leading-tight">
+              Alex Thorne
+            </p>
+            <p class="text-[0.7rem] text-on-surface-variant font-mono">
+              NODE-7721-B
+            </p>
+          </div>
+        </div>
+      </div>
+    </aside>
+    <!-- Main Content Canvas -->
+    <main class="ml-64 min-h-screen p-12 relative overflow-hidden">
+      <!-- Atmospheric Background Glows -->
+      <div
+        class="absolute top-[-10%] right-[-10%] w-[500px] h-[500px] bg-primary/10 rounded-full blur-[120px] pointer-events-none"
+      ></div>
+      <div
+        class="absolute bottom-[-5%] left-[5%] w-[400px] h-[400px] bg-secondary/5 rounded-full blur-[100px] pointer-events-none"
+      ></div>
+      <div class="max-w-4xl mx-auto relative z-10">
+        <header class="mb-12">
+          <h2
+            class="text-4xl font-extrabold tracking-tight text-on-surface mb-2"
+          >
+            System Settings
+          </h2>
+          <p class="text-on-surface-variant max-w-xl">
+            Configure your local intelligence node parameters and manage
+            security protocols for DB_insight.
+          </p>
+        </header>
+        <div class="grid grid-cols-1 gap-8">
+          <!-- Security Section -->
+          <section
+            class="glass-panel p-8 rounded-xl border border-outline-variant/15 shadow-[0_0_40px_rgba(133,173,255,0.05)]"
+          >
+            <div class="flex items-center gap-2 mb-6">
+              <span
+                class="text-[0.75rem] font-manrope uppercase tracking-[0.2em] text-primary font-bold"
+                >Security Protocols</span
+              >
+              <div class="h-[1px] flex-grow bg-outline-variant/20"></div>
+            </div>
+            <div
+              class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6"
+            >
+              <div>
+                <h3 class="text-xl font-semibold text-on-surface mb-2">
+                  Master Authentication
+                </h3>
+                <p class="text-on-surface-variant text-sm">
+                  The master password decrypts your local database. Resetting
+                  this will update your local encryption key.
+                </p>
+              </div>
+              <button
+                class="bg-gradient-to-tr from-primary to-secondary text-on-primary font-bold py-3 px-8 rounded-full shadow-lg shadow-primary/20 hover:scale-105 active:scale-95 transition-all duration-300"
+              >
+                Change Master Password
+              </button>
+            </div>
+          </section>
+          <!-- Preferences Section -->
+          <section
+            class="glass-panel p-8 rounded-xl border border-outline-variant/15"
+          >
+            <div class="flex items-center gap-2 mb-6">
+              <span
+                class="text-[0.75rem] font-manrope uppercase tracking-[0.2em] text-primary font-bold"
+                >Preferences</span
+              >
+              <div class="h-[1px] flex-grow bg-outline-variant/20"></div>
+            </div>
+            <div class="space-y-8">
+              <div>
+                <label
+                  class="block text-[0.7rem] uppercase tracking-widest text-on-surface-variant font-bold mb-3"
+                  for="email"
+                  >Frequently Used Email</label
+                >
+                <div class="relative max-w-md glow-border">
+                  <input
+                    class="w-full bg-transparent border-0 border-b border-outline-variant py-3 px-0 text-on-surface focus:ring-0 focus:border-primary transition-colors duration-300 placeholder-outline"
+                    id="email"
+                    placeholder="archivist@obsidian.io"
+                    type="email"
+                    value="a.thorne@obsidian-intel.local"
+                  />
+                  <div
+                    class="absolute bottom-0 left-0 h-[2px] bg-primary w-0 focus-within:w-full transition-all duration-500"
+                  ></div>
+                </div>
+                <p class="mt-3 text-xs text-on-surface-variant/70 italic">
+                  Used for automated report deliveries and emergency node
+                  recovery notifications.
+                </p>
+              </div>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div
+                  class="p-4 rounded-xl bg-surface-container-low border border-outline-variant/10 flex items-center justify-between"
+                >
+                  <div>
+                    <p class="text-sm font-semibold text-on-surface">
+                      Cloud Sync
+                    </p>
+                    <p class="text-xs text-on-surface-variant">
+                      Sync local logs to encrypted cloud
+                    </p>
+                  </div>
+                  <div
+                    class="w-10 h-5 bg-surface-container-highest rounded-full relative cursor-pointer p-1 transition-colors duration-300"
+                  >
+                    <div
+                      class="w-3 h-3 bg-primary rounded-full absolute right-1"
+                    ></div>
+                  </div>
+                </div>
+                <div
+                  class="p-4 rounded-xl bg-surface-container-low border border-outline-variant/10 flex items-center justify-between"
+                >
+                  <div>
+                    <p class="text-sm font-semibold text-on-surface">
+                      Neural Feedback
+                    </p>
+                    <p class="text-xs text-on-surface-variant">
+                      Enable haptic processing signals
+                    </p>
+                  </div>
+                  <div
+                    class="w-10 h-5 bg-surface-container-highest rounded-full relative cursor-pointer p-1 transition-colors duration-300"
+                  >
+                    <div
+                      class="w-3 h-3 bg-outline rounded-full absolute left-1"
+                    ></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+          <!-- System / Danger Zone -->
+          <section
+            class="glass-panel p-8 rounded-xl border border-error-dim/20 bg-error-dim/5 relative overflow-hidden"
+          >
+            <!-- Red Warning Glow -->
+            <div
+              class="absolute -right-20 -bottom-20 w-64 h-64 bg-error-dim/10 blur-[80px] rounded-full"
+            ></div>
+            <div class="flex items-center gap-2 mb-6">
+              <span
+                class="text-[0.75rem] font-manrope uppercase tracking-[0.2em] text-error-dim font-bold"
+                >Danger Zone</span
+              >
+              <div class="h-[1px] flex-grow bg-error-dim/20"></div>
+            </div>
+            <div
+              class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative z-10"
+            >
+              <div class="max-w-xl">
+                <h3 class="text-xl font-semibold text-error-dim mb-2">
+                  Factory Reset &amp; Data Purge
+                </h3>
+                <p class="text-on-surface-variant text-sm">
+                  Permanently delete all intelligence nodes, local files, and
+                  system preferences. This action is irreversible and will
+                  zero-out all allocated storage sectors.
+                </p>
+              </div>
+              <button
+                class="whitespace-nowrap border border-error-dim/40 text-error-dim font-bold py-3 px-8 rounded-full hover:bg-error-dim hover:text-white transition-all duration-300 active:scale-95 shadow-[0_0_20px_rgba(215,56,59,0.1)]"
+              >
+                Delete App &amp; Data
+              </button>
+            </div>
+          </section>
+        </div>
+        <!-- System Info Footer -->
+        <footer
+          class="mt-16 flex flex-col items-center justify-center text-on-surface-variant/40 space-y-4"
+        >
+          <div class="flex items-center gap-8">
+            <div class="text-center">
+              <p class="text-[0.6rem] uppercase tracking-widest font-bold">
+                Storage
+              </p>
+              <p class="text-xs font-mono">1.2TB / 4.0TB</p>
+            </div>
+            <div class="h-8 w-[1px] bg-outline-variant/10"></div>
+            <div class="text-center">
+              <p class="text-[0.6rem] uppercase tracking-widest font-bold">
+                Latency
+              </p>
+              <p class="text-xs font-mono">14ms</p>
+            </div>
+            <div class="h-8 w-[1px] bg-outline-variant/10"></div>
+            <div class="text-center">
+              <p class="text-[0.6rem] uppercase tracking-widest font-bold">
+                Uptime
+              </p>
+              <p class="text-xs font-mono">1,402h</p>
+            </div>
+          </div>
+          <p class="text-[0.6rem] uppercase tracking-widest">
+            © 2024 Obsidian Intelligence Systems. All Rights Reserved.
+          </p>
+        </footer>
+      </div>
+    </main>
+  </body>
+</html>

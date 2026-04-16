@@ -1,0 +1,466 @@
+<!doctype html>
+
+<html class="dark" lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>DB_insight - Local Intelligence</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@200;300;400;500;600;700;800&amp;display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+      rel="stylesheet"
+    />
+    <script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-tertiary-fixed": "#474c51",
+              "on-tertiary": "#5b5f65",
+              "surface-container-low": "#0c1326",
+              "secondary-fixed-dim": "#ceb9ff",
+              "primary-container": "#6e9fff",
+              "on-secondary-fixed": "#40009b",
+              "inverse-primary": "#005bc4",
+              "secondary-container": "#5516be",
+              "inverse-on-surface": "#4f5469",
+              "on-primary-fixed": "#000000",
+              "on-error-container": "#ffa8a3",
+              "tertiary-fixed-dim": "#e5e8ee",
+              "on-background": "#dfe4fe",
+              "inverse-surface": "#faf8ff",
+              "surface-bright": "#222b47",
+              "on-primary-fixed-variant": "#002a62",
+              "tertiary-fixed": "#f3f7fd",
+              "on-primary": "#002c66",
+              "outline-variant": "#41475b",
+              background: "#070d1f",
+              "on-secondary": "#280067",
+              "on-surface-variant": "#a5aac2",
+              "on-error": "#490006",
+              "error-dim": "#d7383b",
+              "primary-dim": "#699cff",
+              "error-container": "#9f0519",
+              error: "#ff716c",
+              "secondary-dim": "#8455ef",
+              "on-secondary-fixed-variant": "#5f28c8",
+              "on-tertiary-container": "#53575c",
+              "tertiary-container": "#e7ebf1",
+              secondary: "#ac8aff",
+              "surface-container-lowest": "#000000",
+              "surface-variant": "#1c253e",
+              outline: "#6f758b",
+              "surface-container": "#11192e",
+              tertiary: "#f6f9ff",
+              surface: "#070d1f",
+              "on-primary-container": "#002150",
+              "on-secondary-container": "#d9c8ff",
+              "surface-container-high": "#171f36",
+              primary: "#85adff",
+              "surface-container-highest": "#1c253e",
+              "primary-fixed-dim": "#5391ff",
+              "on-surface": "#dfe4fe",
+              "surface-dim": "#070d1f",
+              "primary-fixed": "#6e9fff",
+              "tertiary-dim": "#e5e8ee",
+              "on-tertiary-fixed-variant": "#64686e",
+              "surface-tint": "#85adff",
+              "secondary-fixed": "#dac9ff",
+            },
+            borderRadius: {
+              DEFAULT: "0.25rem",
+              lg: "0.5rem",
+              xl: "1.5rem",
+              full: "9999px",
+            },
+            fontFamily: {
+              headline: ["Manrope"],
+              body: ["Manrope"],
+              label: ["Manrope"],
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      body {
+        background-color: #070d1f;
+        color: #dfe4fe;
+        font-family: "Manrope", sans-serif;
+      }
+      .grid-bg {
+        background-image:
+          linear-gradient(rgba(133, 173, 255, 0.03) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(133, 173, 255, 0.03) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+      .glass-effect {
+        backdrop-filter: blur(20px);
+        background-color: rgba(28, 37, 62, 0.6);
+      }
+      .glow-primary {
+        box-shadow: 0 0 20px rgba(133, 173, 255, 0.15);
+      }
+      .material-symbols-outlined {
+        font-variation-settings:
+          "FILL" 0,
+          "wght" 400,
+          "GRAD" 0,
+          "opsz" 24;
+      }
+    </style>
+  </head>
+  <body class="overflow-hidden h-screen grid-bg">
+    <!-- SideNavBar Implementation -->
+    <aside
+      class="fixed left-0 top-0 h-full w-64 rounded-r-3xl flex flex-col p-4 bg-[#070d1f]/60 backdrop-blur-xl border-r border-[#41475b]/15 shadow-[20px_0_40px_rgba(133,173,255,0.05)] z-50"
+    >
+      <div class="mb-10 flex items-center gap-3 px-2">
+        <div
+          class="w-8 h-8 bg-gradient-to-br from-primary to-secondary rounded-lg flex items-center justify-center"
+        >
+          <span
+            class="material-symbols-outlined text-on-primary-fixed text-lg"
+            style="font-variation-settings: &quot;FILL&quot; 1"
+            >dataset</span
+          >
+        </div>
+        <div>
+          <h1 class="text-xl font-black text-[#dfe4fe] leading-none">
+            DB_insight
+          </h1>
+          <p
+            class="text-[0.65rem] uppercase tracking-widest text-on-surface-variant mt-1"
+          >
+            Local Intelligence
+          </p>
+        </div>
+      </div>
+      <!-- Header Actions (Settings & Data) -->
+      <div class="flex gap-2 mb-8">
+        <button
+          class="flex-1 flex items-center justify-center gap-2 py-2 px-3 bg-surface-container-high rounded-xl border border-outline-variant/15 hover:bg-surface-container-highest transition-all duration-200"
+        >
+          <span class="material-symbols-outlined text-sm" data-icon="settings"
+            >settings</span
+          >
+          <span
+            class="font-manrope uppercase tracking-[0.05em] text-[0.7rem] text-on-surface"
+            >Settings</span
+          >
+        </button>
+        <button
+          class="flex-1 flex items-center justify-center gap-2 py-2 px-3 bg-surface-container-high rounded-xl border border-outline-variant/15 hover:bg-surface-container-highest transition-all duration-200"
+        >
+          <span class="material-symbols-outlined text-sm" data-icon="database"
+            >database</span
+          >
+          <span
+            class="font-manrope uppercase tracking-[0.05em] text-[0.7rem] text-on-surface"
+            >Data</span
+          >
+        </button>
+      </div>
+      <div class="flex-1 overflow-y-auto space-y-1">
+        <div class="px-4 py-2">
+          <p
+            class="font-manrope uppercase tracking-[0.05em] text-[0.75rem] text-primary mb-4"
+          >
+            Search History
+          </p>
+        </div>
+        <!-- Nav Items -->
+        <a
+          class="flex items-center gap-3 text-[#85adff] bg-[#1c253e] rounded-xl px-4 py-3 active:translate-x-1 duration-200 group"
+          href="#"
+        >
+          <span class="material-symbols-outlined" data-icon="history"
+            >history</span
+          >
+          <span class="font-manrope uppercase tracking-[0.05em] text-[0.75rem]"
+            >Search History</span
+          >
+        </a>
+        <a
+          class="flex items-center gap-3 text-[#a5aac2] px-4 py-3 hover:bg-[#1c253e]/50 hover:text-[#dfe4fe] transition-all active:translate-x-1 duration-200 group"
+          href="#"
+        >
+          <span class="material-symbols-outlined" data-icon="search_check"
+            >search_check</span
+          >
+          <span class="font-manrope uppercase tracking-[0.05em] text-[0.75rem]"
+            >Recent Queries</span
+          >
+        </a>
+        <!-- Recent Queries List -->
+        <div class="mt-8 px-4 space-y-4">
+          <p
+            class="font-manrope uppercase tracking-[0.05em] text-[0.7rem] text-on-surface-variant/60"
+          >
+            Recents
+          </p>
+          <div class="space-y-3">
+            <div
+              class="text-[0.8rem] text-on-surface-variant hover:text-on-surface cursor-pointer transition-colors truncate"
+            >
+              Project alpha documentation...
+            </div>
+            <div
+              class="text-[0.8rem] text-on-surface-variant hover:text-on-surface cursor-pointer transition-colors truncate"
+            >
+              Revenue charts Q3 2023
+            </div>
+            <div
+              class="text-[0.8rem] text-on-surface-variant hover:text-on-surface cursor-pointer transition-colors truncate"
+            >
+              Meeting notes encrypted
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Footer Profile -->
+      <div
+        class="mt-auto pt-6 border-t border-outline-variant/10 flex items-center gap-3 px-2"
+      >
+        <img
+          alt="User profile"
+          class="w-10 h-10 rounded-full border-2 border-primary-fixed-dim/20"
+          data-alt="Professional portrait of a male data scientist with thoughtful expression in soft studio lighting"
+          src="https://lh3.googleusercontent.com/aida-public/AB6AXuAbmHz3WS5ehpdwGptbVNLqu5sxanICVEoTrW6AGQ_bxsoeTB4FxfJ87HMt-KbP08uUGdcHxVoli4JhQR_ephEKtzcJ1AiTL4YUVjO6FatNXwQM_TcULBSr8WyjpnGK-DockCiIn_ZOXf2hDxzDS3L9jRMBWog3GWLrejqcXA_vaSWLy9bOqQOXUynCoExDoHWBWRxbopE8Xok2iFZmEm3mNPHqNOfipyz3JA_1ZZ8Xue0RG5GUWLTpqf-Thrakvo5ELiXphtgNe9Aq"
+        />
+        <div class="overflow-hidden">
+          <p class="text-sm font-bold text-on-surface truncate">Admin User</p>
+          <p class="text-[0.65rem] text-on-surface-variant">
+            Deep Insight Access
+          </p>
+        </div>
+      </div>
+    </aside>
+    <!-- TopNavBar Implementation -->
+    <nav
+      class="fixed top-0 w-full flex justify-between items-center px-6 py-4 w-full bg-transparent z-40"
+    >
+      <div class="ml-64 flex items-center">
+        <!-- Spacer for Sidebar -->
+      </div>
+      <div class="flex items-center gap-6">
+        <div class="hidden md:flex gap-8 items-center">
+          <a
+            class="font-manrope tracking-tight text-sm text-[#85adff] font-bold hover:text-[#85adff] transition-colors active:scale-95 duration-200"
+            href="#"
+            >Explore</a
+          >
+          <a
+            class="font-manrope tracking-tight text-sm text-[#a5aac2] hover:text-[#85adff] transition-colors active:scale-95 duration-200"
+            href="#"
+            >Intelligence</a
+          >
+          <a
+            class="font-manrope tracking-tight text-sm text-[#a5aac2] hover:text-[#85adff] transition-colors active:scale-95 duration-200"
+            href="#"
+            >Cloud Sync</a
+          >
+        </div>
+        <div
+          class="w-8 h-8 rounded-full bg-surface-variant flex items-center justify-center cursor-pointer hover:bg-surface-container-highest transition-colors"
+        >
+          <span
+            class="material-symbols-outlined text-primary text-xl"
+            data-icon="account_circle"
+            >account_circle</span
+          >
+        </div>
+      </div>
+    </nav>
+    <!-- Main Content Area -->
+    <main
+      class="ml-64 h-full flex flex-col items-center justify-center p-8 relative"
+    >
+      <!-- Ambient Glow Centers -->
+      <div
+        class="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-[120px] pointer-events-none"
+      ></div>
+      <div
+        class="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-secondary/5 rounded-full blur-[150px] pointer-events-none"
+      ></div>
+      <div class="w-full max-w-4xl flex flex-col items-center z-10">
+        <!-- Logo / Title -->
+        <div class="mb-12 text-center">
+          <h2
+            class="text-display-lg text-5xl md:text-6xl font-black tracking-tighter text-on-surface mb-4"
+          >
+            Local Intelligence<span class="text-primary">.</span>
+          </h2>
+          <p
+            class="text-on-surface-variant text-lg max-w-xl mx-auto font-light"
+          >
+            Your files, indexed and understood by your personal neural engine.
+          </p>
+        </div>
+        <!-- Main Search Bar Container -->
+        <div class="w-full relative group">
+          <!-- Search Glass Box -->
+          <div
+            class="glass-effect rounded-full p-2 border border-outline-variant/20 shadow-[0_0_50px_rgba(133,173,255,0.1)] flex items-center gap-4 hover:border-primary/40 transition-all duration-300"
+          >
+            <!-- Circular Menu Trigger (Active State Visualized) -->
+            <div class="relative group/menu">
+              <button
+                class="w-12 h-12 rounded-full bg-gradient-to-r from-primary to-secondary flex items-center justify-center text-on-primary-fixed shadow-lg active:scale-90 transition-transform"
+              >
+                <span
+                  class="material-symbols-outlined font-bold"
+                  data-icon="add"
+                  >add</span
+                >
+              </button>
+              <!-- Floating Circular Menu (Visualized active) -->
+              <div
+                class="absolute bottom-full left-0 mb-4 flex gap-3 pointer-events-none group-hover/menu:pointer-events-auto"
+              >
+                <!-- Animating outward placeholders -->
+                <div
+                  class="flex flex-col gap-2 items-center absolute -top-44 -left-2 opacity-0 group-hover/menu:opacity-100 transition-all duration-300 transform translate-y-10 group-hover/menu:translate-y-0"
+                >
+                  <div
+                    class="w-10 h-10 rounded-full bg-surface-container-highest border border-outline-variant flex items-center justify-center hover:bg-primary hover:text-on-primary-fixed transition-colors cursor-pointer group/icon"
+                    title="Documents"
+                  >
+                    <span
+                      class="material-symbols-outlined text-sm"
+                      data-icon="description"
+                      >description</span
+                    >
+                  </div>
+                  <div
+                    class="w-10 h-10 rounded-full bg-surface-container-highest border border-outline-variant flex items-center justify-center hover:bg-primary hover:text-on-primary-fixed transition-colors cursor-pointer"
+                    title="Images"
+                  >
+                    <span
+                      class="material-symbols-outlined text-sm"
+                      data-icon="image"
+                      >image</span
+                    >
+                  </div>
+                  <div
+                    class="w-10 h-10 rounded-full bg-surface-container-highest border border-outline-variant flex items-center justify-center hover:bg-primary hover:text-on-primary-fixed transition-colors cursor-pointer"
+                    title="Videos"
+                  >
+                    <span
+                      class="material-symbols-outlined text-sm"
+                      data-icon="movie"
+                      >movie</span
+                    >
+                  </div>
+                  <div
+                    class="w-10 h-10 rounded-full bg-surface-container-highest border border-outline-variant flex items-center justify-center hover:bg-primary hover:text-on-primary-fixed transition-colors cursor-pointer"
+                    title="Music"
+                  >
+                    <span
+                      class="material-symbols-outlined text-sm"
+                      data-icon="music_note"
+                      >music_note</span
+                    >
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- Input Area -->
+            <input
+              class="flex-1 bg-transparent border-none focus:ring-0 text-on-surface placeholder:text-on-surface-variant/40 font-manrope text-lg py-4"
+              placeholder="Ask anything about your local files..."
+              type="text"
+            />
+            <!-- STT Button -->
+            <button
+              class="w-12 h-12 rounded-full flex items-center justify-center text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-all duration-200"
+            >
+              <span class="material-symbols-outlined" data-icon="mic">mic</span>
+            </button>
+          </div>
+          <!-- Go to AI Mode Button -->
+          <div class="mt-10 flex justify-center">
+            <button
+              class="px-8 py-3 rounded-full bg-surface-container-high border border-outline-variant/20 flex items-center gap-3 text-sm font-bold tracking-widest uppercase text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest transition-all duration-300 group glow-primary"
+            >
+              <span
+                class="w-2 h-2 rounded-full bg-primary animate-pulse"
+              ></span>
+              Go to AI Mode
+              <span
+                class="material-symbols-outlined text-lg group-hover:translate-x-1 transition-transform"
+                data-icon="arrow_forward"
+                >arrow_forward</span
+              >
+            </button>
+          </div>
+        </div>
+        <!-- Quick Action Cards (Bento-style snippet) -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-24 w-full">
+          <div
+            class="glass-effect p-6 rounded-xl border border-outline-variant/15 hover:border-primary/20 transition-all group"
+          >
+            <span
+              class="material-symbols-outlined text-primary mb-4"
+              data-icon="summarize"
+              >summarize</span
+            >
+            <h3 class="text-on-surface font-bold mb-1">Summarize PDF</h3>
+            <p
+              class="text-on-surface-variant text-xs uppercase tracking-tighter"
+            >
+              Neural Processing
+            </p>
+          </div>
+          <div
+            class="glass-effect p-6 rounded-xl border border-outline-variant/15 hover:border-secondary/20 transition-all group"
+          >
+            <span
+              class="material-symbols-outlined text-secondary mb-4"
+              data-icon="search_insights"
+              >search_insights</span
+            >
+            <h3 class="text-on-surface font-bold mb-1">Deep Metadata</h3>
+            <p
+              class="text-on-surface-variant text-xs uppercase tracking-tighter"
+            >
+              Attribute Analysis
+            </p>
+          </div>
+          <div
+            class="glass-effect p-6 rounded-xl border border-outline-variant/15 hover:border-primary/20 transition-all group"
+          >
+            <span
+              class="material-symbols-outlined text-primary mb-4"
+              data-icon="auto_awesome"
+              >auto_awesome</span
+            >
+            <h3 class="text-on-surface font-bold mb-1">Visual Search</h3>
+            <p
+              class="text-on-surface-variant text-xs uppercase tracking-tighter"
+            >
+              Vision Engine
+            </p>
+          </div>
+        </div>
+      </div>
+      <!-- Decorative Bottom Gradient -->
+      <div
+        class="absolute bottom-0 left-0 w-full h-32 bg-gradient-to-t from-surface-container-low/80 to-transparent pointer-events-none"
+      ></div>
+    </main>
+    <!-- Visual Background Accents -->
+    <div
+      class="fixed top-0 right-0 w-1/3 h-screen bg-gradient-to-l from-primary/5 to-transparent pointer-events-none"
+    ></div>
+  </body>
+</html>

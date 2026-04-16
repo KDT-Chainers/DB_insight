@@ -1,0 +1,432 @@
+<html class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@200;400;600;700;800&amp;display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+      rel="stylesheet"
+    />
+    <script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "secondary-dim": "#8455ef",
+              "surface-container": "#11192e",
+              "on-primary-container": "#002150",
+              "on-primary-fixed": "#000000",
+              "on-error-container": "#ffa8a3",
+              "surface-container-highest": "#1c253e",
+              primary: "#85adff",
+              "on-secondary": "#280067",
+              "primary-container": "#6e9fff",
+              secondary: "#ac8aff",
+              "on-tertiary-fixed": "#474c51",
+              "on-primary": "#002c66",
+              "tertiary-dim": "#e5e8ee",
+              "on-surface": "#dfe4fe",
+              "on-tertiary-container": "#53575c",
+              "on-secondary-fixed": "#40009b",
+              "inverse-surface": "#faf8ff",
+              "surface-dim": "#070d1f",
+              error: "#ff716c",
+              "inverse-on-surface": "#4f5469",
+              "surface-tint": "#85adff",
+              "on-error": "#490006",
+              "on-secondary-fixed-variant": "#5f28c8",
+              tertiary: "#f6f9ff",
+              "surface-container-high": "#171f36",
+              "secondary-fixed": "#dac9ff",
+              "on-tertiary-fixed-variant": "#64686e",
+              background: "#070d1f",
+              "on-tertiary": "#5b5f65",
+              "error-container": "#9f0519",
+              "tertiary-fixed-dim": "#e5e8ee",
+              "inverse-primary": "#005bc4",
+              "surface-bright": "#222b47",
+              "primary-fixed": "#6e9fff",
+              "on-surface-variant": "#a5aac2",
+              outline: "#6f758b",
+              "tertiary-fixed": "#f3f7fd",
+              "surface-variant": "#1c253e",
+              "secondary-container": "#5516be",
+              "primary-dim": "#699cff",
+              "on-primary-fixed-variant": "#002a62",
+              surface: "#070d1f",
+              "secondary-fixed-dim": "#ceb9ff",
+              "on-secondary-container": "#d9c8ff",
+              "primary-fixed-dim": "#5391ff",
+              "error-dim": "#d7383b",
+              "outline-variant": "#41475b",
+              "on-background": "#dfe4fe",
+              "surface-container-low": "#0c1326",
+              "tertiary-container": "#e7ebf1",
+              "surface-container-lowest": "#000000",
+            },
+            borderRadius: {
+              DEFAULT: "0.25rem",
+              lg: "0.5rem",
+              xl: "1.5rem",
+              full: "9999px",
+            },
+            fontFamily: {
+              headline: ["Manrope"],
+              body: ["Manrope"],
+              label: ["Manrope"],
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      .material-symbols-outlined {
+        font-variation-settings:
+          "FILL" 0,
+          "wght" 400,
+          "GRAD" 0,
+          "opsz" 24;
+      }
+      body {
+        background-color: #070d1f;
+        color: #dfe4fe;
+        font-family: "Manrope", sans-serif;
+        overflow: hidden;
+      }
+      .synaptic-glow {
+        background: radial-gradient(
+          circle at center,
+          rgba(172, 138, 255, 0.15) 0%,
+          transparent 70%
+        );
+      }
+      .glass-panel {
+        background: rgba(28, 37, 62, 0.6);
+        backdrop-filter: blur(20px);
+      }
+    </style>
+  </head>
+  <body class="bg-background text-on-surface selection:bg-secondary/30">
+    <header
+      class="bg-[#070d1f]/60 backdrop-blur-3xl text-[#ac8aff] font-['Manrope'] tracking-[-0.04em] font-semibold fixed top-0 w-full z-50 bg-gradient-to-b from-[#0c1326] to-transparent shadow-[0_8px_32px_0_rgba(0,0,0,0.3)]"
+    >
+      <div
+        class="flex justify-between items-center h-20 px-8 w-full max-w-screen-2xl mx-auto"
+      >
+        <div class="flex items-center gap-3">
+          <div
+            class="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-[0_0_15px_rgba(172,138,255,0.4)]"
+          >
+            <span
+              class="material-symbols-outlined text-on-primary-fixed text-sm"
+              style="font-variation-settings: &quot;FILL&quot; 1"
+              >terminal</span
+            >
+          </div>
+          <span class="text-xl font-bold text-[#dfe4fe] tracking-tighter"
+            >Obsidian AI</span
+          >
+        </div>
+        <nav class="hidden md:flex gap-8 items-center">
+          <a
+            class="text-[#ac8aff] border-b-2 border-[#ac8aff] pb-1 hover:text-[#85adff] transition-colors duration-300"
+            href="#"
+            >Neural Workspace</a
+          >
+          <a
+            class="text-[#a5aac2] hover:text-[#85adff] transition-colors duration-300"
+            href="#"
+            >Analysis Engine</a
+          >
+          <a
+            class="text-[#a5aac2] hover:text-[#85adff] transition-colors duration-300"
+            href="#"
+            >Cloud Sync</a
+          >
+        </nav>
+        <div class="flex items-center gap-4">
+          <button
+            class="p-2 text-[#a5aac2] hover:text-[#ac8aff] transition-colors"
+          >
+            <span class="material-symbols-outlined">settings</span>
+          </button>
+          <button
+            class="p-2 text-[#a5aac2] hover:text-[#ac8aff] transition-colors"
+          >
+            <span class="material-symbols-outlined">database</span>
+          </button>
+          <div
+            class="w-10 h-10 rounded-full border border-outline-variant/30 overflow-hidden"
+          >
+            <img
+              class="w-full h-full object-cover"
+              data-alt="Modern minimalist headshot of a person with dramatic high-contrast lighting and deep blue shadows in a futuristic tech setting"
+              src="https://lh3.googleusercontent.com/aida-public/AB6AXuDfHdBNdSRn31Ycp4hk8IpfCo9cs-hQLC60P1kkKrKp-KTpOa9VvWWOhoA_ikXzUUCN7VovlTWh0ByvWGH9A67TewEsw2XNYy2YD-7IowB9ZPn_kgufzXpVOGfWWfN4ltPuVYhgUHhpw4qT0JjNdpvczTv5aaW6196L_wCbQ6GXpUvpWIOhK-nY0rIgVAa09-E2lsf64KPCh7tPQdoIzsc4fQ4PwBMrshN8oMIQJoUBZrM8QqkKDGoWXcww-zCROS0_ZoL_iOiHxdRN"
+            />
+          </div>
+        </div>
+      </div>
+    </header>
+    <aside
+      class="h-full w-72 rounded-r-[1.5rem] bg-[#070d1f] fixed left-0 top-0 h-screen flex flex-col z-40 py-8 tonal shift to bg-[#0c1326] shadow-[20px_0_40px_rgba(133,173,255,0.05)] pt-24"
+    >
+      <div class="px-6 mb-8">
+        <div class="flex items-center gap-3 mb-6">
+          <span class="text-lg font-black text-[#85adff] font-headline"
+            >NEURAL HISTORY</span
+          >
+        </div>
+        <button
+          class="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-secondary-container to-secondary-dim text-white font-semibold flex items-center justify-center gap-2 shadow-[0_4px_20px_rgba(85,22,190,0.3)] hover:scale-[1.02] transition-transform"
+        >
+          <span class="material-symbols-outlined text-sm">add</span>
+          <span class="font-label uppercase tracking-[0.05em] text-[0.75rem]"
+            >New Session</span
+          >
+        </button>
+      </div>
+      <nav class="flex-1 space-y-1 px-4 overflow-y-auto">
+        <div
+          class="bg-gradient-to-r from-[#ac8aff20] to-transparent text-[#ac8aff] border-l-4 border-[#ac8aff] py-3 px-4 rounded-r-lg group cursor-pointer"
+        >
+          <div class="flex items-center gap-3">
+            <span class="material-symbols-outlined text-[20px]">relax</span>
+            <span class="font-label uppercase tracking-[0.05em] text-[0.75rem]"
+              >Neural Threads</span
+            >
+          </div>
+        </div>
+        <div
+          class="text-[#a5aac2] opacity-70 py-3 px-4 hover:bg-[#1c253e] hover:opacity-100 transition-all rounded-lg group cursor-pointer"
+        >
+          <div class="flex items-center gap-3">
+            <span class="material-symbols-outlined text-[20px]">memory</span>
+            <span class="font-label uppercase tracking-[0.05em] text-[0.75rem]"
+              >Stored Logic</span
+            >
+          </div>
+        </div>
+        <div
+          class="text-[#a5aac2] opacity-70 py-3 px-4 hover:bg-[#1c253e] hover:opacity-100 transition-all rounded-lg group cursor-pointer"
+        >
+          <div class="flex items-center gap-3">
+            <span class="material-symbols-outlined text-[20px]">security</span>
+            <span class="font-label uppercase tracking-[0.05em] text-[0.75rem]"
+              >Synaptic Vault</span
+            >
+          </div>
+        </div>
+        <div
+          class="text-[#a5aac2] opacity-70 py-3 px-4 hover:bg-[#1c253e] hover:opacity-100 transition-all rounded-lg group cursor-pointer"
+        >
+          <div class="flex items-center gap-3">
+            <span class="material-symbols-outlined text-[20px]">history</span>
+            <span class="font-label uppercase tracking-[0.05em] text-[0.75rem]"
+              >Processing History</span
+            >
+          </div>
+        </div>
+      </nav>
+      <div class="px-6 mt-auto pt-6 border-t border-outline-variant/10">
+        <div class="flex items-center gap-3">
+          <div
+            class="w-2 h-2 rounded-full bg-secondary animate-pulse shadow-[0_0_8px_#ac8aff]"
+          ></div>
+          <div>
+            <p
+              class="text-[10px] font-bold text-on-surface tracking-widest uppercase"
+            >
+              Local Instance Active
+            </p>
+            <p class="text-[9px] text-on-surface-variant">v4.0.2-Synapse</p>
+          </div>
+        </div>
+      </div>
+    </aside>
+    <main
+      class="ml-72 pt-20 h-screen relative flex flex-col items-center justify-center px-12 overflow-hidden"
+    >
+      <div class="absolute inset-0 z-0 pointer-events-none synaptic-glow"></div>
+      <div
+        class="absolute top-1/4 right-1/4 w-[500px] h-[500px] bg-secondary/5 blur-[120px] rounded-full"
+      ></div>
+      <div
+        class="absolute bottom-1/4 left-1/4 w-[400px] h-[400px] bg-primary/5 blur-[100px] rounded-full"
+      ></div>
+      <div class="w-full max-w-4xl z-10 space-y-12">
+        <div class="text-center space-y-4">
+          <h1
+            class="text-6xl md:text-7xl font-extrabold tracking-[-0.04em] text-on-surface font-headline leading-tight"
+          >
+            Quantum
+            <span
+              class="bg-gradient-to-r from-primary via-secondary to-primary-container bg-clip-text text-transparent"
+              >Intelligence</span
+            >
+          </h1>
+          <p
+            class="text-xl text-on-surface-variant max-w-2xl mx-auto font-light leading-relaxed"
+          >
+            Access local synaptic nodes and process complex neural threads with
+            unified Obsidian architecture.
+          </p>
+        </div>
+        <div class="relative group">
+          <div
+            class="absolute -inset-1 bg-gradient-to-r from-secondary/50 via-primary/30 to-secondary/50 rounded-2xl blur opacity-20 group-focus-within:opacity-40 transition duration-1000"
+          ></div>
+          <div
+            class="relative glass-panel rounded-2xl border border-outline-variant/15 flex items-center p-2 shadow-2xl"
+          >
+            <button
+              class="p-4 text-on-surface-variant hover:text-secondary transition-colors"
+            >
+              <span class="material-symbols-outlined text-[28px]">add</span>
+            </button>
+            <input
+              class="flex-1 bg-transparent border-none focus:ring-0 text-xl px-4 py-4 text-on-surface placeholder:text-outline/60 font-medium"
+              placeholder="Engage neural thread or query logic vault..."
+              type="text"
+            />
+            <button
+              class="p-4 text-on-surface-variant hover:text-primary transition-colors"
+            >
+              <span class="material-symbols-outlined text-[28px]">mic</span>
+            </button>
+          </div>
+        </div>
+        <div class="flex flex-col items-center gap-8">
+          <button
+            class="px-10 py-4 rounded-full bg-gradient-to-r from-primary to-secondary text-on-primary-fixed font-bold text-lg tracking-tight shadow-[0_0_40px_rgba(133,173,255,0.2)] hover:shadow-[0_0_60px_rgba(172,138,255,0.4)] hover:scale-[1.05] transition-all"
+          >
+            GO TO SEARCH MODE
+          </button>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4 w-full">
+            <div
+              class="glass-panel p-6 rounded-xl border border-outline-variant/10 hover:border-secondary/30 transition-all group cursor-pointer"
+            >
+              <span
+                class="material-symbols-outlined text-secondary mb-3 group-hover:scale-110 transition-transform"
+                >insights</span
+              >
+              <h3
+                class="text-xs font-black uppercase tracking-widest text-on-surface"
+              >
+                Trend Logic
+              </h3>
+              <p class="text-[10px] text-on-surface-variant mt-1">
+                Analyze global data drifts
+              </p>
+            </div>
+            <div
+              class="glass-panel p-6 rounded-xl border border-outline-variant/10 hover:border-secondary/30 transition-all group cursor-pointer"
+            >
+              <span
+                class="material-symbols-outlined text-secondary mb-3 group-hover:scale-110 transition-transform"
+                >auto_awesome</span
+              >
+              <h3
+                class="text-xs font-black uppercase tracking-widest text-on-surface"
+              >
+                Synthesis
+              </h3>
+              <p class="text-[10px] text-on-surface-variant mt-1">
+                Merge multiple logic cores
+              </p>
+            </div>
+            <div
+              class="glass-panel p-6 rounded-xl border border-outline-variant/10 hover:border-secondary/30 transition-all group cursor-pointer"
+            >
+              <span
+                class="material-symbols-outlined text-secondary mb-3 group-hover:scale-110 transition-transform"
+                >language</span
+              >
+              <h3
+                class="text-xs font-black uppercase tracking-widest text-on-surface"
+              >
+                Global Index
+              </h3>
+              <p class="text-[10px] text-on-surface-variant mt-1">
+                Cross-reference archives
+              </p>
+            </div>
+            <div
+              class="glass-panel p-6 rounded-xl border border-outline-variant/10 hover:border-secondary/30 transition-all group cursor-pointer"
+            >
+              <span
+                class="material-symbols-outlined text-secondary mb-3 group-hover:scale-110 transition-transform"
+                >code_blocks</span
+              >
+              <h3
+                class="text-xs font-black uppercase tracking-widest text-on-surface"
+              >
+                Pattern Map
+              </h3>
+              <p class="text-[10px] text-on-surface-variant mt-1">
+                Visualize code synapses
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="absolute bottom-12 flex gap-12 items-center text-outline/40">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-sm">bolt</span>
+          <span class="text-[10px] font-bold uppercase tracking-widest"
+            >Ultra-low Latency</span
+          >
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-sm">encrypted</span>
+          <span class="text-[10px] font-bold uppercase tracking-widest"
+            >Zero-Knowledge Mesh</span
+          >
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-sm">hub</span>
+          <span class="text-[10px] font-bold uppercase tracking-widest"
+            >Distributed Core</span
+          >
+        </div>
+      </div>
+    </main>
+    <div class="fixed bottom-0 right-0 p-8 z-50">
+      <div class="flex flex-col gap-4">
+        <div
+          class="glass-panel p-4 rounded-xl border border-outline-variant/10 max-w-[240px] shadow-xl"
+        >
+          <div class="flex items-center gap-3 mb-2">
+            <div
+              class="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_5px_#22c55e]"
+            ></div>
+            <span
+              class="text-[10px] font-bold uppercase tracking-widest text-on-surface"
+              >System Status</span
+            >
+          </div>
+          <div class="space-y-2">
+            <div
+              class="h-1 w-full bg-surface-container rounded-full overflow-hidden"
+            >
+              <div
+                class="h-full w-2/3 bg-gradient-to-r from-primary to-secondary"
+              ></div>
+            </div>
+            <p class="text-[9px] text-on-surface-variant">
+              Neural load balancing at 64% capacity.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
