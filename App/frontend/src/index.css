@@ -1,0 +1,106 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: 'Manrope', sans-serif;
+  background-color: #070d1f;
+  color: #dfe4fe;
+}
+
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+.glass-panel {
+  background: rgba(28, 37, 62, 0.6);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.glass-effect {
+  backdrop-filter: blur(20px);
+  background-color: rgba(28, 37, 62, 0.6);
+}
+
+.grid-bg {
+  background-image:
+    linear-gradient(rgba(133, 173, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(133, 173, 255, 0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+.grid-pattern {
+  background-image: linear-gradient(to right, rgba(65, 71, 91, 0.1) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(65, 71, 91, 0.1) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+.nebula-glow {
+  background: radial-gradient(circle at 50% 50%, rgba(133, 173, 255, 0.15) 0%, rgba(172, 138, 255, 0.1) 30%, transparent 70%);
+}
+
+.glow-primary {
+  box-shadow: 0 0 20px rgba(133, 173, 255, 0.15);
+}
+
+.glow-violet {
+  box-shadow: 0 0 20px rgba(172, 138, 255, 0.15);
+}
+
+.synaptic-glow {
+  background: radial-gradient(circle at center, rgba(172, 138, 255, 0.15) 0%, transparent 70%);
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #41475b;
+  border-radius: 10px;
+}
+
+.kinetic-gradient {
+  background: linear-gradient(45deg, #85adff, #ac8aff);
+}
+
+.orb-glow {
+  background: radial-gradient(circle, rgba(133, 173, 255, 0.4) 0%, rgba(172, 138, 255, 0.1) 60%, transparent 100%);
+}
+
+.bg-void {
+  background: radial-gradient(circle at center, #0c1326 0%, #000000 100%);
+}
+
+@keyframes reverse-spin {
+  from { transform: rotate(360deg); }
+  to { transform: rotate(0deg); }
+}
+.animate-reverse-spin {
+  animation: reverse-spin 20s linear infinite;
+}
+.animate-spin-slow {
+  animation: spin 30s linear infinite;
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: scale(1); }
+}
+.animate-fade-in {
+  animation: fade-in 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}

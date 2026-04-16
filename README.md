@@ -67,3 +67,40 @@ DBI
 
 이 구조는 각 영역의 책임을 분리하면서도,  
 AI 에이전트 기반 개발에서 일관성과 확장성을 유지하도록 설계되었다.
+
+---
+
+## 프론트엔드 실행 방법
+
+### 기술 스택
+
+- **React 18** + **Vite**
+- **React Router v6** (페이지 라우팅)
+- **Tailwind CSS** (스타일링)
+
+### 실행
+
+```bash
+cd App/frontend
+npm install
+npm run dev
+```
+
+브라우저에서 `http://localhost:3000` 접속
+
+빌드 결과물은 `App/frontend/dist/` 에 생성된다.
+
+### 페이지 구조
+
+| 경로                  | 설명                      |
+| --------------------- | ------------------------- |
+| `/`                   | 로그인                    |
+| `/setup`              | 초기 설정 (마스터키 생성) |
+| `/search`             | 검색 모드 메인            |
+| `/search/results`     | 검색 결과 목록            |
+| `/search/results/:id` | 파일 상세 보기            |
+| `/ai`                 | AI 모드 메인              |
+| `/ai/results`         | AI 검색 결과              |
+| `/ai/results/:id`     | AI 파일 상세 보기         |
+| `/settings`           | 설정                      |
+| `/data`               | 데이터 인덱싱             |
