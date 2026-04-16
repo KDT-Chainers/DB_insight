@@ -204,19 +204,6 @@ export default function MainSearch() {
       ════════════════════════════════ */}
       {view === 'home' && (
         <>
-          <nav className="fixed top-0 w-full flex justify-between items-center px-6 py-4 bg-transparent z-40">
-            <div className={open ? 'ml-64' : ''}></div>
-            <div className="flex items-center gap-6">
-              <div className="hidden md:flex gap-8 items-center">
-                <button className="font-manrope tracking-tight text-sm text-[#85adff] font-bold hover:text-[#85adff] transition-colors active:scale-95 duration-200">탐색</button>
-                <button className="font-manrope tracking-tight text-sm text-[#a5aac2] hover:text-[#85adff] transition-colors active:scale-95 duration-200">인텔리전스</button>
-                <button className="font-manrope tracking-tight text-sm text-[#a5aac2] hover:text-[#85adff] transition-colors active:scale-95 duration-200">클라우드 동기화</button>
-              </div>
-              <div className="w-8 h-8 rounded-full bg-surface-variant flex items-center justify-center cursor-pointer hover:bg-surface-container-highest transition-colors">
-                <span className="material-symbols-outlined text-primary text-xl">account_circle</span>
-              </div>
-            </div>
-          </nav>
 
           <main className={`${ml} h-full flex flex-col items-center justify-center p-8 relative transition-[margin] duration-300`}>
             <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-[120px] pointer-events-none"></div>
@@ -307,7 +294,7 @@ export default function MainSearch() {
         <header className={`fixed top-0 ${leftEdge} right-0 z-40 bg-slate-950/60 backdrop-blur-xl flex items-center px-6 py-3 gap-4 border-b border-outline-variant/10 shadow-[0_0_20px_rgba(133,173,255,0.1)] transition-[left] duration-300`}>
           <button
             onClick={() => { setView('home'); setInputValue('') }}
-            className="text-lg font-bold tracking-tighter bg-gradient-to-r from-blue-300 to-purple-400 bg-clip-text text-transparent shrink-0 hover:opacity-70 transition-opacity"
+            className={`text-lg font-bold tracking-tighter bg-gradient-to-r from-blue-300 to-purple-400 bg-clip-text text-transparent shrink-0 hover:opacity-70 transition-opacity ${!open ? 'ml-10' : ''}`}
           >
             DB_insight
           </button>
@@ -324,13 +311,7 @@ export default function MainSearch() {
             </div>
           </form>
 
-          <nav className="hidden md:flex items-center gap-6 shrink-0">
-            <button className={`text-sm transition-colors ${view === 'results' ? 'text-blue-300 border-b-2 border-blue-400 pb-1' : 'text-slate-400 hover:text-blue-200'}`}>탐색기</button>
-            <button className="text-slate-400 hover:text-blue-200 transition-colors text-sm">최근</button>
-            <button className="text-slate-400 hover:text-blue-200 transition-colors text-sm">보관소</button>
-          </nav>
-
-          {view === 'detail' && (
+{view === 'detail' && (
             <button
               onClick={handleBackToResults}
               className="flex items-center gap-2 px-4 py-2 rounded-full bg-surface-container-high border border-outline-variant/20 text-xs font-bold text-on-surface-variant hover:text-primary hover:border-primary/30 transition-all shrink-0"
@@ -364,9 +345,6 @@ export default function MainSearch() {
               <div className="flex gap-3">
                 <button className="px-4 py-2 rounded-full glass-panel border border-outline-variant/20 text-xs font-bold hover:bg-primary/5 transition-all flex items-center gap-2">
                   <span className="material-symbols-outlined text-sm">filter_list</span>관련도
-                </button>
-                <button className="px-4 py-2 rounded-full bg-gradient-to-r from-primary to-secondary text-on-primary font-bold text-xs shadow-lg shadow-primary/20 flex items-center gap-2">
-                  <span className="material-symbols-outlined text-sm">auto_awesome</span>전체 합성
                 </button>
               </div>
             </div>
@@ -449,14 +427,6 @@ export default function MainSearch() {
             </div>
           </div>
 
-          <div className="fixed bottom-10 right-10 z-50">
-            <button
-              onClick={() => navigate('/ai')}
-              className="p-4 rounded-full bg-gradient-to-br from-primary to-secondary shadow-[0_0_30px_rgba(133,173,255,0.4)] cursor-pointer hover:scale-110 transition-transform active:scale-95"
-            >
-              <span className="material-symbols-outlined text-white">auto_awesome</span>
-            </button>
-          </div>
         </main>
       )}
 
@@ -475,7 +445,7 @@ export default function MainSearch() {
           }}
         >
           {/* 상단 파일 정보 바 */}
-          <div className={`fixed top-[52px] ${leftEdge} right-0 z-30 bg-[#070d1f]/60 backdrop-blur-xl flex items-center justify-between px-8 py-3 border-b border-outline-variant/10 transition-[left] duration-300`}>
+          <div className={`fixed top-[64px] ${leftEdge} right-0 z-30 bg-[#070d1f]/60 backdrop-blur-xl flex items-center justify-between px-8 py-3 border-b border-outline-variant/10 transition-[left] duration-300`}>
             <div className="flex items-center gap-3">
               <span className={`material-symbols-outlined ${selectedFile.iconColor}`}>{selectedFile.icon}</span>
               <span className="font-manrope text-sm tracking-wide text-[#dfe4fe] font-bold">{selectedFile.name}</span>
@@ -491,7 +461,7 @@ export default function MainSearch() {
             </div>
           </div>
 
-          <section className="pt-28 pb-12 px-8 max-w-7xl mx-auto space-y-8">
+          <section className="pt-36 pb-12 px-8 max-w-7xl mx-auto space-y-8">
             <div className="grid grid-cols-12 gap-6">
               {/* 메인 프리뷰 */}
               <div className="col-span-8 space-y-6">
@@ -578,6 +548,16 @@ export default function MainSearch() {
                     <div className="flex items-center gap-3">
                       <span className="material-symbols-outlined text-on-surface-variant group-hover:text-primary">share</span>
                       <span className="text-sm font-semibold">노드에 공유</span>
+                    </div>
+                    <span className="material-symbols-outlined text-xs text-on-surface-variant">chevron_right</span>
+                  </button>
+                  <button
+                    onClick={() => { window.location.href = `mailto:?subject=${encodeURIComponent(selectedFile.name)}&body=${encodeURIComponent(selectedFile.name + ' 파일을 공유합니다.')}` }}
+                    className="w-full group flex items-center justify-between p-4 rounded-xl bg-surface-container-highest hover:bg-primary/10 transition-colors border border-transparent hover:border-primary/20"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="material-symbols-outlined text-on-surface-variant group-hover:text-primary">mail</span>
+                      <span className="text-sm font-semibold">이메일로 보내기</span>
                     </div>
                     <span className="material-symbols-outlined text-xs text-on-surface-variant">chevron_right</span>
                   </button>

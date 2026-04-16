@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import AISidebar from '../components/AISidebar'
+import SearchSidebar from '../components/SearchSidebar'
 import { useSidebar } from '../context/SidebarContext'
 
 const AI_RESULTS = [
@@ -112,7 +112,7 @@ export default function MainAI() {
   }
 
   return (
-    <div className="bg-background text-on-surface relative min-h-screen overflow-x-hidden">
+    <div className={view === 'home' ? 'overflow-hidden h-screen grid-bg relative' : 'min-h-screen relative bg-background text-on-surface'}>
 
       {/* 검색 모드 포털 전환 */}
       {searchTransitioning && (
@@ -147,127 +147,101 @@ export default function MainAI() {
       )}
 
       {/* 사이드바 — 항상 마운트 유지 */}
-      <AISidebar />
+      <SearchSidebar />
 
       {/* ════════════════════════════════
           HOME VIEW
       ════════════════════════════════ */}
       {view === 'home' && (
         <>
-          <header className="bg-[#070d1f]/60 backdrop-blur-3xl text-[#ac8aff] font-manrope tracking-[-0.04em] font-semibold fixed top-0 w-full z-40 shadow-[0_8px_32px_0_rgba(0,0,0,0.3)]">
-            <div className="flex justify-between items-center h-20 px-8 w-full max-w-screen-2xl mx-auto">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-[0_0_15px_rgba(172,138,255,0.4)]">
-                  <span className="material-symbols-outlined text-on-primary-fixed text-sm" style={{ fontVariationSettings: '"FILL" 1' }}>terminal</span>
+          <main className={`${ml} h-full flex flex-col items-center justify-center p-8 relative transition-[margin] duration-300`}>
+            {/* 배경 glow 레이어 */}
+            <div className="absolute top-0 left-1/3 w-[600px] h-[400px] bg-violet-700/20 rounded-full blur-[140px] pointer-events-none animate-pulse" style={{ animationDuration: '4s' }}></div>
+            <div className="absolute bottom-0 right-1/4 w-[500px] h-[400px] bg-purple-800/15 rounded-full blur-[120px] pointer-events-none"></div>
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[200px] bg-violet-900/25 rounded-full blur-[80px] pointer-events-none"></div>
+            {/* 스캔라인 */}
+            <div className="absolute inset-0 pointer-events-none" style={{ background: 'repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(139,92,246,0.015) 3px, rgba(139,92,246,0.015) 4px)' }}></div>
+
+            <div className="w-full max-w-4xl flex flex-col items-center z-10">
+              <div className={`mb-12 text-center transition-all duration-300 ${homeExiting ? 'opacity-0 -translate-y-6' : 'opacity-100 translate-y-0'}`}>
+                <div className="inline-block mb-3">
+                  <span className="text-[10px] font-bold tracking-[0.3em] uppercase text-violet-400/80 border border-violet-700/40 px-3 py-1 rounded-full bg-violet-950/40">
+                    ◆ QUANTUM CORE ONLINE
+                  </span>
                 </div>
-                <span className="text-xl font-bold text-[#dfe4fe] tracking-tighter">Obsidian AI</span>
-              </div>
-              <nav className="hidden md:flex gap-8 items-center">
-                <button className="text-[#ac8aff] border-b-2 border-[#ac8aff] pb-1 hover:text-[#85adff] transition-colors duration-300">신경망 워크스페이스</button>
-                <button className="text-[#a5aac2] hover:text-[#85adff] transition-colors duration-300">분석 엔진</button>
-                <button className="text-[#a5aac2] hover:text-[#85adff] transition-colors duration-300">클라우드 동기화</button>
-              </nav>
-              <div className="flex items-center gap-4">
-                <button onClick={() => navigate('/settings')} className="p-2 text-[#a5aac2] hover:text-[#ac8aff] transition-colors">
-                  <span className="material-symbols-outlined">settings</span>
-                </button>
-                <button onClick={() => navigate('/data')} className="p-2 text-[#a5aac2] hover:text-[#ac8aff] transition-colors">
-                  <span className="material-symbols-outlined">database</span>
-                </button>
-              </div>
-            </div>
-          </header>
-
-          <main className={`${ml} pt-20 h-screen relative flex flex-col items-center justify-center px-12 overflow-hidden transition-[margin] duration-300`}>
-            <div className="absolute inset-0 z-0 pointer-events-none synaptic-glow"></div>
-            <div className="absolute top-1/4 right-1/4 w-[500px] h-[500px] bg-secondary/5 blur-[120px] rounded-full"></div>
-            <div className="absolute bottom-1/4 left-1/4 w-[400px] h-[400px] bg-primary/5 blur-[100px] rounded-full"></div>
-
-            <div className="w-full max-w-4xl z-10 space-y-12">
-              <div className={`text-center space-y-4 transition-all duration-350 ${homeExiting ? 'opacity-0 -translate-y-8' : 'opacity-100 translate-y-0'}`}>
-                <h1 className="text-6xl md:text-7xl font-extrabold tracking-[-0.04em] text-on-surface font-headline leading-tight">
-                  퀀텀{' '}
-                  <span className="bg-gradient-to-r from-primary via-secondary to-primary-container bg-clip-text text-transparent">인텔리전스</span>
-                </h1>
-                <p className="text-xl text-on-surface-variant max-w-2xl mx-auto font-light leading-relaxed">
-                  로컬 시냅스 노드에 접근하고 통합 Obsidian 아키텍처로 복잡한 신경망 스레드를 처리하세요.
+                <h2 className="text-5xl md:text-6xl font-black tracking-tighter mb-4" style={{ textShadow: '0 0 40px rgba(139,92,246,0.4)' }}>
+                  <span className="text-on-surface">퀀텀 </span>
+                  <span className="bg-gradient-to-r from-violet-400 via-fuchsia-400 to-pink-400 bg-clip-text text-transparent">인텔리전스</span>
+                  <span className="text-violet-400">.</span>
+                </h2>
+                <p className="text-on-surface-variant/70 text-lg max-w-xl mx-auto font-light">
+                  신경망 엔진이 로컬 파일을 분석하고 질문에 답합니다.
                 </p>
               </div>
 
               <form
                 onSubmit={handleSearch}
-                className={`relative group transition-all duration-350 ${homeExiting ? 'opacity-0 translate-y-4' : 'opacity-100 translate-y-0'}`}
-                style={homeExiting ? { animationDelay: '60ms' } : {}}
+                className="w-full relative group"
+                style={homeExiting ? { visibility: 'hidden' } : {}}
               >
-                <div className="absolute -inset-1 bg-gradient-to-r from-secondary/50 via-primary/30 to-secondary/50 rounded-2xl blur opacity-20 group-focus-within:opacity-40 transition duration-1000"></div>
-                <div className="relative glass-panel rounded-2xl border border-outline-variant/15 flex items-center p-2 shadow-2xl">
-                  <button type="button" className="p-4 text-on-surface-variant hover:text-secondary transition-colors">
-                    <span className="material-symbols-outlined text-[28px]">add</span>
+                {/* 외곽 glow */}
+                <div className="absolute -inset-[1px] rounded-full bg-gradient-to-r from-violet-700/60 via-fuchsia-600/30 to-violet-700/60 blur-sm opacity-0 group-focus-within:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
+                <div className="relative rounded-full p-2 flex items-center gap-4 transition-all duration-300"
+                  style={{ background: 'rgba(5,3,12,0.75)', border: '1px solid rgba(109,40,217,0.4)', boxShadow: '0 0 40px rgba(109,40,217,0.12), inset 0 0 20px rgba(0,0,0,0.4)' }}>
+                  <button type="button" className="w-12 h-12 rounded-full flex items-center justify-center text-white active:scale-90 transition-transform" style={{ background: 'linear-gradient(135deg, #4c1d95, #7c3aed)', boxShadow: '0 0 20px rgba(124,58,237,0.6)' }}>
+                    <span className="material-symbols-outlined font-bold">add</span>
                   </button>
                   <input
                     type="text"
                     value={inputValue}
                     onChange={(e) => setInputValue(e.target.value)}
                     placeholder="신경망 스레드를 시작하거나 로직 보관소를 검색하세요..."
-                    className="flex-1 bg-transparent border-none focus:ring-0 text-xl px-4 py-4 text-on-surface placeholder:text-outline/60 font-medium outline-none"
+                    className="flex-1 bg-transparent border-none focus:ring-0 text-on-surface placeholder:text-violet-200/20 font-manrope text-lg py-4 outline-none"
                   />
-                  <button type="button" className="p-4 text-on-surface-variant hover:text-primary transition-colors">
-                    <span className="material-symbols-outlined text-[28px]">mic</span>
+                  <button type="button" className="w-12 h-12 rounded-full flex items-center justify-center text-violet-900/60 hover:text-violet-400 transition-all duration-200" style={{ background: 'rgba(139,92,246,0.05)' }}>
+                    <span className="material-symbols-outlined">mic</span>
                   </button>
                 </div>
               </form>
 
-              <div className={`flex flex-col items-center gap-8 transition-all duration-350 ${homeExiting ? 'opacity-0 translate-y-4' : 'opacity-100 translate-y-0'}`}>
+              <div className="mt-10 flex justify-center" style={homeExiting ? { visibility: 'hidden' } : {}}>
                 <button
                   ref={btnRef}
                   onClick={handleGoToSearch}
                   disabled={searchTransitioning}
-                  className="px-10 py-4 rounded-full bg-gradient-to-r from-primary to-secondary text-on-primary-fixed font-bold text-lg tracking-tight shadow-[0_0_40px_rgba(133,173,255,0.2)] hover:shadow-[0_0_60px_rgba(172,138,255,0.4)] hover:scale-[1.05] transition-all disabled:pointer-events-none"
+                  className="px-8 py-3 rounded-full flex items-center gap-3 text-sm font-bold tracking-widest uppercase text-violet-200/50 hover:text-violet-200 transition-all duration-300 group disabled:pointer-events-none"
+                  style={{ background: 'rgba(10,5,25,0.6)', border: '1px solid rgba(109,40,217,0.25)' }}
+                  onMouseEnter={e => e.currentTarget.style.boxShadow = '0 0 20px rgba(139,92,246,0.2)'}
+                  onMouseLeave={e => e.currentTarget.style.boxShadow = 'none'}
                 >
+                  <span className="w-2 h-2 rounded-full bg-violet-500 animate-pulse" style={{ boxShadow: '0 0 6px rgba(139,92,246,0.9)' }}></span>
                   검색 모드로 전환
+                  <span className="material-symbols-outlined text-lg group-hover:translate-x-1 transition-transform">arrow_forward</span>
                 </button>
+              </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full">
-                  {[
-                    { icon: 'insights', title: '트렌드 분석', sub: '글로벌 데이터 흐름 분석' },
-                    { icon: 'auto_awesome', title: '합성', sub: '다중 로직 코어 병합' },
-                    { icon: 'language', title: '글로벌 인덱스', sub: '아카이브 교차 참조' },
-                    { icon: 'code_blocks', title: '패턴 맵', sub: '코드 시냅스 시각화' },
-                  ].map((card) => (
-                    <div key={card.title} className="glass-panel p-6 rounded-xl border border-outline-variant/10 hover:border-secondary/30 transition-all group cursor-pointer">
-                      <span className="material-symbols-outlined text-secondary mb-3 group-hover:scale-110 transition-transform block">{card.icon}</span>
-                      <h3 className="text-xs font-black uppercase tracking-widest text-on-surface">{card.title}</h3>
-                      <p className="text-[10px] text-on-surface-variant mt-1">{card.sub}</p>
-                    </div>
-                  ))}
-                </div>
+              <div className={`grid grid-cols-1 md:grid-cols-3 gap-4 mt-24 w-full transition-all duration-300 ${homeExiting ? 'opacity-0 translate-y-4' : 'opacity-100 translate-y-0'}`}>
+                {[
+                  { icon: 'insights', title: '트렌드 분석', sub: '글로벌 데이터 흐름' },
+                  { icon: 'auto_awesome', title: '합성', sub: '다중 로직 코어 병합' },
+                  { icon: 'code_blocks', title: '패턴 맵', sub: '코드 시냅스 시각화' },
+                ].map((card) => (
+                  <div key={card.title}
+                    className="p-6 rounded-xl cursor-pointer transition-all duration-300 group"
+                    style={{ background: 'rgba(5,3,15,0.65)', border: '1px solid rgba(109,40,217,0.2)' }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(139,92,246,0.5)'; e.currentTarget.style.boxShadow = '0 0 25px rgba(139,92,246,0.12)' }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(109,40,217,0.2)'; e.currentTarget.style.boxShadow = 'none' }}
+                  >
+                    <span className="material-symbols-outlined text-violet-600 mb-4 block group-hover:text-violet-400 transition-colors">{card.icon}</span>
+                    <h3 className="text-on-surface font-bold mb-1">{card.title}</h3>
+                    <p className="text-violet-200/30 text-xs uppercase tracking-tighter">{card.sub}</p>
+                  </div>
+                ))}
               </div>
             </div>
 
-            <div className="absolute bottom-12 flex gap-12 items-center text-outline/40">
-              {[['bolt', '초저지연'], ['encrypted', '제로 지식 메시'], ['hub', '분산 코어']].map(([icon, label]) => (
-                <div key={label} className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-sm">{icon}</span>
-                  <span className="text-[10px] font-bold uppercase tracking-widest">{label}</span>
-                </div>
-              ))}
-            </div>
+            <div className="absolute bottom-0 left-0 w-full h-40 pointer-events-none" style={{ background: 'linear-gradient(to top, rgba(10,3,25,0.6), transparent)' }}></div>
           </main>
-
-          <div className="fixed bottom-0 right-0 p-8 z-50">
-            <div className="glass-panel p-4 rounded-xl border border-outline-variant/10 max-w-[240px] shadow-xl">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_5px_#22c55e]"></div>
-                <span className="text-[10px] font-bold uppercase tracking-widest text-on-surface">System Status</span>
-              </div>
-              <div className="space-y-2">
-                <div className="h-1 w-full bg-surface-container rounded-full overflow-hidden">
-                  <div className="h-full w-2/3 bg-gradient-to-r from-primary to-secondary"></div>
-                </div>
-                <p className="text-[9px] text-on-surface-variant">Neural load balancing at 64% capacity.</p>
-              </div>
-            </div>
-          </div>
         </>
       )}
 
@@ -275,10 +249,10 @@ export default function MainAI() {
           RESULTS / DETAIL 공통 헤더
       ════════════════════════════════ */}
       {view !== 'home' && (
-        <header className={`fixed top-0 ${leftEdge} right-0 z-50 bg-[#070d1f]/60 backdrop-blur-xl flex items-center px-8 h-16 gap-6 shadow-[0_4px_30px_rgba(172,138,255,0.1)] transition-[left] duration-300`}>
+        <header className={`fixed top-0 ${leftEdge} right-0 z-40 bg-[#070d1f]/60 backdrop-blur-xl flex items-center px-8 h-16 gap-6 shadow-[0_4px_30px_rgba(172,138,255,0.1)] transition-[left] duration-300`}>
           <button
             onClick={() => { setView('home'); setInputValue('') }}
-            className="text-xl font-bold tracking-tighter bg-gradient-to-r from-violet-400 to-fuchsia-400 bg-clip-text text-transparent shrink-0 hover:opacity-70 transition-opacity"
+            className={`text-xl font-bold tracking-tighter bg-gradient-to-r from-violet-400 to-fuchsia-400 bg-clip-text text-transparent shrink-0 hover:opacity-70 transition-opacity ${!open ? 'ml-10' : ''}`}
           >
             Obsidian AI
           </button>
