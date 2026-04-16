@@ -5,24 +5,24 @@ const AI_RESULTS = [
   {
     id: '1',
     tag: 'DATAPACK_772',
-    title: 'Quantum Memory Allocation',
-    desc: 'Structural analysis of distributed memory nodes across the fuchsia quadrant. High redundancy detected in sector 9.',
-    modified: '2h ago',
+    title: '퀀텀 메모리 할당',
+    desc: '퓨샤 쿼드런트 전반의 분산 메모리 노드에 대한 구조 분석. 섹터 9에서 높은 중복성이 감지되었습니다.',
+    modified: '2시간 전',
     img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBiusmUQ-dF9m6N2dat_eOi8PeAoliSDsbJq4jNjPUMeLdXktUuZ0dHPASMIqM6HxhOFd_BRotNPPM6fK9p-x5FPhrSJnCnR7zxeBt-3NQMG1LK8RWuj3Q2N_XJXFJcQcNIcCpmZrMUB1BkVkXnIYeipnjBZkJfeYwHyIQcQC064JM4zpL5IVLiQEzGmp8JHFb4G2I8EKZAnkfPT1R_WDK_WmT290fPuMpL6yQ0FeI38nkMQ2cxf8FvKKbnJKTS75oONti5_kSDnsRs',
   },
   {
     id: '2',
     tag: 'LOG_STREAM',
-    title: 'Cognitive Load Distribution',
-    desc: 'Real-time balancing of heuristic weights in active thinking cycles. Optimization protocol initiated.',
-    modified: 'Active',
+    title: '인지 부하 분산',
+    desc: '활성 사고 사이클에서 휴리스틱 가중치의 실시간 균형 조정. 최적화 프로토콜이 시작되었습니다.',
+    modified: '활성 중',
     img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDSfkJz1BrXhj8JKwbl2czpkysEDmYSvRLX2WptNVJq5GJscS_bMt0Yw0409-4Mz39isL0K_hQ8FdKu5lqkvABJ8n0vJHnxybkP8aHVBwk42jjs9TxiSkwRM5gmboyIByUnkBup1-2dfsuTIA2ZL_U1UW1oUgTyhfO9XnDgBvSbCDE4_wPvHvzmY6pcCN5UCVYvdxM_xBYnyJlEGKcxDuMKDjNexPXPd4pe3wHFrDnUjk-UKfmY889GTbwLU_SFHcsBdwqZzG8nKGRr',
   },
   {
     id: '3',
     tag: 'VAULT_ARCHIVE',
-    title: 'Crystalline Knowledge Base',
-    desc: 'Deep-storage retrieval of historical training sets. Integrity verified through multi-pass hash check.',
+    title: '결정형 지식 베이스',
+    desc: '과거 학습 데이터셋의 심층 저장소 검색. 다중 패스 해시 검사를 통해 무결성이 검증되었습니다.',
     modified: '4.2 PB',
     img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBXIIVVDVBdpsRK-VyjwcBDfX5m0q1aGVB7lNkqsmY3dnaihm7xe0kRv0F5SB93RYrEFiaVKDroBKUb0yqjB14Q3hUTiu_9wYEmnleWOuLQgAic_0PcIER1IlnGP2ap7aQAAAnTRu7-AujKhHzk5MJQmkbfFPbVlZfq7edimXxeOIbqjUX22lvKQ8LbHkTBm_mOcQeleA8WE2d-S1rVKWTZYJFPQt29wNzi9wc-qgwniGitShIKul7FnudpG4SUfJyEO8K5OwYnH2E6',
   },
@@ -40,9 +40,9 @@ export default function MainAIModeResult() {
       <header className="fixed top-0 w-full z-50 bg-[#070d1f]/60 backdrop-blur-xl shadow-[0_4px_30px_rgba(172,138,255,0.1)]">
         <div className="flex justify-between items-center px-8 h-16 w-full font-manrope tracking-tight">
           <div className="flex items-center gap-8">
-            <span className="text-xl font-bold tracking-tighter bg-gradient-to-r from-violet-400 to-fuchsia-400 bg-clip-text text-transparent">Obsidian Intelligence</span>
+            <span className="text-xl font-bold tracking-tighter bg-gradient-to-r from-violet-400 to-fuchsia-400 bg-clip-text text-transparent">Obsidian 인텔리전스</span>
             <div className="hidden md:flex items-center gap-6">
-              {['Models', 'Datasets', 'Neural Logs'].map((item) => (
+              {['모델', '데이터셋', '신경망 로그'].map((item) => (
                 <button key={item} className="text-slate-400 hover:text-slate-200 transition-colors">{item}</button>
               ))}
             </div>
@@ -50,7 +50,7 @@ export default function MainAIModeResult() {
           <div className="flex items-center gap-4">
             <div className="relative group">
               <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-violet-400/50">search</span>
-              <input className="bg-white/5 border-none rounded-full pl-10 pr-4 py-1.5 text-sm w-64 focus:ring-1 focus:ring-violet-500/50 transition-all outline-none" placeholder="Neural Search..." />
+              <input className="bg-white/5 border-none rounded-full pl-10 pr-4 py-1.5 text-sm w-64 focus:ring-1 focus:ring-violet-500/50 transition-all outline-none" placeholder="신경망 검색..." />
             </div>
             <button onClick={() => navigate('/settings')} className="p-2 text-slate-400 hover:bg-white/5 rounded-full transition-all">
               <span className="material-symbols-outlined">settings</span>
@@ -67,13 +67,13 @@ export default function MainAIModeResult() {
           <div className="mb-12 relative">
             <div className="absolute -top-20 -left-20 w-96 h-96 bg-secondary/10 blur-[100px] rounded-full"></div>
             <div className="relative z-10">
-              <span className="text-secondary text-xs font-bold tracking-[0.3em] uppercase mb-4 block">Refined Intelligence Output</span>
-              <h1 className="text-5xl font-extrabold tracking-tighter text-on-surface mb-4">Neural Search Results</h1>
+              <span className="text-secondary text-xs font-bold tracking-[0.3em] uppercase mb-4 block">정제된 인텔리전스 출력</span>
+              <h1 className="text-5xl font-extrabold tracking-tighter text-on-surface mb-4">신경망 검색 결과</h1>
               <div className="flex items-center gap-4 text-on-surface-variant">
                 <span className="flex items-center gap-2 px-3 py-1 bg-surface-container-high rounded-full border border-outline-variant/20 text-sm">
-                  <span className="w-1.5 h-1.5 rounded-full bg-secondary"></span>342 Matches Found
+                  <span className="w-1.5 h-1.5 rounded-full bg-secondary"></span>342개 매칭 발견
                 </span>
-                <span className="text-sm">Processed in 124ms</span>
+                <span className="text-sm">124ms에 처리 완료</span>
               </div>
             </div>
           </div>
@@ -86,15 +86,15 @@ export default function MainAIModeResult() {
                 <span className="material-symbols-outlined text-secondary opacity-50 text-4xl" style={{ fontVariationSettings: '"FILL" 1' }}>auto_awesome</span>
               </div>
               <div className="relative z-10">
-                <h3 className="text-secondary text-xs font-black tracking-widest uppercase mb-6">AI Contextual Synthesis</h3>
+                <h3 className="text-secondary text-xs font-black tracking-widest uppercase mb-6">AI 맥락 합성</h3>
                 <p className="text-2xl font-light text-on-surface leading-relaxed mb-8">
-                  Based on your recent <span className="text-secondary font-medium">Neural Logs</span> and the refinement of{' '}
-                  <span className="text-secondary font-medium">Processing Nodes</span>, the system has identified a strong correlation between the selected datasets
-                  and your current trajectory in "Predictive Analytics Phase 4".
+                  최근 <span className="text-secondary font-medium">신경망 로그</span>와{' '}
+                  <span className="text-secondary font-medium">처리 노드</span> 정제를 바탕으로, 시스템은 선택된 데이터셋과
+                  현재 "예측 분석 4단계" 진행 방향 간의 강한 상관관계를 식별했습니다.
                 </p>
                 <div className="flex gap-3">
-                  <button className="bg-secondary text-on-secondary px-6 py-2.5 rounded-full font-bold text-sm tracking-tight active:scale-95 transition-all">Expand Synthesis</button>
-                  <button className="bg-surface-container-highest text-on-surface px-6 py-2.5 rounded-full font-bold text-sm tracking-tight border border-outline-variant/30 hover:bg-surface-bright transition-all">Audit Logic</button>
+                  <button className="bg-secondary text-on-secondary px-6 py-2.5 rounded-full font-bold text-sm tracking-tight active:scale-95 transition-all">합성 확장</button>
+                  <button className="bg-surface-container-highest text-on-surface px-6 py-2.5 rounded-full font-bold text-sm tracking-tight border border-outline-variant/30 hover:bg-surface-bright transition-all">로직 감사</button>
                 </div>
               </div>
             </div>
@@ -102,9 +102,9 @@ export default function MainAIModeResult() {
             {/* Model stats */}
             <div className="col-span-12 lg:col-span-4 bg-surface-container-high rounded-xl p-6 border border-outline-variant/10 flex flex-col justify-between">
               <div>
-                <h4 className="text-on-surface-variant text-[10px] font-black tracking-[0.2em] uppercase mb-6">Model Integrity</h4>
+                <h4 className="text-on-surface-variant text-[10px] font-black tracking-[0.2em] uppercase mb-6">모델 무결성</h4>
                 <div className="space-y-6">
-                  {[['Coherence Level', '98.4%', 'w-[98%]'], ['Latency Shift', '-12ms', 'w-[75%]']].map(([label, val, w]) => (
+                  {[['일관성 수준', '98.4%', 'w-[98%]'], ['지연 변화', '-12ms', 'w-[75%]']].map(([label, val, w]) => (
                     <div key={label}>
                       <div className="flex justify-between text-xs mb-2">
                         <span className="text-on-surface/80">{label}</span>
@@ -124,7 +124,7 @@ export default function MainAIModeResult() {
                   </div>
                   <div>
                     <p className="text-xs font-bold text-on-surface">Obsidian-v4.2</p>
-                    <p className="text-[10px] text-on-surface-variant">LATEST REFINEMENT</p>
+                    <p className="text-[10px] text-on-surface-variant">최신 업데이트</p>
                   </div>
                 </div>
               </div>
@@ -146,7 +146,7 @@ export default function MainAIModeResult() {
                     <h3 className="text-lg font-bold text-on-surface mb-2 group-hover:text-secondary transition-colors">{r.title}</h3>
                     <p className="text-sm text-on-surface-variant line-clamp-2 mb-4 leading-relaxed">{r.desc}</p>
                     <div className="flex justify-between items-center">
-                      <span className="text-[10px] font-bold text-outline uppercase tracking-widest">Modified: {r.modified}</span>
+                      <span className="text-[10px] font-bold text-outline uppercase tracking-widest">수정: {r.modified}</span>
                       <span className="material-symbols-outlined text-on-surface-variant group-hover:translate-x-1 transition-transform">arrow_forward</span>
                     </div>
                   </div>
@@ -157,7 +157,7 @@ export default function MainAIModeResult() {
             {/* Pagination */}
             <div className="col-span-12 bg-surface-container-highest/40 border border-outline-variant/20 rounded-xl p-4 flex items-center justify-between">
               <div className="flex items-center gap-6">
-                <p className="text-xs text-on-surface-variant font-medium">Page 1 of 34</p>
+                <p className="text-xs text-on-surface-variant font-medium">1 / 34 페이지</p>
                 <div className="flex gap-2">
                   {[1, 2, 3].map((n) => (
                     <button key={n} className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm ${n === 2 ? 'bg-secondary text-on-secondary font-bold' : 'bg-surface-container text-on-surface-variant hover:text-secondary border border-outline-variant/10'}`}>{n}</button>
@@ -168,7 +168,7 @@ export default function MainAIModeResult() {
               </div>
               <div className="flex gap-4">
                 <button className="flex items-center gap-2 px-4 py-2 text-xs font-bold uppercase tracking-widest text-on-surface-variant hover:text-secondary transition-all">
-                  Export Manifest<span className="material-symbols-outlined text-sm">download</span>
+                  목록 내보내기<span className="material-symbols-outlined text-sm">download</span>
                 </button>
               </div>
             </div>

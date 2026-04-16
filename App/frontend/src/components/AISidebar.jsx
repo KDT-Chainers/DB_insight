@@ -5,11 +5,11 @@ export default function AISidebar() {
   const location = useLocation()
 
   const navItems = [
-    { label: 'Neural Search', icon: 'search', path: '/ai' },
-    { label: 'File Vault', icon: 'folder_open', path: null },
-    { label: 'Processing', icon: 'memory', path: null },
-    { label: 'History', icon: 'history', path: null },
-    { label: 'Analytics', icon: 'insights', path: null },
+    { label: '신경망 검색', icon: 'search', path: '/ai' },
+    { label: '파일 보관소', icon: 'folder_open', path: null },
+    { label: '처리 중', icon: 'memory', path: null },
+    { label: '기록', icon: 'history', path: null },
+    { label: '분석', icon: 'insights', path: null },
   ]
 
   return (
@@ -18,9 +18,9 @@ export default function AISidebar() {
         <div className="px-6 mb-10">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-2 h-2 rounded-full bg-violet-400 animate-pulse"></div>
-            <span className="text-lg font-black text-violet-400">Core Terminal</span>
+            <span className="text-lg font-black text-violet-400">코어 터미널</span>
           </div>
-          <p className="text-[10px] uppercase tracking-[0.2em] text-violet-400/60 font-bold">AI Mode Active</p>
+          <p className="text-[10px] uppercase tracking-[0.2em] text-violet-400/60 font-bold">AI 모드 활성화</p>
         </div>
 
         <nav className="flex-1 space-y-1">
@@ -45,19 +45,19 @@ export default function AISidebar() {
 
         <div className="px-6 mt-auto pt-8">
           <button className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-secondary-container to-secondary text-on-secondary font-bold text-xs tracking-widest uppercase hover:opacity-90 active:scale-95 transition-all glow-violet">
-            Initialize Sync
+            동기화 시작
           </button>
           <div className="mt-8 space-y-4">
             <button className="flex items-center gap-3 text-slate-500 hover:text-violet-300 transition-all text-xs tracking-widest uppercase font-bold w-full">
               <span className="material-symbols-outlined text-sm">help</span>
-              Support
+              지원
             </button>
             <button
               onClick={() => navigate('/settings')}
               className="flex items-center gap-3 text-slate-500 hover:text-violet-300 transition-all text-xs tracking-widest uppercase font-bold w-full"
             >
               <span className="material-symbols-outlined text-sm">sensors</span>
-              Status
+              상태
             </button>
           </div>
         </div>

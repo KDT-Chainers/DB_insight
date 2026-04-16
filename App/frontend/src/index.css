@@ -104,3 +104,45 @@ body {
 .animate-fade-in {
   animation: fade-in 0.8s cubic-bezier(0.16, 1, 0.3, 1);
 }
+
+/* Search submit slide-up */
+@keyframes slide-up-out {
+  0%   { transform: translateY(0); opacity: 1; }
+  100% { transform: translateY(-60px); opacity: 0; }
+}
+@keyframes cards-fade-out {
+  0%   { transform: translateY(0); opacity: 1; }
+  100% { transform: translateY(40px); opacity: 0; }
+}
+.search-slide-up {
+  animation: slide-up-out 0.45s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+.cards-fade-down {
+  animation: cards-fade-out 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* Mode transition overlay */
+@keyframes portal-expand {
+  0%   { transform: scale(0); opacity: 0; }
+  30%  { opacity: 0.35; }
+  100% { transform: scale(25); opacity: 0.55; }
+}
+@keyframes portal-ring-pulse {
+  0%   { transform: scale(0.6); opacity: 0.3; }
+  100% { transform: scale(2.5); opacity: 0; }
+}
+@keyframes portal-text-fade {
+  0%   { opacity: 0; transform: translateY(6px); }
+  30%  { opacity: 1; transform: translateY(0); }
+  80%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+.portal-overlay {
+  animation: portal-expand 0.85s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+.portal-ring {
+  animation: portal-ring-pulse 0.7s ease-out forwards;
+}
+.portal-text {
+  animation: portal-text-fade 0.85s ease-out forwards;
+}

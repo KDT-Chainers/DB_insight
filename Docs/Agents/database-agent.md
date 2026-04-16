@@ -14,6 +14,7 @@
 - metadata 구조 정의
 - 데이터 간 연결 관계 유지
 - 데이터 일관성 보장
+- SQLite 앱 DB 관리 (설정, 검색 기록)
 
 ---
 
@@ -79,6 +80,55 @@ chunk_id: file_001_chunk_001
 - file_id / chunk_id 규칙 위반 금지
 - 중복 데이터 생성 금지
 - 구조 변경 시 기준 문서 미반영 금지
+
+---
+
+## SQLite 앱 DB
+
+### 위치
+
+`App/backend/db/app.db`
+
+파일 임베딩 데이터(raw/extracted/embedded)와 분리된 앱 전용 DB이다.
+
+### 테이블: settings
+
+앱 설정 저장. 비밀번호 등 key-value 구조.
+
+```sql
+CREATE TABLE settings (
+    key        TEXT PRIMARY KEY,
+    value      TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+```
+
+- `master_password_hash` key: `{salt}:{SHA256(salt+password)}` 형식
+- 해당 row 없음 = 비밀번호 미설정 상태
+- 평문 비밀번호 저장 금지
+
+### 테이블: search_history
+
+검색 기록 저장.
+
+```sql
+CREATE TABLE search_history (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    query        TEXT NOT NULL,
+    method       TEXT,
+    result_count INTEGER,
+    searched_at  TEXT NOT NULL
+);
+```
+
+- 검색 수행 시 백엔드가 자동 저장
+- 프론트엔드가 직접 INSERT 금지
+
+### 규칙
+
+- DB 파일이 없으면 앱 최초 실행 시 자동 생성
+- 마이그레이션 시 기존 데이터 유지
+- 임의 테이블/필드 추가 금지
 
 ---
 

@@ -11,7 +11,7 @@ export default function Settings() {
       {/* Sidebar */}
       <aside className="h-screen w-64 fixed left-0 border-r border-outline-variant/15 bg-[#070d1f] flex flex-col py-8 px-4 gap-4 z-50">
         <div className="mb-8 px-4">
-          <h1 className="text-[#85adff] font-bold text-xl tracking-tighter">Obsidian Intelligence</h1>
+          <h1 className="text-[#85adff] font-bold text-xl tracking-tighter">Obsidian 인텔리전스</h1>
           <p className="font-manrope uppercase tracking-widest text-[0.7rem] text-on-surface-variant mt-1">DB_insight v.2.0.4</p>
         </div>
         <nav className="flex flex-col gap-2">
@@ -20,19 +20,19 @@ export default function Settings() {
             className="text-[#a5aac2] px-4 py-3 hover:text-[#dfe4fe] hover:bg-[#1c253e]/20 transition-all duration-200 cursor-pointer flex items-center gap-3 rounded-xl group hover:translate-x-1"
           >
             <span className="material-symbols-outlined text-lg">psychology</span>
-            <span className="font-manrope uppercase tracking-widest text-[0.75rem]">Intelligence</span>
+            <span className="font-manrope uppercase tracking-widest text-[0.75rem]">인텔리전스</span>
           </button>
           <button className="text-[#a5aac2] px-4 py-3 hover:text-[#dfe4fe] hover:bg-[#1c253e]/20 transition-all duration-200 cursor-pointer flex items-center gap-3 rounded-xl group hover:translate-x-1">
             <span className="material-symbols-outlined text-lg">folder_open</span>
-            <span className="font-manrope uppercase tracking-widest text-[0.75rem]">Files</span>
+            <span className="font-manrope uppercase tracking-widest text-[0.75rem]">파일</span>
           </button>
           <div className="text-[#85adff] bg-[#1c253e]/40 rounded-xl px-4 py-3 border-l-2 border-[#ac8aff] flex items-center gap-3 translate-x-1">
             <span className="material-symbols-outlined text-lg" style={{ fontVariationSettings: '"FILL" 1' }}>tune</span>
-            <span className="font-manrope uppercase tracking-widest text-[0.75rem] font-semibold">Settings</span>
+            <span className="font-manrope uppercase tracking-widest text-[0.75rem] font-semibold">설정</span>
           </div>
           <button className="text-[#a5aac2] px-4 py-3 hover:text-[#dfe4fe] hover:bg-[#1c253e]/20 transition-all duration-200 cursor-pointer flex items-center gap-3 rounded-xl group hover:translate-x-1">
             <span className="material-symbols-outlined text-lg">help_outline</span>
-            <span className="font-manrope uppercase tracking-widest text-[0.75rem]">Support</span>
+            <span className="font-manrope uppercase tracking-widest text-[0.75rem]">지원</span>
           </button>
         </nav>
         <div className="mt-auto px-4 py-6 border-t border-outline-variant/10">
@@ -55,9 +55,9 @@ export default function Settings() {
 
         <div className="max-w-4xl mx-auto relative z-10">
           <header className="mb-12">
-            <h2 className="text-4xl font-extrabold tracking-tight text-on-surface mb-2">System Settings</h2>
+            <h2 className="text-4xl font-extrabold tracking-tight text-on-surface mb-2">시스템 설정</h2>
             <p className="text-on-surface-variant max-w-xl">
-              Configure your local intelligence node parameters and manage security protocols for DB_insight.
+              DB_insight의 로컬 인텔리전스 노드 파라미터를 구성하고 보안 프로토콜을 관리합니다.
             </p>
           </header>
 
@@ -65,19 +65,19 @@ export default function Settings() {
             {/* Security */}
             <section className="glass-panel p-8 rounded-xl border border-outline-variant/15 shadow-[0_0_40px_rgba(133,173,255,0.05)]">
               <div className="flex items-center gap-2 mb-6">
-                <span className="text-[0.75rem] font-manrope uppercase tracking-[0.2em] text-primary font-bold">Security Protocols</span>
+                <span className="text-[0.75rem] font-manrope uppercase tracking-[0.2em] text-primary font-bold">보안 프로토콜</span>
                 <div className="h-[1px] flex-grow bg-outline-variant/20"></div>
               </div>
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                 <div>
-                  <h3 className="text-xl font-semibold text-on-surface mb-2">Master Authentication</h3>
-                  <p className="text-on-surface-variant text-sm">The master password decrypts your local database. Resetting this will update your local encryption key.</p>
+                  <h3 className="text-xl font-semibold text-on-surface mb-2">마스터 인증</h3>
+                  <p className="text-on-surface-variant text-sm">마스터 비밀번호는 로컬 데이터베이스를 복호화합니다. 초기화하면 로컬 암호화 키가 업데이트됩니다.</p>
                 </div>
                 <button
                   onClick={() => navigate('/setup')}
                   className="bg-gradient-to-tr from-primary to-secondary text-on-primary font-bold py-3 px-8 rounded-full shadow-lg shadow-primary/20 hover:scale-105 active:scale-95 transition-all duration-300 whitespace-nowrap"
                 >
-                  Change Master Password
+                  마스터 비밀번호 변경
                 </button>
               </div>
             </section>
@@ -85,12 +85,12 @@ export default function Settings() {
             {/* Preferences */}
             <section className="glass-panel p-8 rounded-xl border border-outline-variant/15">
               <div className="flex items-center gap-2 mb-6">
-                <span className="text-[0.75rem] font-manrope uppercase tracking-[0.2em] text-primary font-bold">Preferences</span>
+                <span className="text-[0.75rem] font-manrope uppercase tracking-[0.2em] text-primary font-bold">환경 설정</span>
                 <div className="h-[1px] flex-grow bg-outline-variant/20"></div>
               </div>
               <div className="space-y-8">
                 <div>
-                  <label className="block text-[0.7rem] uppercase tracking-widest text-on-surface-variant font-bold mb-3">Frequently Used Email</label>
+                  <label className="block text-[0.7rem] uppercase tracking-widest text-on-surface-variant font-bold mb-3">자주 사용하는 이메일</label>
                   <div className="relative max-w-md">
                     <input
                       className="w-full bg-transparent border-0 border-b border-outline-variant py-3 px-0 text-on-surface focus:ring-0 focus:border-primary transition-colors duration-300 placeholder-outline outline-none"
@@ -99,14 +99,14 @@ export default function Settings() {
                       defaultValue="a.thorne@obsidian-intel.local"
                     />
                   </div>
-                  <p className="mt-3 text-xs text-on-surface-variant/70 italic">Used for automated report deliveries and emergency node recovery notifications.</p>
+                  <p className="mt-3 text-xs text-on-surface-variant/70 italic">자동 보고서 발송 및 긴급 노드 복구 알림에 사용됩니다.</p>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Toggle: Cloud Sync */}
                   <div className="p-4 rounded-xl bg-surface-container-low border border-outline-variant/10 flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-semibold text-on-surface">Cloud Sync</p>
-                      <p className="text-xs text-on-surface-variant">Sync local logs to encrypted cloud</p>
+                      <p className="text-sm font-semibold text-on-surface">클라우드 동기화</p>
+                      <p className="text-xs text-on-surface-variant">로컬 로그를 암호화된 클라우드에 동기화</p>
                     </div>
                     <button
                       onClick={() => setCloudSync(!cloudSync)}
@@ -118,8 +118,8 @@ export default function Settings() {
                   {/* Toggle: Neural Feedback */}
                   <div className="p-4 rounded-xl bg-surface-container-low border border-outline-variant/10 flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-semibold text-on-surface">Neural Feedback</p>
-                      <p className="text-xs text-on-surface-variant">Enable haptic processing signals</p>
+                      <p className="text-sm font-semibold text-on-surface">신경망 피드백</p>
+                      <p className="text-xs text-on-surface-variant">햅틱 처리 신호 활성화</p>
                     </div>
                     <button
                       onClick={() => setNeuralFeedback(!neuralFeedback)}
@@ -136,18 +136,18 @@ export default function Settings() {
             <section className="glass-panel p-8 rounded-xl border border-error-dim/20 bg-error-dim/5 relative overflow-hidden">
               <div className="absolute -right-20 -bottom-20 w-64 h-64 bg-error-dim/10 blur-[80px] rounded-full"></div>
               <div className="flex items-center gap-2 mb-6">
-                <span className="text-[0.75rem] font-manrope uppercase tracking-[0.2em] text-error-dim font-bold">Danger Zone</span>
+                <span className="text-[0.75rem] font-manrope uppercase tracking-[0.2em] text-error-dim font-bold">위험 구역</span>
                 <div className="h-[1px] flex-grow bg-error-dim/20"></div>
               </div>
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative z-10">
                 <div className="max-w-xl">
-                  <h3 className="text-xl font-semibold text-error-dim mb-2">Factory Reset & Data Purge</h3>
+                  <h3 className="text-xl font-semibold text-error-dim mb-2">공장 초기화 및 데이터 삭제</h3>
                   <p className="text-on-surface-variant text-sm">
-                    Permanently delete all intelligence nodes, local files, and system preferences. This action is irreversible and will zero-out all allocated storage sectors.
+                    모든 인텔리전스 노드, 로컬 파일, 시스템 환경 설정을 영구적으로 삭제합니다. 이 작업은 되돌릴 수 없으며 할당된 모든 저장 섹터를 초기화합니다.
                   </p>
                 </div>
                 <button className="whitespace-nowrap border border-error-dim/40 text-error-dim font-bold py-3 px-8 rounded-full hover:bg-error-dim hover:text-white transition-all duration-300 active:scale-95 shadow-[0_0_20px_rgba(215,56,59,0.1)]">
-                  Delete App & Data
+                  앱 및 데이터 삭제
                 </button>
               </div>
             </section>
@@ -156,14 +156,14 @@ export default function Settings() {
           {/* Footer */}
           <footer className="mt-16 flex flex-col items-center justify-center text-on-surface-variant/40 space-y-4">
             <div className="flex items-center gap-8">
-              {[['Storage', '1.2TB / 4.0TB'], ['Latency', '14ms'], ['Uptime', '1,402h']].map(([label, val]) => (
+              {[['저장소', '1.2TB / 4.0TB'], ['지연', '14ms'], ['가동시간', '1,402h']].map(([label, val]) => (
                 <div key={label} className="text-center">
                   <p className="text-[0.6rem] uppercase tracking-widest font-bold">{label}</p>
                   <p className="text-xs font-mono">{val}</p>
                 </div>
               ))}
             </div>
-            <p className="text-[0.6rem] uppercase tracking-widest">© 2024 Obsidian Intelligence Systems. All Rights Reserved.</p>
+            <p className="text-[0.6rem] uppercase tracking-widest">© 2024 Obsidian Intelligence Systems. 모든 권리 보유.</p>
           </footer>
         </div>
       </main>
