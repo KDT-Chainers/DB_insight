@@ -1,5 +1,6 @@
 import { useNavigate, useLocation } from 'react-router-dom'
 import AISidebar from '../components/AISidebar'
+import { useSidebar } from '../context/SidebarContext'
 
 const BAR_HEIGHTS = ['60%', '45%', '85%', '30%', '70%', '55%', '95%', '40%']
 
@@ -7,6 +8,7 @@ export default function MainAIModeResultSpecific() {
   const navigate = useNavigate()
   const location = useLocation()
   const result = location.state?.result || { title: 'DB_insight.bin', tag: 'DATAPACK' }
+  const { open } = useSidebar()
 
   return (
     <div className="bg-surface text-on-surface overflow-x-hidden min-h-screen">
@@ -29,7 +31,7 @@ export default function MainAIModeResultSpecific() {
       </header>
 
       {/* Main */}
-      <main className="ml-64 pt-24 pb-12 px-10 min-h-screen">
+      <main className={`${open ? 'ml-64' : 'ml-0'} pt-24 pb-12 px-10 min-h-screen transition-[margin] duration-300`}>
         {/* Breadcrumbs */}
         <div className="mb-8 flex justify-between items-end">
           <div>

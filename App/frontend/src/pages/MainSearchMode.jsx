@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import SearchSidebar from '../components/SearchSidebar'
+import { useSidebar } from '../context/SidebarContext'
 
 export default function MainSearchMode() {
   const navigate = useNavigate()
@@ -11,6 +12,7 @@ export default function MainSearchMode() {
   const [ripplePos, setRipplePos] = useState({ x: '50%', y: '50%' })
   const btnRef = useRef(null)
   const formRef = useRef(null)
+  const { open } = useSidebar()
 
   const handleSearch = (e) => {
     e.preventDefault()
@@ -95,7 +97,7 @@ export default function MainSearchMode() {
 
       {/* Top nav */}
       <nav className="fixed top-0 w-full flex justify-between items-center px-6 py-4 bg-transparent z-40">
-        <div className="ml-64"></div>
+        <div className={open ? 'ml-64' : 'ml-0'}></div>
         <div className="flex items-center gap-6">
           <div className="hidden md:flex gap-8 items-center">
             <button className="font-manrope tracking-tight text-sm text-[#85adff] font-bold hover:text-[#85adff] transition-colors active:scale-95 duration-200">탐색</button>
@@ -109,7 +111,7 @@ export default function MainSearchMode() {
       </nav>
 
       {/* Main content */}
-      <main className="ml-64 h-full flex flex-col items-center justify-center p-8 relative">
+      <main className={`${open ? 'ml-64' : 'ml-0'} h-full flex flex-col items-center justify-center p-8 relative transition-[margin] duration-300`}>
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-[120px] pointer-events-none"></div>
         <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-secondary/5 rounded-full blur-[150px] pointer-events-none"></div>
 

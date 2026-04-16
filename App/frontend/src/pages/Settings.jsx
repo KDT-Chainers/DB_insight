@@ -1,10 +1,12 @@
 import { useNavigate } from 'react-router-dom'
 import { useState } from 'react'
+import { useSidebar } from '../context/SidebarContext'
 
 export default function Settings() {
   const navigate = useNavigate()
   const [cloudSync, setCloudSync] = useState(true)
   const [neuralFeedback, setNeuralFeedback] = useState(false)
+  const { open } = useSidebar()
 
   return (
     <div className="bg-surface text-on-surface antialiased min-h-screen">
@@ -49,7 +51,7 @@ export default function Settings() {
       </aside>
 
       {/* Main */}
-      <main className="ml-64 min-h-screen p-12 relative overflow-hidden">
+      <main className={`${open ? 'ml-64' : 'ml-0'} min-h-screen p-12 relative overflow-hidden transition-[margin] duration-300`}>
         <div className="absolute top-[-10%] right-[-10%] w-[500px] h-[500px] bg-primary/10 rounded-full blur-[120px] pointer-events-none"></div>
         <div className="absolute bottom-[-5%] left-[5%] w-[400px] h-[400px] bg-secondary/5 rounded-full blur-[100px] pointer-events-none"></div>
 

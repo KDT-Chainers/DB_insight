@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { SidebarProvider } from './context/SidebarContext'
 import LandingLogin from './pages/LandingLogin'
 import InitialSetup from './pages/InitialSetup'
 import MainSearchMode from './pages/MainSearchMode'
@@ -69,6 +70,7 @@ function AuthGate() {
 export default function App() {
   return (
     <BrowserRouter>
+      <SidebarProvider>
       <Routes>
         <Route path="/" element={<AuthGate />} />
         <Route path="/setup" element={<InitialSetup />} />
@@ -82,6 +84,7 @@ export default function App() {
         <Route path="/data" element={<DataIndexing />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </SidebarProvider>
     </BrowserRouter>
   )
 }

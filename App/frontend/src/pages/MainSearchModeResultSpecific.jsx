@@ -1,50 +1,21 @@
 import { useNavigate, useLocation } from 'react-router-dom'
+import SearchSidebar from '../components/SearchSidebar'
+import { useSidebar } from '../context/SidebarContext'
 
 export default function MainSearchModeResultSpecific() {
   const navigate = useNavigate()
   const location = useLocation()
+  const { open } = useSidebar()
   const file = location.state?.file || { name: 'neural_network_architecture_v4.pdf', icon: 'description' }
 
   return (
     <div className="bg-surface text-on-surface selection:bg-primary/30 selection:text-primary min-h-screen">
-      {/* Sidebar */}
-      <aside className="h-screen w-64 fixed left-0 top-0 bg-[#070d1f] flex flex-col border-r border-[#41475b]/15 z-50">
-        <div className="p-8">
-          <h1 className="text-xl font-black text-[#dfe4fe] tracking-tight">Obsidian</h1>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-on-surface-variant mt-1">로컬 인텔리전스</p>
-        </div>
-        <nav className="flex-1 px-4 mt-4 space-y-2">
-          {[
-            { icon: 'search', label: '검색', onClick: () => navigate('/search') },
-            { icon: 'psychology', label: '신경망 분석', onClick: null },
-            { icon: 'history', label: '기록', onClick: () => navigate('/search') },
-            { icon: 'settings', label: '설정', onClick: () => navigate('/settings') },
-          ].map((item) => (
-            <button
-              key={item.label}
-              onClick={item.onClick}
-              className="w-full text-[#a5aac2] py-3 px-6 hover:bg-[#1c253e] transition-all rounded-xl flex items-center gap-3 cursor-pointer group"
-            >
-              <span className="material-symbols-outlined text-xl group-hover:text-primary">{item.icon}</span>
-              <span className="font-manrope text-xs font-semibold uppercase tracking-[0.05em]">{item.label}</span>
-            </button>
-          ))}
-        </nav>
-        <div className="p-6">
-          <button
-            onClick={() => navigate('/search')}
-            className="w-full py-4 bg-gradient-to-r from-primary to-secondary text-on-primary-fixed font-bold rounded-full active:scale-95 transition-transform flex items-center justify-center gap-2"
-          >
-            <span className="material-symbols-outlined" style={{ fontVariationSettings: '"FILL" 1' }}>add</span>
-            <span>새 분석</span>
-          </button>
-        </div>
-      </aside>
+      <SearchSidebar />
 
       {/* Main */}
-      <main className="ml-64 min-h-screen relative" style={{ backgroundImage: 'radial-gradient(rgba(133,173,255,0.05) 1px, transparent 1px)', backgroundSize: '32px 32px' }}>
+      <main className={`${open ? 'ml-64' : 'ml-0'} min-h-screen relative transition-[margin] duration-300`} style={{ backgroundImage: 'radial-gradient(rgba(133,173,255,0.05) 1px, transparent 1px)', backgroundSize: '32px 32px' }}>
         {/* Top bar */}
-        <header className="fixed top-0 left-64 right-0 z-50 bg-[#070d1f]/60 backdrop-blur-xl flex items-center justify-between px-8 py-4 shadow-[0_4px_20px_rgba(133,173,255,0.1)]">
+        <header className={`fixed top-0 ${open ? 'left-64' : 'left-0'} right-0 z-40 bg-[#070d1f]/60 backdrop-blur-xl flex items-center justify-between px-8 py-4 shadow-[0_4px_20px_rgba(133,173,255,0.1)] transition-[left] duration-300`}>
           <div className="flex items-center gap-4">
             <span className="material-symbols-outlined text-primary">description</span>
             <h2 className="font-manrope text-sm tracking-wide text-[#dfe4fe] font-bold">{file.name || 'neural_network_architecture_v4.pdf'}</h2>

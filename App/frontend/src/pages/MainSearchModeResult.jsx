@@ -1,4 +1,6 @@
 import { useNavigate, useLocation } from 'react-router-dom'
+import SearchSidebar from '../components/SearchSidebar'
+import { useSidebar } from '../context/SidebarContext'
 
 const RESULTS = [
   {
@@ -47,6 +49,7 @@ export default function MainSearchModeResult() {
   const navigate = useNavigate()
   const location = useLocation()
   const query = location.state?.query || '로컬 보관소의 신경망 벡터 클러스터'
+  const { open } = useSidebar()
 
   return (
     <div className="bg-background text-on-surface min-h-screen overflow-x-hidden" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, rgba(65, 71, 91, 0.15) 1px, transparent 0)', backgroundSize: '32px 32px' }}>
@@ -76,43 +79,10 @@ export default function MainSearchModeResult() {
         </div>
       </header>
 
-      {/* Sidebar */}
-      <aside className="fixed left-0 top-0 h-full w-64 pt-20 bg-slate-950/80 backdrop-blur-2xl shadow-[10px_0_30px_rgba(0,0,0,0.5)] flex flex-col gap-4 p-4 z-40">
-        <div className="px-2 py-4">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-secondary p-px">
-              <div className="w-full h-full bg-slate-950 rounded-[11px] flex items-center justify-center">
-                <span className="material-symbols-outlined text-primary text-xl">hub</span>
-              </div>
-            </div>
-            <div>
-              <p className="text-sm font-bold text-blue-300 font-manrope">신경망 노드 01</p>
-              <p className="text-[10px] text-slate-500 tracking-widest uppercase">로컬 인텔리전스 활성화</p>
-            </div>
-          </div>
-        </div>
-        <nav className="space-y-1">
-          <button onClick={() => navigate('/search')} className="w-full text-slate-500 hover:text-slate-300 flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-900/50 transition-all text-sm font-medium tracking-wide">
-            <span className="material-symbols-outlined">history</span><span>기록</span>
-          </button>
-          <div className="text-blue-300 bg-blue-500/5 border-r-2 border-blue-500/50 flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium tracking-wide">
-            <span className="material-symbols-outlined">analytics</span><span>데이터 클러스터</span>
-          </div>
-          <button onClick={() => navigate('/settings')} className="w-full text-slate-500 hover:text-slate-300 flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-900/50 transition-all text-sm font-medium tracking-wide">
-            <span className="material-symbols-outlined">settings</span><span>설정</span>
-          </button>
-        </nav>
-        <div className="mt-auto p-4 glass-panel rounded-2xl border border-outline-variant/10">
-          <p className="text-[10px] font-bold text-primary mb-2 uppercase tracking-tighter">메모리 인덱스 상태</p>
-          <div className="h-1.5 w-full bg-surface-container-highest rounded-full overflow-hidden">
-            <div className="h-full w-3/4 bg-gradient-to-r from-primary to-secondary shadow-[0_0_8px_rgba(133,173,255,0.5)]"></div>
-          </div>
-          <p className="text-[10px] text-on-surface-variant mt-2">1.2TB / 2.0TB 인덱싱됨</p>
-        </div>
-      </aside>
+      <SearchSidebar />
 
       {/* Main */}
-      <main className="pl-64 pt-24 min-h-screen">
+      <main className={`${open ? 'pl-64' : 'pl-0'} pt-24 min-h-screen transition-[padding] duration-300`}>
         <div className="p-8 max-w-[1400px] mx-auto">
           <div className="flex justify-between items-end mb-10">
             <div className="space-y-2">

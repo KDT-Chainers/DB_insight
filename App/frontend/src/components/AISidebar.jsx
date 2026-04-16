@@ -1,8 +1,10 @@
 import { useNavigate, useLocation } from 'react-router-dom'
+import { useSidebar } from '../context/SidebarContext'
 
 export default function AISidebar() {
   const navigate = useNavigate()
   const location = useLocation()
+  const { open, toggle } = useSidebar()
 
   const navItems = [
     { label: '신경망 검색', icon: 'search', path: '/ai' },
@@ -13,55 +15,78 @@ export default function AISidebar() {
   ]
 
   return (
-    <aside className="fixed left-0 top-0 h-full w-64 z-40 bg-[#000000] shadow-[10px_0_40px_rgba(172,138,255,0.05)] border-r border-outline-variant/10">
-      <div className="flex flex-col h-full py-8">
-        <div className="px-6 mb-10">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-2 h-2 rounded-full bg-violet-400 animate-pulse"></div>
-            <span className="text-lg font-black text-violet-400">코어 터미널</span>
-          </div>
-          <p className="text-[10px] uppercase tracking-[0.2em] text-violet-400/60 font-bold">AI 모드 활성화</p>
-        </div>
-
-        <nav className="flex-1 space-y-1">
-          {navItems.map((item) => {
-            const isActive = item.path && location.pathname === item.path
-            return (
-              <button
-                key={item.label}
-                onClick={() => item.path && navigate(item.path)}
-                className={`w-full flex items-center gap-3 px-6 py-4 font-manrope text-sm font-medium uppercase tracking-widest group transition-all ${
-                  isActive
-                    ? 'bg-gradient-to-r from-violet-900/40 to-transparent text-violet-200 border-l-4 border-violet-500'
-                    : 'text-slate-500 hover:bg-violet-900/20 hover:text-violet-300'
-                }`}
-              >
-                <span className={`material-symbols-outlined ${isActive ? 'text-violet-400' : ''}`}>{item.icon}</span>
-                <span className="group-hover:translate-x-1 duration-300">{item.label}</span>
-              </button>
-            )
-          })}
-        </nav>
-
-        <div className="px-6 mt-auto pt-8">
-          <button className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-secondary-container to-secondary text-on-secondary font-bold text-xs tracking-widest uppercase hover:opacity-90 active:scale-95 transition-all glow-violet">
-            동기화 시작
-          </button>
-          <div className="mt-8 space-y-4">
-            <button className="flex items-center gap-3 text-slate-500 hover:text-violet-300 transition-all text-xs tracking-widest uppercase font-bold w-full">
-              <span className="material-symbols-outlined text-sm">help</span>
-              지원
-            </button>
+    <>
+      {/* 사이드바 */}
+      <aside
+        className={`fixed left-0 top-0 h-full w-64 z-40 bg-[#000000] shadow-[10px_0_40px_rgba(172,138,255,0.05)] border-r border-outline-variant/10 transition-transform duration-300 ${open ? 'translate-x-0' : '-translate-x-full'}`}
+      >
+        <div className="flex flex-col h-full py-8">
+          <div className="px-6 mb-10 flex items-center justify-between">
+            <div>
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-2 h-2 rounded-full bg-violet-400 animate-pulse"></div>
+                <span className="text-lg font-black text-violet-400">코어 터미널</span>
+              </div>
+              <p className="text-[10px] uppercase tracking-[0.2em] text-violet-400/60 font-bold">AI 모드 활성화</p>
+            </div>
             <button
-              onClick={() => navigate('/settings')}
-              className="flex items-center gap-3 text-slate-500 hover:text-violet-300 transition-all text-xs tracking-widest uppercase font-bold w-full"
+              onClick={toggle}
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-500 hover:text-violet-300 hover:bg-violet-900/20 transition-all"
             >
-              <span className="material-symbols-outlined text-sm">sensors</span>
-              상태
+              <span className="material-symbols-outlined text-lg">menu_open</span>
             </button>
           </div>
+
+          <nav className="flex-1 space-y-1">
+            {navItems.map((item) => {
+              const isActive = item.path && location.pathname === item.path
+              return (
+                <button
+                  key={item.label}
+                  onClick={() => item.path && navigate(item.path)}
+                  className={`w-full flex items-center gap-3 px-6 py-4 font-manrope text-sm font-medium uppercase tracking-widest group transition-all ${
+                    isActive
+                      ? 'bg-gradient-to-r from-violet-900/40 to-transparent text-violet-200 border-l-4 border-violet-500'
+                      : 'text-slate-500 hover:bg-violet-900/20 hover:text-violet-300'
+                  }`}
+                >
+                  <span className={`material-symbols-outlined ${isActive ? 'text-violet-400' : ''}`}>{item.icon}</span>
+                  <span className="group-hover:translate-x-1 duration-300">{item.label}</span>
+                </button>
+              )
+            })}
+          </nav>
+
+          <div className="px-6 mt-auto pt-8">
+            <button className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-secondary-container to-secondary text-on-secondary font-bold text-xs tracking-widest uppercase hover:opacity-90 active:scale-95 transition-all glow-violet">
+              동기화 시작
+            </button>
+            <div className="mt-8 space-y-4">
+              <button className="flex items-center gap-3 text-slate-500 hover:text-violet-300 transition-all text-xs tracking-widest uppercase font-bold w-full">
+                <span className="material-symbols-outlined text-sm">help</span>
+                지원
+              </button>
+              <button
+                onClick={() => navigate('/settings')}
+                className="flex items-center gap-3 text-slate-500 hover:text-violet-300 transition-all text-xs tracking-widest uppercase font-bold w-full"
+              >
+                <span className="material-symbols-outlined text-sm">sensors</span>
+                상태
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
-    </aside>
+      </aside>
+
+      {/* 사이드바 닫혔을 때 떠있는 토글 버튼 */}
+      {!open && (
+        <button
+          onClick={toggle}
+          className="fixed left-3 top-3 z-50 w-9 h-9 rounded-lg flex items-center justify-center bg-black/80 backdrop-blur border border-violet-900/30 text-slate-500 hover:text-violet-300 hover:border-violet-500/30 transition-all"
+        >
+          <span className="material-symbols-outlined text-lg">menu</span>
+        </button>
+      )}
+    </>
   )
 }
