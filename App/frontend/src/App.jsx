@@ -3,12 +3,8 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { SidebarProvider } from './context/SidebarContext'
 import LandingLogin from './pages/LandingLogin'
 import InitialSetup from './pages/InitialSetup'
-import MainSearchMode from './pages/MainSearchMode'
-import MainSearchModeResult from './pages/MainSearchModeResult'
-import MainSearchModeResultSpecific from './pages/MainSearchModeResultSpecific'
-import MainAIMode from './pages/MainAIMode'
-import MainAIModeResult from './pages/MainAIModeResult'
-import MainAIModeResultSpecific from './pages/MainAIModeResultSpecific'
+import MainSearch from './pages/MainSearch'
+import MainAI from './pages/MainAI'
 import Settings from './pages/Settings'
 import DataIndexing from './pages/DataIndexing'
 
@@ -32,7 +28,7 @@ function AuthGate() {
         }
       } catch {
         if (active) {
-          setError('\uC11C\uBC84\uC5D0 \uC5F0\uACB0\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4')
+          setError('서버에 연결할 수 없습니다')
         }
       } finally {
         if (active) {
@@ -74,12 +70,12 @@ export default function App() {
       <Routes>
         <Route path="/" element={<AuthGate />} />
         <Route path="/setup" element={<InitialSetup />} />
-        <Route path="/search" element={<MainSearchMode />} />
-        <Route path="/search/results" element={<MainSearchModeResult />} />
-        <Route path="/search/results/:id" element={<MainSearchModeResultSpecific />} />
-        <Route path="/ai" element={<MainAIMode />} />
-        <Route path="/ai/results" element={<MainAIModeResult />} />
-        <Route path="/ai/results/:id" element={<MainAIModeResultSpecific />} />
+        <Route path="/search" element={<MainSearch />} />
+        <Route path="/search/results" element={<Navigate to="/search" replace />} />
+        <Route path="/search/results/:id" element={<Navigate to="/search" replace />} />
+        <Route path="/ai" element={<MainAI />} />
+        <Route path="/ai/results" element={<Navigate to="/ai" replace />} />
+        <Route path="/ai/results/:id" element={<Navigate to="/ai" replace />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/data" element={<DataIndexing />} />
         <Route path="*" element={<Navigate to="/" replace />} />
