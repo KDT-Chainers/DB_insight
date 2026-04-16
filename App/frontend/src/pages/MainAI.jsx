@@ -164,11 +164,6 @@ export default function MainAI() {
 
             <div className="w-full max-w-4xl flex flex-col items-center z-10">
               <div className={`mb-12 text-center transition-all duration-300 ${homeExiting ? 'opacity-0 -translate-y-6' : 'opacity-100 translate-y-0'}`}>
-                <div className="inline-block mb-3">
-                  <span className="text-[10px] font-bold tracking-[0.3em] uppercase text-violet-400/80 border border-violet-700/40 px-3 py-1 rounded-full bg-violet-950/40">
-                    ◆ QUANTUM CORE ONLINE
-                  </span>
-                </div>
                 <h2 className="text-5xl md:text-6xl font-black tracking-tighter mb-4" style={{ textShadow: '0 0 40px rgba(139,92,246,0.4)' }}>
                   <span className="text-on-surface">퀀텀 </span>
                   <span className="bg-gradient-to-r from-violet-400 via-fuchsia-400 to-pink-400 bg-clip-text text-transparent">인텔리전스</span>
