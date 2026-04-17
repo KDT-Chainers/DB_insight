@@ -53,6 +53,26 @@
 
 ## API 응답 구조
 
+### ScanFile (POST /api/index/scan 응답 files 요소)
+```json
+{
+  "name": "보고서.pdf",
+  "path": "C:/Users/.../보고서.pdf",
+  "type": "doc",
+  "size": 102400
+}
+```
+- `type`: `"doc"` / `"video"` / `"image"` / `"audio"` / `null`
+
+### IndexResult (GET /api/index/status 응답 results 요소)
+```json
+{
+  "path":   "C:/Users/.../보고서.pdf",
+  "status": "done"
+}
+```
+- `status`: `"pending"` / `"running"` / `"done"` / `"error"`
+
 ### SearchResult (GET /api/search 응답 items 요소)
 ```json
 {
@@ -94,9 +114,6 @@
 |-----|-----------|------|
 | `master_password_hash` | `{salt}:{SHA256(salt+password)}` | 마스터 비밀번호 해시 |
 
-- 해당 row가 없으면 비밀번호 미설정 상태(`initialized: false`)
-- 비밀번호는 반드시 해시로 저장, 평문 저장 금지
-
 ```sql
 CREATE TABLE settings (
     key        TEXT PRIMARY KEY,
@@ -108,7 +125,6 @@ CREATE TABLE settings (
 ---
 
 ### search_history 테이블
-검색 기록 저장
 
 | 필드 | 타입 | 설명 |
 |------|------|------|

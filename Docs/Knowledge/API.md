@@ -107,9 +107,10 @@ OS 기본 앱으로 파일 직접 열기
 
 ## 인덱싱
 
-### POST /api/index
+### POST /api/index/scan
 
-경로 인덱싱 시작
+폴더 경로를 스캔하여 파일 목록 반환.
+프론트의 리소스 탐색기에 표시할 데이터를 제공한다.
 
 **Request**
 ```json
@@ -118,8 +119,74 @@ OS 기본 앱으로 파일 직접 열기
 
 **Response**
 ```json
-{ "job_id": "string", "status": "started" }
+{
+  "path": "C:/Users/foo/Documents",
+  "files": [
+    { "name": "보고서.pdf", "path": "C:/Users/foo/Documents/보고서.pdf", "type": "doc",   "size": 102400 },
+    { "name": "회의.mp4",   "path": "C:/Users/foo/Documents/회의.mp4",   "type": "video", "size": 524288 },
+    { "name": "사진.jpg",   "path": "C:/Users/foo/Documents/사진.jpg",   "type": "image", "size": 20480  },
+    { "name": "unknown.xyz","path": "C:/Users/foo/Documents/unknown.xyz","type": null,    "size": 1024   }
+  ]
+}
 ```
+
+- `type`: `"doc"` / `"video"` / `"image"` / `"audio"` / `null` (지원 안 되는 확장자)
+- 하위 폴더는 재귀 스캔
+
+**Error**
+```json
+{ "error": "Path not found" }
+```
+
+---
+
+### POST /api/index/start
+
+선택한 파일들의 임베딩을 시작한다.
+백엔드가 확장자를 보고 적합한 embedder를 자동 선택한다.
+
+**Request**
+```json
+{
+  "files": [
+    "C:/Users/foo/Documents/보고서.pdf",
+    "C:/Users/foo/Documents/회의.mp4"
+  ]
+}
+```
+
+**Response**
+```json
+{ "job_id": "abc123", "total": 2 }
+```
+
+**Error**
+```json
+{ "error": "No valid files provided" }
+```
+
+---
+
+### GET /api/index/status/{job_id}
+
+인덱싱 진행 상태 조회. 프론트에서 폴링하여 진행 상황을 표시한다.
+
+**Response**
+```json
+{
+  "job_id":  "abc123",
+  "status":  "running",
+  "total":   2,
+  "done":    1,
+  "errors":  0,
+  "results": [
+    { "path": "C:/…/보고서.pdf", "status": "done"    },
+    { "path": "C:/…/회의.mp4",   "status": "running" }
+  ]
+}
+```
+
+- `status`: `"running"` / `"done"` / `"error"`
 
 ---
 
@@ -234,11 +301,7 @@ OS 기본 앱으로 파일 직접 열기
 
 **Request**
 ```json
-{
-  "query": "string",
-  "method": "string",
-  "result_count": 5
-}
+{ "query": "string", "method": "string", "result_count": 5 }
 ```
 
 **Response**
