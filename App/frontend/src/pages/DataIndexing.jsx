@@ -1,92 +1,39 @@
 import { useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 
-const FILE_TREE = [
-  {
-    id: 'root',
-    name: 'Project_Alpha_Core',
-    type: 'folder',
-    status: '컨테이너',
-    statusColor: 'text-[#a5aac2] bg-surface-container-highest border-outline-variant/20',
-    expanded: true,
-    children: [
-      {
-        id: 'src',
-        name: 'source_data',
-        type: 'folder',
-        status: '준비',
-        statusColor: 'text-primary bg-primary/10',
-        expanded: false,
-        children: [
-          { id: 'f1', name: 'neural_architecture.json', type: 'file', icon: 'description', status: '준비', statusColor: 'text-primary bg-primary/10', checked: true },
-          { id: 'f2', name: 'dataset_v04_raw.csv', type: 'file', icon: 'table_chart', status: '대기중', statusColor: 'text-secondary bg-secondary/10', checked: false },
-          {
-            id: 'logs',
-            name: 'processed_logs',
-            type: 'folder',
-            status: '부분',
-            statusColor: 'text-on-surface-variant bg-surface-container-highest',
-            expanded: true,
-            children: [
-              { id: 'l1', name: 'node_trace_01.log', type: 'file', icon: 'analytics', status: '준비', statusColor: 'text-primary bg-primary/10', checked: true },
-              { id: 'l2', name: 'node_trace_02.log', type: 'file', icon: 'analytics', status: '손상', statusColor: 'text-error bg-error/10', checked: false },
-            ],
-          },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'backup',
-    name: 'Backups_Legacy',
-    type: 'folder',
-    status: '제외',
-    statusColor: 'text-[#a5aac2] bg-surface-container-highest border-outline-variant/20',
-    expanded: false,
-    children: [],
-  },
-]
+const TYPE_ICON = {
+  doc:   'description',
+  video: 'movie',
+  image: 'image',
+  audio: 'volume_up',
+}
 
-function FileTreeItem({ item, depth = 0 }) {
-  const [expanded, setExpanded] = useState(item.expanded ?? false)
-  const [checked, setChecked] = useState(item.checked ?? (item.type === 'folder'))
-  const indent = depth * 36
+const TYPE_LABEL = {
+  doc:   '문서',
+  video: '영상',
+  image: '이미지',
+  audio: '음성',
+}
+
+function FileRow({ file, checked, onToggle }) {
+  const icon = TYPE_ICON[file.type] ?? 'insert_drive_file'
+  const label = TYPE_LABEL[file.type] ?? '기타'
+  const sizeKB = (file.size / 1024).toFixed(1)
 
   return (
-    <div>
-      <div
-        className="group flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-primary/5 transition-colors cursor-pointer"
-        style={{ marginLeft: `${indent}px` }}
-        onClick={() => item.type === 'folder' && setExpanded(!expanded)}
-      >
-        <input
-          type="checkbox"
-          checked={checked}
-          onChange={(e) => { e.stopPropagation(); setChecked(e.target.checked) }}
-          onClick={(e) => e.stopPropagation()}
-          className="w-4 h-4 rounded border-outline-variant bg-transparent text-primary focus:ring-primary focus:ring-offset-0"
-        />
-        {item.type === 'folder' ? (
-          <>
-            <span className="material-symbols-outlined text-primary-container text-[20px]">
-              {expanded ? 'keyboard_arrow_down' : 'keyboard_arrow_right'}
-            </span>
-            <span className="material-symbols-outlined text-[#85adff] text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>folder</span>
-          </>
-        ) : (
-          <>
-            <div className="w-[20px]"></div>
-            <span className="material-symbols-outlined text-on-surface-variant text-[20px]">{item.icon}</span>
-          </>
-        )}
-        <span className="text-sm font-medium flex-1 text-on-surface-variant">{item.name}</span>
-        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${item.statusColor}`}>
-          {item.status}
-        </span>
-      </div>
-      {item.type === 'folder' && expanded && item.children?.map((child) => (
-        <FileTreeItem key={child.id} item={child} depth={depth + 1} />
-      ))}
+    <div className="group flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-primary/5 transition-colors">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={() => onToggle(file.path)}
+        className="w-4 h-4 rounded border-outline-variant bg-transparent text-primary focus:ring-primary focus:ring-offset-0"
+      />
+      <span className="material-symbols-outlined text-on-surface-variant text-[20px]">{icon}</span>
+      <span className="text-sm font-medium flex-1 text-on-surface-variant truncate">{file.name}</span>
+      <span className="text-[10px] text-on-surface-variant/50 w-16 text-right">{sizeKB} KB</span>
+      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase w-14 text-center ${file.type ? 'text-primary bg-primary/10' : 'text-on-surface-variant bg-surface-container-highest'}`}>
+        {label}
+      </span>
     </div>
   )
 }
@@ -95,6 +42,65 @@ export default function DataIndexing() {
   const navigate = useNavigate()
   const [indexMode, setIndexMode] = useState('자동')
   const [complexityMode, setComplexityMode] = useState('딥 러닝')
+
+  const [folderPath, setFolderPath] = useState('')
+  const [files, setFiles] = useState([])
+  const [checkedPaths, setCheckedPaths] = useState(new Set())
+  const [scanning, setScanning] = useState(false)
+  const [scanError, setScanError] = useState('')
+
+  const handleSelectFolder = async () => {
+    const path = await window.electronAPI.selectFolder()
+    if (!path) return
+
+    setFolderPath(path)
+    setScanError('')
+    setScanning(true)
+    setFiles([])
+    setCheckedPaths(new Set())
+
+    try {
+      const res = await fetch('http://localhost:5001/api/index/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setScanError(data.error || '스캔 실패')
+      } else {
+        const supportedFiles = data.files.filter(f => f.type !== null)
+        setFiles(data.files)
+        setCheckedPaths(new Set(supportedFiles.map(f => f.path)))
+      }
+    } catch {
+      setScanError('서버에 연결할 수 없습니다. Flask 백엔드를 실행하세요.')
+    } finally {
+      setScanning(false)
+    }
+  }
+
+  const toggleCheck = (path) => {
+    setCheckedPaths(prev => {
+      const next = new Set(prev)
+      next.has(path) ? next.delete(path) : next.add(path)
+      return next
+    })
+  }
+
+  const toggleAll = () => {
+    const supportedPaths = files.filter(f => f.type !== null).map(f => f.path)
+    if (supportedPaths.every(p => checkedPaths.has(p))) {
+      setCheckedPaths(new Set())
+    } else {
+      setCheckedPaths(new Set(supportedPaths))
+    }
+  }
+
+  const selectedCount = checkedPaths.size
+  const selectedSizeKB = files
+    .filter(f => checkedPaths.has(f.path))
+    .reduce((sum, f) => sum + f.size, 0) / 1024
 
   return (
     <div className="bg-surface text-on-surface flex min-h-screen overflow-hidden">
@@ -181,11 +187,18 @@ export default function DataIndexing() {
                 <label className="text-[10px] uppercase tracking-[0.1em] text-primary mb-2 block font-bold">구성 경로</label>
                 <div className="flex items-center gap-3 bg-surface-container-lowest/50 px-4 py-3 rounded-lg border border-outline-variant/10">
                   <span className="material-symbols-outlined text-[#a5aac2] text-sm">folder_open</span>
-                  <span className="text-sm font-mono text-on-surface-variant truncate">C:/Users/Admin/Documents/Project_Alpha</span>
+                  <span className="text-sm font-mono text-on-surface-variant truncate">
+                    {folderPath || '폴더를 선택하세요'}
+                  </span>
                 </div>
               </div>
-              <button className="px-6 py-3 rounded-full bg-surface-container-high border border-outline-variant/40 hover:bg-surface-container-highest transition-all text-sm font-semibold flex items-center gap-2 whitespace-nowrap">
-                <span className="material-symbols-outlined text-sm">folder_shared</span>폴더 선택
+              <button
+                onClick={handleSelectFolder}
+                disabled={scanning}
+                className="px-6 py-3 rounded-full bg-surface-container-high border border-outline-variant/40 hover:bg-surface-container-highest transition-all text-sm font-semibold flex items-center gap-2 whitespace-nowrap disabled:opacity-50"
+              >
+                <span className="material-symbols-outlined text-sm">folder_shared</span>
+                {scanning ? '스캔 중...' : '폴더 선택'}
               </button>
             </div>
             <div className="col-span-12 lg:col-span-5 glass-panel p-6 rounded-xl border border-outline-variant/15">
@@ -225,23 +238,43 @@ export default function DataIndexing() {
             </div>
           </div>
 
-          {/* File tree */}
+          {/* File list */}
           <div className="flex-1 glass-panel rounded-xl border border-outline-variant/15 overflow-hidden flex flex-col">
             <div className="px-6 py-4 border-b border-outline-variant/10 flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <h2 className="text-lg font-bold tracking-tight text-on-surface">리소스 탐색기</h2>
-                <span className="px-3 py-1 rounded-full bg-primary/10 text-primary text-[10px] font-bold tracking-widest uppercase">142개 항목 발견</span>
+                {files.length > 0 && (
+                  <span className="px-3 py-1 rounded-full bg-primary/10 text-primary text-[10px] font-bold tracking-widest uppercase">
+                    {files.length}개 항목 발견
+                  </span>
+                )}
               </div>
-              <div className="flex items-center gap-2">
-                <button className="text-xs font-semibold text-on-surface-variant hover:text-primary transition-colors">모두 펼치기</button>
-                <span className="w-px h-3 bg-outline-variant/30"></span>
-                <button className="text-xs font-semibold text-on-surface-variant hover:text-primary transition-colors">모두 접기</button>
-              </div>
+              {files.length > 0 && (
+                <button
+                  onClick={toggleAll}
+                  className="text-xs font-semibold text-on-surface-variant hover:text-primary transition-colors"
+                >
+                  {files.filter(f => f.type !== null).every(f => checkedPaths.has(f.path)) ? '전체 해제' : '전체 선택'}
+                </button>
+              )}
             </div>
             <div className="flex-1 overflow-y-auto custom-scrollbar p-4">
+              {scanError && (
+                <p className="text-sm text-red-400 text-center py-8">{scanError}</p>
+              )}
+              {!scanError && files.length === 0 && (
+                <p className="text-sm text-on-surface-variant/40 text-center py-16">
+                  {folderPath ? '지원되는 파일이 없습니다.' : '폴더를 선택하면 파일 목록이 표시됩니다.'}
+                </p>
+              )}
               <div className="space-y-1">
-                {FILE_TREE.map((item) => (
-                  <FileTreeItem key={item.id} item={item} depth={0} />
+                {files.map((file) => (
+                  <FileRow
+                    key={file.path}
+                    file={file}
+                    checked={checkedPaths.has(file.path)}
+                    onToggle={file.type ? toggleCheck : () => {}}
+                  />
                 ))}
               </div>
             </div>
@@ -249,14 +282,19 @@ export default function DataIndexing() {
 
           {/* Start button */}
           <div className="flex justify-center pt-4">
-            <button className="relative group">
+            <button
+              disabled={selectedCount === 0}
+              className="relative group disabled:opacity-40 disabled:cursor-not-allowed"
+            >
               <div className="absolute -inset-1 bg-gradient-to-r from-primary to-secondary rounded-full blur opacity-40 group-hover:opacity-75 transition duration-1000 group-hover:duration-200"></div>
               <div className="relative px-12 py-5 bg-[#000000] rounded-full leading-none flex items-center divide-x divide-outline-variant/30">
                 <span className="flex items-center space-x-5">
                   <span className="material-symbols-outlined text-primary animate-pulse" style={{ fontVariationSettings: '"FILL" 1' }}>rocket_launch</span>
                   <span className="pr-6 text-on-surface font-black tracking-widest text-sm uppercase">선택한 파일 인덱싱 시작</span>
                 </span>
-                <span className="pl-6 text-secondary text-xs font-bold uppercase tracking-widest">84.2 GB 대상</span>
+                <span className="pl-6 text-secondary text-xs font-bold uppercase tracking-widest">
+                  {selectedCount > 0 ? `${selectedCount}개 · ${(selectedSizeKB / 1024).toFixed(1)} MB` : '파일 미선택'}
+                </span>
               </div>
             </button>
           </div>
