@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { useState } from 'react'
+import WindowControls from '../components/WindowControls'
 
 export default function LandingLogin() {
   const navigate = useNavigate()
@@ -36,6 +37,11 @@ export default function LandingLogin() {
 
   return (
     <div className="bg-surface-dim text-on-surface font-body overflow-hidden min-h-screen">
+      {/* 윈도우 컨트롤 버튼 */}
+      <div className="fixed top-2 right-2 z-[9999]">
+        <WindowControls />
+      </div>
+
       {/* Background */}
       <div className="fixed inset-0 grid-pattern pointer-events-none"></div>
       <div className="fixed inset-0 nebula-glow pointer-events-none"></div>

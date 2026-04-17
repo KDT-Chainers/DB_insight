@@ -1,5 +1,6 @@
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useSidebar } from '../context/SidebarContext'
+import WindowControls from './WindowControls'
 
 export default function SearchSidebar() {
   const navigate = useNavigate()
@@ -110,6 +111,11 @@ export default function SearchSidebar() {
           <span className="material-symbols-outlined text-lg">menu</span>
         </button>
       )}
+
+      {/* 윈도우 컨트롤 버튼 */}
+      <div className="fixed top-2 right-2 z-[9999]">
+        <WindowControls />
+      </div>
     </>
   )
 }

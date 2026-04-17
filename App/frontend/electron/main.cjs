@@ -79,6 +79,7 @@ function createWindow() {
     height: 900,
     minWidth: 900,
     minHeight: 600,
+    frame: false,          // 기본 타이틀바 제거 (Windows: titleBarStyle 불필요)
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -108,6 +109,15 @@ ipcMain.handle('select-folder', async () => {
   if (canceled || filePaths.length === 0) return null
   return filePaths[0]
 })
+
+// 윈도우 컨트롤
+ipcMain.on('window-minimize', () => BrowserWindow.getFocusedWindow()?.minimize())
+ipcMain.on('window-maximize', () => {
+  const win = BrowserWindow.getFocusedWindow()
+  if (!win) return
+  win.isMaximized() ? win.unmaximize() : win.maximize()
+})
+ipcMain.on('window-close', () => BrowserWindow.getFocusedWindow()?.close())
 
 // ---------------------------------------------------------------------------
 // 앱 생명주기

@@ -1,12 +1,14 @@
 import { useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import { useSidebar } from '../context/SidebarContext'
+import { useScale } from '../context/ScaleContext'
 
 export default function Settings() {
   const navigate = useNavigate()
   const [cloudSync, setCloudSync] = useState(true)
   const [neuralFeedback, setNeuralFeedback] = useState(false)
   const { open } = useSidebar()
+  const { scale, setScale, MIN_SCALE, MAX_SCALE, STEP } = useScale()
 
   const [modalOpen, setModalOpen] = useState(false)
   const [currentPw, setCurrentPw] = useState('')
@@ -147,6 +149,55 @@ export default function Settings() {
                 <div className="h-[1px] flex-grow bg-outline-variant/20"></div>
               </div>
               <div className="space-y-8">
+
+                {/* 화면 크기 */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <label className="text-[0.7rem] uppercase tracking-widest text-on-surface-variant font-bold">화면 크기</label>
+                    <div className="flex items-center gap-2">
+                      {[0.7, 0.8, 0.9, 1.0].map(v => (
+                        <button
+                          key={v}
+                          onClick={() => setScale(v)}
+                          className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all
+                            ${Math.abs(scale - v) < 0.01
+                              ? 'bg-primary/20 text-primary border border-primary/30'
+                              : 'bg-surface-container-high text-on-surface-variant hover:text-on-surface border border-outline-variant/20'}`}
+                        >
+                          {Math.round(v * 100)}%
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <span className="text-[10px] text-on-surface-variant/50 w-8">{Math.round(MIN_SCALE * 100)}%</span>
+                    <div className="relative flex-1">
+                      <input
+                        type="range"
+                        min={MIN_SCALE}
+                        max={MAX_SCALE}
+                        step={STEP}
+                        value={scale}
+                        onChange={e => setScale(parseFloat(e.target.value))}
+                        className="w-full h-1.5 rounded-full appearance-none cursor-pointer
+                          bg-surface-container-highest
+                          [&::-webkit-slider-thumb]:appearance-none
+                          [&::-webkit-slider-thumb]:w-4
+                          [&::-webkit-slider-thumb]:h-4
+                          [&::-webkit-slider-thumb]:rounded-full
+                          [&::-webkit-slider-thumb]:bg-primary
+                          [&::-webkit-slider-thumb]:shadow-[0_0_8px_rgba(133,173,255,0.5)]
+                          [&::-webkit-slider-thumb]:cursor-pointer"
+                        style={{
+                          background: `linear-gradient(to right, var(--md-sys-color-primary) 0%, var(--md-sys-color-primary) ${((scale - MIN_SCALE) / (MAX_SCALE - MIN_SCALE)) * 100}%, rgba(255,255,255,0.1) ${((scale - MIN_SCALE) / (MAX_SCALE - MIN_SCALE)) * 100}%, rgba(255,255,255,0.1) 100%)`
+                        }}
+                      />
+                    </div>
+                    <span className="text-[10px] text-on-surface-variant/50 w-8 text-right">{Math.round(MAX_SCALE * 100)}%</span>
+                    <span className="text-xs font-bold text-primary w-10 text-right">{Math.round(scale * 100)}%</span>
+                  </div>
+                  <p className="mt-2 text-xs text-on-surface-variant/50 italic">앱 전체 UI 크기를 조절합니다. 즉시 적용됩니다.</p>
+                </div>
                 <div>
                   <label className="block text-[0.7rem] uppercase tracking-widest text-on-surface-variant font-bold mb-3">자주 사용하는 이메일</label>
                   <div className="relative max-w-md">

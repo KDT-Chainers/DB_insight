@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { SidebarProvider } from './context/SidebarContext'
+import { ScaleProvider, useScale } from './context/ScaleContext'
 import LandingLogin from './pages/LandingLogin'
 import InitialSetup from './pages/InitialSetup'
 import MainSearch from './pages/MainSearch'
@@ -63,10 +64,17 @@ function AuthGate() {
   return <LandingLogin />
 }
 
-export default function App() {
+function ScaledApp() {
+  const { scale } = useScale()
+
+  // Electron webFrame.setZoomFactor() 사용 — CSS zoom과 달리 레이아웃에 영향 없이
+  // 렌더링 레벨에서만 확대/축소하므로 h-screen, fixed 등이 모두 정상 동작한다.
+  useEffect(() => {
+    window.electronAPI?.setZoom(scale)
+  }, [scale])
+
   return (
-    <HashRouter>
-      <SidebarProvider>
+    <SidebarProvider>
       <Routes>
         <Route path="/" element={<AuthGate />} />
         <Route path="/setup" element={<InitialSetup />} />
@@ -80,7 +88,16 @@ export default function App() {
         <Route path="/data" element={<DataIndexing />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-      </SidebarProvider>
+    </SidebarProvider>
+  )
+}
+
+export default function App() {
+  return (
+    <HashRouter>
+      <ScaleProvider>
+        <ScaledApp />
+      </ScaleProvider>
     </HashRouter>
   )
 }

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import WindowControls from '../components/WindowControls'
 
 export default function InitialSetup() {
   const navigate = useNavigate()
@@ -44,6 +45,11 @@ export default function InitialSetup() {
 
   return (
     <div className="flex items-center justify-center min-h-screen p-4 bg-void">
+      {/* 윈도우 컨트롤 버튼 */}
+      <div className="fixed top-2 right-2 z-[9999]">
+        <WindowControls />
+      </div>
+
       {/* Background */}
       <div className="fixed top-[-10%] left-[-10%] w-[60%] h-[60%] orb-glow rounded-full blur-[100px] opacity-40 pointer-events-none"></div>
       <div className="fixed bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-secondary/10 rounded-full blur-[120px] opacity-30 pointer-events-none"></div>
@@ -59,7 +65,12 @@ export default function InitialSetup() {
               <span className="text-2xl font-black tracking-tighter text-on-surface">DB_insight</span>
             </div>
             <h1 className="text-5xl font-extrabold tracking-tight leading-[1.1] mb-6">
-              <span className="text-transparent bg-clip-text kinetic-gradient">로컬 인텔리전스</span>에{' '}
+              <span style={{
+                background: 'linear-gradient(45deg, #85adff, #ac8aff)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
+              }}>DB_insight</span>에{' '}
               오신 것을 환영합니다.
             </h1>
             <p className="text-on-surface-variant text-lg leading-relaxed max-w-sm">
