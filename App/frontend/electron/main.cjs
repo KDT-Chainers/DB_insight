@@ -1,6 +1,11 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron')
+const { app, BrowserWindow, ipcMain, dialog, protocol } = require('electron')
 const path = require('path')
 const { spawn } = require('child_process')
+
+// file:// 에서 Google Fonts 등 외부 리소스 로드 허용
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'file', privileges: { standard: true, secure: true, corsEnabled: true } }
+])
 
 const isDev = !app.isPackaged
 const DEV_URL = 'http://localhost:3000'
@@ -12,7 +17,7 @@ let backendProcess = null
 // ---------------------------------------------------------------------------
 
 function startBackend() {
-  if (isDev) return  // 개발 중엔 별도 터미널에서 실행
+  if (isDev) return
 
   const backendExe = path.join(process.resourcesPath, 'backend', 'backend.exe')
 
@@ -34,6 +39,37 @@ function killBackend() {
 }
 
 // ---------------------------------------------------------------------------
+// 백엔드 준비 대기 (최대 15초, 500ms 간격 폴링)
+// ---------------------------------------------------------------------------
+
+function waitForBackend(maxRetries = 30, interval = 500) {
+  return new Promise((resolve) => {
+    if (isDev) return resolve()  // 개발 중엔 스킵
+
+    const http = require('http')
+    let tries = 0
+
+    const check = () => {
+      tries++
+      const req = http.get('http://localhost:5001/api/auth/status', (res) => {
+        resolve()  // 응답 오면 준비 완료
+      })
+      req.on('error', () => {
+        if (tries < maxRetries) setTimeout(check, interval)
+        else resolve()  // 타임아웃 → 그냥 진행
+      })
+      req.setTimeout(300, () => {
+        req.destroy()
+        if (tries < maxRetries) setTimeout(check, interval)
+        else resolve()
+      })
+    }
+
+    check()
+  })
+}
+
+// ---------------------------------------------------------------------------
 // 윈도우 생성
 // ---------------------------------------------------------------------------
 
@@ -48,7 +84,6 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
     },
-    titleBarStyle: 'hiddenInset',
     show: false,
   })
 
@@ -78,8 +113,9 @@ ipcMain.handle('select-folder', async () => {
 // 앱 생명주기
 // ---------------------------------------------------------------------------
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   startBackend()
+  await waitForBackend()  // 백엔드 준비될 때까지 대기
   createWindow()
 })
 

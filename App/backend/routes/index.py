@@ -67,9 +67,19 @@ def scan():
     if not os.path.isdir(folder_path):
         return jsonify({"error": "Path not found"}), 404
 
+    max_depth = 3   # 하위 폴더 탐색 최대 깊이
+    max_files = 500  # 최대 파일 수 제한
+    base_depth = folder_path.rstrip("/\\").count(os.sep)
+
     files = []
     for root, _dirs, filenames in os.walk(folder_path):
+        current_depth = root.count(os.sep) - base_depth
+        if current_depth >= max_depth:
+            _dirs.clear()  # 더 깊이 내려가지 않음
+            continue
         for filename in filenames:
+            if len(files) >= max_files:
+                break
             full_path = os.path.join(root, filename)
             try:
                 size = os.path.getsize(full_path)
@@ -81,6 +91,8 @@ def scan():
                 "type": _get_file_type(full_path),
                 "size": size,
             })
+        if len(files) >= max_files:
+            break
 
     return jsonify({"path": folder_path, "files": files})
 

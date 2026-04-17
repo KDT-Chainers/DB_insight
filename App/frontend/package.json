@@ -16,11 +16,12 @@
     "appId": "com.dbinsight.app",
     "productName": "DB_insight",
     "directories": {
-      "output": "release"
+      "output": "out"
     },
     "files": [
       "dist/**/*",
-      "electron/**/*"
+      "electron/main.cjs",
+      "electron/preload.cjs"
     ],
     "extraResources": [
       {
@@ -29,12 +30,9 @@
       }
     ],
     "win": {
-      "target": "nsis",
-      "icon": "public/icon.ico"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "target": "portable",
+      "signingHashAlgorithms": null,
+      "sign": null
     }
   },
   "dependencies": {

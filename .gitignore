@@ -1,52 +1,72 @@
+# ============================================================
 # Node / React
+# ============================================================
 App/frontend/node_modules/
 App/frontend/dist/
 App/frontend/.vite/
 App/frontend/build/
 
-# Environment variables
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+# Electron 빌드 결과물
+App/frontend/out/
+App/frontend/dist-electron/
+App/frontend/release/
+App/frontend/builder-debug.yml
+App/frontend/builder-effective-config.yaml
 
-# Logs
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-*.log
-
-# OS
-.DS_Store
-Thumbs.db
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# Python
+# ============================================================
+# Python / Flask
+# ============================================================
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 .Python
 *.egg-info/
-dist/
-build/
 .eggs/
+
+# PyInstaller 빌드 결과물
+App/backend/dist/
+App/backend/build/
+App/backend/backend.spec
 
 # Virtual environments
 .venv/
 venv/
 env/
 
-# Database files
+# ============================================================
+# Database
+# ============================================================
 *.db
 *.sqlite
 *.sqlite3
 
-# Package locks (optional – keep if you want reproducible installs)
-# App/frontend/package-lock.json
+# ============================================================
+# Environment variables
+# ============================================================
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# ============================================================
+# Logs
+# ============================================================
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# ============================================================
+# OS
+# ============================================================
+.DS_Store
+Thumbs.db
+
+# ============================================================
+# IDE
+# ============================================================
+.idea/
+*.swp
+*.swo

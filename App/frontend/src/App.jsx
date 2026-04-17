@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { SidebarProvider } from './context/SidebarContext'
 import LandingLogin from './pages/LandingLogin'
 import InitialSetup from './pages/InitialSetup'
@@ -65,7 +65,7 @@ function AuthGate() {
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <HashRouter>
       <SidebarProvider>
       <Routes>
         <Route path="/" element={<AuthGate />} />
@@ -81,6 +81,6 @@ export default function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       </SidebarProvider>
-    </BrowserRouter>
+    </HashRouter>
   )
 }
