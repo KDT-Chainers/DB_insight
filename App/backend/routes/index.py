@@ -67,34 +67,35 @@ def scan():
     if not os.path.isdir(folder_path):
         return jsonify({"error": "Path not found"}), 404
 
-    max_depth = 3   # 하위 폴더 탐색 최대 깊이
-    max_files = 500  # 최대 파일 수 제한
-    base_depth = folder_path.rstrip("/\\").count(os.sep)
+    # 1단계만 반환 — 폴더/파일 구분
+    items = []
+    try:
+        entries = list(os.scandir(folder_path))
+    except PermissionError:
+        return jsonify({"error": "Permission denied"}), 403
 
-    files = []
-    for root, _dirs, filenames in os.walk(folder_path):
-        current_depth = root.count(os.sep) - base_depth
-        if current_depth >= max_depth:
-            _dirs.clear()  # 더 깊이 내려가지 않음
+    for entry in sorted(entries, key=lambda e: (not e.is_dir(), e.name.lower())):
+        try:
+            if entry.is_dir(follow_symlinks=False):
+                items.append({
+                    "name": entry.name,
+                    "path": entry.path,
+                    "kind": "folder",
+                    "type": None,
+                    "size": None,
+                })
+            else:
+                items.append({
+                    "name": entry.name,
+                    "path": entry.path,
+                    "kind": "file",
+                    "type": _get_file_type(entry.path),
+                    "size": entry.stat().st_size,
+                })
+        except OSError:
             continue
-        for filename in filenames:
-            if len(files) >= max_files:
-                break
-            full_path = os.path.join(root, filename)
-            try:
-                size = os.path.getsize(full_path)
-            except OSError:
-                size = 0
-            files.append({
-                "name": filename,
-                "path": full_path,
-                "type": _get_file_type(full_path),
-                "size": size,
-            })
-        if len(files) >= max_files:
-            break
 
-    return jsonify({"path": folder_path, "files": files})
+    return jsonify({"path": folder_path, "items": items})
 
 
 @index_bp.post("/start")
