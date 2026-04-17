@@ -14,7 +14,7 @@
 |------|------|------|
 | file_id | string | 파일 고유 식별자 |
 | path | string | 절대 경로 |
-| type | string | Docs / Movie / Rec / Img |
+| type | string | doc / video / image / audio |
 | size | integer | 바이트 |
 | hash | string | SHA256 |
 | indexing_status | string | pending / processing / done / failed |
@@ -31,13 +31,49 @@
 | chunks | array | chunk 텍스트 배열 |
 | preview | string | 미리보기용 요약 텍스트 |
 
-### embedded_DB
+### embedded_DB (ChromaDB)
 | 필드 | 타입 | 설명 |
 |------|------|------|
 | chunk_id | string | 청크 식별자 |
 | file_id | string | raw_DB와 동일 |
 | embedding | array | float 벡터 |
 | metadata | object | 검색 결과 연결용 부가 정보 |
+
+**metadata 필수 포함 필드**
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| file_id | string | 파일 식별자 |
+| file_name | string | 파일명 (확장자 포함) |
+| file_type | string | doc / video / image / audio |
+| file_path | string | 절대 경로 |
+| folder_path | string | 파일이 속한 폴더 절대 경로 |
+| preview | string | 미리보기 텍스트 |
+
+---
+
+## API 응답 구조
+
+### SearchResult (GET /api/search 응답 items 요소)
+```json
+{
+  "file_id":    "string",
+  "file_name":  "string",
+  "similarity": 0.91,
+  "snippet":    "string"
+}
+```
+
+### FileDetail (GET /api/files/{file_id} 응답)
+```json
+{
+  "file_id":         "string",
+  "file_name":       "string",
+  "file_type":       "doc | video | image | audio",
+  "file_path":       "string",
+  "folder_path":     "string",
+  "content_preview": "string"
+}
+```
 
 ---
 
@@ -78,8 +114,8 @@ CREATE TABLE settings (
 |------|------|------|
 | id | INTEGER (PK, AUTOINCREMENT) | 기록 식별자 |
 | query | TEXT | 검색어 |
-| method | TEXT | 임베딩 방법 (M7 등) |
-| result_count | INTEGER | 반환된 결과 수 |
+| method | TEXT | 검색 유형 (doc/video/image/audio) |
+| result_count | INTEGER | 반환된 전체 결과 수 |
 | searched_at | TEXT | ISO 8601 |
 
 ```sql
@@ -98,5 +134,6 @@ CREATE TABLE search_history (
 
 - 임의 필드 추가/삭제 금지
 - 모든 시각 필드는 ISO 8601 문자열 (UTC)
-- SQLite DB 파일 위치: `App/backend/db/app.db`
-- SQLite는 앱 설정 전용 — 파일 임베딩 데이터는 기존 3단 구조 유지
+- SQLite DB 파일 위치: `App/backend/db/app.db` — 앱 설정 전용
+- 파일 임베딩 데이터는 ChromaDB (유형별 컬렉션 분리)
+- ChromaDB metadata에 file_path / folder_path 반드시 포함 (파일 열기 기능 필수)
