@@ -8,6 +8,62 @@ export default function Settings() {
   const [neuralFeedback, setNeuralFeedback] = useState(false)
   const { open } = useSidebar()
 
+  const [modalOpen, setModalOpen] = useState(false)
+  const [currentPw, setCurrentPw] = useState('')
+  const [newPw, setNewPw] = useState('')
+  const [confirmPw, setConfirmPw] = useState('')
+  const [modalError, setModalError] = useState('')
+  const [modalSuccess, setModalSuccess] = useState(false)
+  const [loading, setLoading] = useState(false)
+
+  const openModal = () => {
+    setCurrentPw('')
+    setNewPw('')
+    setConfirmPw('')
+    setModalError('')
+    setModalSuccess(false)
+    setModalOpen(true)
+  }
+
+  const closeModal = () => {
+    if (loading) return
+    setModalOpen(false)
+  }
+
+  const handlePasswordChange = async (e) => {
+    e.preventDefault()
+    setModalError('')
+
+    if (newPw !== confirmPw) {
+      setModalError('새 비밀번호가 일치하지 않습니다.')
+      return
+    }
+    if (newPw.length < 1) {
+      setModalError('새 비밀번호를 입력하세요.')
+      return
+    }
+
+    setLoading(true)
+    try {
+      const res = await fetch('http://localhost:5001/api/auth/reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ current_password: currentPw, new_password: newPw }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setModalError(data.error || '변경에 실패했습니다.')
+      } else {
+        setModalSuccess(true)
+        setTimeout(() => setModalOpen(false), 1200)
+      }
+    } catch {
+      setModalError('서버에 연결할 수 없습니다.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="bg-surface text-on-surface antialiased min-h-screen">
       {/* Sidebar */}
@@ -76,7 +132,7 @@ export default function Settings() {
                   <p className="text-on-surface-variant text-sm">마스터 비밀번호는 로컬 데이터베이스를 복호화합니다. 초기화하면 로컬 암호화 키가 업데이트됩니다.</p>
                 </div>
                 <button
-                  onClick={() => navigate('/setup')}
+                  onClick={openModal}
                   className="bg-gradient-to-tr from-primary to-secondary text-on-primary font-bold py-3 px-8 rounded-full shadow-lg shadow-primary/20 hover:scale-105 active:scale-95 transition-all duration-300 whitespace-nowrap"
                 >
                   마스터 비밀번호 변경
@@ -169,6 +225,94 @@ export default function Settings() {
           </footer>
         </div>
       </main>
+      {/* 비밀번호 변경 모달 */}
+      {modalOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={closeModal} />
+          <div className="relative w-full max-w-md mx-4 bg-[#0c1326] border border-outline-variant/20 rounded-2xl shadow-[0_0_60px_rgba(133,173,255,0.15)] p-8">
+            <button
+              onClick={closeModal}
+              disabled={loading}
+              className="absolute top-4 right-4 text-on-surface-variant hover:text-on-surface transition-colors"
+            >
+              <span className="material-symbols-outlined">close</span>
+            </button>
+
+            <h3 className="text-xl font-bold text-on-surface mb-1">마스터 비밀번호 변경</h3>
+            <p className="text-xs text-on-surface-variant mb-8">현재 비밀번호를 확인한 후 새 비밀번호로 변경합니다.</p>
+
+            {modalSuccess ? (
+              <div className="flex flex-col items-center gap-3 py-6">
+                <span className="material-symbols-outlined text-4xl text-primary">check_circle</span>
+                <p className="text-sm font-bold text-on-surface">비밀번호가 변경되었습니다.</p>
+              </div>
+            ) : (
+              <form onSubmit={handlePasswordChange} className="flex flex-col gap-5">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold">현재 비밀번호</label>
+                  <input
+                    type="password"
+                    value={currentPw}
+                    onChange={(e) => setCurrentPw(e.target.value)}
+                    required
+                    disabled={loading}
+                    className="bg-surface-container-high border border-outline-variant/30 rounded-xl px-4 py-3 text-sm text-on-surface focus:outline-none focus:border-primary/60 transition-colors disabled:opacity-50"
+                    placeholder="현재 비밀번호 입력"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold">새 비밀번호</label>
+                  <input
+                    type="password"
+                    value={newPw}
+                    onChange={(e) => setNewPw(e.target.value)}
+                    required
+                    disabled={loading}
+                    className="bg-surface-container-high border border-outline-variant/30 rounded-xl px-4 py-3 text-sm text-on-surface focus:outline-none focus:border-primary/60 transition-colors disabled:opacity-50"
+                    placeholder="새 비밀번호 입력"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold">새 비밀번호 확인</label>
+                  <input
+                    type="password"
+                    value={confirmPw}
+                    onChange={(e) => setConfirmPw(e.target.value)}
+                    required
+                    disabled={loading}
+                    className="bg-surface-container-high border border-outline-variant/30 rounded-xl px-4 py-3 text-sm text-on-surface focus:outline-none focus:border-primary/60 transition-colors disabled:opacity-50"
+                    placeholder="새 비밀번호 다시 입력"
+                  />
+                </div>
+
+                {modalError && (
+                  <p className="text-xs text-red-400 font-medium">{modalError}</p>
+                )}
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={closeModal}
+                    disabled={loading}
+                    className="flex-1 py-3 rounded-full border border-outline-variant/30 text-sm font-bold text-on-surface-variant hover:text-on-surface hover:border-outline-variant/60 transition-all disabled:opacity-50"
+                  >
+                    취소
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="flex-1 py-3 rounded-full bg-gradient-to-tr from-primary to-secondary text-on-primary text-sm font-bold hover:brightness-110 active:scale-95 transition-all disabled:opacity-50"
+                  >
+                    {loading ? '변경 중...' : '변경'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
