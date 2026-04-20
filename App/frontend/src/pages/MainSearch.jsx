@@ -1,7 +1,61 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import SearchSidebar from '../components/SearchSidebar'
 import { useSidebar } from '../context/SidebarContext'
+
+// ── STT 훅 ──────────────────────────────────────────────
+function useSpeechRecognition({ onFinal }) {
+  const [listening, setListening] = useState(false)
+  const [interim, setInterim] = useState('')
+  const recognitionRef = useRef(null)
+  const latestRef = useRef('')
+
+  const start = useCallback(() => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition
+    if (!SR) { alert('이 환경에서는 음성 인식이 지원되지 않습니다.'); return }
+
+    const r = new SR()
+    r.lang = 'ko-KR'
+    r.continuous = false
+    r.interimResults = true
+
+    r.onstart = () => { setListening(true); setInterim(''); latestRef.current = '' }
+
+    r.onresult = (e) => {
+      let fin = '', tmp = ''
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) fin += e.results[i][0].transcript
+        else tmp += e.results[i][0].transcript
+      }
+      if (tmp) { setInterim(tmp); latestRef.current = tmp }
+      if (fin) { setInterim(''); latestRef.current = fin }
+    }
+
+    r.onend = () => {
+      setListening(false)
+      setInterim('')
+      const text = latestRef.current.trim()
+      latestRef.current = ''
+      if (text) onFinal(text)
+    }
+
+    r.onerror = () => { setListening(false); setInterim('') }
+
+    recognitionRef.current = r
+    r.start()
+  }, [onFinal])
+
+  const stop = useCallback(() => {
+    recognitionRef.current?.stop()
+  }, [])
+
+  const toggle = useCallback(() => {
+    if (listening) stop()
+    else start()
+  }, [listening, start, stop])
+
+  return { listening, interim, toggle }
+}
 
 const RESULTS = [
   {
@@ -71,6 +125,15 @@ export default function MainSearch() {
   const btnRef = useRef(null)
   const formRef = useRef(null)
 
+  // STT — doSearch보다 먼저 선언하지만 ref로 지연 참조
+  const doSearchRef = useRef(null)
+  const { listening, interim, toggle: toggleMic } = useSpeechRecognition({
+    onFinal: useCallback((text) => {
+      setInputValue(text)
+      setTimeout(() => doSearchRef.current?.(text), 80)
+    }, []),
+  })
+
   const ml = open ? 'ml-64' : 'ml-0'
   const leftEdge = open ? 'left-64' : 'left-0'
   const sidebarPx = open ? 256 : 0
@@ -132,6 +195,9 @@ export default function MainSearch() {
       setView('results')
     }
   }
+
+  // doSearch ref 항상 최신 유지 (STT onFinal 콜백에서 사용)
+  useEffect(() => { doSearchRef.current = doSearch })
 
   const handleSearch = (e) => {
     e?.preventDefault()
@@ -205,7 +271,7 @@ export default function MainSearch() {
       {view === 'home' && (
         <>
 
-          <main className={`${ml} h-full flex flex-col items-center justify-center p-8 relative transition-[margin] duration-300`}>
+          <main className={`${ml} h-full flex flex-col items-center justify-center p-8 pt-16 relative transition-[margin] duration-300`}>
             <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-[120px] pointer-events-none"></div>
             <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-secondary/5 rounded-full blur-[150px] pointer-events-none"></div>
 
@@ -225,19 +291,50 @@ export default function MainSearch() {
                 className="w-full relative group"
                 style={homeExiting ? { visibility: 'hidden' } : {}}
               >
-                <div className="glass-effect rounded-full p-2 border border-outline-variant/20 shadow-[0_0_50px_rgba(133,173,255,0.1)] flex items-center gap-4 hover:border-primary/40 transition-all duration-300">
-                  <button type="button" className="w-12 h-12 rounded-full bg-gradient-to-r from-primary to-secondary flex items-center justify-center text-on-primary-fixed shadow-lg active:scale-90 transition-transform">
+                <div className={`glass-effect rounded-full p-2 flex items-center gap-4 shadow-[0_0_50px_rgba(133,173,255,0.1)] transition-all duration-300
+                  ${listening
+                    ? 'border border-red-400/60 shadow-[0_0_30px_rgba(248,113,113,0.2)]'
+                    : 'border border-outline-variant/20 hover:border-primary/40'}`}>
+                  <button type="button" className="w-12 h-12 rounded-full bg-gradient-to-r from-primary to-secondary flex items-center justify-center text-on-primary-fixed shadow-lg active:scale-90 transition-transform shrink-0">
                     <span className="material-symbols-outlined font-bold">add</span>
                   </button>
-                  <input
-                    type="text"
-                    value={inputValue}
-                    onChange={(e) => setInputValue(e.target.value)}
-                    placeholder="로컬 파일에 대해 무엇이든 물어보세요..."
-                    className="flex-1 bg-transparent border-none focus:ring-0 text-on-surface placeholder:text-on-surface-variant/40 font-manrope text-lg py-4 outline-none"
-                  />
-                  <button type="button" className="w-12 h-12 rounded-full flex items-center justify-center text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-all duration-200">
-                    <span className="material-symbols-outlined">mic</span>
+                  <div className="flex-1 relative">
+                    <input
+                      type="text"
+                      value={listening ? '' : inputValue}
+                      onChange={(e) => !listening && setInputValue(e.target.value)}
+                      placeholder={listening ? '' : '로컬 파일에 대해 무엇이든 물어보세요...'}
+                      className="w-full bg-transparent border-none focus:ring-0 text-on-surface placeholder:text-on-surface-variant/40 font-manrope text-lg py-4 outline-none"
+                      readOnly={listening}
+                    />
+                    {/* 음성 인식 중 표시 */}
+                    {listening && (
+                      <div className="absolute inset-0 flex items-center gap-3 py-4 pointer-events-none">
+                        <span className="text-red-400 font-manrope text-lg truncate">
+                          {interim || <span className="text-on-surface-variant/50">듣는 중...</span>}
+                        </span>
+                        {/* 웨이브 애니메이션 */}
+                        <div className="flex items-center gap-[3px] shrink-0">
+                          {[0, 0.15, 0.3, 0.15, 0].map((delay, i) => (
+                            <div key={i} className="w-[3px] bg-red-400 rounded-full animate-bounce"
+                              style={{ height: `${[12,20,28,20,12][i]}px`, animationDelay: `${delay}s`, animationDuration: '0.8s' }} />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  {/* 마이크 버튼 */}
+                  <button
+                    type="button"
+                    onClick={toggleMic}
+                    className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 shrink-0
+                      ${listening
+                        ? 'bg-red-500/20 text-red-400 animate-pulse'
+                        : 'text-on-surface-variant hover:text-primary hover:bg-primary/10'}`}
+                  >
+                    <span className="material-symbols-outlined" style={listening ? { fontVariationSettings: '"FILL" 1' } : {}}>
+                      {listening ? 'mic' : 'mic'}
+                    </span>
                   </button>
                 </div>
               </form>
@@ -291,7 +388,8 @@ export default function MainSearch() {
           RESULTS / DETAIL 공통 헤더
       ════════════════════════════════ */}
       {view !== 'home' && (
-        <header className={`fixed top-0 ${leftEdge} right-0 z-40 bg-slate-950/60 backdrop-blur-xl flex items-center px-6 py-3 gap-4 border-b border-outline-variant/10 shadow-[0_0_20px_rgba(133,173,255,0.1)] transition-[left] duration-300`}>
+        /* top-8 = 드래그 바(32px) 아래에서 시작 */
+        <header className={`fixed top-8 ${leftEdge} right-0 z-40 bg-slate-950/60 backdrop-blur-xl flex items-center px-6 py-3 gap-4 border-b border-outline-variant/10 shadow-[0_0_20px_rgba(133,173,255,0.1)] transition-[left] duration-300`}>
           <button
             onClick={() => { setView('home'); setInputValue('') }}
             className={`text-lg font-bold tracking-tighter bg-gradient-to-r from-blue-300 to-purple-400 bg-clip-text text-transparent shrink-0 hover:opacity-70 transition-opacity ${!open ? 'ml-10' : ''}`}
@@ -300,14 +398,40 @@ export default function MainSearch() {
           </button>
 
           <form onSubmit={handleSearch} className="flex-1">
-            <div className="flex items-center bg-surface-container-high rounded-full border border-outline-variant/20 px-4 py-2 gap-3 focus-within:border-primary/50 transition-all">
-              <span className="material-symbols-outlined text-primary">search</span>
-              <input
-                className="bg-transparent border-none focus:ring-0 w-full text-on-surface placeholder-on-surface-variant text-sm outline-none"
-                placeholder="인텔리전스에 질문하세요..."
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-              />
+            <div className={`flex items-center rounded-full border px-4 py-2 gap-3 transition-all
+              ${listening
+                ? 'bg-red-500/5 border-red-400/50 shadow-[0_0_15px_rgba(248,113,113,0.15)]'
+                : 'bg-surface-container-high border-outline-variant/20 focus-within:border-primary/50'}`}>
+              <span className={`material-symbols-outlined text-sm ${listening ? 'text-red-400' : 'text-primary'}`}>
+                {listening ? 'mic' : 'search'}
+              </span>
+              <div className="flex-1 relative">
+                <input
+                  className="bg-transparent border-none focus:ring-0 w-full text-on-surface placeholder-on-surface-variant text-sm outline-none"
+                  placeholder={listening ? '' : '인텔리전스에 질문하세요...'}
+                  value={listening ? '' : inputValue}
+                  onChange={(e) => !listening && setInputValue(e.target.value)}
+                  readOnly={listening}
+                />
+                {listening && (
+                  <div className="absolute inset-0 flex items-center gap-2 pointer-events-none">
+                    <span className="text-red-400 text-sm truncate">{interim || '듣는 중...'}</span>
+                    <div className="flex items-center gap-[2px] shrink-0">
+                      {[0,0.1,0.2,0.1,0].map((d,i) => (
+                        <div key={i} className="w-[2px] bg-red-400 rounded-full animate-bounce"
+                          style={{ height: `${[6,10,14,10,6][i]}px`, animationDelay: `${d}s`, animationDuration: '0.7s' }} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={toggleMic}
+                className={`shrink-0 transition-all duration-200 ${listening ? 'text-red-400 animate-pulse' : 'text-on-surface-variant hover:text-primary'}`}
+              >
+                <span className="material-symbols-outlined text-sm" style={listening ? { fontVariationSettings: '"FILL" 1' } : {}}>mic</span>
+              </button>
             </div>
           </form>
 
@@ -328,7 +452,7 @@ export default function MainSearch() {
       ════════════════════════════════ */}
       {view === 'results' && (
         <main
-          className={`${ml} pt-20 min-h-screen transition-[margin] duration-300`}
+          className={`${ml} pt-24 min-h-screen transition-[margin] duration-300`}
           style={{
             opacity: resultsReady ? 1 : 0,
             transform: resultsReady ? 'translateY(0)' : 'translateY(24px)',
@@ -445,7 +569,7 @@ export default function MainSearch() {
           }}
         >
           {/* 상단 파일 정보 바 */}
-          <div className={`fixed top-[64px] ${leftEdge} right-0 z-30 bg-[#070d1f]/60 backdrop-blur-xl flex items-center justify-between px-8 py-3 border-b border-outline-variant/10 transition-[left] duration-300`}>
+          <div className={`fixed top-[88px] ${leftEdge} right-0 z-30 bg-[#070d1f]/60 backdrop-blur-xl flex items-center justify-between px-8 py-3 border-b border-outline-variant/10 transition-[left] duration-300`}>
             <div className="flex items-center gap-3">
               <span className={`material-symbols-outlined ${selectedFile.iconColor}`}>{selectedFile.icon}</span>
               <span className="font-manrope text-sm tracking-wide text-[#dfe4fe] font-bold">{selectedFile.name}</span>
@@ -461,7 +585,7 @@ export default function MainSearch() {
             </div>
           </div>
 
-          <section className="pt-36 pb-12 px-8 max-w-7xl mx-auto space-y-8">
+          <section className="pt-44 pb-12 px-8 max-w-7xl mx-auto space-y-8">
             <div className="grid grid-cols-12 gap-6">
               {/* 메인 프리뷰 */}
               <div className="col-span-8 space-y-6">

@@ -11,9 +11,9 @@ export default function SearchSidebar() {
     <>
       {/* 사이드바 */}
       <aside
-        className={`fixed left-0 top-0 h-full w-64 rounded-r-3xl flex flex-col p-4 bg-[#070d1f]/60 backdrop-blur-xl border-r border-[#41475b]/15 shadow-[20px_0_40px_rgba(133,173,255,0.05)] z-50 transition-transform duration-300 ${open ? 'translate-x-0' : '-translate-x-full'}`}
+        className={`fixed left-0 top-0 h-full w-64 rounded-r-3xl flex flex-col p-4 pt-10 bg-[#070d1f]/60 backdrop-blur-xl border-r border-[#41475b]/15 shadow-[20px_0_40px_rgba(133,173,255,0.05)] z-50 transition-transform duration-300 ${open ? 'translate-x-0' : '-translate-x-full'}`}
       >
-        {/* Logo + 토글 버튼 */}
+        {/* Logo + 토글 버튼 — h-8 드래그 바 아래에서 시작 */}
         <div className="mb-10 flex items-center justify-between px-2">
           <button
             onClick={() => navigate('/search')}
@@ -105,11 +105,11 @@ export default function SearchSidebar() {
         </div>
       </aside>
 
-      {/* 사이드바 닫혔을 때 떠있는 토글 버튼 */}
+      {/* 사이드바 닫혔을 때 떠있는 토글 버튼 — h-8(32px) 드래그 바 아래 */}
       {!open && (
         <button
           onClick={toggle}
-          className="fixed left-3 top-3 z-50 w-9 h-9 rounded-lg flex items-center justify-center bg-[#070d1f]/80 backdrop-blur border border-[#41475b]/30 text-on-surface-variant hover:text-primary hover:border-primary/30 transition-all"
+          className="fixed left-3 top-10 z-50 w-9 h-9 rounded-lg flex items-center justify-center bg-[#070d1f]/80 backdrop-blur border border-[#41475b]/30 text-on-surface-variant hover:text-primary hover:border-primary/30 transition-all"
         >
           <span className="material-symbols-outlined text-lg">menu</span>
         </button>

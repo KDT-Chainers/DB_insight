@@ -8,6 +8,15 @@ body {
   color: #dfe4fe;
 }
 
+/* 전역 스크롤바 숨김 — 스크롤 기능은 유지 */
+* {
+  scrollbar-width: none;        /* Firefox */
+  -ms-overflow-style: none;     /* IE / Edge */
+}
+*::-webkit-scrollbar {
+  display: none;                /* Chrome / Safari / Electron */
+}
+
 .material-symbols-outlined {
   font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
 }
