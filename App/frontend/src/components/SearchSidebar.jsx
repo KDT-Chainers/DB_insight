@@ -15,15 +15,18 @@ export default function SearchSidebar() {
       >
         {/* Logo + 토글 버튼 */}
         <div className="mb-10 flex items-center justify-between px-2">
-          <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate('/search')}
+            className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+          >
             <div className="w-8 h-8 bg-gradient-to-br from-primary to-secondary rounded-lg flex items-center justify-center">
               <span className="material-symbols-outlined text-on-primary-fixed text-lg" style={{ fontVariationSettings: '"FILL" 1' }}>dataset</span>
             </div>
-            <div>
+            <div className="text-left">
               <h1 className="text-xl font-black text-[#dfe4fe] leading-none">DB_insight</h1>
               <p className="text-[0.65rem] uppercase tracking-widest text-on-surface-variant mt-1">로컬 인텔리전스</p>
             </div>
-          </div>
+          </button>
           <button
             onClick={toggle}
             className="w-8 h-8 rounded-lg flex items-center justify-center text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-all"
@@ -112,9 +115,14 @@ export default function SearchSidebar() {
         </button>
       )}
 
-      {/* 윈도우 컨트롤 버튼 */}
-      <div className="fixed top-2 right-2 z-[9999]">
-        <WindowControls />
+      {/* 드래그 가능한 타이틀바 + 윈도우 컨트롤 */}
+      <div
+        className="fixed top-0 right-0 h-8 bg-[#070d1f] z-[9999] flex items-center justify-end px-2"
+        style={{ WebkitAppRegion: 'drag', left: open ? '256px' : '0', transition: 'left 0.3s' }}
+      >
+        <div style={{ WebkitAppRegion: 'no-drag' }}>
+          <WindowControls />
+        </div>
       </div>
     </>
   )

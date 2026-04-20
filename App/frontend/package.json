@@ -15,6 +15,8 @@
   "build": {
     "appId": "com.dbinsight.app",
     "productName": "DB_insight",
+    "npmRebuild": false,
+    "buildDependenciesFromSource": false,
     "directories": {
       "output": "out"
     },

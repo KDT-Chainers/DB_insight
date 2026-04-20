@@ -10,7 +10,9 @@ from routes.index import index_bp
 
 def create_app() -> Flask:
     app = Flask(__name__)
-    CORS(app, resources={r"/api/*": {"origins": ["http://localhost:3000"]}})
+    # 개발(localhost:3000) + 패키징 앱(file://) 모두 허용
+    CORS(app, resources={r"/api/*": {"origins": ["http://localhost:3000", "http://localhost:5173", "null"]}},
+         supports_credentials=True)
 
     init_db()
 
@@ -26,4 +28,5 @@ app = create_app()
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5001)
+    # 127.0.0.1 → 로컬호스트 전용, Windows 방화벽 팝업 안 뜸
+    app.run(host="127.0.0.1", port=5001)

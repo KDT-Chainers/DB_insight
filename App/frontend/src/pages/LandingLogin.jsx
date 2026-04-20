@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import WindowControls from '../components/WindowControls'
+import { API_BASE } from '../api'
 
 export default function LandingLogin() {
   const navigate = useNavigate()
@@ -11,7 +12,7 @@ export default function LandingLogin() {
     e.preventDefault()
 
     try {
-      const response = await fetch('http://localhost:5001/api/auth/verify', {
+      const response = await fetch(`${API_BASE}/api/auth/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password }),
@@ -37,9 +38,14 @@ export default function LandingLogin() {
 
   return (
     <div className="bg-surface-dim text-on-surface font-body overflow-hidden min-h-screen">
-      {/* 윈도우 컨트롤 버튼 */}
-      <div className="fixed top-2 right-2 z-[9999]">
-        <WindowControls />
+      {/* 드래그 가능한 타이틀바 — 어두운 배경으로 glow 투과 방지 */}
+      <div
+        className="fixed top-0 left-0 right-0 h-8 bg-[#070d1f] z-[9999] flex items-center justify-end px-2"
+        style={{ WebkitAppRegion: 'drag' }}
+      >
+        <div style={{ WebkitAppRegion: 'no-drag' }}>
+          <WindowControls />
+        </div>
       </div>
 
       {/* Background */}

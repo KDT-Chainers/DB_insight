@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { SidebarProvider } from './context/SidebarContext'
 import { ScaleProvider, useScale } from './context/ScaleContext'
+import { API_BASE } from './api'
 import LandingLogin from './pages/LandingLogin'
 import InitialSetup from './pages/InitialSetup'
 import MainSearch from './pages/MainSearch'
@@ -19,7 +20,7 @@ function AuthGate() {
 
     const checkStatus = async () => {
       try {
-        const response = await fetch('http://localhost:5001/api/auth/status')
+        const response = await fetch(`${API_BASE}/api/auth/status`)
         const data = await response.json()
         if (!response.ok) {
           throw new Error(data?.error || 'Failed to fetch status')

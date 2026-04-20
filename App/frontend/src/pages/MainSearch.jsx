@@ -311,7 +311,7 @@ export default function MainSearch() {
             </div>
           </form>
 
-{view === 'detail' && (
+          {view === 'detail' && (
             <button
               onClick={handleBackToResults}
               className="flex items-center gap-2 px-4 py-2 rounded-full bg-surface-container-high border border-outline-variant/20 text-xs font-bold text-on-surface-variant hover:text-primary hover:border-primary/30 transition-all shrink-0"

@@ -1,8 +1,20 @@
 import sqlite3
+import sys
+import os
 from pathlib import Path
 
 
-BASE_DIR = Path(__file__).resolve().parent
+def _get_base_dir() -> Path:
+    if getattr(sys, 'frozen', False):
+        # PyInstaller 빌드: __file__은 매번 다른 임시 폴더 → APPDATA에 영구 저장
+        app_data = os.environ.get('APPDATA') or os.environ.get('LOCALAPPDATA') or Path.home()
+        return Path(app_data) / 'DB_insight'
+    else:
+        # 개발 환경: 소스 옆에 저장
+        return Path(__file__).resolve().parent
+
+
+BASE_DIR = _get_base_dir()
 DB_PATH = BASE_DIR / "app.db"
 
 

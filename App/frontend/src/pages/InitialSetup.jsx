@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import WindowControls from '../components/WindowControls'
+import { API_BASE } from '../api'
 
 export default function InitialSetup() {
   const navigate = useNavigate()
@@ -18,7 +19,7 @@ export default function InitialSetup() {
     }
 
     try {
-      const response = await fetch('http://localhost:5001/api/auth/setup', {
+      const response = await fetch(`${API_BASE}/api/auth/setup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password }),
@@ -45,9 +46,14 @@ export default function InitialSetup() {
 
   return (
     <div className="flex items-center justify-center min-h-screen p-4 bg-void">
-      {/* 윈도우 컨트롤 버튼 */}
-      <div className="fixed top-2 right-2 z-[9999]">
-        <WindowControls />
+      {/* 드래그 가능한 타이틀바 */}
+      <div
+        className="fixed top-0 left-0 right-0 h-8 bg-[#070d1f] z-[9999] flex items-center justify-end px-2"
+        style={{ WebkitAppRegion: 'drag' }}
+      >
+        <div style={{ WebkitAppRegion: 'no-drag' }}>
+          <WindowControls />
+        </div>
       </div>
 
       {/* Background */}
