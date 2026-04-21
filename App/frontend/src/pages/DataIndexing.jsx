@@ -499,16 +499,44 @@ function IndexingModal({ rootPath, selectedCount, jobStatus, jobId, onClose, onS
 
 // ── 데이터 소스 탭 ──────────────────────────────────────
 function DataSourcesTab() {
-  const [files, setFiles]   = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError]   = useState('')
+  const [files, setFiles]       = useState([])
+  const [loading, setLoading]   = useState(true)
+  const [error, setError]       = useState('')
+  const [confirming, setConfirming] = useState(null)   // 삭제 확인 중인 file_path
+  const [deleting, setDeleting]     = useState(new Set()) // 삭제 요청 중인 file_path Set
 
-  useEffect(() => {
+  const loadFiles = () => {
+    setLoading(true)
     fetch(`${API}/api/files/indexed`)
       .then(r => r.json())
       .then(d => { setFiles(d.files ?? []); setLoading(false) })
       .catch(e => { setError(e.message); setLoading(false) })
-  }, [])
+  }
+
+  useEffect(() => { loadFiles() }, [])
+
+  const handleDeleteClick = (filePath) => {
+    setConfirming(filePath)
+  }
+
+  const handleDeleteConfirm = async (filePath) => {
+    setConfirming(null)
+    setDeleting(prev => new Set(prev).add(filePath))
+    try {
+      const res = await fetch(`${API}/api/files/delete`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file_path: filePath }),
+      })
+      if (!res.ok) throw new Error('삭제 실패')
+      // 목록에서 즉시 제거
+      setFiles(prev => prev.filter(f => f.file_path !== filePath))
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setDeleting(prev => { const s = new Set(prev); s.delete(filePath); return s })
+    }
+  }
 
   if (loading) return (
     <div className="flex items-center justify-center py-32 gap-2">
@@ -557,24 +585,77 @@ function DataSourcesTab() {
 
       {/* 파일 목록 */}
       <div className="glass-panel rounded-xl border border-outline-variant/10 overflow-hidden">
-        <div className="px-4 py-3 border-b border-outline-variant/10">
+        <div className="px-4 py-3 border-b border-outline-variant/10 flex items-center justify-between">
           <h3 className="text-sm font-bold text-on-surface">전체 파일 <span className="text-on-surface-variant font-normal">({files.length})</span></h3>
+          <button
+            onClick={loadFiles}
+            className="flex items-center gap-1 text-[10px] text-on-surface-variant/50 hover:text-primary transition-colors"
+          >
+            <span className="material-symbols-outlined text-sm">refresh</span>
+            새로고침
+          </button>
         </div>
         <div className="divide-y divide-outline-variant/8 max-h-[calc(100vh-340px)] overflow-y-auto">
           {files.map((f, i) => {
-            const icon  = TYPE_ICON[f.file_type]  ?? 'insert_drive_file'
-            const color = TYPE_COLOR[f.file_type] ?? 'text-on-surface-variant'
-            const sizeKB = f.size != null ? (f.size / 1024).toFixed(1) + ' KB' : '-'
+            const icon    = TYPE_ICON[f.file_type]  ?? 'insert_drive_file'
+            const color   = TYPE_COLOR[f.file_type] ?? 'text-on-surface-variant'
+            const sizeKB  = f.size != null ? (f.size / 1024).toFixed(1) + ' KB' : '-'
+            const isConfirming = confirming === f.file_path
+            const isDeleting   = deleting.has(f.file_path)
+
             return (
-              <div key={i} className={`flex items-center gap-3 px-4 py-3 hover:bg-white/3 transition-colors ${!f.exists ? 'opacity-40' : ''}`}>
+              <div
+                key={i}
+                className={`flex items-center gap-3 px-4 py-3 transition-colors group
+                  ${isConfirming ? 'bg-red-500/8' : 'hover:bg-white/3'}
+                  ${!f.exists ? 'opacity-40' : ''}`}
+              >
                 <span className={`material-symbols-outlined text-base shrink-0 ${color}`}>{icon}</span>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-on-surface truncate">{f.file_name}</p>
                   <p className="text-[10px] text-on-surface-variant/40 font-mono truncate">{f.file_path}</p>
                 </div>
+
                 <span className="text-[10px] text-on-surface-variant/30 shrink-0">{sizeKB}</span>
                 <span className="text-[10px] text-primary/60 shrink-0">{f.chunk_count} 청크</span>
-                {!f.exists && <span className="material-symbols-outlined text-red-400 text-sm shrink-0" title="파일 없음">error</span>}
+                {!f.exists && (
+                  <span className="material-symbols-outlined text-red-400 text-sm shrink-0" title="파일 없음">
+                    error
+                  </span>
+                )}
+
+                {/* 삭제 버튼 영역 */}
+                {isDeleting ? (
+                  <span className="material-symbols-outlined text-on-surface-variant/30 text-base animate-spin shrink-0">
+                    progress_activity
+                  </span>
+                ) : isConfirming ? (
+                  /* 인라인 확인 */
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="text-[10px] text-red-400/80 font-bold">삭제?</span>
+                    <button
+                      onClick={() => handleDeleteConfirm(f.file_path)}
+                      className="px-2 py-0.5 rounded-full bg-red-500 hover:bg-red-600 text-white text-[10px] font-bold transition-colors"
+                    >
+                      확인
+                    </button>
+                    <button
+                      onClick={() => setConfirming(null)}
+                      className="px-2 py-0.5 rounded-full bg-white/10 hover:bg-white/20 text-on-surface-variant text-[10px] font-bold transition-colors"
+                    >
+                      취소
+                    </button>
+                  </div>
+                ) : (
+                  /* 기본 상태: hover 시 휴지통 아이콘 */
+                  <button
+                    onClick={() => handleDeleteClick(f.file_path)}
+                    title="인덱스에서 삭제"
+                    className="opacity-0 group-hover:opacity-100 shrink-0 w-7 h-7 rounded-full hover:bg-red-500/15 flex items-center justify-center text-on-surface-variant/40 hover:text-red-400 transition-all"
+                  >
+                    <span className="material-symbols-outlined text-base">delete</span>
+                  </button>
+                )}
               </div>
             )
           })}

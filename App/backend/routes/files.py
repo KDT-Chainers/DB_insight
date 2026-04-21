@@ -143,3 +143,27 @@ def detail():
     })
 
 
+# ── 파일 삭제 (ChromaDB에서 해당 파일 청크 전부 제거) ────────────
+
+@files_bp.delete("/delete")
+def delete():
+    """
+    DELETE /api/files/delete
+    Body: { "file_path": "C:/..." }
+
+    ChromaDB에서 해당 파일의 모든 청크를 삭제한다.
+    원본 파일 자체는 건드리지 않는다.
+    """
+    data = request.get_json(silent=True) or {}
+    file_path = data.get("file_path", "").strip()
+    if not file_path:
+        return jsonify({"error": "file_path is required"}), 400
+
+    from db.vector_store import delete_file
+    try:
+        delete_file(file_path)
+        return jsonify({"ok": True, "file_path": file_path})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
