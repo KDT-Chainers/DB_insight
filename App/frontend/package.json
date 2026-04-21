@@ -17,6 +17,7 @@
     "productName": "DB_insight",
     "npmRebuild": false,
     "buildDependenciesFromSource": false,
+    "electronDist": "node_modules/electron/dist",
     "directories": {
       "output": "out"
     },
@@ -44,6 +45,7 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",
+    "app-builder-bin": "^4.2.0",
     "autoprefixer": "^10.4.20",
     "concurrently": "^9.0.0",
     "electron": "^31.0.0",

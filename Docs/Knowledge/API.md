@@ -12,37 +12,31 @@
 
 ### GET /api/search
 
-자연어 검색 — 쿼리를 doc/video/image/audio 검색기에 동시에 전달하여 유형별 결과를 반환한다.
+자연어 검색 — 쿼리를 인덱싱된 타입의 검색기에 동시에 전달하여 통합 결과를 반환한다.
 
 **Query Params**
 - `q` (필수): 검색어
-- `top_k` (선택, 기본 10): 유형별 최대 결과 수
+- `top_k` (선택, 기본 10): 최대 결과 수
+- `type` (선택): `doc` | `video` | `image` | `audio` — 지정 시 해당 타입만 검색
 
 **Response**
 ```json
 {
   "query": "검색어",
-  "results": {
-    "doc":   { "available": true,  "items": [ SearchResult, "..." ] },
-    "video": { "available": false, "items": [] },
-    "image": { "available": true,  "items": [ SearchResult, "..." ] },
-    "audio": { "available": false, "items": [] }
-  }
+  "results": [
+    {
+      "file_path":  "C:/Users/.../보고서.pdf",
+      "file_name":  "보고서.pdf",
+      "file_type":  "doc",
+      "similarity": 0.91,
+      "snippet":    "...검색어 주변 텍스트..."
+    }
+  ]
 }
 ```
 
-- `available: false` → 해당 유형 검색기 미구현/미연결 상태
-- `items`는 similarity 내림차순 정렬
-
-**SearchResult**
-```json
-{
-  "file_id":    "string",
-  "file_name":  "보고서.pdf",
-  "similarity": 0.91,
-  "snippet":    "...검색어 주변 텍스트..."
-}
-```
+- `results`는 similarity 내림차순 정렬 (모든 타입 통합)
+- 인덱싱된 파일이 없으면 `results: []` 반환
 
 **Error**
 ```json
@@ -51,57 +45,118 @@
 
 ---
 
-## 파일 상세
+## 파일 열기
 
-### GET /api/files/{file_id}
+### POST /api/files/open
 
-파일 상세 조회 (검색 결과 클릭 시 호출)
+OS 기본 앱으로 파일 직접 열기
+
+**Request Body**
+```json
+{ "file_path": "C:/Users/.../보고서.pdf" }
+```
+
+**Response**
+```json
+{ "success": true }
+```
+
+**Error**
+```json
+{ "error": "File not found" }
+```
+
+---
+
+### POST /api/files/open-folder
+
+파일 탐색기로 해당 파일이 있는 폴더 열기 (파일 선택 상태)
+
+**Request Body**
+```json
+{ "file_path": "C:/Users/.../보고서.pdf" }
+```
+
+**Response**
+```json
+{ "success": true }
+```
+
+---
+
+## 파일 정보
+
+### GET /api/files/indexed
+
+인덱싱된 모든 파일 목록 (파일별 청크 수 포함)
 
 **Response**
 ```json
 {
-  "file_id":         "string",
-  "file_name":       "보고서.pdf",
-  "file_type":       "doc",
-  "file_path":       "C:/Users/.../보고서.pdf",
-  "folder_path":     "C:/Users/...",
-  "content_preview": "...파일 내용 미리보기..."
+  "files": [
+    {
+      "file_path":   "C:/Users/.../보고서.pdf",
+      "file_name":   "보고서.pdf",
+      "file_type":   "doc",
+      "chunk_count": 12,
+      "size":        102400,
+      "exists":      true
+    }
+  ],
+  "total": 1
+}
+```
+
+- `size`: 파일이 존재하면 바이트 크기, 없으면 `null`
+- `exists`: 파일이 실제로 존재하는지 여부
+
+---
+
+### GET /api/files/stats
+
+타입별 파일 수·청크 수 통계
+
+**Response**
+```json
+{
+  "by_type": {
+    "doc":   { "file_count": 5, "chunk_count": 48 },
+    "video": { "file_count": 2, "chunk_count": 30 },
+    "image": { "file_count": 0, "chunk_count": 0  },
+    "audio": { "file_count": 1, "chunk_count": 8  }
+  },
+  "total_files":  8,
+  "total_chunks": 86
 }
 ```
 
 ---
 
-## 파일/폴더 열기
+### GET /api/files/detail
 
-### POST /api/files/{file_id}/open
+특정 파일의 전체 청크 텍스트 조회
 
-OS 기본 앱으로 파일 직접 열기
-
-**Response**
-```json
-{ "success": true }
-```
-
-**Error**
-```json
-{ "error": "File not found" }
-```
-
----
-
-### POST /api/files/{file_id}/open-folder
-
-파일 탐색기로 해당 파일이 있는 폴더 열기
+**Query Params**
+- `path` (필수): 파일 절대 경로
 
 **Response**
 ```json
-{ "success": true }
+{
+  "file_path": "C:/Users/.../보고서.pdf",
+  "file_type": "doc",
+  "chunks": [
+    {
+      "chunk_index":  0,
+      "chunk_text":   "청크 텍스트...",
+      "chunk_source": ""
+    }
+  ],
+  "full_text": "전체 청크 텍스트를 이어붙인 문자열"
+}
 ```
 
-**Error**
-```json
-{ "error": "File not found" }
-```
+- `chunk_source`: video 타입의 경우 `"blip"` (프레임 캡션) 또는 `""` (STT)
+- video 타입의 `full_text`는 `[프레임 캡션]\n...` + `[음성 텍스트]\n...` 형식
 
 ---
 
@@ -109,7 +164,7 @@ OS 기본 앱으로 파일 직접 열기
 
 ### POST /api/index/scan
 
-폴더 경로를 스캔하여 파일 목록 반환.
+폴더 경로를 1단계 스캔하여 파일/폴더 목록 반환.
 프론트의 리소스 탐색기에 표시할 데이터를 제공한다.
 
 **Request**
@@ -121,17 +176,18 @@ OS 기본 앱으로 파일 직접 열기
 ```json
 {
   "path": "C:/Users/foo/Documents",
-  "files": [
-    { "name": "보고서.pdf", "path": "C:/Users/foo/Documents/보고서.pdf", "type": "doc",   "size": 102400 },
-    { "name": "회의.mp4",   "path": "C:/Users/foo/Documents/회의.mp4",   "type": "video", "size": 524288 },
-    { "name": "사진.jpg",   "path": "C:/Users/foo/Documents/사진.jpg",   "type": "image", "size": 20480  },
-    { "name": "unknown.xyz","path": "C:/Users/foo/Documents/unknown.xyz","type": null,    "size": 1024   }
+  "items": [
+    { "name": "하위폴더",   "path": "C:/Users/foo/Documents/하위폴더",   "kind": "folder", "type": null,    "size": null   },
+    { "name": "보고서.pdf", "path": "C:/Users/foo/Documents/보고서.pdf", "kind": "file",   "type": "doc",   "size": 102400 },
+    { "name": "회의.mp4",   "path": "C:/Users/foo/Documents/회의.mp4",   "kind": "file",   "type": "video", "size": 524288 },
+    { "name": "unknown.xyz","path": "C:/Users/foo/Documents/unknown.xyz","kind": "file",   "type": null,    "size": 1024   }
   ]
 }
 ```
 
-- `type`: `"doc"` / `"video"` / `"image"` / `"audio"` / `null` (지원 안 되는 확장자)
-- 하위 폴더는 재귀 스캔
+- `kind`: `"folder"` | `"file"`
+- `type`: `"doc"` / `"video"` / `"image"` / `"audio"` / `null` (지원 안 되는 확장자 또는 폴더)
+- 폴더 먼저, 파일 나중 (이름 오름차순)
 
 **Error**
 ```json
@@ -174,19 +230,47 @@ OS 기본 앱으로 파일 직접 열기
 **Response**
 ```json
 {
-  "job_id":  "abc123",
-  "status":  "running",
-  "total":   2,
-  "done":    1,
-  "errors":  0,
+  "job_id":   "abc123",
+  "status":   "running",
+  "total":    2,
+  "done":     1,
+  "skipped":  0,
+  "errors":   0,
+  "stopping": false,
   "results": [
-    { "path": "C:/…/보고서.pdf", "status": "done"    },
-    { "path": "C:/…/회의.mp4",   "status": "running" }
+    { "path": "C:/…/보고서.pdf", "status": "done" },
+    {
+      "path":        "C:/…/회의.mp4",
+      "status":      "running",
+      "step":        2,
+      "step_total":  4,
+      "step_detail": "음성 텍스트 변환 중..."
+    }
   ]
 }
 ```
 
-- `status`: `"running"` / `"done"` / `"error"`
+- `status`: `"running"` / `"done"` / `"error"` / `"stopped"`
+- `stopping`: `true`이면 중단 요청됨 (아직 진행 중)
+- `step` / `step_total` / `step_detail`: video 파일 처리 중에만 포함 (4단계 진행)
+
+---
+
+### POST /api/index/stop/{job_id}
+
+진행 중인 인덱싱 작업을 중단 요청한다.
+현재 처리 중인 파일은 완료 후 다음 파일부터 중단.
+video 임베더는 현재 단계 완료 후 중단.
+
+**Response**
+```json
+{ "ok": true }
+```
+
+**Error**
+```json
+{ "error": "Job not found" }
+```
 
 ---
 

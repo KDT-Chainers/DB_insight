@@ -11,9 +11,9 @@
 
 데이터는 다음의 3단계로 처리된다:
 
-- **raw_DB**: 파일 메타데이터 저장
-- **extracted_DB**: 텍스트/OCR/STT 등 추출된 콘텐츠
-- **embedded_DB**: 임베딩 벡터 (ChromaDB)
+- **raw_DB**: (향후 확장용)
+- **extracted_DB**: 텍스트/OCR/STT 등 추출된 콘텐츠 캐시
+- **embedded_DB**: 임베딩 벡터 (ChromaDB) + .npy 캐시
 
 AI 협업을 위해 **3계층 구조**를 적용한다:
 
@@ -35,12 +35,11 @@ DB_insight
 │  └─ backend           ← Flask 백엔드
 │     ├─ routes/        ← API 엔드포인트
 │     ├─ embedders/     ← 파일 유형별 임베더
-│     ├─ db/            ← SQLite 초기화
-│     └─ dist/          ← PyInstaller 빌드 결과물 (backend.exe)
+│     └─ db/            ← SQLite 초기화 및 ChromaDB 인터페이스
 ├─ Data
 │  ├─ raw_DB
-│  ├─ extracted_DB
-│  └─ embedded_DB
+│  ├─ extracted_DB      ← 텍스트 캐시 (captions, STT, chunks)
+│  └─ embedded_DB       ← 벡터 캐시 (.npy) + ChromaDB
 └─ Docs
    ├─ Agents/
    ├─ Knowledge/        ← API.md, DataContract.md, ...
@@ -56,38 +55,26 @@ DB_insight
 ### 사전 조건
 
 - Node.js 설치
-- Python 설치
-- **Windows 개발자 모드 활성화** (필수)
-  - `설정 → 개인 정보 및 보안 → 개발자용 → 개발자 모드 ON`
+- Python 설치 (PATH에 등록)
 
 ---
 
-### Step 1 — Flask 백엔드 exe 빌드
-
-```bash
-cd App/backend
-pip install pyinstaller
-pyinstaller app.py --onefile --name backend
-```
-
-결과물: `App/backend/dist/backend.exe`
-
----
-
-### Step 2 — Electron 앱 빌드
+### Step 1 — Electron 앱 빌드
 
 ```bash
 cd App/frontend
 npm install
 rmdir /s /q out              # 이전 빌드 있을 경우
-set CSC_IDENTITY_AUTO_DISCOVERY=false && npm run dist
+npm run dist
 ```
 
 결과물: `App/frontend/out/DB_insight 0.1.0.exe`
 
+> Flask 백엔드 별도 빌드 불필요. Electron이 실행 시 `python app.py`를 자동 실행한다.
+
 ---
 
-### Step 3 — 앱 실행
+### Step 2 — 앱 실행
 
 `App/frontend/out/DB_insight 0.1.0.exe` 더블클릭
 
@@ -97,7 +84,7 @@ set CSC_IDENTITY_AUTO_DISCOVERY=false && npm run dist
 
 ---
 
-### Step 4 — 배포
+### Step 3 — 배포
 
 `App/frontend/out/DB_insight 0.1.0.exe` 파일 하나만 팀원에게 전달.
 설치 없이 바로 실행 가능.
@@ -127,18 +114,21 @@ npm run electron:dev
 
 | 경로 | 설명 |
 |------|------|
-| `GET /api/search?q=...` | 자연어 검색 (doc/video/image/audio) |
-| `GET /api/files/{id}` | 파일 상세 조회 |
-| `POST /api/files/{id}/open` | OS로 파일 열기 |
-| `POST /api/files/{id}/open-folder` | 탐색기로 폴더 열기 |
+| `GET  /api/search?q=...` | 자연어 검색 (모든 타입 통합) |
+| `POST /api/files/open` | OS로 파일 열기 |
+| `POST /api/files/open-folder` | 탐색기로 폴더 열기 |
+| `GET  /api/files/indexed` | 인덱싱된 파일 전체 목록 |
+| `GET  /api/files/stats` | 타입별 파일/청크 수 통계 |
+| `GET  /api/files/detail?path=` | 특정 파일 전체 청크 텍스트 |
 | `POST /api/index/scan` | 폴더 스캔 |
 | `POST /api/index/start` | 선택 파일 임베딩 시작 |
-| `GET /api/index/status/{job_id}` | 임베딩 진행 상태 |
-| `GET /api/auth/status` | 비밀번호 설정 여부 |
+| `GET  /api/index/status/{job_id}` | 임베딩 진행 상태 |
+| `POST /api/index/stop/{job_id}` | 임베딩 중단 |
+| `GET  /api/auth/status` | 비밀번호 설정 여부 |
 | `POST /api/auth/setup` | 최초 비밀번호 설정 |
 | `POST /api/auth/verify` | 비밀번호 검증 |
 | `POST /api/auth/reset` | 비밀번호 변경 |
-| `GET /api/history` | 검색 기록 조회 |
+| `GET  /api/history` | 검색 기록 조회 |
 | `DELETE /api/history` | 전체 검색 기록 삭제 |
 
 전체 스펙: `Docs/Knowledge/API.md`
@@ -154,4 +144,7 @@ npm run electron:dev
 | `/search` | 자연어 검색 메인 |
 | `/ai` | AI 모드 |
 | `/settings` | 설정 (비밀번호 변경 등) |
-| `/data` | 폴더 선택 및 파일 인덱싱 |
+| `/data` | 데이터 관리 |
+| `/data` → 인덱싱 탭 | 폴더 선택 및 파일 인덱싱 (임베딩 진행 모달) |
+| `/data` → 데이터 소스 탭 | 인덱싱된 파일 목록 (타입별 통계 + 전체 목록) |
+| `/data` → 벡터 저장소 탭 | ChromaDB 현황 (컬렉션별 파일/청크 수) |

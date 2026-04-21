@@ -6,6 +6,7 @@ from routes.auth import auth_bp
 from routes.history import history_bp
 from routes.search import search_bp
 from routes.index import index_bp
+from routes.files import files_bp
 
 
 def create_app() -> Flask:
@@ -20,6 +21,7 @@ def create_app() -> Flask:
     app.register_blueprint(history_bp)
     app.register_blueprint(search_bp)
     app.register_blueprint(index_bp)
+    app.register_blueprint(files_bp)
 
     return app
 

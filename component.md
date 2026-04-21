@@ -14,47 +14,82 @@
 
 ## 2. 전체 디렉토리 구조
 
-DBI  
-├─ constitution.md  
-│  
-├─ App  
-│ ├─ frontend  
-│ └─ backend  
-│  
-├─ Data  
-│ ├─ raw_DB  
-│ │ ├─ Docs  
-│ │ ├─ Movie  
-│ │ ├─ Rec  
-│ │ └─ Img  
-│ │  
-│ ├─ extracted_DB  
-│ │ ├─ Docs  
-│ │ ├─ Movie  
-│ │ ├─ Rec  
-│ │ └─ Img  
-│ │  
-│ └─ embedded_DB  
-│ ├─ Docs  
-│ ├─ Movie  
-│ ├─ Rec  
-│ └─ Img  
-│  
-└─ Docs  
- ├─ Agents  
- │ ├─ frontend-agent.md  
- │ ├─ backend-agent.md  
- │ ├─ database-agent.md  
- │ ├─ doc-embedding-agent.md  
- │ ├─ video-embedding-agent.md  
- │ ├─ image-embedding-agent.md  
- │ └─ audio-embedding-agent.md  
- │  
- └─ Knowledge  
- ├─ API.md  
- ├─ DataContract.md  
- ├─ RetrievalSpec.md  
- └─ IndexingSpec.md
+```
+DB_insight
+├─ constitution.md
+│
+├─ App
+│  ├─ frontend
+│  │  ├─ electron/
+│  │  │  ├─ main.cjs       ← Electron main (Flask 자동 실행, IPC)
+│  │  │  └─ preload.cjs    ← contextBridge
+│  │  ├─ src/
+│  │  │  ├─ pages/
+│  │  │  │  ├─ Login.jsx
+│  │  │  │  ├─ Setup.jsx
+│  │  │  │  ├─ MainSearch.jsx    ← 검색 메인 (파일 상세 포함)
+│  │  │  │  ├─ DataIndexing.jsx  ← 데이터 관리 (3탭)
+│  │  │  │  ├─ AIMode.jsx
+│  │  │  │  └─ Settings.jsx
+│  │  │  ├─ App.jsx
+│  │  │  └─ main.jsx
+│  │  └─ package.json
+│  │
+│  └─ backend
+│     ├─ app.py             ← Flask 앱 생성 및 Blueprint 등록
+│     ├─ config.py          ← 경로 상수 (EXTRACTED_DB_VIDEO, EMBEDDED_DB_VIDEO 등)
+│     ├─ routes/
+│     │  ├─ auth.py         ← /api/auth/*
+│     │  ├─ history.py      ← /api/history/*
+│     │  ├─ search.py       ← /api/search, /api/files/open, /api/files/open-folder
+│     │  ├─ index.py        ← /api/index/scan|start|stop|status
+│     │  └─ files.py        ← /api/files/indexed|stats|detail
+│     ├─ embedders/
+│     │  ├─ base.py         ← 공통 인코딩 함수 (encode_query, encode_query_ko, encode_query_e5)
+│     │  ├─ doc.py          ← 문서 임베더 (MiniLM 384d)
+│     │  ├─ video.py        ← M11 동영상 임베더 (BLIP+STT+e5, 4단계 progress_cb)
+│     │  ├─ image.py        ← 이미지 임베더 (OCR+MiniLM 384d)
+│     │  └─ audio.py        ← 음성 임베더 (STT+ko-sroberta 768d)
+│     └─ db/
+│        ├─ init_db.py      ← SQLite 초기화 (settings, search_history)
+│        └─ vector_store.py ← ChromaDB 인터페이스 (유형별 컬렉션 관리)
+│
+├─ Data
+│  ├─ raw_DB
+│  │  ├─ Docs
+│  │  ├─ Movie
+│  │  ├─ Rec
+│  │  └─ Img
+│  │
+│  ├─ extracted_DB          ← 텍스트 캐시 (captions.json, stt.txt, chunks.json)
+│  │  ├─ Docs
+│  │  ├─ Movie
+│  │  ├─ Rec
+│  │  └─ Img
+│  │
+│  └─ embedded_DB           ← 벡터 캐시 (.npy) + ChromaDB (chroma.sqlite3)
+│     ├─ Docs
+│     ├─ Movie
+│     ├─ Rec
+│     └─ Img
+│
+└─ Docs
+   ├─ Agents/
+   │  ├─ frontend-agent.md
+   │  ├─ backend-agent.md
+   │  ├─ database-agent.md
+   │  ├─ doc-embedding-agent.md
+   │  ├─ video-embedding-agent.md
+   │  ├─ image-embedding-agent.md
+   │  └─ audio-embedding-agent.md
+   │
+   └─ Knowledge/
+      ├─ API.md
+      ├─ DataContract.md
+      ├─ RetrievalSpec.md
+      ├─ IndexingSpec.md
+      └─ spec_video.md
+```
 
 ---
 
@@ -63,16 +98,7 @@ DBI
 ### 3.1 constitution.md (1계층)
 
 프로젝트의 최상위 규칙 문서이다.
-
-모든 에이전트와 개발자는 이 문서를 기준으로 작업해야 하며, 다음과 같은 내용을 포함한다.
-
-- 코드 작성 규칙
-- 폴더 구조 규칙
-- 데이터 흐름 기준
-- 네이밍 규칙
-- 시스템 전체 동작 원칙
-
-즉, **프로젝트의 절대 기준**이다.
+모든 에이전트와 개발자는 이 문서를 기준으로 작업해야 하며, 코드 작성 규칙, 폴더 구조 규칙, 데이터 흐름 기준, 네이밍 규칙, 시스템 전체 동작 원칙을 포함한다.
 
 ---
 
@@ -82,37 +108,51 @@ DBI
 
 #### frontend
 
-사용자 인터페이스 담당
+사용자 인터페이스 담당. React + Vite + Electron.
 
-- 검색 UI
-- 결과 표시
-- 미리보기
-- 상세 페이지
-- 사용자 인터랙션
+**페이지 목록**
+
+| 페이지 | 경로 | 설명 |
+|--------|------|------|
+| Login | `/` | 마스터 비밀번호 입력 |
+| Setup | `/setup` | 최초 비밀번호 설정 |
+| MainSearch | `/search` | 자연어 검색, 결과 목록, 파일 상세 (전체 청크 텍스트) |
+| DataIndexing | `/data` | 데이터 관리 (3탭) |
+| AIMode | `/ai` | AI 모드 |
+| Settings | `/settings` | 비밀번호 변경 등 |
+
+**DataIndexing 탭 구조**
+
+| 탭 | 설명 |
+|----|------|
+| 인덱싱 | 폴더 선택 → 파일 트리 → 체크박스 선택 → 임베딩 시작/중단 (RingProgress 모달) |
+| 데이터 소스 | 인덱싱된 파일 목록 (타입별 요약 카드 + 전체 파일 리스트) |
+| 벡터 저장소 | ChromaDB 현황 (총 파일/청크 수, 컬렉션별 상세) |
 
 #### backend
 
-서비스 로직 담당
+서비스 로직 담당. Flask REST API (포트 5001).
 
-- 경로 스캔
-- 파일 처리
-- 임베딩 파이프라인 실행
-- 검색 요청 처리
-- DB 연동
+**routes 목록**
+
+| 파일 | Blueprint | 엔드포인트 |
+|------|-----------|-----------|
+| auth.py    | `/api/auth`  | status, setup, verify, reset |
+| history.py | `/api`       | GET/POST/DELETE /history |
+| search.py  | `/api`       | GET /search, POST /files/open, POST /files/open-folder |
+| index.py   | `/api/index` | POST /scan, POST /start, POST /stop/{id}, GET /status/{id} |
+| files.py   | `/api/files` | GET /indexed, GET /stats, GET /detail |
 
 ---
 
 ### 3.3 Data
 
-데이터 저장 영역
+데이터 저장 영역. 3단계 분리.
 
-본 프로젝트는 데이터를 3단계로 분리한다.
+- **extracted_DB**: 텍스트 캐시 (BLIP 캡션 JSON, Whisper STT txt, 청크 JSON, 가중치 JSON)
+- **embedded_DB**: 임베딩 벡터 (.npy 캐시) + ChromaDB (chroma.sqlite3)
 
-- raw_DB → 원본 파일 메타데이터
-- extracted_DB → 추출된 텍스트/콘텐츠
-- embedded_DB → 임베딩 벡터
-
-이 구조는 검색 품질과 디버깅을 위해 필수적이다.
+파일 유형별 서브폴더: `Movie` (video), `Docs` (doc), `Img` (image), `Rec` (audio)
 
 ---
 
@@ -121,132 +161,42 @@ DBI
 AI 협업을 위한 문서 영역
 
 - Agents (2계층) → 역할 정의
-- Knowledge (3계층) → 최소 스펙 정의
+- Knowledge (3계층) → 최소 스펙 정의 (API, DataContract, RetrievalSpec, IndexingSpec, spec_video)
 
 ---
 
-## 4. Data 구조 설명
+## 4. 임베딩 모델 요약
 
-### 4.1 raw_DB
-
-원본 파일의 메타데이터 저장
-
-- file_id
-- path
-- type
-- created / modified time
-- size
-- hash
-- indexing status
+| 타입 | 모델 | 차원 | 캐시 위치 |
+|------|------|------|-----------|
+| doc   | paraphrase-multilingual-MiniLM-L12-v2 | 384d | embedded_DB/Docs/ |
+| image | paraphrase-multilingual-MiniLM-L12-v2 | 384d | embedded_DB/Img/ |
+| audio | jhgan/ko-sroberta-multitask            | 768d | embedded_DB/Rec/ |
+| video | intfloat/multilingual-e5-large (M11)  | 1024d | embedded_DB/Movie/ |
 
 ---
 
-### 4.2 extracted_DB
+## 5. 데이터 흐름
 
-파일에서 추출된 콘텐츠 저장
-
-- 텍스트
-- OCR 결과
-- STT 결과
-- chunk 데이터
-- preview 텍스트
-
----
-
-### 4.3 embedded_DB
-
-임베딩 벡터 저장
-
-- chunk_id
-- file_id
-- embedding vector
-- metadata
+1. 사용자 폴더 지정 (DataIndexing → 인덱싱 탭)
+2. 파일 스캔 (`POST /api/index/scan`)
+3. 체크박스로 파일 선택
+4. 임베딩 시작 (`POST /api/index/start`) → job_id 발급
+5. 프론트 폴링 (`GET /api/index/status/{job_id}`) → RingProgress 모달 표시
+   - video: 4단계 진행 (캡셔닝→STT→임베딩→저장)
+   - 중단 가능 (`POST /api/index/stop/{job_id}`)
+6. 임베딩 결과 → ChromaDB upsert + 텍스트 캐시 저장
+7. 자연어 검색 (`GET /api/search?q=...`)
+8. 결과 목록 → 파일 클릭 → 상세 조회 (`GET /api/files/detail?path=...`)
 
 ---
 
-## 5. Docs 구조 설명
-
-### 5.1 Agents (2계층)
-
-전문 코딩 에이전트 정의
-
-각 에이전트는 **해당 도메인의 지식을 내부에 포함**한다.
-
-- frontend-agent.md → UI/UX
-- backend-agent.md → 서버 및 로직
-- database-agent.md → 데이터 구조
-- doc-embedding-agent.md → 문서 처리
-- video-embedding-agent.md → 영상 처리
-- image-embedding-agent.md → 이미지 처리
-- audio-embedding-agent.md → 음성 처리
-
-즉, **실제 작업을 수행하는 주체**이다.
-
----
-
-### 5.2 Knowledge (3계층)
-
-에이전트 간 충돌을 방지하는 최소 스펙
-
-#### API.md
-
-프론트 ↔ 백엔드 통신 규약
-
-#### DataContract.md
-
-모든 데이터 구조 정의 (file_id, chunk_id, metadata 등)
-
-#### RetrievalSpec.md
-
-검색 방식 정의 (유사도, top-k, 정렬 기준 등)
-
-#### IndexingSpec.md
-
-임베딩 및 인덱싱 기준 (chunking, 업데이트 정책 등)
-
-👉 중요한 점:
-이 영역은 **설명 문서가 아니라 “규칙 문서”**이다.
-
----
-
-## 6. 파일 유형 분류
-
-- Docs → 문서 (pdf, docx 등)
-- Movie → 영상
-- Rec → 음성
-- Img → 이미지
-
----
-
-## 7. 데이터 흐름
-
-1. 사용자 경로 지정
-2. 파일 스캔
-3. raw_DB 저장
-4. 콘텐츠 추출
-5. extracted_DB 저장
-6. 임베딩 수행
-7. embedded_DB 저장
-8. 자연어 검색
-9. 결과 반환
-10. 상세 조회
-
----
-
-## 8. 설계 핵심 원칙
+## 6. 설계 핵심 원칙
 
 - 실행(App) / 데이터(Data) / 문서(Docs) 분리
 - raw → extracted → embedded 3단 구조 유지
-- 2계층(Agents)에 최대한 지식 포함
-- 3계층(Knowledge)은 최소 규칙만 유지
-- 모든 컴포넌트는 file_id / chunk_id 기준으로 연결
-
----
-
-## 9. 결론
-
-본 구조는 단순 파일 검색이 아니라,  
-로컬 데이터를 의미 기반으로 이해하는 AI 시스템을 목표로 한다.
-
-특히 3계층 구조를 통해  
-AI 에이전트가 일관되게 협업할 수 있는 환경을 제공한다.
+- 파일 식별자: `file_path` (절대 경로) — `file_id` 미사용
+- 텍스트 캐시(`extracted_DB`) vs 벡터 캐시(`embedded_DB`) 분리
+- 각 파일 유형별 독립 ChromaDB 컬렉션 + 독립 임베딩 모델
+- progress_cb 패턴으로 video 임베딩 4단계 실시간 진행 표시
+- 중단 flag 기반 stop 메커니즘 (파일 단위 + 단계 단위)

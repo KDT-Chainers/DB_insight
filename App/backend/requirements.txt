@@ -1,2 +1,22 @@
 Flask
 flask-cors
+
+# 벡터 저장소
+chromadb>=0.6.0
+
+# 텍스트 임베딩 (공통)
+sentence-transformers
+
+# 동영상 임베딩 (M11) ✅ 구현 완료
+faster-whisper        # Whisper medium STT (한국어)
+transformers          # BLIP 이미지 캡셔닝
+opencv-python         # 프레임 추출
+Pillow                # 이미지 처리
+torch                 # BLIP/Whisper GPU 지원
+numpy
+
+# 문서 추출 (doc.py 구현 시 필요한 것만 설치)
+# pdfplumber         # PDF
+# python-docx        # DOCX
+# python-pptx        # PPTX
+# openpyxl           # XLSX

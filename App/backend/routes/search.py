@@ -5,140 +5,145 @@ from flask import Blueprint, jsonify, request
 
 search_bp = Blueprint("search", __name__, url_prefix="/api")
 
-# ---------------------------------------------------------------------------
-# 검색기 플레이스홀더
-# 팀원 검색기 완성 시 아래 함수를 실제 모듈로 교체
-#
-# 각 함수 반환 규칙:
-#   - 검색기 없음(미구현): None
-#   - 검색 성공: list[dict]  ← 아래 SearchResult 구조 참고
-#
-# SearchResult 구조:
-#   {
-#     "file_id":   str,   # 파일 고유 ID
-#     "file_name": str,   # 파일명 (확장자 포함)
-#     "similarity": float, # 0.0 ~ 1.0
-#     "snippet":   str,   # 검색어 주변 텍스트
-#   }
-# ---------------------------------------------------------------------------
 
-
-def _search_doc(query: str, top_k: int):
-    return None  # TODO: 팀원 doc 검색기 연결
-
-
-def _search_video(query: str, top_k: int):
-    return None  # TODO: 팀원 video 검색기 연결
-
-
-def _search_image(query: str, top_k: int):
-    return None  # TODO: 팀원 image 검색기 연결
-
-
-def _search_audio(query: str, top_k: int):
-    return None  # TODO: 팀원 audio 검색기 연결
-
-
-SEARCHERS = {
-    "doc":   _search_doc,
-    "video": _search_video,
-    "image": _search_image,
-    "audio": _search_audio,
-}
-
-
-# ---------------------------------------------------------------------------
-# 파일 경로 조회 헬퍼
-# 팀원 검색기 완성 시 file_id → 절대 경로 변환 로직 구현
-# ---------------------------------------------------------------------------
-
-def _get_file_path(file_id: str) -> str | None:
-    # TODO: ChromaDB 메타데이터에서 file_id → path 조회
-    return None
-
-
-# ---------------------------------------------------------------------------
-# 엔드포인트
-# ---------------------------------------------------------------------------
+# ── 검색 ──────────────────────────────────────────────────────────
 
 @search_bp.get("/search")
 def search():
     """
-    GET /api/search?q=검색어&top_k=10
+    GET /api/search?q=검색어&top_k=10&type=doc|image|audio|video
+
+    type 미지정 → 인덱싱된 모든 타입에서 검색 후 유사도 합산.
 
     Response:
     {
       "query": "검색어",
-      "results": {
-        "doc":   { "available": true,  "items": [ SearchResult, ... ] },
-        "video": { "available": false, "items": [] },
-        "image": { "available": true,  "items": [ SearchResult, ... ] },
-        "audio": { "available": false, "items": [] }
-      }
+      "results": [
+        {
+          "file_path":  str,
+          "file_name":  str,
+          "file_type":  str,   # doc | image | audio | video
+          "similarity": float, # 0.0 ~ 1.0
+          "snippet":    str
+        },
+        ...
+      ]
     }
     """
-    query = request.args.get("q", "").strip()
+    query     = request.args.get("q", "").strip()
+    top_k     = request.args.get("top_k", default=10, type=int)
+    file_type = request.args.get("type", default=None)
+
     if not query:
         return jsonify({"error": "q is required"}), 400
-
-    top_k = request.args.get("top_k", default=10, type=int)
     if top_k <= 0:
         top_k = 10
 
-    results = {}
-    for type_name, searcher_fn in SEARCHERS.items():
-        try:
-            items = searcher_fn(query, top_k)
-            if items is None:
-                results[type_name] = {"available": False, "items": []}
+    try:
+        from db.vector_store import search as vs_search, search_all, search_video_m11, count
+
+        if count() == 0:
+            return jsonify({"query": query, "results": []})
+
+        if file_type:
+            # 특정 타입만 검색
+            if file_type == "video":
+                from embedders.base import encode_query_e5
+                query_vec = encode_query_e5(query)
+                results   = search_video_m11(query_vec, top_k=top_k)
             else:
-                results[type_name] = {"available": True, "items": items}
-        except Exception:
-            results[type_name] = {"available": False, "items": []}
+                query_vec = _encode_for_type(query, file_type)
+                results   = vs_search(query_vec, file_type=file_type, top_k=top_k)
+        else:
+            # 모든 타입 검색 — 타입별 인코딩 후 합산
+            embeddings_by_type = _encode_all(query)
+            results = search_all(embeddings_by_type, top_k=top_k)
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
     return jsonify({"query": query, "results": results})
 
 
-@search_bp.get("/files/<file_id>")
-def file_detail(file_id: str):
+def _encode_for_type(query: str, file_type: str) -> list[float]:
+    """파일 타입에 맞는 모델로 쿼리 인코딩."""
+    if file_type == "audio":
+        from embedders.base import encode_query_ko
+        return encode_query_ko(query)
+    elif file_type == "video":
+        from embedders.base import encode_query_e5
+        return encode_query_e5(query)
+    else:
+        from embedders.base import encode_query
+        return encode_query(query)
+
+
+def _encode_all(query: str) -> dict[str, list[float]]:
     """
-    GET /api/files/{file_id}
-
-    Response:
-    {
-      "file_id":         str,
-      "file_name":       str,
-      "file_type":       str,   # doc / video / image / audio
-      "file_path":       str,
-      "folder_path":     str,
-      "content_preview": str
-    }
+    각 타입별 모델로 쿼리를 인코딩.
+      doc/image → 384d (MiniLM)
+      audio     → 768d (ko-sroberta)
+      video     → 1024d (e5-large, M11)
+    각 컬렉션에 청크가 없으면 포함하지 않음.
     """
-    # TODO: ChromaDB 메타데이터에서 file_id 기반 상세 정보 조회
-    return jsonify({"error": "Not implemented"}), 501
+    from db.vector_store import count as col_count
+
+    result: dict[str, list[float] | None] = {}
+
+    # 384d 모델 (doc, image)
+    if col_count("doc") > 0 or col_count("image") > 0:
+        from embedders.base import encode_query
+        vec_mini = encode_query(query)
+        if col_count("doc")   > 0: result["doc"]   = vec_mini
+        if col_count("image") > 0: result["image"] = vec_mini
+
+    # 768d 모델 (audio)
+    if col_count("audio") > 0:
+        from embedders.base import encode_query_ko
+        vec_ko = encode_query_ko(query)
+        result["audio"] = vec_ko
+
+    # 1024d 모델 (video, M11 e5-large)
+    if col_count("video") > 0:
+        from embedders.base import encode_query_e5
+        vec_e5 = encode_query_e5(query)
+        result["video"] = vec_e5
+
+    return result
 
 
-@search_bp.post("/files/<file_id>/open")
-def file_open(file_id: str):
-    """POST /api/files/{file_id}/open — OS 기본 앱으로 파일 열기"""
-    file_path = _get_file_path(file_id)
-    if not file_path:
+# ── 인덱싱된 파일 목록 ────────────────────────────────────────────
+
+@search_bp.get("/indexed-files")
+def indexed_files():
+    """GET /api/indexed-files"""
+    try:
+        from db.vector_store import get_indexed_files, count
+        files = get_indexed_files()
+        return jsonify({"total_chunks": count(), "files": files})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ── 파일 열기 ─────────────────────────────────────────────────────
+
+@search_bp.post("/files/open")
+def file_open():
+    """POST /api/files/open  body: { "file_path": "C:/..." }"""
+    data      = request.get_json(silent=True) or {}
+    file_path = data.get("file_path", "")
+    if not file_path or not os.path.exists(file_path):
         return jsonify({"error": "File not found"}), 404
-    if not os.path.exists(file_path):
-        return jsonify({"error": "File not found"}), 404
-
     os.startfile(file_path)
     return jsonify({"success": True})
 
 
-@search_bp.post("/files/<file_id>/open-folder")
-def folder_open(file_id: str):
-    """POST /api/files/{file_id}/open-folder — 파일 탐색기로 해당 폴더 열기"""
-    file_path = _get_file_path(file_id)
-    if not file_path:
+@search_bp.post("/files/open-folder")
+def folder_open():
+    """POST /api/files/open-folder  body: { "file_path": "C:/..." }"""
+    data      = request.get_json(silent=True) or {}
+    file_path = data.get("file_path", "")
+    if not file_path or not os.path.exists(file_path):
         return jsonify({"error": "File not found"}), 404
-    if not os.path.exists(file_path):
-        return jsonify({"error": "File not found"}), 404
-
     subprocess.Popen(["explorer", "/select,", file_path])
     return jsonify({"success": True})

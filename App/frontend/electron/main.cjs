@@ -54,8 +54,40 @@ async function startBackend() {
   await freePort(5001)  // 이전 인스턴스가 포트를 쥐고 있으면 먼저 해제
 
   const backendExe = path.join(process.resourcesPath, 'backend', 'backend.exe')
-  backendProcess = spawn(backendExe, [], { stdio: 'ignore', detached: false })
-  backendProcess.on('error', err => console.error('Backend failed to start:', err))
+
+  // ML 패키지(torch, transformers 등)가 필요하므로 항상 Python 소스 직접 실행
+  // backend.exe 는 ML 라이브러리를 포함하지 않아 임베딩 불가
+  _startPythonBackend()
+}
+
+function _startPythonBackend() {
+  // 백엔드 소스 경로 (패키징 여부에 관계없이 소스 직접 실행)
+  const candidates = [
+    path.resolve(__dirname, '..', '..', 'backend'),          // 개발 모드
+    'C:\\Honey\\DB_insight\\App\\backend',                   // 배포 고정 경로
+    path.join(process.resourcesPath, '..', '..', 'backend'), // 리소스 상대
+  ]
+  const cwd = candidates.find(d => {
+    try { return fs.existsSync(path.join(d, 'app.py')) } catch { return false }
+  }) || candidates[1]
+
+  const pythonCandidates = ['python', 'python3', 'py']
+  let started = false
+  for (const py of pythonCandidates) {
+    try {
+      backendProcess = spawn(py, ['app.py'], {
+        cwd,
+        stdio: 'ignore',
+        detached: false,
+        shell: true,
+      })
+      backendProcess.on('error', () => {})
+      started = true
+      console.log(`Backend started via: ${py} app.py (cwd: ${cwd})`)
+      break
+    } catch (_) {}
+  }
+  if (!started) console.error('Python backend could not be started')
 }
 
 function killBackend() {
@@ -71,7 +103,7 @@ function killBackend() {
 // 백엔드 준비 대기 (최대 15초, 300ms 간격 폴링)
 // ---------------------------------------------------------------------------
 
-function waitForBackend(maxRetries = 50, interval = 300) {
+function waitForBackend(maxRetries = 100, interval = 500) {
   return new Promise((resolve) => {
     if (isDev) return resolve()
 
