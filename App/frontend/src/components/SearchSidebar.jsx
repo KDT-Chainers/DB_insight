@@ -79,6 +79,15 @@ export default function SearchSidebar() {
             <span className="material-symbols-outlined">search_check</span>
             <span className="font-manrope uppercase tracking-[0.05em] text-[0.75rem]">최근 검색어</span>
           </button>
+          <button
+            onClick={() => navigate('/trichef')}
+            className={`w-full flex items-center gap-3 rounded-xl px-4 py-3 active:translate-x-1 duration-200 ${
+              location.pathname === '/trichef' ? 'text-primary bg-[#1c253e]' : 'text-[#a5aac2] hover:bg-[#1c253e]/50 hover:text-[#dfe4fe]'
+            }`}
+          >
+            <span className="material-symbols-outlined">hub</span>
+            <span className="font-manrope uppercase tracking-[0.05em] text-[0.75rem]">TRI-CHEF</span>
+          </button>
 
           {/* Recent queries */}
           <div className="mt-8 px-4 space-y-4">

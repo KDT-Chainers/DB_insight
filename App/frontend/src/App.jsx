@@ -9,6 +9,7 @@ import MainSearch from './pages/MainSearch'
 import MainAI from './pages/MainAI'
 import Settings from './pages/Settings'
 import DataIndexing from './pages/DataIndexing'
+import TriChefSearch from './pages/TriChefSearch'
 
 function AuthGate() {
   const [loading, setLoading] = useState(true)
@@ -87,6 +88,7 @@ function ScaledApp() {
         <Route path="/ai/results/:id" element={<Navigate to="/ai" replace />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/data" element={<DataIndexing />} />
+        <Route path="/trichef" element={<TriChefSearch />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </SidebarProvider>
