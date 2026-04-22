@@ -74,7 +74,14 @@ def _upsert_chroma(collection: str, ids: list[str],
     col = _get_trichef_collection(collection)
     metadatas = [{"path": str(src_root / i), "id": i} for i in ids]
     embeds = np.hstack([Re, Im_perp, Z_perp]).astype(np.float32)
-    col.upsert(ids=ids, embeddings=embeds.tolist(), metadatas=metadatas)
+    CHUNK = 5000  # ChromaDB max batch size ~5461
+    for start in range(0, len(ids), CHUNK):
+        end = start + CHUNK
+        col.upsert(
+            ids=ids[start:end],
+            embeddings=embeds[start:end].tolist(),
+            metadatas=metadatas[start:end],
+        )
 
 
 # ── 이미지 도메인 ────────────────────────────────────────────────────────────
@@ -184,7 +191,7 @@ def run_doc_incremental() -> IncrementalResult:
         if p.suffix.lower() != ".pdf":
             continue
         pages = doc_page_render.render_pdf(p)
-        cap_dir = Path(PATHS["TRICHEF_DOC_EXTRACT"]) / "captions" / p.stem
+        cap_dir = Path(PATHS["TRICHEF_DOC_EXTRACT"]) / "captions" / doc_page_render._sanitize(p.stem)
         cap_dir.mkdir(parents=True, exist_ok=True)
         for pg in pages:
             cp = cap_dir / f"{pg.stem}.txt"
