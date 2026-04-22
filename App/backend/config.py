@@ -18,7 +18,8 @@
 import os
 from pathlib import Path
 
-DATA_ROOT    = Path(r"C:\Honey\DB_insight\Data")
+_DEFAULT_DATA = Path(__file__).resolve().parents[2] / "Data"
+DATA_ROOT    = Path(os.environ.get("DB_INSIGHT_DATA", str(_DEFAULT_DATA)))
 EMBEDDED_DB  = DATA_ROOT / "embedded_DB"
 EXTRACTED_DB = DATA_ROOT / "extracted_DB"
 RAW_DB       = DATA_ROOT / "raw_DB"
@@ -38,7 +39,7 @@ EXTRACTED_DB_AUDIO = EXTRACTED_DB / "Rec"
 for _d in [
     EMBEDDED_DB_VIDEO, EMBEDDED_DB_DOC, EMBEDDED_DB_IMAGE, EMBEDDED_DB_AUDIO,
     EXTRACTED_DB_VIDEO, EXTRACTED_DB_DOC, EXTRACTED_DB_IMAGE, EXTRACTED_DB_AUDIO,
-    RAW_DB / "Img", RAW_DB / "Doc",
+    RAW_DB / "Img", RAW_DB / "Doc", RAW_DB / "Docs",
 ]:
     _d.mkdir(parents=True, exist_ok=True)
 

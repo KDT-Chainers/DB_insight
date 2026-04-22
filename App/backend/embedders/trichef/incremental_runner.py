@@ -157,7 +157,9 @@ def run_image_incremental() -> IncrementalResult:
 
 # ── 문서 도메인 (doc_page) ──────────────────────────────────────────────────
 def run_doc_incremental() -> IncrementalResult:
-    raw_dir   = Path(PATHS["RAW_DB"]) / "Doc"
+    # "Docs" 우선, 없으면 "Doc" 폴백 (폴더명 호환)
+    _raw_base = Path(PATHS["RAW_DB"])
+    raw_dir = _raw_base / "Docs" if (_raw_base / "Docs").exists() else _raw_base / "Doc"
     cache_dir = Path(PATHS["TRICHEF_DOC_CACHE"])
     reg_path  = cache_dir / "registry.json"
     registry  = _load_registry(reg_path)
