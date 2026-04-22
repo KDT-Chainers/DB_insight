@@ -17,7 +17,7 @@ from embedders.trichef import siglip2_re
 from embedders.trichef import bgem3_caption_im as e5_caption_im  # v2 P1: e5→BGE-M3 호환 alias
 from embedders.trichef import bgem3_sparse  # v2 P2: lexical channel
 from scipy import sparse as sp
-from services.trichef import calibration, qwen_expand, tri_gs
+from services.trichef import asf_filter, auto_vocab, calibration, qwen_expand, tri_gs
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +49,8 @@ class TriChefEngine:
                     (idir / "img_ids.json").read_text(encoding="utf-8")
                 )["ids"],
                 "sparse": _load_sparse(idir / "cache_img_sparse.npz"),
+                "vocab": auto_vocab.load_vocab(idir / "auto_vocab.json"),
+                "asf_sets": asf_filter.load_token_sets(idir / "asf_token_sets.json"),
             }
         # 문서 페이지
         ddir = Path(PATHS["TRICHEF_DOC_CACHE"])
@@ -61,6 +63,8 @@ class TriChefEngine:
                     (ddir / "doc_page_ids.json").read_text(encoding="utf-8")
                 )["ids"],
                 "sparse": _load_sparse(ddir / "cache_doc_page_sparse.npz"),
+                "vocab": auto_vocab.load_vocab(ddir / "auto_vocab.json"),
+                "asf_sets": asf_filter.load_token_sets(ddir / "asf_token_sets.json"),
             }
         logger.info(f"[engine] 캐시 로드 완료: {list(self._cache.keys())}")
 
@@ -71,7 +75,8 @@ class TriChefEngine:
         return q_Re, q_Im
 
     def search(self, query: str, domain: str, topk: int = 20,
-               use_lexical: bool = True, pool: int = 200) -> list[TriChefResult]:
+               use_lexical: bool = True, use_asf: bool = True,
+               pool: int = 200) -> list[TriChefResult]:
         if domain not in self._cache:
             logger.warning(f"[engine] 도메인 {domain} 캐시 없음")
             return []
@@ -86,13 +91,21 @@ class TriChefEngine:
 
         # v2 P2: sparse lexical 채널
         sparse_scores = None
+        rankings = [dense_order[:pool]]
         if use_lexical and d.get("sparse") is not None:
             q_sp = bgem3_sparse.embed_query_sparse(query)
             sparse_scores = bgem3_sparse.lexical_scores(q_sp, d["sparse"])
-            sparse_order = np.argsort(-sparse_scores)
-            # RRF: 각 채널의 상위 pool 만 사용
-            rrf = _rrf_merge([dense_order[:pool], sparse_order[:pool]],
-                              n=len(dense_scores))
+            rankings.append(np.argsort(-sparse_scores)[:pool])
+
+        # v3 P4: ASF (Attention-Similarity-Filter) 채널
+        asf_s = None
+        if use_asf and d.get("asf_sets") and d.get("vocab"):
+            asf_s = asf_filter.asf_scores(query, d["asf_sets"], d["vocab"])
+            if asf_s.any():
+                rankings.append(np.argsort(-asf_s)[:pool])
+
+        if len(rankings) > 1:
+            rrf = _rrf_merge(rankings, n=len(dense_scores))
             combined_order = np.argsort(-rrf)
         else:
             combined_order = dense_order
@@ -110,6 +123,8 @@ class TriChefEngine:
             meta = {"domain": domain, "dense": s}
             if sparse_scores is not None:
                 meta["lexical"] = float(sparse_scores[i])
+            if asf_s is not None:
+                meta["asf"] = float(asf_s[i])
             out.append(TriChefResult(
                 id=d["ids"][i], score=s, confidence=conf, metadata=meta,
             ))
