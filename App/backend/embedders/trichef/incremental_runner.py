@@ -17,8 +17,10 @@ from chromadb.config import Settings
 from tqdm import tqdm
 
 from config import PATHS, TRICHEF_CFG
-from embedders.trichef import siglip2_re, e5_caption_im, dinov2_z, qwen_caption, doc_page_render
+from embedders.trichef import siglip2_re, dinov2_z, qwen_caption, doc_page_render
+from embedders.trichef import bgem3_caption_im as im_embedder  # v2 P1: e5→BGE-M3
 from services.trichef import tri_gs, calibration
+from services.trichef.prune import prune_domain
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +97,16 @@ def run_image_incremental() -> IncrementalResult:
         p for p in raw_dir.rglob("*")
         if p.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}
     )
+    # v2 P1: stale 정리
+    current_keys = {str(p.relative_to(raw_dir)).replace("\\", "/") for p in img_files}
+    registry, pruned = prune_domain(
+        "image", raw_dir, cache_dir, registry, current_keys,
+        npy_bases=["cache_img_Re_siglip2", "cache_img_Im_e5cap", "cache_img_Z_dinov2"],
+        ids_filename="img_ids.json",
+        col_name=TRICHEF_CFG["COL_IMAGE"],
+    )
+    if pruned:
+        _save_registry(reg_path, registry)
     existing_count = len(registry)
     new_files: list[Path] = []
     for p in img_files:
@@ -123,7 +135,7 @@ def run_image_incremental() -> IncrementalResult:
 
     # 2. 3축 임베딩
     new_Re = siglip2_re.embed_images(new_files)
-    new_Im = e5_caption_im.embed_passage(captions)
+    new_Im = im_embedder.embed_passage(captions)
     new_Z  = dinov2_z.embed_images(new_files)
 
     # 3. 누적 concat
@@ -213,7 +225,7 @@ def run_doc_incremental() -> IncrementalResult:
 
     # 2. 3축 임베딩 (doc_page)
     new_Re = siglip2_re.embed_images(all_page_imgs)
-    new_Im = e5_caption_im.embed_passage(all_page_captions)
+    new_Im = im_embedder.embed_passage(all_page_captions)
     new_Z  = dinov2_z.embed_images(all_page_imgs)
 
     # 3. 캐시 누적

@@ -59,14 +59,19 @@ def embed_passage(texts: list[str], batch_size: int = 32,
 
 
 @torch.inference_mode()
-def embed_query(text: str, max_length: int = 256) -> np.ndarray:
-    """쿼리 임베딩. BGE-M3는 prefix 불필요."""
+def embed_query(texts, max_length: int = 256) -> np.ndarray:
+    """쿼리 임베딩. BGE-M3는 prefix 불필요. str/list[str] 모두 허용."""
     _load()
+    if isinstance(texts, str):
+        texts = [texts]
+    if not texts:
+        return np.zeros((0, TRICHEF_CFG["DIM_IM"]), dtype=np.float32)
     out = _model.encode(
-        [text],
-        batch_size=1,
+        list(texts),
+        batch_size=min(32, len(texts)),
         max_length=max_length,
         return_dense=True,
     )
-    v = np.asarray(out["dense_vecs"][0], dtype=np.float32)
-    return v / (np.linalg.norm(v) + 1e-12)
+    vecs = np.asarray(out["dense_vecs"], dtype=np.float32)
+    norms = np.linalg.norm(vecs, axis=1, keepdims=True) + 1e-12
+    return vecs / norms

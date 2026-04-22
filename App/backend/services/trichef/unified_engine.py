@@ -13,7 +13,8 @@ from typing import Any
 import numpy as np
 
 from config import PATHS, TRICHEF_CFG
-from embedders.trichef import siglip2_re, e5_caption_im
+from embedders.trichef import siglip2_re
+from embedders.trichef import bgem3_caption_im as e5_caption_im  # v2 P1: e5→BGE-M3 호환 alias
 from services.trichef import calibration, qwen_expand, tri_gs
 
 logger = logging.getLogger(__name__)
