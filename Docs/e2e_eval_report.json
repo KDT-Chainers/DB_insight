@@ -84,7 +84,7 @@
           ]
         },
         "dense+sp+asf": {
-          "returned": 4,
+          "returned": 3,
           "hits": 1,
           "top": [
             {
@@ -102,12 +102,6 @@
             {
               "id": "page_images/2016_환경포럼_모음집/p0000.jpg",
               "score": 0.24450382590293884,
-              "asf": 0.0,
-              "lex": 0.0
-            },
-            {
-              "id": "page_images/B090039_2011_M_0042/p0145.jpg",
-              "score": 0.24324889481067657,
               "asf": 0.0,
               "lex": 0.0
             }
@@ -199,7 +193,7 @@
           ]
         },
         "dense+sp+asf": {
-          "returned": 4,
+          "returned": 5,
           "hits": 4,
           "top": [
             {
@@ -225,6 +219,12 @@
               "score": 0.2683272957801819,
               "asf": 0.0,
               "lex": 0.0
+            },
+            {
+              "id": "page_images/B090039_2011_M_0042/p0101.jpg",
+              "score": 0.26082852482795715,
+              "asf": 0.0,
+              "lex": 0.0
             }
           ]
         }
@@ -246,13 +246,13 @@
           "hits": 0,
           "top": [
             {
-              "id": "page_images/B552126_2008_M_0012/p0281.jpg",
+              "id": "page_images/B552126_2008_M_0017/p0121.jpg",
               "score": 0.2200806587934494,
               "asf": 0,
               "lex": 0
             },
             {
-              "id": "page_images/B552126_2008_M_0017/p0121.jpg",
+              "id": "page_images/B552126_2008_M_0012/p0281.jpg",
               "score": 0.2200806587934494,
               "asf": 0,
               "lex": 0
@@ -282,13 +282,13 @@
           "hits": 0,
           "top": [
             {
-              "id": "page_images/B552126_2008_M_0012/p0281.jpg",
+              "id": "page_images/B552126_2008_M_0017/p0121.jpg",
               "score": 0.2200806587934494,
               "asf": 0,
               "lex": 0.0
             },
             {
-              "id": "page_images/B552126_2008_M_0017/p0121.jpg",
+              "id": "page_images/B552126_2008_M_0012/p0281.jpg",
               "score": 0.2200806587934494,
               "asf": 0,
               "lex": 0.0
@@ -318,13 +318,13 @@
           "hits": 0,
           "top": [
             {
-              "id": "page_images/B552126_2008_M_0012/p0281.jpg",
+              "id": "page_images/B552126_2008_M_0017/p0121.jpg",
               "score": 0.2200806587934494,
               "asf": 0.0,
               "lex": 0.0
             },
             {
-              "id": "page_images/B552126_2008_M_0017/p0121.jpg",
+              "id": "page_images/B552126_2008_M_0012/p0281.jpg",
               "score": 0.2200806587934494,
               "asf": 0.0,
               "lex": 0.0

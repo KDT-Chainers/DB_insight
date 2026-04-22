@@ -20,7 +20,7 @@ from config import PATHS, TRICHEF_CFG
 from embedders.trichef import siglip2_re, dinov2_z, qwen_caption, doc_page_render
 from embedders.trichef import bgem3_caption_im as im_embedder  # v2 P1: e5→BGE-M3
 from embedders.trichef import blip_caption_triple, doc_ingest  # v2 P1 Phase B
-from services.trichef import tri_gs, calibration
+from services.trichef import tri_gs
 from services.trichef.prune import prune_domain
 
 
@@ -180,7 +180,9 @@ def run_image_incremental() -> IncrementalResult:
     _upsert_chroma(TRICHEF_CFG["COL_IMAGE"], all_ids, Re_all, Im_perp, Z_perp, raw_dir)
 
     # 5. calibration 재보정
-    calibration.calibrate_domain("image", Re_all, Im_perp, Z_perp)
+    # NOTE: 쿼리 기반 null 분포 (scripts/recalibrate_query_null.py) 를 별도
+    # 실행. 기존 doc-doc self-score 방식은 threshold 과대평가 이슈로 폐기.
+    logger.info("[image] calibration: run scripts/recalibrate_query_null.py")
 
     # 6. registry save
     _save_registry(reg_path, registry)
@@ -284,7 +286,7 @@ def run_doc_incremental() -> IncrementalResult:
     Im_perp, Z_perp = tri_gs.orthogonalize(Re_all, Im_all, Z_all)
     _upsert_chroma(TRICHEF_CFG["COL_DOC_PAGE"], all_ids, Re_all, Im_perp, Z_perp,
                    Path(PATHS["TRICHEF_DOC_EXTRACT"]))
-    calibration.calibrate_domain("doc_page", Re_all, Im_perp, Z_perp)
+    logger.info("[doc_page] calibration: run scripts/recalibrate_query_null.py")
 
     # 5. registry save — 실제로 페이지를 기여한 문서만 등록
     for p in ingested_docs:

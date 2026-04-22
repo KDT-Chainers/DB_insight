@@ -35,6 +35,9 @@ def search():
         return jsonify({"error": "query 필수"}), 400
     topk = int(body.get("topk", 20))
     domains = body.get("domains", ["image", "doc_page"])
+    use_lexical = bool(body.get("use_lexical", True))
+    use_asf = bool(body.get("use_asf", True))
+    pool = int(body.get("pool", 200))
 
     engine = _get_engine()
     all_items: list[dict] = []
@@ -43,7 +46,9 @@ def search():
     from services.trichef import calibration
     for d in domains:
         try:
-            res = engine.search(query, domain=d, topk=topk)
+            res = engine.search(query, domain=d, topk=topk,
+                                use_lexical=use_lexical, use_asf=use_asf,
+                                pool=pool)
         except Exception as e:
             logger.exception(f"domain={d} 검색 실패")
             stats["per_domain"][d] = {"error": str(e)[:200], "count": 0}
@@ -60,6 +65,9 @@ def search():
                 "rank": rank, "domain": d,
                 "id": r.id, "score": round(r.score, 4),
                 "confidence": round(r.confidence, 4),
+                "dense":   round(r.metadata.get("dense", r.score), 4),
+                "lexical": round(r.metadata.get("lexical", 0.0), 4),
+                "asf":     round(r.metadata.get("asf", 0.0), 4),
                 "preview_url": f"/api/trichef/file?domain={d}&path={r.id}",
             })
 
