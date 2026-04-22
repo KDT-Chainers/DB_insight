@@ -19,8 +19,28 @@ from tqdm import tqdm
 from config import PATHS, TRICHEF_CFG
 from embedders.trichef import siglip2_re, dinov2_z, qwen_caption, doc_page_render
 from embedders.trichef import bgem3_caption_im as im_embedder  # v2 P1: e5→BGE-M3
+from embedders.trichef import blip_caption_triple, doc_ingest  # v2 P1 Phase B
 from services.trichef import tri_gs, calibration
 from services.trichef.prune import prune_domain
+
+
+def _caption_for_im(cap_dir: Path, img_path: Path) -> str:
+    """Phase B: .caption.json(L1/L2/L3) → .txt 레거시 → 신규 3단계 생성 순."""
+    jp = cap_dir / f"{img_path.stem}.caption.json"
+    tp = cap_dir / f"{img_path.stem}.txt"
+    if jp.exists():
+        try:
+            d = json.loads(jp.read_text(encoding="utf-8"))
+            return d.get("L3") or d.get("L1") or ""
+        except Exception:
+            pass
+    if tp.exists():
+        return tp.read_text(encoding="utf-8")
+    c3 = blip_caption_triple.caption_triple(img_path)
+    jp.write_text(c3.to_json(), encoding="utf-8")
+    # .txt 호환 유지
+    tp.write_text(c3.L1, encoding="utf-8")
+    return c3.L3 or c3.L1
 
 logger = logging.getLogger(__name__)
 
@@ -124,14 +144,8 @@ def run_image_incremental() -> IncrementalResult:
     cap_dir = Path(PATHS["TRICHEF_IMG_EXTRACT"]) / "captions"
     cap_dir.mkdir(parents=True, exist_ok=True)
     captions: list[str] = []
-    for p in tqdm(new_files, desc="Qwen caption"):
-        cp = cap_dir / f"{p.stem}.txt"
-        if cp.exists():
-            captions.append(cp.read_text(encoding="utf-8"))
-        else:
-            c = qwen_caption.caption(p)
-            cp.write_text(c, encoding="utf-8")
-            captions.append(c)
+    for p in tqdm(new_files, desc="BLIP caption"):
+        captions.append(_caption_for_im(cap_dir, p))
 
     # 2. 3축 임베딩
     new_Re = siglip2_re.embed_images(new_files)
@@ -181,10 +195,25 @@ def run_doc_incremental() -> IncrementalResult:
     reg_path  = cache_dir / "registry.json"
     registry  = _load_registry(reg_path)
 
+    # v2 P1 Phase B: doc_ingest 지원 확장자 전체
+    DOC_EXTS = {".pdf",
+                ".docx", ".doc", ".pptx", ".ppt", ".xlsx", ".xls",
+                ".odt", ".odp", ".ods", ".rtf",
+                ".hwp", ".hwpx",
+                ".txt", ".md", ".markdown", ".rst", ".log",
+                ".csv", ".html", ".htm"}
     doc_files = sorted(
         p for p in raw_dir.rglob("*")
-        if p.suffix.lower() in {".pdf", ".docx", ".hwp", ".xlsx", ".txt"}
+        if p.is_file() and p.suffix.lower() in DOC_EXTS
     )
+    # v2 P1: source-level prune (registry 만 정리, page-level .npy 정리는 Phase B2)
+    current_keys = {str(p.relative_to(raw_dir)).replace("\\", "/") for p in doc_files}
+    stale = set(registry.keys()) - current_keys
+    if stale:
+        for k in stale:
+            registry.pop(k, None)
+        _save_registry(reg_path, registry)
+        logger.info(f"[doc_inc] registry stale {len(stale)}개 제거")
 
     new_docs = [
         p for p in doc_files
@@ -196,32 +225,30 @@ def run_doc_incremental() -> IncrementalResult:
     if not new_docs:
         return IncrementalResult("document", 0, len(registry), len(registry))
 
-    # 1. PDF → 페이지 JPEG 렌더
+    # 1. doc_ingest → 페이지 이미지 + 캡션 (PDF/Office/HWP/텍스트 통합)
+    IMG_PAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
     all_page_imgs: list[Path] = []
     all_page_captions: list[str] = []
-    for p in tqdm(new_docs, desc="PDF render + caption"):
-        if p.suffix.lower() != ".pdf":
+    ingested_docs: list[Path] = []  # 실제 페이지를 기여한 문서만 registry 등록
+    skipped_docs: list[Path] = []
+    for p in tqdm(new_docs, desc="doc_ingest + caption"):
+        pages = doc_ingest.to_pages(p)
+        img_pages = [pg for pg in pages if pg.suffix.lower() in IMG_PAGE_EXTS]
+        if not img_pages:
+            skipped_docs.append(p)
             continue
-        pages = doc_page_render.render_pdf(p)
         cap_dir = Path(PATHS["TRICHEF_DOC_EXTRACT"]) / "captions" / doc_page_render._sanitize(p.stem)
         cap_dir.mkdir(parents=True, exist_ok=True)
-        for pg in pages:
-            cp = cap_dir / f"{pg.stem}.txt"
-            if cp.exists():
-                cap = cp.read_text(encoding="utf-8")
-            else:
-                cap = qwen_caption.caption(pg)
-                cp.write_text(cap, encoding="utf-8")
+        for pg in img_pages:
             all_page_imgs.append(pg)
-            all_page_captions.append(cap)
+            all_page_captions.append(_caption_for_im(cap_dir, pg))
+        ingested_docs.append(p)
+
+    logger.info(f"[doc_inc] 처리 성공 {len(ingested_docs)}, 스킵 {len(skipped_docs)} "
+                f"(LibreOffice 미설치/빈 파일 등)")
 
     if not all_page_imgs:
-        # PDF 외 파일만 있는 경우 registry 만 갱신
-        for p in new_docs:
-            key = str(p.relative_to(raw_dir)).replace("\\", "/")
-            registry[key] = {"sha": _sha256(p), "abs": str(p)}
-        _save_registry(reg_path, registry)
-        return IncrementalResult("document", len(new_docs), len(registry), len(registry))
+        return IncrementalResult("document", 0, len(registry), len(registry))
 
     # 2. 3축 임베딩 (doc_page)
     new_Re = siglip2_re.embed_images(all_page_imgs)
@@ -259,10 +286,10 @@ def run_doc_incremental() -> IncrementalResult:
                    Path(PATHS["TRICHEF_DOC_EXTRACT"]))
     calibration.calibrate_domain("doc_page", Re_all, Im_perp, Z_perp)
 
-    # 5. registry save
-    for p in new_docs:
+    # 5. registry save — 실제로 페이지를 기여한 문서만 등록
+    for p in ingested_docs:
         key = str(p.relative_to(raw_dir)).replace("\\", "/")
         registry[key] = {"sha": _sha256(p), "abs": str(p)}
     _save_registry(reg_path, registry)
 
-    return IncrementalResult("document", len(new_docs), len(registry), len(registry))
+    return IncrementalResult("document", len(ingested_docs), len(registry), len(registry))
