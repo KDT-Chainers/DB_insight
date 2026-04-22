@@ -136,11 +136,8 @@ def status():
         "doc_page_cached": (ddir / "cache_doc_page_Re.npy").exists(),
         "img_raw_count":   len(list((Path(PATHS["RAW_DB"]) / "Img").rglob("*.*")))
                            if (Path(PATHS["RAW_DB"]) / "Img").exists() else 0,
-        "doc_raw_count":   sum(
-            len(list((Path(PATHS["RAW_DB"]) / d).rglob("*.*")))
-            for d in ("Docs", "Doc")
-            if (Path(PATHS["RAW_DB"]) / d).exists()
-        ),
+        "doc_raw_count":   len(list((Path(PATHS["RAW_DB"]) / "Doc").rglob("*.*")))
+                           if (Path(PATHS["RAW_DB"]) / "Doc").exists() else 0,
     })
 
 

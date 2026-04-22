@@ -39,7 +39,7 @@ EXTRACTED_DB_AUDIO = EXTRACTED_DB / "Rec"
 for _d in [
     EMBEDDED_DB_VIDEO, EMBEDDED_DB_DOC, EMBEDDED_DB_IMAGE, EMBEDDED_DB_AUDIO,
     EXTRACTED_DB_VIDEO, EXTRACTED_DB_DOC, EXTRACTED_DB_IMAGE, EXTRACTED_DB_AUDIO,
-    RAW_DB / "Img", RAW_DB / "Doc", RAW_DB / "Docs",
+    RAW_DB / "Img", RAW_DB / "Doc",
 ]:
     _d.mkdir(parents=True, exist_ok=True)
 
