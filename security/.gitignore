@@ -1,0 +1,20 @@
+# 생성 파일 — Git 추적 제외
+__pycache__/
+*.pyc
+*.pyo
+
+# FAISS 인덱스 (대용량 바이너리)
+vectordb/store/
+
+# 영구 저장 이미지 (업로드 데이터)
+secure_store/
+
+# SQLite 감사 로그 (로컬 데이터)
+audit/audit.db
+
+# 테스트용 데이터
+data/
+
+# 환경변수
+.env
+.secret
