@@ -12,7 +12,7 @@ from pathlib import Path
 
 import fitz
 import numpy as np
-from flask import Blueprint, jsonify, request, send_file
+from flask import Blueprint, jsonify, request, send_file, send_from_directory
 
 from config import PATHS, TRICHEF_CFG
 from embedders.trichef import bgem3_sparse, siglip2_re
@@ -147,6 +147,12 @@ def inspect():
         d["Re"], d["Im"], d["Z"],
     )[0]
 
+    # [개선 1] image 도메인 + 한국어 쿼리면 lex/asf 스킵 (캡션이 영어라 매칭 불가 → 노이즈만 유발).
+    has_kr = any("\uac00" <= c <= "\ud7a3" for c in query)
+    if domain == "image" and has_kr:
+        use_lexical = False
+        use_asf = False
+
     lex = None
     if use_lexical and d.get("sparse") is not None:
         q_sp = bgem3_sparse.embed_query_sparse(query)
@@ -156,21 +162,46 @@ def inspect():
     if use_asf and d.get("asf_sets") and d.get("vocab"):
         asf_s = asf_filter.asf_scores(query, d["asf_sets"], d["vocab"])
 
-    # RRF
+    # [개선 2] 가중 fusion — 신호 있는 채널만 정규화 후 가중합. 없는 채널의 가중치는 dense 로 재배분.
+    def _minmax(x):
+        lo, hi = float(np.min(x)), float(np.max(x))
+        return (x - lo) / (hi - lo + 1e-12) if hi > lo else np.zeros_like(x)
+
+    w_dense, w_lex, w_asf = 0.6, 0.25, 0.15
+    lex_active = lex is not None and float(np.max(lex)) > 0
+    asf_active = asf_s is not None and float(np.max(asf_s)) > 0
+    if not lex_active:
+        w_dense += w_lex
+        w_lex = 0.0
+    if not asf_active:
+        w_dense += w_asf
+        w_asf = 0.0
+    fused = w_dense * _minmax(dense)
+    if w_lex > 0:
+        fused = fused + w_lex * _minmax(lex)
+    if w_asf > 0:
+        fused = fused + w_asf * _minmax(asf_s)
+
+    # RRF 는 표시용으로 유지 (참고치)
     rankings = [np.argsort(-dense)]
-    if lex is not None:
+    if lex_active:
         rankings.append(np.argsort(-lex))
-    if asf_s is not None and asf_s.any():
+    if asf_active:
         rankings.append(np.argsort(-asf_s))
     n = len(dense)
     rrf = np.zeros(n, dtype=np.float32)
-    for order in rankings:
-        for rank, idx in enumerate(order):
-            rrf[int(idx)] += 1.0 / (60 + rank + 1)
-    order = np.argsort(-rrf)
+    for order_ in rankings:
+        for r_, idx in enumerate(order_):
+            rrf[int(idx)] += 1.0 / (60 + r_ + 1)
+
+    order = np.argsort(-fused)
 
     cal = calibration.get_thresholds(domain)
     mu, sig = cal.get("mu_null", 0.0), max(cal.get("sigma_null", 1.0), 1e-9)
+    # [개선 3] image 도메인: abs_threshold 를 μ+3σ 로 상향 (기존 calibration 값이 낮게 잡힌 경우 보호)
+    abs_thr = cal.get("abs_threshold", 0.0)
+    if domain == "image":
+        abs_thr = max(abs_thr, mu + 3.0 * sig)
 
     rows = []
     for rank, i in enumerate(order[:top_n], start=1):
@@ -178,13 +209,22 @@ def inspect():
         z = (s - mu) / sig
         conf = 0.5 * (1 + math.erf(z / (2 ** 0.5)))
         doc_id = d["ids"][i]
+        if domain == "doc_page":
+            src, page = _source_doc_path(doc_id)
+        else:
+            src = _resolve_file_path("image", doc_id)
+            page = 0
         rows.append({
             "rank": rank,
             "id": doc_id,
+            "filename": Path(src).name if src else Path(doc_id).name,
+            "source_path": str(src) if src else "",
+            "page": page,
             "dense": s,
             "lexical": float(lex[i]) if lex is not None else None,
             "asf": float(asf_s[i]) if asf_s is not None else None,
             "rrf": float(rrf[i]),
+            "fused": float(fused[i]),
             "confidence": conf,
             "z_score": z,
         })
@@ -195,7 +235,7 @@ def inspect():
         "total": n,
         "returned": len(rows),
         "calibration": {"mu_null": mu, "sigma_null": sig,
-                        "abs_threshold": cal.get("abs_threshold", 0.0)},
+                        "abs_threshold": abs_thr},
         "rows": rows,
     })
 
@@ -243,6 +283,17 @@ def file_serve():
     if not p or not p.exists():
         return jsonify({"error": "file not found"}), 404
     return send_file(str(p))
+
+
+@bp_admin.get("/ui")
+def admin_ui():
+    """관리자 UI (HTML 카드 그리드). /api/admin/ui 로 접근.
+
+    파일은 App/admin_ui/admin.html (독립 폴더). 백엔드는 단순 서빙만 수행.
+    별도 standalone 실행도 가능: App/admin_ui/serve.py.
+    """
+    ui_dir = Path(__file__).resolve().parents[2] / "admin_ui"
+    return send_from_directory(str(ui_dir), "admin.html")
 
 
 @bp_admin.get("/domains")

@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<title>TRI-CHEF 관리자 전수 검사</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --muted:#64748b; --text:#e2e8f0;
+    --accent:#059669; --accent2:#2563eb; --warn:#dc2626; --ok:#10b981;
+    --border:#334155;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg);color:var(--text);line-height:1.5}
+  header{padding:20px 32px;border-bottom:1px solid var(--border);background:var(--panel)}
+  header h1{font-size:22px;font-weight:700;letter-spacing:-0.5px}
+  header p{color:var(--muted);font-size:13px;margin-top:4px}
+  main{max-width:1400px;margin:0 auto;padding:24px 32px}
+  .search-box{display:flex;gap:12px;margin-bottom:16px}
+  .search-box input[type=text]{flex:1;padding:14px 18px;border-radius:8px;border:1px solid var(--border);background:var(--panel);color:var(--text);font-size:15px}
+  .search-box input[type=text]:focus{outline:none;border-color:var(--accent)}
+  .search-box button{padding:0 28px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer}
+  .search-box button:hover{background:#047857}
+  .search-box button:disabled{opacity:0.5;cursor:wait}
+  .options{display:flex;gap:20px;flex-wrap:wrap;margin-bottom:20px;font-size:13px;color:var(--muted);align-items:center}
+  .options label{display:flex;align-items:center;gap:6px;cursor:pointer}
+  .options input[type=checkbox]{accent-color:var(--accent)}
+  .options input[type=number]{width:70px;padding:4px 8px;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:4px}
+  .stats{background:var(--panel);border-radius:8px;padding:16px;margin-bottom:20px;font-size:13px;border:1px solid var(--border)}
+  .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:12px}
+  .stat-card{background:#0b1220;border-radius:6px;padding:10px 14px;border:1px solid var(--border)}
+  .stat-card .lbl{color:var(--muted);font-size:11px;text-transform:uppercase}
+  .stat-card .val{font-size:15px;font-weight:600;margin-top:2px}
+  .results{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:10px;overflow:hidden;display:flex;flex-direction:column;position:relative;transition:transform 0.15s}
+  .card:hover{transform:translateY(-2px);border-color:var(--accent)}
+  .card .rank{position:absolute;top:8px;left:8px;background:var(--accent);color:#fff;min-width:32px;height:28px;padding:0 8px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;z-index:2}
+  .thumb{position:relative;height:200px;background:#0b1220;display:flex;align-items:center;justify-content:center;overflow:hidden}
+  .thumb img{max-width:100%;max-height:100%;object-fit:contain;cursor:zoom-in}
+  .thumb .no-img{color:var(--muted);font-size:12px}
+  .body{padding:12px 14px;display:flex;flex-direction:column;gap:8px;flex:1}
+  .title{font-weight:600;font-size:13px;word-break:break-all;color:#f1f5f9}
+  .path{font-size:11px;color:var(--muted);word-break:break-all;font-family:Consolas,monospace}
+  .metrics{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;font-size:11px}
+  .metric{background:#0b1220;border-radius:4px;padding:4px 8px;border:1px solid var(--border)}
+  .metric .k{color:var(--muted)}
+  .metric .v{font-weight:600;color:#f1f5f9}
+  .metric .v.hi{color:var(--ok)}
+  .metric .v.lo{color:var(--warn)}
+  .badges{display:flex;gap:4px;flex-wrap:wrap}
+  .badge{font-size:10px;padding:2px 8px;border-radius:10px;border:1px solid var(--border);background:#0b1220;color:var(--muted)}
+  .badge.domain-image{background:#065f46;color:#d1fae5;border-color:#10b981}
+  .badge.domain-doc_page{background:#5b21b6;color:#ede9fe;border-color:#8b5cf6}
+  .excerpt{font-size:12px;color:#cbd5e1;background:#0b1220;padding:8px;border-radius:4px;max-height:120px;overflow:auto;white-space:pre-wrap;border:1px solid var(--border)}
+  .excerpt mark{background:#fbbf24;color:#1f2937;padding:0 2px;border-radius:2px}
+  .loading{text-align:center;padding:40px;color:var(--muted)}
+  .error{background:#7f1d1d;border:1px solid var(--warn);color:#fecaca;padding:12px;border-radius:8px;margin-bottom:16px}
+  .empty{text-align:center;padding:60px 20px;color:var(--muted)}
+  .empty h2{font-size:18px;margin-bottom:8px;color:var(--text)}
+
+  /* 모달 (이미지 확대) */
+  .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:999;align-items:center;justify-content:center;padding:40px;cursor:zoom-out}
+  .modal.show{display:flex}
+  .modal img{max-width:100%;max-height:100%;object-fit:contain}
+</style>
+</head>
+<body>
+<header>
+  <h1>🔍 TRI-CHEF 관리자 전수 검사</h1>
+  <p id="dom-info">도메인 현황 로딩…</p>
+</header>
+<main>
+  <div class="search-box">
+    <input id="q" type="text" placeholder="검색어를 입력하세요 (예: 고양이, 복지정책, 반도체)" autofocus />
+    <button id="go">검색 실행</button>
+  </div>
+  <div class="options">
+    <label><input type="checkbox" id="d-doc_page" checked> doc_page (문서 페이지)</label>
+    <label><input type="checkbox" id="d-image" checked> image (이미지)</label>
+    <label>상위 N <input type="number" id="topn" value="30" min="5" max="2000" step="5"></label>
+    <label><input type="checkbox" id="use-lex" checked> Lexical 채널</label>
+    <label><input type="checkbox" id="use-asf" checked> ASF 채널</label>
+  </div>
+  <div id="stats"></div>
+  <div id="output"></div>
+</main>
+
+<div class="modal" id="modal"><img id="modal-img" alt="preview"></div>
+
+<script>
+const API_BASE = location.origin;
+const btn = document.getElementById('go');
+const inp = document.getElementById('q');
+const output = document.getElementById('output');
+const statsDiv = document.getElementById('stats');
+const modal = document.getElementById('modal');
+const modalImg = document.getElementById('modal-img');
+
+inp.addEventListener('keydown', e => { if (e.key === 'Enter') btn.click(); });
+btn.addEventListener('click', runSearch);
+modal.addEventListener('click', () => modal.classList.remove('show'));
+
+loadDomains();
+
+async function loadDomains(){
+  try{
+    const r = await fetch(`${API_BASE}/api/admin/domains`);
+    const d = await r.json();
+    const parts = Object.entries(d).map(([k,v]) =>
+      `${k}: N=${v.count}, vocab=${v.vocab_size}, sparse=${v.has_sparse?'O':'X'}, asf=${v.has_asf?'O':'X'}`
+    );
+    document.getElementById('dom-info').textContent = '도메인 현황 | ' + parts.join(' | ');
+  }catch(e){
+    document.getElementById('dom-info').textContent = '⚠️ 백엔드 연결 실패: ' + e.message;
+  }
+}
+
+async function runSearch(){
+  const q = inp.value.trim();
+  if (!q){ inp.focus(); return; }
+  const domains = [];
+  if (document.getElementById('d-doc_page').checked) domains.push('doc_page');
+  if (document.getElementById('d-image').checked) domains.push('image');
+  if (!domains.length){ output.innerHTML = '<div class="error">도메인을 1개 이상 선택하세요.</div>'; return; }
+
+  const topN = parseInt(document.getElementById('topn').value) || 30;
+  const useLex = document.getElementById('use-lex').checked;
+  const useAsf = document.getElementById('use-asf').checked;
+
+  btn.disabled = true;
+  output.innerHTML = '<div class="loading">검색 중…</div>';
+  statsDiv.innerHTML = '';
+  const t0 = performance.now();
+
+  try{
+    const results = [];
+    const perDom = {};
+    for (const dom of domains){
+      const r = await fetch(`${API_BASE}/api/admin/inspect`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({query:q, domain:dom, top_n:topN,
+                              use_lexical:useLex, use_asf:useAsf}),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
+      const data = await r.json();
+      perDom[dom] = {count:data.total, returned:data.returned, cal:data.calibration};
+      for (const row of data.rows){
+        row.domain = data.domain;
+        results.push(row);
+      }
+    }
+    // RRF fusion across domains? 아니, 도메인별 정렬 유지하되 합쳐서 rank 재계산
+    // 각 도메인 내부 순위는 유지. 표시는 도메인 쌍을 interleave 또는 그대로.
+    // 간단히: 도메인별로 rrf 내림차순 이미 정렬됨. merge 시 rrf 기준.
+    results.sort((a,b) => (b.rrf||0) - (a.rrf||0));
+    results.forEach((r,i) => r.global_rank = i+1);
+
+    const elapsed = ((performance.now()-t0)/1000).toFixed(2);
+    renderStats(q, perDom, results.length, elapsed);
+    await renderResults(q, results);
+  }catch(e){
+    output.innerHTML = `<div class="error">검색 실패: ${e.message}</div>`;
+  }finally{
+    btn.disabled = false;
+  }
+}
+
+function renderStats(query, perDom, totalShown, elapsed){
+  const cards = Object.entries(perDom).map(([k,v]) =>
+    `<div class="stat-card">
+      <div class="lbl">${k}</div>
+      <div class="val">총 ${v.count}건 중 top-${v.returned}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">
+        μ=${v.cal.mu_null.toFixed(3)} · σ=${v.cal.sigma_null.toFixed(3)} · abs_thr=${v.cal.abs_threshold.toFixed(3)}
+      </div>
+    </div>`
+  ).join('');
+  statsDiv.innerHTML = `
+    <div class="stats">
+      <div><b>${escapeHtml(query)}</b> — ${totalShown}건 표시 (${elapsed}s)</div>
+      <div class="stats-grid">${cards}</div>
+    </div>`;
+}
+
+async function renderResults(query, items){
+  if (!items.length){
+    output.innerHTML = `<div class="empty"><h2>결과 없음</h2></div>`;
+    return;
+  }
+  output.className = 'results';
+  output.innerHTML = items.map(it => card(it)).join('');
+
+  // doc_text(원문) lazy fetch — 카드당 1회
+  for (const el of document.querySelectorAll('[data-load-text]')){
+    const doc_id = el.dataset.id;
+    const dom = el.dataset.domain;
+    try{
+      const url = `${API_BASE}/api/admin/doc-text?id=${encodeURIComponent(doc_id)}&domain=${dom}&query=${encodeURIComponent(query)}`;
+      const r = await fetch(url);
+      if (!r.ok){ el.remove(); continue; }
+      const d = await r.json();
+      const text = d.text || '';
+      if (!text){ el.remove(); continue; }
+      const matches = d.matches || [];
+      el.innerHTML = highlight(text.slice(0, 600), matches);
+      el.removeAttribute('data-load-text');
+    }catch(_){ el.remove(); }
+  }
+
+  // 이미지 클릭 → 모달 확대
+  for (const img of document.querySelectorAll('.thumb img')){
+    img.addEventListener('click', ev => {
+      ev.stopPropagation();
+      modalImg.src = img.src;
+      modal.classList.add('show');
+    });
+  }
+}
+
+function card(it){
+  const isImage = it.domain === 'image';
+  const hasPreview = it.domain === 'image' || it.domain === 'doc_page';
+  const fileUrl = `${API_BASE}/api/admin/file?domain=${it.domain}&id=${encodeURIComponent(it.id)}`;
+  const thumb = hasPreview
+    ? `<div class="thumb"><img src="${fileUrl}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<div class=no-img>미리보기 없음</div>'"></div>`
+    : `<div class="thumb"><div class="no-img">${it.domain}</div></div>`;
+  const pageStr = it.page ? ` · p${it.page}` : '';
+  const conf = it.confidence ?? 0;
+  const confCls = conf >= 0.8 ? 'hi' : conf >= 0.3 ? '' : 'lo';
+  const fname = it.filename || it.id;
+  const srcPath = it.source_path || '';
+  const pathLink = srcPath ? `<div class="path">${escapeHtml(srcPath)}${pageStr}</div>` : '';
+
+  return `<div class="card">
+    <div class="rank">#${it.global_rank}</div>
+    ${thumb}
+    <div class="body">
+      <div class="badges">
+        <span class="badge domain-${it.domain}">${it.domain}</span>
+        ${it.page ? `<span class="badge">page ${it.page}</span>` : ''}
+      </div>
+      <div class="title">${escapeHtml(fname)}</div>
+      ${pathLink}
+      <div class="metrics">
+        <div class="metric"><span class="k">신뢰도</span> <span class="v ${confCls}">${(conf*100).toFixed(1)}%</span></div>
+        <div class="metric"><span class="k">dense</span> <span class="v">${(it.dense??0).toFixed(3)}</span></div>
+        <div class="metric"><span class="k">lexical</span> <span class="v">${(it.lexical??0).toFixed(3)}</span></div>
+        <div class="metric"><span class="k">ASF</span> <span class="v">${(it.asf??0).toFixed(3)}</span></div>
+        <div class="metric"><span class="k">RRF</span> <span class="v">${(it.rrf??0).toFixed(4)}</span></div>
+        <div class="metric"><span class="k">z</span> <span class="v">${(it.z_score??0).toFixed(2)}</span></div>
+      </div>
+      <div class="excerpt" data-load-text data-id="${escapeHtml(it.id)}" data-domain="${it.domain}">로딩 중…</div>
+    </div>
+  </div>`;
+}
+
+function highlight(text, matches){
+  if (!matches || !matches.length) return escapeHtml(text);
+  const sorted = [...matches].filter(Boolean).sort((a,b) => b.length - a.length);
+  const escaped = escapeHtml(text);
+  let out = escaped;
+  for (const m of sorted){
+    const em = escapeHtml(m);
+    const re = new RegExp(em.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'), 'g');
+    out = out.replace(re, `<mark>${em}</mark>`);
+  }
+  return out;
+}
+
+function escapeHtml(s){
+  return String(s ?? '').replace(/[&<>"']/g, c => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[c]));
+}
+</script>
+</body>
+</html>
