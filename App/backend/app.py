@@ -7,6 +7,8 @@ from routes.history import history_bp
 from routes.search import search_bp
 from routes.index import index_bp
 from routes.files import files_bp
+from routes.trichef import bp as trichef_bp
+from routes.trichef_admin import bp_admin as trichef_admin_bp
 
 
 def create_app() -> Flask:
@@ -22,6 +24,8 @@ def create_app() -> Flask:
     app.register_blueprint(search_bp)
     app.register_blueprint(index_bp)
     app.register_blueprint(files_bp)
+    app.register_blueprint(trichef_bp)
+    app.register_blueprint(trichef_admin_bp)
 
     return app
 
