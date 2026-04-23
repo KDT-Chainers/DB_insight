@@ -69,12 +69,16 @@ def _libreoffice_to_pdf(src: Path, out_dir: Path) -> Path | None:
     return pdf if pdf.exists() else None
 
 
-def to_pages(src: Path) -> list[Path]:
-    """모든 지원 포맷 → 페이지 JPEG 리스트."""
+def to_pages(src: Path, stem_key: str | None = None) -> list[Path]:
+    """모든 지원 포맷 → 페이지 JPEG 리스트.
+
+    `stem_key` 가 주어지면 render_pdf 로 그대로 전달되어 PAGE_DIR 의 서브
+    디렉토리 이름이 충돌 방지 형식(`<stem>__<md5hash>`)으로 생성된다.
+    """
     ext = src.suffix.lower()
 
     if ext == ".pdf":
-        return doc_page_render.render_pdf(src)
+        return doc_page_render.render_pdf(src, stem_key=stem_key)
 
     if ext in OFFICE_EXT or ext in HWP_EXT:
         with tempfile.TemporaryDirectory() as td:
@@ -88,21 +92,7 @@ def to_pages(src: Path) -> list[Path]:
             pdf_cache.mkdir(parents=True, exist_ok=True)
             final = pdf_cache / pdf.name
             shutil.copy2(pdf, final)
-            return doc_page_render.render_pdf(final)
-
-
-def converted_pdf_path(src: Path) -> Path | None:
-    """doc_ingest 변환본 경로. 신규 규칙(해시 서브디렉토리) 우선, 없으면 레거시 위치 fallback."""
-    import hashlib
-    conv_root = Path(PATHS["TRICHEF_DOC_EXTRACT"]) / "converted_pdf"
-    sub = hashlib.md5(str(src.resolve()).encode("utf-8")).hexdigest()[:8]
-    new_path = conv_root / sub / f"{src.stem}.pdf"
-    if new_path.exists():
-        return new_path
-    legacy = conv_root / f"{src.stem}.pdf"
-    if legacy.exists():
-        return legacy
-    return None
+            return doc_page_render.render_pdf(final, stem_key=stem_key)
 
     if ext in TEXT_EXT:
         return _virtual_text_pages(src.read_text(encoding="utf-8", errors="ignore"),
@@ -126,6 +116,20 @@ def converted_pdf_path(src: Path) -> Path | None:
 
     logger.debug(f"[doc_ingest] 미지원 확장자: {ext}")
     return []
+
+
+def converted_pdf_path(src: Path) -> Path | None:
+    """doc_ingest 변환본 경로. 신규 규칙(해시 서브디렉토리) 우선, 없으면 레거시 위치 fallback."""
+    import hashlib
+    conv_root = Path(PATHS["TRICHEF_DOC_EXTRACT"]) / "converted_pdf"
+    sub = hashlib.md5(str(src.resolve()).encode("utf-8")).hexdigest()[:8]
+    new_path = conv_root / sub / f"{src.stem}.pdf"
+    if new_path.exists():
+        return new_path
+    legacy = conv_root / f"{src.stem}.pdf"
+    if legacy.exists():
+        return legacy
+    return None
 
 
 def _virtual_text_pages(text: str, stem: str, chars_per_page: int = 1500) -> list[Path]:

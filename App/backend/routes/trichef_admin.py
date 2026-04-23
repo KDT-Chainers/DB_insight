@@ -53,9 +53,9 @@ def _source_doc_path(doc_id: str) -> tuple[Path | None, int]:
 
     cache = Path(PATHS["TRICHEF_DOC_CACHE"])
     reg = json.loads((cache / "registry.json").read_text(encoding="utf-8"))
-    from embedders.trichef.doc_page_render import _sanitize
+    from embedders.trichef.doc_page_render import _sanitize, stem_key_for
     for key, meta in reg.items():
-        if _sanitize(Path(key).stem) == stem:
+        if stem_key_for(key) == stem or _sanitize(Path(key).stem) == stem:
             return Path(meta["abs"]), page_idx
     return None, page_idx
 
@@ -88,6 +88,11 @@ def _doc_text(doc_id: str) -> str:
 
 def _image_caption(doc_id: str) -> str:
     cap_dir = Path(PATHS["TRICHEF_IMG_EXTRACT"]) / "captions"
+    from embedders.trichef.doc_page_render import stem_key_for
+    cap = load_caption(cap_dir, stem_key_for(doc_id))
+    if cap:
+        return cap
+    # 레거시 폴백: 마이그레이션 전 파일명
     return load_caption(cap_dir, Path(doc_id).stem)
 
 

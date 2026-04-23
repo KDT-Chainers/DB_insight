@@ -25,10 +25,15 @@ from services.trichef.prune import prune_domain
 from services.trichef import lexical_rebuild
 
 
-def _caption_for_im(cap_dir: Path, img_path: Path) -> str:
-    """Phase B: .caption.json(L1/L2/L3) → .txt 레거시 → 신규 3단계 생성 순."""
-    jp = cap_dir / f"{img_path.stem}.caption.json"
-    tp = cap_dir / f"{img_path.stem}.txt"
+def _caption_for_im(cap_dir: Path, img_path: Path, key: str | None = None) -> str:
+    """Phase B: .caption.json(L1/L2/L3) → .txt 레거시 → 신규 3단계 생성 순.
+
+    `key` (예: "sub/foo.jpg") 가 주어지면 `stem_key_for(key)` 로 파일명을 생성하여
+    동일 stem 충돌을 방지한다. 미지정 시 레거시 `img_path.stem` 폴백.
+    """
+    stem = doc_page_render.stem_key_for(key) if key else img_path.stem
+    jp = cap_dir / f"{stem}.caption.json"
+    tp = cap_dir / f"{stem}.txt"
     if jp.exists():
         try:
             d = json.loads(jp.read_text(encoding="utf-8"))
@@ -107,6 +112,86 @@ def _upsert_chroma(collection: str, ids: list[str],
         )
 
 
+def _purge_doc_page_cache(keys: set[str], cache_dir: Path) -> int:
+    """삭제/수정된 doc rel_key 들의 page_images/captions/ids.json/.npy/Chroma 정리.
+
+    stem_key_for(key) 기준으로 page_images/<stem_key>, captions/<stem_key> 디렉토리를
+    삭제하고, 해당 prefix 를 가진 ids.json 행을 .npy 3축과 동시 필터링한다.
+    ChromaDB 도 삭제.
+    """
+    import shutil
+    if not keys:
+        return 0
+    stem_keys = {doc_page_render.stem_key_for(k) for k in keys}
+    extract = Path(PATHS["TRICHEF_DOC_EXTRACT"])
+
+    # 1) 디렉토리 삭제 (페이지 이미지 + 캡션)
+    for sk in stem_keys:
+        shutil.rmtree(doc_page_render.PAGE_DIR / sk, ignore_errors=True)
+        shutil.rmtree(extract / "captions" / sk, ignore_errors=True)
+
+    # 2) ids.json + .npy rows 필터링
+    ids_path = cache_dir / "doc_page_ids.json"
+    if not ids_path.exists():
+        return 0
+    ids = json.loads(ids_path.read_text(encoding="utf-8")).get("ids", [])
+    to_remove_ids: list[str] = []
+    keep_mask = np.ones(len(ids), dtype=bool)
+    for idx, i in enumerate(ids):
+        parts = Path(i).parts
+        if len(parts) >= 3 and parts[0] == "page_images" and parts[1] in stem_keys:
+            keep_mask[idx] = False
+            to_remove_ids.append(i)
+    removed = int((~keep_mask).sum())
+    if removed == 0:
+        return 0
+
+    for base in ("cache_doc_page_Re", "cache_doc_page_Im", "cache_doc_page_Z"):
+        pth = cache_dir / f"{base}.npy"
+        if pth.exists():
+            arr = np.load(pth)
+            if arr.shape[0] == len(ids):
+                np.save(pth, arr[keep_mask])
+            else:
+                logger.warning(f"[purge] {pth.name} 행 수 불일치({arr.shape[0]} vs {len(ids)}) → 건너뜀")
+
+    # sparse.npz + asf_token_sets.json 도 동시 필터 (후속 rebuild 미호출 대비)
+    sparse_path = cache_dir / "cache_doc_page_sparse.npz"
+    if sparse_path.exists():
+        try:
+            from scipy import sparse as _sp
+            mat = _sp.load_npz(sparse_path)
+            if mat.shape[0] == len(ids):
+                _sp.save_npz(sparse_path, mat[keep_mask])
+        except Exception as e:
+            logger.warning(f"[purge] sparse 필터 실패: {e}")
+    asf_path = cache_dir / "asf_token_sets.json"
+    if asf_path.exists():
+        try:
+            asf = json.loads(asf_path.read_text(encoding="utf-8"))
+            if isinstance(asf, list) and len(asf) == len(ids):
+                new_asf = [s for s, k in zip(asf, keep_mask) if k]
+                asf_path.write_text(json.dumps(new_asf, ensure_ascii=False), encoding="utf-8")
+        except Exception as e:
+            logger.warning(f"[purge] asf_token_sets 필터 실패: {e}")
+
+    kept_ids = [i for i, k in zip(ids, keep_mask) if k]
+    ids_path.write_text(json.dumps({"ids": kept_ids}, ensure_ascii=False, indent=2),
+                        encoding="utf-8")
+
+    # 3) ChromaDB 삭제
+    try:
+        col = _get_trichef_collection(TRICHEF_CFG["COL_DOC_PAGE"])
+        CHUNK = 2000
+        for s in range(0, len(to_remove_ids), CHUNK):
+            col.delete(ids=to_remove_ids[s:s+CHUNK])
+    except Exception as e:
+        logger.warning(f"[purge] Chroma 삭제 실패: {e}")
+
+    logger.info(f"[purge:doc_page] {len(stem_keys)}개 stem_key, rows {removed}개 제거")
+    return removed
+
+
 # ── 이미지 도메인 ────────────────────────────────────────────────────────────
 def run_image_incremental() -> IncrementalResult:
     raw_dir   = Path(PATHS["RAW_DB"]) / "Img"
@@ -146,7 +231,8 @@ def run_image_incremental() -> IncrementalResult:
     cap_dir.mkdir(parents=True, exist_ok=True)
     captions: list[str] = []
     for p in tqdm(new_files, desc="BLIP caption"):
-        captions.append(_caption_for_im(cap_dir, p))
+        key = str(p.relative_to(raw_dir)).replace("\\", "/")
+        captions.append(_caption_for_im(cap_dir, p, key))
 
     # 2. 3축 임베딩
     new_Re = siglip2_re.embed_images(new_files)
@@ -215,24 +301,30 @@ def run_doc_incremental() -> IncrementalResult:
         p for p in raw_dir.rglob("*")
         if p.is_file() and p.suffix.lower() in DOC_EXTS
     )
-    # v2 P1: source-level prune (registry 만 정리, page-level .npy 정리는 Phase B2)
     current_keys = {str(p.relative_to(raw_dir)).replace("\\", "/") for p in doc_files}
     stale = set(registry.keys()) - current_keys
-    if stale:
-        for k in stale:
-            registry.pop(k, None)
-        _save_registry(reg_path, registry)
-        logger.info(f"[doc_inc] registry stale {len(stale)}개 제거")
 
     sha_cache: dict[str, str] = {}
     new_docs: list[Path] = []
+    modified_keys: set[str] = set()  # SHA 변경된 기존 파일 (캐시 stale 대상)
     for p in doc_files:
         key = str(p.relative_to(raw_dir)).replace("\\", "/")
         sha = _sha256(p)
         sha_cache[key] = sha
         if registry.get(key, {}).get("sha") != sha:
             new_docs.append(p)
-    logger.info(f"[doc_inc] 기존={len(registry)}, 신규={len(new_docs)}")
+            if key in registry:
+                modified_keys.add(key)
+    logger.info(f"[doc_inc] 기존={len(registry)}, 신규={len(new_docs)}, "
+                f"수정={len(modified_keys)}, 삭제={len(stale)}")
+
+    # stale(삭제) + modified(SHA 변경) 의 구 page 데이터 통합 정리
+    _purge_keys = stale | modified_keys
+    if _purge_keys:
+        _purge_doc_page_cache(_purge_keys, cache_dir)
+        for k in stale:
+            registry.pop(k, None)
+        _save_registry(reg_path, registry)
 
     if not new_docs:
         return IncrementalResult("document", 0, len(registry), len(registry))
@@ -244,12 +336,14 @@ def run_doc_incremental() -> IncrementalResult:
     ingested_docs: list[Path] = []  # 실제 페이지를 기여한 문서만 registry 등록
     skipped_docs: list[Path] = []
     for p in tqdm(new_docs, desc="doc_ingest + caption"):
-        pages = doc_ingest.to_pages(p)
+        rel_key = str(p.relative_to(raw_dir)).replace("\\", "/")
+        stem_key = doc_page_render.stem_key_for(rel_key)
+        pages = doc_ingest.to_pages(p, stem_key=stem_key)
         img_pages = [pg for pg in pages if pg.suffix.lower() in IMG_PAGE_EXTS]
         if not img_pages:
             skipped_docs.append(p)
             continue
-        cap_dir = Path(PATHS["TRICHEF_DOC_EXTRACT"]) / "captions" / doc_page_render._sanitize(p.stem)
+        cap_dir = Path(PATHS["TRICHEF_DOC_EXTRACT"]) / "captions" / stem_key
         cap_dir.mkdir(parents=True, exist_ok=True)
         for pg in img_pages:
             all_page_imgs.append(pg)

@@ -20,7 +20,7 @@ from tqdm import tqdm
 from config import PATHS
 from embedders.trichef import bgem3_sparse
 from embedders.trichef.caption_io import load_caption, page_idx_from_stem
-from embedders.trichef.doc_page_render import _sanitize
+from embedders.trichef.doc_page_render import _sanitize, stem_key_for
 from services.trichef import asf_filter, auto_vocab
 
 logger = logging.getLogger(__name__)
@@ -50,7 +50,8 @@ def resolve_doc_pdf_map() -> dict[str, Path]:
     registry = json.loads(reg_path.read_text(encoding="utf-8"))
     out: dict[str, Path] = {}
     for key, meta in registry.items():
-        stem = _sanitize(Path(key).stem)
+        # 신규 규칙(hash suffix) 우선. 마이그레이션 전 데이터는 레거시 stem 도 fallback.
+        stem = stem_key_for(key)
         if stem in out:
             logger.warning(f"[lexical_rebuild] stem 충돌: {stem!r} - {key!r} 무시")
             continue
@@ -107,7 +108,7 @@ def rebuild_image_lexical() -> dict:
         return {"skipped": True, "reason": "img_ids.json 없음"}
     ids = json.loads(ids_path.read_text(encoding="utf-8"))["ids"]
     cap_dir = Path(PATHS["TRICHEF_IMG_EXTRACT"]) / "captions"
-    docs = [load_caption(cap_dir, Path(i).stem) for i in ids]
+    docs = [load_caption(cap_dir, stem_key_for(i)) for i in ids]
 
     vocab = auto_vocab.build_vocab(docs, min_df=2, max_df_ratio=0.5, top_k=5000)
     auto_vocab.save_vocab(cache / "auto_vocab.json", vocab)

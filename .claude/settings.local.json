@@ -78,7 +78,9 @@
       "Bash(tasklist //FI \"IMAGENAME eq python.exe\")",
       "Bash(PYTHONIOENCODING=utf-8 python scripts/_diag_hwp3.py)",
       "Bash(PYTHONIOENCODING=utf-8 python scripts/_diag_hwp_search.py)",
-      "Bash(PYTHONIOENCODING=utf-8 python scripts/_diag_hwp_rank.py)"
+      "Bash(PYTHONIOENCODING=utf-8 python scripts/_diag_hwp_rank.py)",
+      "Bash(python -m py_compile App/backend/embedders/trichef/incremental_runner.py App/backend/embedders/trichef/doc_ingest.py App/backend/embedders/trichef/doc_page_render.py App/backend/services/trichef/lexical_rebuild.py App/backend/routes/trichef_admin.py scripts/migrate_stem_hash.py)",
+      "Bash(python -m py_compile scripts/migrate_stem_hash.py)"
     ]
   }
 }
