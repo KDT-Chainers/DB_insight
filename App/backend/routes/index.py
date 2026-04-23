@@ -22,12 +22,14 @@ for _ext in image.SUPPORTED_EXTENSIONS:
 for _ext in audio.SUPPORTED_EXTENSIONS:
     EXT_TYPE_MAP[_ext] = "audio"
 
+# 현재 활성화된 임베더 (동영상 + 음악만 지원)
 EMBEDDERS = {
-    "doc":   doc.embed,
     "video": video.embed,
-    "image": image.embed,
     "audio": audio.embed,
 }
+
+# 인덱싱 가능한 타입 (UI 파일 트리에서 활성 표시)
+ACTIVE_TYPES = {"video", "audio"}
 
 # ---------------------------------------------------------------------------
 # 인메모리 job 저장소 (서버 재시작 시 초기화)
@@ -205,10 +207,15 @@ def _run_job(job_id: str, file_paths: list[str], results: list[dict]) -> None:
         file_type = _get_file_type(path)
         embedder = EMBEDDERS.get(file_type) if file_type else None
 
-        if embedder is None:
-            # 지원하지 않는 확장자
+        if file_type is None:
+            # 인식 불가 확장자
             results[i]["status"] = "skipped"
             results[i]["reason"] = "지원하지 않는 파일 형식"
+            skipped += 1
+        elif file_type not in ACTIVE_TYPES:
+            # 인식은 되지만 현재 임베더 미활성
+            results[i]["status"] = "skipped"
+            results[i]["reason"] = "현재 동영상·음악 파일만 인덱싱됩니다"
             skipped += 1
         else:
             try:
