@@ -295,8 +295,27 @@ function IndexingModal({ rootPath, selectedCount, jobStatus, jobId, onClose, onS
     : isStopped ? 'border-amber-500/30 shadow-[0_0_60px_rgba(251,191,36,0.15)]'
     : 'border-[#85adff]/20 shadow-[0_0_80px_rgba(133,173,255,0.2)]'
 
-  const STEPS = ['프레임 캡셔닝', '음성 변환', '임베딩 생성', '벡터DB 저장']
-  const STEP_ICONS = ['frame_inspect', 'mic', 'hub', 'database']
+  // 파일 확장자로 파일 타입 판별
+  const _getFileType = (path) => {
+    const ext = path.split('.').pop()?.toLowerCase() ?? ''
+    if (['mp4','avi','mov','mkv','wmv','flv','webm'].includes(ext)) return 'video'
+    if (['jpg','jpeg','png','webp','gif','bmp'].includes(ext)) return 'image'
+    if (['pdf','docx','doc','pptx','ppt','xlsx','xls','txt','md','html','hwp'].includes(ext)) return 'doc'
+    if (['mp3','wav','flac','m4a','aac','ogg','wma'].includes(ext)) return 'audio'
+    return null
+  }
+
+  const runningFileType = runningResult ? _getFileType(runningResult.path) : null
+  const isTriChefMode   = runningFileType === 'image' || runningFileType === 'doc'
+
+  // 동영상 4단계 / TRI-CHEF 3단계
+  const VIDEO_STEPS = ['프레임 캡셔닝', '음성 변환', '임베딩 생성', '벡터DB 저장']
+  const VIDEO_ICONS = ['frame_inspect', 'mic', 'hub', 'database']
+  const CHEF_STEPS  = ['캡션 생성', '3축 임베딩', '벡터DB 저장']
+  const CHEF_ICONS  = ['description', 'hub', 'database']
+
+  const STEPS      = isTriChefMode ? CHEF_STEPS : VIDEO_STEPS
+  const STEP_ICONS = isTriChefMode ? CHEF_ICONS : VIDEO_ICONS
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
@@ -397,21 +416,29 @@ function IndexingModal({ rootPath, selectedCount, jobStatus, jobId, onClose, onS
           {/* 오른쪽: 동영상 스텝 + 파일 목록 */}
           <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
 
-            {/* 동영상 4단계 스텝 (동영상 처리 중일 때만) */}
+            {/* 처리 단계 (동영상 4단계 / TRI-CHEF 3단계) */}
             {isRunning && runningResult?.step != null && (
               <div className="shrink-0 px-6 pt-6 pb-5 border-b border-white/5">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/40 mb-4">동영상 처리 단계</p>
-                <div className="grid grid-cols-4 gap-3">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/40 mb-4">
+                  {isTriChefMode ? (runningFileType === 'image' ? '이미지 처리 단계 (TRI-CHEF)' : '문서 처리 단계 (TRI-CHEF)') : '동영상 처리 단계'}
+                </p>
+                <div className={`grid gap-3 ${isTriChefMode ? 'grid-cols-3' : 'grid-cols-4'}`}>
                   {STEPS.map((label, idx) => {
                     const sn       = idx + 1
                     const cur      = runningResult.step
                     const isPast   = sn < cur
                     const isActive = sn === cur
+                    const chipColor = isTriChefMode ? 'text-emerald-400' : 'text-[#85adff]'
+                    const chipActiveBg = isTriChefMode ? 'bg-emerald-400 border-emerald-400' : 'bg-[#85adff] border-[#85adff]'
+                    const chipActiveShadow = isTriChefMode
+                      ? 'bg-emerald-500/8 border-emerald-500/30 shadow-[0_0_20px_rgba(52,211,153,0.2)]'
+                      : 'bg-[#85adff]/10 border-[#85adff]/40 shadow-[0_0_20px_rgba(133,173,255,0.2)]'
+                    const pingBorder = isTriChefMode ? 'border-emerald-400/30' : 'border-[#85adff]/30'
                     return (
                       <div key={label}
                         className={`relative flex flex-col items-center gap-2 p-3 rounded-2xl border transition-all duration-300 ${
                           isActive
-                            ? 'bg-[#85adff]/10 border-[#85adff]/40 shadow-[0_0_20px_rgba(133,173,255,0.2)]'
+                            ? chipActiveShadow
                             : isPast
                               ? 'bg-emerald-500/8 border-emerald-500/20'
                               : 'bg-white/3 border-white/5'
@@ -419,7 +446,7 @@ function IndexingModal({ rootPath, selectedCount, jobStatus, jobId, onClose, onS
                         {/* 번호 / 아이콘 */}
                         <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-black border-2 transition-all ${
                           isActive
-                            ? 'bg-[#85adff] border-[#85adff] text-[#070d1f] scale-110'
+                            ? `${chipActiveBg} text-[#070d1f] scale-110`
                             : isPast
                               ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400'
                               : 'bg-white/5 border-white/10 text-on-surface-variant/30'
@@ -432,11 +459,11 @@ function IndexingModal({ rootPath, selectedCount, jobStatus, jobId, onClose, onS
                           }
                         </div>
                         <span className={`text-[10px] font-bold text-center leading-tight ${
-                          isActive ? 'text-[#85adff]' : isPast ? 'text-emerald-400' : 'text-on-surface-variant/25'
+                          isActive ? chipColor : isPast ? 'text-emerald-400' : 'text-on-surface-variant/25'
                         }`}>{label}</span>
                         {/* 활성 펄스 */}
                         {isActive && (
-                          <div className="absolute inset-0 rounded-2xl border-2 border-[#85adff]/30 animate-ping opacity-50" />
+                          <div className={`absolute inset-0 rounded-2xl border-2 ${pingBorder} animate-ping opacity-50`} />
                         )}
                       </div>
                     )
@@ -708,11 +735,11 @@ function VectorStoreTab() {
       {/* 타입별 컬렉션 */}
       <div className="grid grid-cols-2 gap-4">
         {[
-          { key: 'video', db: 'embedded_DB/Movie', dim: '1024d', model: 'e5-large', col: 'files_video' },
-          { key: 'doc',   db: 'embedded_DB/Doc',   dim: '384d',  model: 'MiniLM',   col: 'files_doc'   },
-          { key: 'image', db: 'embedded_DB/Img',   dim: '384d',  model: 'MiniLM',   col: 'files_image' },
-          { key: 'audio', db: 'embedded_DB/Rec',   dim: '768d',  model: 'ko-sroberta', col: 'files_audio' },
-        ].map(({ key, db, dim, model, col }) => {
+          { key: 'video', db: 'embedded_DB/Movie',   dim: '1024d',            model: 'e5-large',       col: 'files_video',        engine: 'ChromaDB' },
+          { key: 'doc',   db: 'embedded_DB/trichef', dim: '3200d (Re+Im+Z)',  model: 'TRI-CHEF 3-axis',col: 'trichef_doc_page',   engine: 'TRI-CHEF' },
+          { key: 'image', db: 'embedded_DB/trichef', dim: '3200d (Re+Im+Z)',  model: 'TRI-CHEF 3-axis',col: 'trichef_image',      engine: 'TRI-CHEF' },
+          { key: 'audio', db: 'embedded_DB/Rec',     dim: '768d',             model: 'ko-sroberta',    col: 'files_audio',        engine: 'ChromaDB' },
+        ].map(({ key, db, dim, model, col, engine }) => {
           const t     = byType[key] ?? { file_count: 0, chunk_count: 0 }
           const icon  = TYPE_ICON[key]  ?? 'insert_drive_file'
           const label = TYPE_LABEL[key] ?? key
@@ -737,11 +764,15 @@ function VectorStoreTab() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-on-surface-variant">임베딩 모델</span>
-                  <span className="font-mono text-on-surface-variant/60">{model}</span>
+                  <span className="font-mono text-on-surface-variant/60 text-right max-w-[55%] text-[10px] leading-snug">{model}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-on-surface-variant">컬렉션</span>
-                  <span className="font-mono text-on-surface-variant/60">{col}</span>
+                  <span className="font-mono text-on-surface-variant/60 text-[10px]">{col}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-on-surface-variant">엔진</span>
+                  <span className={`font-bold text-[10px] ${engine === 'TRI-CHEF' ? 'text-emerald-400' : 'text-[#85adff]'}`}>{engine}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-on-surface-variant">경로</span>

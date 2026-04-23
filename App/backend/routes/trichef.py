@@ -13,6 +13,10 @@ from services.trichef.unified_engine import TriChefEngine
 from embedders.trichef.incremental_runner import (
     run_image_incremental,
     run_doc_incremental,
+    embed_image_file,
+    embed_doc_file,
+    IMAGE_EMBED_EXTS,
+    DOC_EMBED_EXTS,
 )
 
 logger = logging.getLogger(__name__)
@@ -167,6 +171,14 @@ def status():
         "img_raw_count":   img_n,
         "doc_raw_count":   doc_n,
     })
+
+
+def reload_engine():
+    """임베딩 완료 후 엔진 캐시 재로드 (routes/index.py 에서 호출)."""
+    global _engine
+    with _engine_lock:
+        if _engine is not None:
+            _engine.reload()
 
 
 @bp.get("/image-tags")

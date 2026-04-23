@@ -72,6 +72,8 @@ async function openFolder(filePath) {
 function ResultCard({ result, onClick }) {
   const meta    = getTypeMeta(result.file_type)
   const simPct  = Math.round(result.similarity * 100)
+  const hasPreview = (result.file_type === 'image' || result.file_type === 'doc') && result.preview_url
+  const [imgError, setImgError] = useState(false)
 
   return (
     <div className="flex-none w-[400px] snap-start">
@@ -79,17 +81,39 @@ function ResultCard({ result, onClick }) {
         onClick={onClick}
         className="bg-surface-container-high rounded-[1.5rem] p-1 h-full shadow-[0_20px_50px_rgba(0,0,0,0.3)] hover:shadow-primary/10 transition-all group/card border border-outline-variant/5 cursor-pointer hover:border-primary/20"
       >
-        {/* 썸네일 영역 — 타입별 그라데이션 */}
-        <div className={`relative rounded-[1.4rem] overflow-hidden aspect-video bg-gradient-to-br ${meta.grad} border border-outline-variant/10 flex items-center justify-center`}>
-          <span className="material-symbols-outlined text-white/20 text-[80px]" style={{ fontVariationSettings: '"FILL" 1' }}>{meta.icon}</span>
-          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 to-transparent" />
+        {/* 썸네일 영역 */}
+        <div className={`relative rounded-[1.4rem] overflow-hidden aspect-video border border-outline-variant/10 flex items-center justify-center
+          ${hasPreview && !imgError ? 'bg-black' : `bg-gradient-to-br ${meta.grad}`}`}>
+
+          {/* 실제 이미지 미리보기 (이미지/문서 페이지) */}
+          {hasPreview && !imgError ? (
+            <>
+              <img
+                src={`${API_BASE}${result.preview_url}`}
+                alt={result.file_name}
+                className="w-full h-full object-contain"
+                onError={() => setImgError(true)}
+              />
+              {/* 오버레이 그라데이션 */}
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent pointer-events-none" />
+            </>
+          ) : (
+            <>
+              <span className="material-symbols-outlined text-white/20 text-[80px]" style={{ fontVariationSettings: '"FILL" 1' }}>{meta.icon}</span>
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 to-transparent" />
+            </>
+          )}
+
+          {/* 타입 배지 */}
           <div className="absolute top-4 left-4 p-2 glass-panel rounded-xl">
             <span className={`material-symbols-outlined ${meta.color}`}>{meta.icon}</span>
           </div>
+
+          {/* 파일명 + 유사도 (하단) */}
           <div className="absolute bottom-4 left-4 right-4 flex justify-between items-end">
             <div className="space-y-1 min-w-0 flex-1 mr-3">
               <p className={`text-xs font-bold tracking-widest uppercase ${meta.color}`}>{meta.label}</p>
-              <p className="text-lg font-bold text-on-surface truncate">{result.file_name}</p>
+              <p className="text-lg font-bold text-on-surface truncate drop-shadow-md">{result.file_name}</p>
             </div>
             <div className="text-right shrink-0">
               <div className="text-2xl font-black text-primary">{simPct}%</div>
@@ -599,6 +623,23 @@ export default function MainSearch() {
                     {/* 동영상: BLIP + STT 탭 */}
                     {selectedFile.file_type === 'video' && fileDetail ? (
                       <VideoDetailContent fileDetail={fileDetail} meta={meta} />
+                    ) : (selectedFile.file_type === 'image' || selectedFile.file_type === 'doc') && selectedFile.preview_url ? (
+                      /* 이미지/문서: 실제 미리보기 */
+                      <div className="flex-1 flex flex-col items-center justify-center px-8 py-6 gap-4 overflow-hidden">
+                        <div className="w-full flex-1 flex items-center justify-center min-h-0">
+                          <img
+                            src={`${API_BASE}${selectedFile.preview_url}`}
+                            alt={selectedFile.file_name}
+                            className="max-w-full max-h-full object-contain rounded-xl shadow-2xl border border-outline-variant/10"
+                            style={{ maxHeight: '340px' }}
+                          />
+                        </div>
+                        {selectedFile.snippet && (
+                          <p className="w-full text-sm text-on-surface-variant/70 leading-relaxed line-clamp-3 text-center">
+                            {selectedFile.snippet}
+                          </p>
+                        )}
+                      </div>
                     ) : (
                       <div className="flex-1 px-8 py-6">
                         {detailLoading ? (

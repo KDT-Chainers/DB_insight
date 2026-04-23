@@ -407,3 +407,229 @@ def run_doc_incremental() -> IncrementalResult:
     logger.info("[doc_page] calibration: run scripts/recalibrate_query_null.py")
 
     return IncrementalResult("document", len(ingested_docs), len(registry), len(registry))
+
+
+# ── 단일 파일 임베딩 (UI 인덱싱 진입점) ────────────────────────────────────
+
+IMAGE_EMBED_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
+DOC_EMBED_EXTS = {
+    ".pdf", ".docx", ".doc", ".pptx", ".ppt", ".xlsx", ".xls",
+    ".odt", ".odp", ".ods", ".rtf", ".hwp", ".hwpx",
+    ".txt", ".md", ".markdown", ".rst", ".log",
+    ".csv", ".html", ".htm",
+}
+
+
+def embed_image_file(file_path: str, progress_cb=None) -> dict:
+    """
+    단일 이미지 파일 TRI-CHEF 3축 임베딩.
+    파일을 raw_DB/Img/staged/ 에 하드링크(실패 시 복사)로 스테이징 후
+    기존 TRI-CHEF 파이프라인(캡션→임베딩→GS직교화→ChromaDB)을 수행한다.
+
+    progress_cb(step, total, detail) → bool(True=중단)
+      step 1/3: BLIP 캡션
+      step 2/3: 3축 임베딩
+      step 3/3: 벡터DB 저장
+    """
+    import os, shutil
+
+    p = Path(file_path)
+    if not p.is_file():
+        return {"status": "error", "reason": "파일이 존재하지 않습니다"}
+    if p.suffix.lower() not in IMAGE_EMBED_EXTS:
+        return {"status": "skipped", "reason": f"지원하지 않는 이미지 형식: {p.suffix}"}
+
+    raw_dir   = Path(PATHS["RAW_DB"]) / "Img"
+    cache_dir = Path(PATHS["TRICHEF_IMG_CACHE"])
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    reg_path  = cache_dir / "registry.json"
+    registry  = _load_registry(reg_path)
+
+    sha       = _sha256(p)
+    stage_rel = Path("staged") / sha[:8] / p.name      # 상대 key
+    staged    = raw_dir / stage_rel
+    staged.parent.mkdir(parents=True, exist_ok=True)
+
+    key = str(stage_rel).replace("\\", "/")             # "staged/abcd1234/foo.jpg"
+
+    # 이미 인덱싱 완료
+    if registry.get(key, {}).get("sha") == sha:
+        return {"status": "skipped", "reason": "이미 인덱싱된 파일"}
+
+    # 스테이징 (하드링크 → 실패 시 복사)
+    if not staged.exists():
+        try:
+            os.link(str(p), str(staged))
+        except (OSError, NotImplementedError):
+            shutil.copy2(str(p), str(staged))
+
+    # ── Step 1/3: BLIP 캡션 ─────────────────────────────
+    if progress_cb:
+        if progress_cb(1, 3, "BLIP 캡션 생성 중"):
+            return {"status": "skipped", "reason": "사용자 중단"}
+
+    cap_dir = Path(PATHS["TRICHEF_IMG_EXTRACT"]) / "captions"
+    cap_dir.mkdir(parents=True, exist_ok=True)
+    caption = _caption_for_im(cap_dir, staged, key)
+
+    # ── Step 2/3: 3축 임베딩 ─────────────────────────────
+    if progress_cb:
+        if progress_cb(2, 3, "3축 임베딩 생성 중 (Re·Im·Z)"):
+            return {"status": "skipped", "reason": "사용자 중단"}
+
+    new_Re = siglip2_re.embed_images([staged])
+    new_Im = im_embedder.embed_passage([caption])
+    new_Z  = dinov2_z.embed_images([staged])
+
+    def _merge(name: str, new_vec: np.ndarray) -> np.ndarray:
+        pth = cache_dir / name
+        if pth.exists():
+            prev = np.load(pth)
+            merged = np.vstack([prev, new_vec])
+        else:
+            merged = new_vec
+        np.save(pth, merged)
+        return merged
+
+    Re_all = _merge("cache_img_Re_siglip2.npy", new_Re)
+    Im_all = _merge("cache_img_Im_e5cap.npy",   new_Im)
+    Z_all  = _merge("cache_img_Z_dinov2.npy",   new_Z)
+
+    ids_path = cache_dir / "img_ids.json"
+    prev_ids = _load_registry(ids_path).get("ids", []) if ids_path.exists() else []
+    all_ids  = prev_ids + [key]
+    ids_path.write_text(
+        json.dumps({"ids": all_ids}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+    # ── Step 3/3: GS 직교화 + ChromaDB 저장 ─────────────
+    if progress_cb:
+        if progress_cb(3, 3, "벡터DB 저장 중"):
+            return {"status": "skipped", "reason": "사용자 중단"}
+
+    Im_perp, Z_perp = tri_gs.orthogonalize(Re_all, Im_all, Z_all)
+    _upsert_chroma(TRICHEF_CFG["COL_IMAGE"], all_ids, Re_all, Im_perp, Z_perp, raw_dir)
+
+    try:
+        lexical_rebuild.rebuild_image_lexical()
+    except Exception as e:
+        logger.warning(f"[embed_image_file] lexical rebuild 실패: {e}")
+
+    registry[key] = {"sha": sha, "abs": str(p), "staged": str(staged)}
+    _save_registry(reg_path, registry)
+
+    return {"status": "done", "chunks": 1}
+
+
+def embed_doc_file(file_path: str, progress_cb=None) -> dict:
+    """
+    단일 문서 파일 TRI-CHEF 3축 임베딩 (페이지 렌더링 포함).
+    파일을 raw_DB/Doc/staged/ 에 스테이징 후 기존 파이프라인 실행.
+
+    progress_cb(step, total, detail) → bool(True=중단)
+      step 1/3: 문서 페이지 렌더링 + BLIP 캡션
+      step 2/3: 3축 임베딩
+      step 3/3: 벡터DB 저장
+    """
+    import os, shutil
+
+    p = Path(file_path)
+    if not p.is_file():
+        return {"status": "error", "reason": "파일이 존재하지 않습니다"}
+    if p.suffix.lower() not in DOC_EMBED_EXTS:
+        return {"status": "skipped", "reason": f"지원하지 않는 문서 형식: {p.suffix}"}
+
+    raw_dir   = Path(PATHS["RAW_DB"]) / "Doc"
+    cache_dir = Path(PATHS["TRICHEF_DOC_CACHE"])
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    reg_path  = cache_dir / "registry.json"
+    registry  = _load_registry(reg_path)
+
+    sha       = _sha256(p)
+    stage_rel = Path("staged") / sha[:8] / p.name
+    staged    = raw_dir / stage_rel
+    staged.parent.mkdir(parents=True, exist_ok=True)
+
+    key = str(stage_rel).replace("\\", "/")             # "staged/abcd1234/foo.pdf"
+
+    if registry.get(key, {}).get("sha") == sha:
+        return {"status": "skipped", "reason": "이미 인덱싱된 파일"}
+
+    if not staged.exists():
+        try:
+            os.link(str(p), str(staged))
+        except (OSError, NotImplementedError):
+            shutil.copy2(str(p), str(staged))
+
+    # ── Step 1/3: 페이지 렌더링 + 캡션 ──────────────────
+    if progress_cb:
+        if progress_cb(1, 3, "문서 페이지 렌더링 + 캡션 생성 중"):
+            return {"status": "skipped", "reason": "사용자 중단"}
+
+    stem_key = doc_page_render.stem_key_for(key)
+    IMG_PAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
+    pages = doc_ingest.to_pages(staged, stem_key=stem_key)
+    img_pages = [pg for pg in pages if pg.suffix.lower() in IMG_PAGE_EXTS]
+    if not img_pages:
+        return {"status": "skipped", "reason": "페이지 이미지 생성 실패 (LibreOffice 필요 또는 빈 파일)"}
+
+    cap_dir = Path(PATHS["TRICHEF_DOC_EXTRACT"]) / "captions" / stem_key
+    cap_dir.mkdir(parents=True, exist_ok=True)
+    captions = [_caption_for_im(cap_dir, pg) for pg in img_pages]
+
+    # ── Step 2/3: 3축 임베딩 ─────────────────────────────
+    if progress_cb:
+        if progress_cb(2, 3, f"3축 임베딩 ({len(img_pages)}페이지)"):
+            return {"status": "skipped", "reason": "사용자 중단"}
+
+    new_Re = siglip2_re.embed_images(img_pages)
+    new_Im = im_embedder.embed_passage(captions)
+    new_Z  = dinov2_z.embed_images(img_pages)
+
+    def _merge(name: str, new_vec: np.ndarray) -> np.ndarray:
+        pth = cache_dir / name
+        if pth.exists():
+            prev = np.load(pth)
+            merged = np.vstack([prev, new_vec])
+        else:
+            merged = new_vec
+        np.save(pth, merged)
+        return merged
+
+    Re_all = _merge("cache_doc_page_Re.npy", new_Re)
+    Im_all = _merge("cache_doc_page_Im.npy", new_Im)
+    Z_all  = _merge("cache_doc_page_Z.npy",  new_Z)
+
+    doc_extract = Path(PATHS["TRICHEF_DOC_EXTRACT"])
+    ids_path    = cache_dir / "doc_page_ids.json"
+    prev_ids    = _load_registry(ids_path).get("ids", []) if ids_path.exists() else []
+    new_page_ids = [
+        str(pg.relative_to(doc_extract)).replace("\\", "/")
+        for pg in img_pages
+    ]
+    all_ids = prev_ids + new_page_ids
+    ids_path.write_text(
+        json.dumps({"ids": all_ids}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+    # ── Step 3/3: GS 직교화 + ChromaDB 저장 ─────────────
+    if progress_cb:
+        if progress_cb(3, 3, "벡터DB 저장 중"):
+            return {"status": "skipped", "reason": "사용자 중단"}
+
+    Im_perp, Z_perp = tri_gs.orthogonalize(Re_all, Im_all, Z_all)
+    _upsert_chroma(TRICHEF_CFG["COL_DOC_PAGE"], all_ids, Re_all, Im_perp, Z_perp,
+                   doc_extract)
+
+    try:
+        lexical_rebuild.rebuild_doc_lexical()
+    except Exception as e:
+        logger.warning(f"[embed_doc_file] lexical rebuild 실패: {e}")
+
+    registry[key] = {"sha": sha, "abs": str(p), "staged": str(staged),
+                     "pages": len(img_pages)}
+    _save_registry(reg_path, registry)
+
+    return {"status": "done", "chunks": len(img_pages), "pages": len(img_pages)}

@@ -26,12 +26,7 @@
       "electron/main.cjs",
       "electron/preload.cjs"
     ],
-    "extraResources": [
-      {
-        "from": "../backend/dist/backend.exe",
-        "to": "backend/backend.exe"
-      }
-    ],
+    "extraResources": [],
     "win": {
       "target": "portable",
       "signingHashAlgorithms": null,

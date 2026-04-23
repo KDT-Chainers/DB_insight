@@ -4,7 +4,11 @@ import uuid
 
 from flask import Blueprint, jsonify, request
 
-from embedders import doc, video, image, audio
+from embedders import video, audio
+from embedders.trichef.incremental_runner import (
+    embed_image_file, embed_doc_file,
+    IMAGE_EMBED_EXTS, DOC_EMBED_EXTS,
+)
 
 index_bp = Blueprint("index", __name__, url_prefix="/api/index")
 
@@ -13,23 +17,27 @@ index_bp = Blueprint("index", __name__, url_prefix="/api/index")
 # ---------------------------------------------------------------------------
 
 EXT_TYPE_MAP: dict[str, str] = {}
-for _ext in doc.SUPPORTED_EXTENSIONS:
-    EXT_TYPE_MAP[_ext] = "doc"
+# video / audio: 기존 embedder 그대로
 for _ext in video.SUPPORTED_EXTENSIONS:
     EXT_TYPE_MAP[_ext] = "video"
-for _ext in image.SUPPORTED_EXTENSIONS:
-    EXT_TYPE_MAP[_ext] = "image"
 for _ext in audio.SUPPORTED_EXTENSIONS:
     EXT_TYPE_MAP[_ext] = "audio"
+# image / doc: TRI-CHEF 지원 확장자로만 제한 (legacy image.py / doc.py 목록 사용 안 함)
+for _ext in IMAGE_EMBED_EXTS:
+    EXT_TYPE_MAP[_ext] = "image"
+for _ext in DOC_EMBED_EXTS:
+    EXT_TYPE_MAP[_ext] = "doc"
 
-# 현재 활성화된 임베더 (동영상 + 음악만 지원)
+# 활성 임베더 — image/doc 은 TRI-CHEF 단일 파일 함수 사용
 EMBEDDERS = {
     "video": video.embed,
     "audio": audio.embed,
+    "image": embed_image_file,
+    "doc":   embed_doc_file,
 }
 
 # 인덱싱 가능한 타입 (UI 파일 트리에서 활성 표시)
-ACTIVE_TYPES = {"video", "audio"}
+ACTIVE_TYPES = {"video", "audio", "image", "doc"}
 
 # ---------------------------------------------------------------------------
 # 인메모리 job 저장소 (서버 재시작 시 초기화)
@@ -215,7 +223,7 @@ def _run_job(job_id: str, file_paths: list[str], results: list[dict]) -> None:
         elif file_type not in ACTIVE_TYPES:
             # 인식은 되지만 현재 임베더 미활성
             results[i]["status"] = "skipped"
-            results[i]["reason"] = "현재 동영상·음악 파일만 인덱싱됩니다"
+            results[i]["reason"] = f"{file_type} 타입 임베더 미활성"
             skipped += 1
         else:
             try:
@@ -229,8 +237,20 @@ def _run_job(job_id: str, file_paths: list[str], results: list[dict]) -> None:
                         return _is_stopped(_job_id)  # True 이면 중단 신호
                     return _cb
 
-                kwargs = {"progress_cb": _make_cb(i, job_id)} if file_type == "video" else {}
+                # progress_cb 지원 타입: video(4단계), image/doc(3단계)
+                kwargs = (
+                    {"progress_cb": _make_cb(i, job_id)}
+                    if file_type in {"video", "image", "doc"}
+                    else {}
+                )
                 result = embedder(path, **kwargs)
+                # TRI-CHEF 임베딩 후 검색 엔진 캐시 재로드
+                if file_type in {"image", "doc"} and result.get("status") == "done":
+                    try:
+                        from routes.trichef import reload_engine
+                        reload_engine()
+                    except Exception as _e:
+                        pass
                 status = result.get("status", "error")
                 if status == "done":
                     results[i]["status"] = "done"
