@@ -7,6 +7,7 @@ export default function LandingLogin() {
   const navigate = useNavigate()
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [flashing, setFlashing] = useState(false)
 
   const handleLogin = async (e) => {
     e.preventDefault()
@@ -21,7 +22,8 @@ export default function LandingLogin() {
 
       if (response.ok && data?.success === true) {
         setError('')
-        navigate('/search')
+        setFlashing(true)
+        setTimeout(() => navigate('/search'), 380)
         return
       }
 
@@ -38,6 +40,11 @@ export default function LandingLogin() {
 
   return (
     <div className="bg-surface-dim text-on-surface font-body overflow-hidden min-h-screen">
+
+      {/* 로그인 성공 플래시 오버레이 */}
+      {flashing && (
+        <div className="fixed inset-0 z-[99999] login-flash" />
+      )}
       {/* 드래그 가능한 타이틀바 — 어두운 배경으로 glow 투과 방지 */}
       <div
         className="fixed top-0 left-0 right-0 h-8 bg-[#070d1f] z-[9999] flex items-center justify-end px-2"
