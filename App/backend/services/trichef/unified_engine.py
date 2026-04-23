@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -41,32 +42,52 @@ class TriChefEngine:
         # 이미지
         idir = Path(PATHS["TRICHEF_IMG_CACHE"])
         if (idir / "cache_img_Re_siglip2.npy").exists():
-            self._cache["image"] = {
-                "Re":  np.load(idir / "cache_img_Re_siglip2.npy"),
-                "Im":  np.load(idir / "cache_img_Im_e5cap.npy"),
-                "Z":   np.load(idir / "cache_img_Z_dinov2.npy"),
-                "ids": json.loads(
-                    (idir / "img_ids.json").read_text(encoding="utf-8")
-                )["ids"],
-                "sparse": _load_sparse(idir / "cache_img_sparse.npz"),
-                "vocab": auto_vocab.load_vocab(idir / "auto_vocab.json"),
-                "asf_sets": asf_filter.load_token_sets(idir / "asf_token_sets.json"),
-            }
+            self._cache["image"] = self._build_entry(
+                idir, "cache_img_Re_siglip2.npy", "cache_img_Im_e5cap.npy",
+                "cache_img_Z_dinov2.npy", "img_ids.json", "cache_img_sparse.npz",
+                domain_label="image",
+            )
         # 문서 페이지
         ddir = Path(PATHS["TRICHEF_DOC_CACHE"])
         if (ddir / "cache_doc_page_Re.npy").exists():
-            self._cache["doc_page"] = {
-                "Re":  np.load(ddir / "cache_doc_page_Re.npy"),
-                "Im":  np.load(ddir / "cache_doc_page_Im.npy"),
-                "Z":   np.load(ddir / "cache_doc_page_Z.npy"),
-                "ids": json.loads(
-                    (ddir / "doc_page_ids.json").read_text(encoding="utf-8")
-                )["ids"],
-                "sparse": _load_sparse(ddir / "cache_doc_page_sparse.npz"),
-                "vocab": auto_vocab.load_vocab(ddir / "auto_vocab.json"),
-                "asf_sets": asf_filter.load_token_sets(ddir / "asf_token_sets.json"),
-            }
+            self._cache["doc_page"] = self._build_entry(
+                ddir, "cache_doc_page_Re.npy", "cache_doc_page_Im.npy",
+                "cache_doc_page_Z.npy", "doc_page_ids.json", "cache_doc_page_sparse.npz",
+                domain_label="doc_page",
+            )
         logger.info(f"[engine] 캐시 로드 완료: {list(self._cache.keys())}")
+
+    def _build_entry(self, dir: Path, re_fn: str, im_fn: str, z_fn: str,
+                     ids_fn: str, sparse_fn: str, domain_label: str) -> dict:
+        Re = np.load(dir / re_fn)
+        ids = json.loads((dir / ids_fn).read_text(encoding="utf-8"))["ids"]
+        N = Re.shape[0]
+        if len(ids) != N:
+            logger.warning(f"[engine:{domain_label}] ids({len(ids)}) != Re({N}); "
+                           f"ids를 Re 길이에 맞춰 절단")
+            ids = ids[:N] if len(ids) > N else ids + [f"__missing__/{i}" for i in range(N - len(ids))]
+
+        sparse_mat = _load_sparse(dir / sparse_fn)
+        if sparse_mat is not None and sparse_mat.shape[0] != N:
+            logger.warning(f"[engine:{domain_label}] sparse({sparse_mat.shape[0]}) != Re({N}); "
+                           f"sparse 채널 비활성화 (rebuild 필요)")
+            sparse_mat = None
+
+        asf_sets = asf_filter.load_token_sets(dir / "asf_token_sets.json")
+        if asf_sets and len(asf_sets) != N:
+            logger.warning(f"[engine:{domain_label}] asf_sets({len(asf_sets)}) != Re({N}); "
+                           f"ASF 채널 비활성화 (rebuild 필요)")
+            asf_sets = []
+
+        return {
+            "Re": Re,
+            "Im": np.load(dir / im_fn),
+            "Z":  np.load(dir / z_fn),
+            "ids": ids,
+            "sparse": sparse_mat,
+            "vocab": auto_vocab.load_vocab(dir / "auto_vocab.json"),
+            "asf_sets": asf_sets,
+        }
 
     def _embed_query(self, query: str) -> tuple[np.ndarray, np.ndarray]:
         variants = qwen_expand.expand(query)
@@ -119,7 +140,7 @@ class TriChefEngine:
             if s < abs_thr:
                 continue
             z = (s - mu) / max(sig, 1e-9)
-            conf = 0.5 * (1 + _erf(z / (2 ** 0.5)))
+            conf = 0.5 * (1 + math.erf(z / (2 ** 0.5)))
             meta = {"domain": domain, "dense": s}
             if sparse_scores is not None:
                 meta["lexical"] = float(sparse_scores[i])
@@ -153,13 +174,3 @@ def _rrf_merge(rankings: list[np.ndarray], n: int, k: int = 60) -> np.ndarray:
     return agg
 
 
-def _erf(x: float) -> float:
-    # Abramowitz & Stegun 7.1.26
-    import math
-    a1, a2, a3, a4, a5 = 0.254829592, -0.284496736, 1.421413741, -1.453152027, 1.061405429
-    p = 0.3275911
-    s = 1 if x >= 0 else -1
-    x = abs(x)
-    t = 1 / (1 + p * x)
-    y = 1 - ((((a5*t + a4)*t + a3)*t + a2)*t + a1)*t * math.exp(-x * x)
-    return s * y

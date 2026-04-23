@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 from pathlib import Path
 
 import numpy as np
@@ -19,18 +20,22 @@ _BATCH    = TRICHEF_CFG["BATCH_IMG"]
 
 _model = None
 _proc  = None
+_lock  = threading.Lock()
 
 
 def _load():
     global _model, _proc
     if _model is not None:
         return
-    logger.info(f"[dinov2_z] 모델 로드: {_MODEL_ID}")
-    _proc  = AutoImageProcessor.from_pretrained(_MODEL_ID)
-    _model = AutoModel.from_pretrained(
-        _MODEL_ID,
-        torch_dtype=torch.float16 if _DEVICE == "cuda" else torch.float32,
-    ).to(_DEVICE).eval()
+    with _lock:
+        if _model is not None:
+            return
+        logger.info(f"[dinov2_z] 모델 로드: {_MODEL_ID}")
+        _proc  = AutoImageProcessor.from_pretrained(_MODEL_ID)
+        _model = AutoModel.from_pretrained(
+            _MODEL_ID,
+            torch_dtype=torch.float16 if _DEVICE == "cuda" else torch.float32,
+        ).to(_DEVICE).eval()
 
 
 @torch.inference_mode()
@@ -38,7 +43,10 @@ def embed_images(paths: list[Path]) -> np.ndarray:
     _load()
     out: list[np.ndarray] = []
     for i in range(0, len(paths), _BATCH):
-        batch = [Image.open(p).convert("RGB") for p in paths[i:i+_BATCH]]
+        batch = []
+        for p in paths[i:i+_BATCH]:
+            with Image.open(p) as _img:
+                batch.append(_img.convert("RGB"))
         inp = _proc(images=batch, return_tensors="pt").to(_DEVICE)
         out_d = _model(**inp)
         # [CLS] 토큰 (N, 1024)

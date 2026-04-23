@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import mimetypes
+import threading
 from pathlib import Path
 
 from flask import Blueprint, jsonify, request, send_file
@@ -18,12 +19,31 @@ logger = logging.getLogger(__name__)
 bp = Blueprint("trichef", __name__, url_prefix="/api/trichef")
 
 _engine: TriChefEngine | None = None
+_engine_lock = threading.Lock()
+
+_raw_count_cache: dict = {"ts": 0.0, "img": 0, "doc": 0}
+_raw_count_ttl = 5.0  # 초
+
+
+def _raw_counts() -> tuple[int, int]:
+    import time
+    now = time.time()
+    if now - _raw_count_cache["ts"] < _raw_count_ttl:
+        return _raw_count_cache["img"], _raw_count_cache["doc"]
+    img_dir = Path(PATHS["RAW_DB"]) / "Img"
+    doc_dir = Path(PATHS["RAW_DB"]) / "Doc"
+    img_n = sum(1 for p in img_dir.rglob("*.*") if p.is_file()) if img_dir.exists() else 0
+    doc_n = sum(1 for p in doc_dir.rglob("*.*") if p.is_file()) if doc_dir.exists() else 0
+    _raw_count_cache.update(ts=now, img=img_n, doc=doc_n)
+    return img_n, doc_n
 
 
 def _get_engine() -> TriChefEngine:
     global _engine
     if _engine is None:
-        _engine = TriChefEngine()
+        with _engine_lock:
+            if _engine is None:
+                _engine = TriChefEngine()
     return _engine
 
 
@@ -129,23 +149,23 @@ def reindex():
             logger.exception("document reindex 실패")
             results["document"] = {"error": str(e)[:400]}
     global _engine
-    _engine = None   # 재로드 강제
+    with _engine_lock:
+        if _engine is not None:
+            _engine.reload()
     return jsonify(results)
 
 
 @bp.get("/status")
 def status():
     """캐시 현황 빠른 조회 (모델 로드 없음)."""
-    from pathlib import Path
     idir = Path(PATHS["TRICHEF_IMG_CACHE"])
     ddir = Path(PATHS["TRICHEF_DOC_CACHE"])
+    img_n, doc_n = _raw_counts()
     return jsonify({
         "image_cached":    (idir / "cache_img_Re_siglip2.npy").exists(),
         "doc_page_cached": (ddir / "cache_doc_page_Re.npy").exists(),
-        "img_raw_count":   len(list((Path(PATHS["RAW_DB"]) / "Img").rglob("*.*")))
-                           if (Path(PATHS["RAW_DB"]) / "Img").exists() else 0,
-        "doc_raw_count":   len(list((Path(PATHS["RAW_DB"]) / "Doc").rglob("*.*")))
-                           if (Path(PATHS["RAW_DB"]) / "Doc").exists() else 0,
+        "img_raw_count":   img_n,
+        "doc_raw_count":   doc_n,
     })
 
 

@@ -12,6 +12,7 @@ from pathlib import Path
 import chromadb
 import numpy as np
 from chromadb.config import Settings
+from scipy import sparse as sp
 
 from config import PATHS
 
@@ -71,6 +72,30 @@ def prune_domain(
                 logger.warning(f"[prune] {p.name} 행 수 불일치 → 건너뜀")
                 continue
             np.save(p, arr[keep_mask])
+
+        # sparse npz 행 필터링
+        sparse_path = next(cache_dir.glob(f"cache_{domain}_sparse.npz"), None) \
+                      or next(cache_dir.glob("*_sparse.npz"), None)
+        if sparse_path and sparse_path.exists():
+            mat = sp.load_npz(sparse_path)
+            if mat.shape[0] == len(ids):
+                sp.save_npz(sparse_path, mat[keep_mask])
+            else:
+                logger.warning(f"[prune] {sparse_path.name} 행 수 불일치 → 건너뜀")
+
+        # asf_token_sets.json 리스트 필터링
+        asf_path = cache_dir / "asf_token_sets.json"
+        if asf_path.exists():
+            try:
+                asf_sets = json.loads(asf_path.read_text(encoding="utf-8"))
+                if isinstance(asf_sets, list) and len(asf_sets) == len(ids):
+                    new_sets = [s for s, k in zip(asf_sets, keep_mask) if k]
+                    asf_path.write_text(json.dumps(new_sets, ensure_ascii=False),
+                                        encoding="utf-8")
+                else:
+                    logger.warning(f"[prune] asf_token_sets 길이 불일치 → 건너뜀")
+            except Exception as e:
+                logger.warning(f"[prune] asf_token_sets 정리 실패: {e}")
 
         new_ids = [i for i, k in zip(ids, keep_mask) if k]
         _save_json(ids_path, {"ids": new_ids})

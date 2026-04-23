@@ -17,22 +17,9 @@ sys.path.insert(0, str(ROOT / "App" / "backend"))
 os.chdir(ROOT / "App" / "backend")
 
 from config import PATHS  # noqa: E402
-from embedders.trichef.doc_page_render import _sanitize  # noqa: E402
+from embedders.trichef.caption_io import load_caption as _load_caption, page_idx_from_stem  # noqa: E402
 from services.trichef import asf_filter, auto_vocab  # noqa: E402
-
-
-def _load_caption(cap_dir: Path, stem: str) -> str:
-    jp = cap_dir / f"{stem}.caption.json"
-    tp = cap_dir / f"{stem}.txt"
-    if jp.exists():
-        try:
-            d = json.loads(jp.read_text(encoding="utf-8"))
-            return " ".join(d.get(k, "") for k in ("L1", "L2", "L3") if d.get(k))
-        except Exception:
-            pass
-    if tp.exists():
-        return tp.read_text(encoding="utf-8")
-    return ""
+from services.trichef.lexical_rebuild import resolve_doc_pdf_map  # noqa: E402
 
 
 def build_image():
@@ -52,8 +39,7 @@ def build_doc():
     extract = Path(PATHS["TRICHEF_DOC_EXTRACT"])
     vocab = auto_vocab.load_vocab(cache / "auto_vocab.json")
     ids = json.loads((cache / "doc_page_ids.json").read_text(encoding="utf-8"))["ids"]
-    registry = json.loads((cache / "registry.json").read_text(encoding="utf-8"))
-    stem_to_pdf = {_sanitize(Path(k).stem): Path(v["abs"]) for k, v in registry.items()}
+    stem_to_pdf = resolve_doc_pdf_map()
 
     pdf_text: dict[str, dict[int, str]] = {}
     unique_stems = sorted({Path(i).parts[1] for i in ids if Path(i).parts[0] == "page_images"})
@@ -76,7 +62,7 @@ def build_doc():
             continue
         stem = parts[1]
         page_stem = Path(parts[2]).stem
-        page_idx = int(page_stem.lstrip("p") or "0")
+        page_idx = page_idx_from_stem(page_stem)
         cap = _load_caption(extract / "captions" / stem, page_stem)
         txt = pdf_text.get(stem, {}).get(page_idx, "")
         docs.append(cap + "\n" + txt)

@@ -20,32 +20,8 @@ os.chdir(ROOT / "App" / "backend")
 
 from config import PATHS  # noqa: E402
 from embedders.trichef import bgem3_sparse  # noqa: E402
-from embedders.trichef.doc_page_render import _sanitize  # noqa: E402
-
-
-def _load_caption(cap_dir: Path, stem: str) -> str:
-    jp = cap_dir / f"{stem}.caption.json"
-    tp = cap_dir / f"{stem}.txt"
-    if jp.exists():
-        try:
-            d = json.loads(jp.read_text(encoding="utf-8"))
-            parts = [d.get(k, "") for k in ("L1", "L2", "L3")]
-            return " ".join(x for x in parts if x)
-        except Exception:
-            pass
-    if tp.exists():
-        return tp.read_text(encoding="utf-8")
-    return ""
-
-
-def _build_stem_to_pdf() -> dict[str, Path]:
-    cache = Path(PATHS["TRICHEF_DOC_CACHE"])
-    registry = json.loads((cache / "registry.json").read_text(encoding="utf-8"))
-    out: dict[str, Path] = {}
-    for key, meta in registry.items():
-        stem = _sanitize(Path(key).stem)
-        out[stem] = Path(meta["abs"])
-    return out
+from embedders.trichef.caption_io import load_caption as _load_caption, page_idx_from_stem  # noqa: E402
+from services.trichef.lexical_rebuild import resolve_doc_pdf_map  # noqa: E402
 
 
 def _extract_pdf_pages_text(pdf_path: Path) -> dict[int, str]:
@@ -70,7 +46,7 @@ def main():
     cache = Path(PATHS["TRICHEF_DOC_CACHE"])
     extract = Path(PATHS["TRICHEF_DOC_EXTRACT"])
     ids = json.loads((cache / "doc_page_ids.json").read_text(encoding="utf-8"))["ids"]
-    stem_to_pdf = _build_stem_to_pdf()
+    stem_to_pdf = resolve_doc_pdf_map()
     print(f"PDFs in registry: {len(stem_to_pdf)}, ids: {len(ids)}")
 
     # 1. PDF별 텍스트 캐시
@@ -92,7 +68,7 @@ def main():
             continue
         stem = parts[1]
         page_stem = Path(parts[2]).stem
-        page_idx = int(page_stem.lstrip("p") or "0")
+        page_idx = page_idx_from_stem(page_stem)
         cap = _load_caption(extract / "captions" / stem, page_stem)
         pdf_txt = pdf_text_cache.get(stem, {}).get(page_idx, "")
         # 캡션(영어) + 원문(주로 한글) 합산으로 cross-lingual 커버

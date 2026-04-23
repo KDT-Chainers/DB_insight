@@ -18,22 +18,7 @@ os.chdir(ROOT / "App" / "backend")
 
 from config import PATHS  # noqa: E402
 from embedders.trichef import bgem3_sparse  # noqa: E402
-
-
-def _load_caption(cap_dir: Path, stem: str) -> str:
-    jp = cap_dir / f"{stem}.caption.json"
-    tp = cap_dir / f"{stem}.txt"
-    if jp.exists():
-        try:
-            d = json.loads(jp.read_text(encoding="utf-8"))
-            # Sparse 채널에 가장 정보량 많은 조합
-            parts = [d.get(k, "") for k in ("L1", "L2", "L3")]
-            return " ".join(x for x in parts if x)
-        except Exception:
-            pass
-    if tp.exists():
-        return tp.read_text(encoding="utf-8")
-    return ""
+from embedders.trichef.caption_io import load_caption as _load_caption  # noqa: E402
 
 
 def build_image():

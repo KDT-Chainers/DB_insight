@@ -81,11 +81,28 @@ def to_pages(src: Path) -> list[Path]:
             pdf = _libreoffice_to_pdf(src, Path(td))
             if pdf is None:
                 return []
-            pdf_cache = Path(PATHS["TRICHEF_DOC_EXTRACT"]) / "converted_pdf"
+            # stem 충돌 방지: 원본 절대경로 해시 기반 서브디렉토리 사용
+            import hashlib
+            sub = hashlib.md5(str(src.resolve()).encode("utf-8")).hexdigest()[:8]
+            pdf_cache = Path(PATHS["TRICHEF_DOC_EXTRACT"]) / "converted_pdf" / sub
             pdf_cache.mkdir(parents=True, exist_ok=True)
             final = pdf_cache / pdf.name
             shutil.copy2(pdf, final)
             return doc_page_render.render_pdf(final)
+
+
+def converted_pdf_path(src: Path) -> Path | None:
+    """doc_ingest 변환본 경로. 신규 규칙(해시 서브디렉토리) 우선, 없으면 레거시 위치 fallback."""
+    import hashlib
+    conv_root = Path(PATHS["TRICHEF_DOC_EXTRACT"]) / "converted_pdf"
+    sub = hashlib.md5(str(src.resolve()).encode("utf-8")).hexdigest()[:8]
+    new_path = conv_root / sub / f"{src.stem}.pdf"
+    if new_path.exists():
+        return new_path
+    legacy = conv_root / f"{src.stem}.pdf"
+    if legacy.exists():
+        return legacy
+    return None
 
     if ext in TEXT_EXT:
         return _virtual_text_pages(src.read_text(encoding="utf-8", errors="ignore"),

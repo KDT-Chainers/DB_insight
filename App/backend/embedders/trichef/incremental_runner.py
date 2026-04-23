@@ -22,6 +22,7 @@ from embedders.trichef import bgem3_caption_im as im_embedder  # v2 P1: e5→BGE
 from embedders.trichef import blip_caption_triple, doc_ingest  # v2 P1 Phase B
 from services.trichef import tri_gs
 from services.trichef.prune import prune_domain
+from services.trichef import lexical_rebuild
 
 
 def _caption_for_im(cap_dir: Path, img_path: Path) -> str:
@@ -179,12 +180,18 @@ def run_image_incremental() -> IncrementalResult:
     Im_perp, Z_perp = tri_gs.orthogonalize(Re_all, Im_all, Z_all)
     _upsert_chroma(TRICHEF_CFG["COL_IMAGE"], all_ids, Re_all, Im_perp, Z_perp, raw_dir)
 
-    # 5. calibration 재보정
+    # 5. lexical 채널 재빌드 (vocab / asf_token_sets / sparse) — 신규 항목 반영 필수
+    try:
+        lexical_rebuild.rebuild_image_lexical()
+    except Exception as e:
+        logger.exception(f"[image] lexical rebuild 실패: {e}")
+
+    # 6. calibration 재보정
     # NOTE: 쿼리 기반 null 분포 (scripts/recalibrate_query_null.py) 를 별도
     # 실행. 기존 doc-doc self-score 방식은 threshold 과대평가 이슈로 폐기.
     logger.info("[image] calibration: run scripts/recalibrate_query_null.py")
 
-    # 6. registry save
+    # 7. registry save
     _save_registry(reg_path, registry)
 
     return IncrementalResult("image", len(new_files), existing_count, len(all_ids))
@@ -217,11 +224,14 @@ def run_doc_incremental() -> IncrementalResult:
         _save_registry(reg_path, registry)
         logger.info(f"[doc_inc] registry stale {len(stale)}개 제거")
 
-    new_docs = [
-        p for p in doc_files
-        if registry.get(str(p.relative_to(raw_dir)).replace("\\", "/"),
-                        {}).get("sha") != _sha256(p)
-    ]
+    sha_cache: dict[str, str] = {}
+    new_docs: list[Path] = []
+    for p in doc_files:
+        key = str(p.relative_to(raw_dir)).replace("\\", "/")
+        sha = _sha256(p)
+        sha_cache[key] = sha
+        if registry.get(key, {}).get("sha") != sha:
+            new_docs.append(p)
     logger.info(f"[doc_inc] 기존={len(registry)}, 신규={len(new_docs)}")
 
     if not new_docs:
@@ -286,12 +296,20 @@ def run_doc_incremental() -> IncrementalResult:
     Im_perp, Z_perp = tri_gs.orthogonalize(Re_all, Im_all, Z_all)
     _upsert_chroma(TRICHEF_CFG["COL_DOC_PAGE"], all_ids, Re_all, Im_perp, Z_perp,
                    Path(PATHS["TRICHEF_DOC_EXTRACT"]))
-    logger.info("[doc_page] calibration: run scripts/recalibrate_query_null.py")
 
-    # 5. registry save — 실제로 페이지를 기여한 문서만 등록
+    # 5. registry save — 실제로 페이지를 기여한 문서만 등록 (lexical_rebuild 이전에 커밋)
     for p in ingested_docs:
         key = str(p.relative_to(raw_dir)).replace("\\", "/")
-        registry[key] = {"sha": _sha256(p), "abs": str(p)}
+        registry[key] = {"sha": sha_cache[key], "abs": str(p)}
     _save_registry(reg_path, registry)
+
+    # 6. lexical 채널 재빌드 (vocab / asf_token_sets / sparse) — 신규 항목 반영 필수
+    #    registry 를 먼저 저장해야 _resolve_doc_pdf_map 이 최신 상태를 읽는다.
+    try:
+        lexical_rebuild.rebuild_doc_lexical()
+    except Exception as e:
+        logger.exception(f"[doc_page] lexical rebuild 실패: {e}")
+
+    logger.info("[doc_page] calibration: run scripts/recalibrate_query_null.py")
 
     return IncrementalResult("document", len(ingested_docs), len(registry), len(registry))

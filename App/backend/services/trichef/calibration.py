@@ -63,10 +63,10 @@ def calibrate_domain(domain: str, Re: np.ndarray,
     i_idx = i_idx[mask]
     j_idx = j_idx[mask]
 
-    scores = tri_gs.hermitian_score(
+    scores = tri_gs.pair_hermitian_score(
         Re[i_idx], Im_perp[i_idx], Z_perp[i_idx],
         Re[j_idx], Im_perp[j_idx], Z_perp[j_idx],
-    ).diagonal()
+    )
     mu  = float(scores.mean())
     sig = float(scores.std())
 

@@ -30,3 +30,14 @@ def hermitian_score(q_Re: np.ndarray, q_Im: np.ndarray, q_Z: np.ndarray,
     B = q_Im @ d_Im.T
     C = q_Z  @ d_Z.T
     return np.sqrt(A**2 + (alpha * B)**2 + (beta * C)**2)
+
+
+def pair_hermitian_score(q_Re: np.ndarray, q_Im: np.ndarray, q_Z: np.ndarray,
+                         d_Re: np.ndarray, d_Im: np.ndarray, d_Z: np.ndarray,
+                         alpha: float = 0.4, beta: float = 0.2) -> np.ndarray:
+    """행-대응 쌍별 Hermitian 점수 (N,). `hermitian_score(...).diagonal()` 동치이지만
+    N×N 임시행렬 대신 행별 내적만 계산한다 (calibration 등 대용량 쌍 처리용)."""
+    A = np.einsum("ij,ij->i", q_Re, d_Re)
+    B = np.einsum("ij,ij->i", q_Im, d_Im)
+    C = np.einsum("ij,ij->i", q_Z,  d_Z)
+    return np.sqrt(A**2 + (alpha * B)**2 + (beta * C)**2)
