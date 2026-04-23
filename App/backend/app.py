@@ -14,8 +14,8 @@ from routes.trichef_admin import bp_admin as trichef_admin_bp
 def create_app() -> Flask:
     app = Flask(__name__)
     # 개발(localhost:3000) + 패키징 앱(file://) 모두 허용
-    CORS(app, resources={r"/api/*": {"origins": ["http://localhost:3000", "http://localhost:5173", "null"]}},
-         supports_credentials=True)
+    CORS(app, resources={r"/api/*": {"origins": "*"}},
+         supports_credentials=False)
 
     init_db()
 

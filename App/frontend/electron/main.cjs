@@ -61,7 +61,16 @@ async function startBackend() {
 }
 
 function _startPythonBackend() {
-  // 백엔드 소스 경로 (패키징 여부에 관계없이 소스 직접 실행)
+  // 로그 파일 경로 (C:\Honey\DB_insight\backend.log)
+  const logDir  = 'C:\\Honey\\DB_insight'
+  const logPath = path.join(logDir, 'backend.log')
+  let logStream
+  try {
+    fs.mkdirSync(logDir, { recursive: true })
+    logStream = fs.openSync(logPath, 'w')
+  } catch (_) { logStream = 'ignore' }
+
+  // 백엔드 소스 경로 후보
   const candidates = [
     path.resolve(__dirname, '..', '..', 'backend'),          // 개발 모드
     'C:\\Honey\\DB_insight\\App\\backend',                   // 배포 고정 경로
@@ -71,23 +80,48 @@ function _startPythonBackend() {
     try { return fs.existsSync(path.join(d, 'app.py')) } catch { return false }
   }) || candidates[1]
 
-  const pythonCandidates = ['python', 'python3', 'py']
+  // Python 실행 파일 후보 (절대경로 우선 → PATH fallback)
+  const pythonCandidates = [
+    path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python', 'Python312', 'python.exe'),
+    path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python', 'Python311', 'python.exe'),
+    path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Python', 'Python310', 'python.exe'),
+    path.join(process.env.USERPROFILE  || '', 'anaconda3', 'python.exe'),
+    path.join(process.env.USERPROFILE  || '', 'miniconda3', 'python.exe'),
+    path.join(process.env.USERPROFILE  || '', 'AppData', 'Local', 'anaconda3', 'python.exe'),
+    'python',
+    'python3',
+    'py',
+  ]
+
+  // 로그 헤더
+  const header = `[DB_insight backend log] ${new Date().toISOString()}\ncwd: ${cwd}\nlogPath: ${logPath}\n\n`
+  try { if (typeof logStream === 'number') fs.writeSync(logStream, header) } catch (_) {}
+
   let started = false
   for (const py of pythonCandidates) {
+    // 절대경로인 경우 파일 존재 여부 먼저 확인
+    if (path.isAbsolute(py) && !fs.existsSync(py)) continue
     try {
       backendProcess = spawn(py, ['app.py'], {
         cwd,
-        stdio: 'ignore',
+        stdio: ['ignore', logStream, logStream],
         detached: false,
-        shell: true,
+        shell: true,              // PATH 기반 해석을 위해 shell 사용
+        env: { ...process.env },  // 현재 환경변수 전달
       })
-      backendProcess.on('error', () => {})
+      backendProcess.on('error', (err) => {
+        try { if (typeof logStream === 'number') fs.writeSync(logStream, `\n[spawn error] ${err.message}\n`) } catch (_) {}
+      })
       started = true
-      console.log(`Backend started via: ${py} app.py (cwd: ${cwd})`)
+      console.log(`Backend started via: ${py} app.py (cwd: ${cwd}) log: ${logPath}`)
       break
     } catch (_) {}
   }
-  if (!started) console.error('Python backend could not be started')
+  if (!started) {
+    const msg = `Python backend could not be started. Checked:\n${pythonCandidates.join('\n')}`
+    console.error(msg)
+    try { if (typeof logStream === 'number') fs.writeSync(logStream, msg) } catch (_) {}
+  }
 }
 
 function killBackend() {
@@ -248,6 +282,20 @@ ipcMain.on('window-close', () => BrowserWindow.getFocusedWindow()?.close())
 // ---------------------------------------------------------------------------
 
 app.whenReady().then(async () => {
+  // ── 진단 로그 (항상 기록, C:\Honey\DB_insight\startup.log) ──
+  try {
+    const diagDir  = 'C:\\Honey\\DB_insight'
+    const diagPath = require('path').join(diagDir, 'startup.log')
+    require('fs').mkdirSync(diagDir, { recursive: true })
+    require('fs').writeFileSync(diagPath,
+      `isPackaged=${app.isPackaged} isDev=${isDev}\n` +
+      `__dirname=${__dirname}\n` +
+      `resourcesPath=${process.resourcesPath}\n` +
+      `argv=${process.argv.join(' ')}\n` +
+      `time=${new Date().toISOString()}\n`, 'utf8')
+  } catch (_) {}
+  // ──────────────────────────────────────────────────────────
+
   createSplash()          // app.whenReady() 직후 즉시 표시
   await startBackend()    // 포트 정리 후 백엔드 시작 (await로 포트 해제 대기)
   await Promise.all([
