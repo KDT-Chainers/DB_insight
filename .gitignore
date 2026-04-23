@@ -150,3 +150,5 @@ App/admin_ui/.venv-admin/
 
 # pip 실수 산물 (e.g. `pip install … =1.0`)
 App/backend/=*
+
+merge

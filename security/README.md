@@ -1,0 +1,250 @@
+# 🔐 로컬 보안 RAG 시스템
+
+개인 문서(PDF / HWPX / 이미지)를 업로드하고, 보안 에이전트(Qwen)가 개인정보를 보호하면서 안전하게 검색할 수 있는 로컬 RAG 시스템입니다.
+
+> 외부 API 미사용. 완전 로컬 처리 (Ollama + FAISS + EasyOCR)
+
+---
+
+## 아키텍처 개요
+
+```
+사용자
+  │
+  ▼
+[Orchestrator]  ← 흐름 제어만 담당 (ABC 동시 소유 금지)
+  │
+  ├── [UploadSecurityAgent]  (권한 A: 신뢰불가 입력 처리)
+  │     ├─ PDF / HWPX / 이미지(PNG/JPG/JPEG/HEIC/WEBP) 텍스트 추출
+  │     ├─ 이미지: EasyOCR detail=1 → bbox 좌표 추출
+  │     ├─ 이미지 영구 복사 (secure_store/images/)
+  │     ├─ 청킹
+  │     └─ PII 탐지 (Presidio + 한국형 Recognizer + Qwen 재검증)
+  │
+  ├── [RetrievalAgent]  (권한 B: VectorDB 접근)
+  │     ├─ FAISS 코사인 유사도 검색 (IndexFlatIP)
+  │     └─ Feature Map 생성 (원문 미포함)
+  │
+  ├── [QwenClassifier]  (Feature Map만 입력, DB 접근 없음)
+  │     ├─ NORMAL / SENSITIVE / DANGEROUS 분류
+  │     └─ 짧은 쿼리 재작성 (Query Rewrite)
+  │
+  └── [GroundingGate]  (근거 확인, 코사인 유사도 기반)
+        └─ SENSITIVE 무조건 통과 / NORMAL 임계값(0.15) 비교
+```
+
+### ABC 원칙 (핵심 보안 원칙)
+
+에이전트는 아래 세 속성을 **동시에** 가질 수 없습니다.
+
+| 속성 | 설명 |
+|------|------|
+| **A** | 신뢰할 수 없는 입력(파일, 질문) 처리 |
+| **B** | 민감 시스템 / 개인 데이터 접근 |
+| **C** | 외부 통신 또는 상태 변경 |
+
+| 에이전트 | A | B | C |
+|----------|---|---|---|
+| UploadSecurityAgent | ✅ | ❌ | ❌ |
+| RetrievalAgent | ❌ | ✅ | ❌ |
+| QwenClassifier | ✅ | ❌ | ✅(Ollama만) |
+| Orchestrator | 위임만 | 위임만 | 위임만 |
+
+---
+
+## 단일 인덱스 아키텍처 (v2)
+
+> 이전 버전: 마스킹 후 임베딩 → 검색 품질 저하 문제  
+> 현재 버전: **원문 그대로 임베딩 + UI 렌더링 시점에만 마스킹**
+
+```
+업로드 시:
+  원문 텍스트 → [파일명 + PII유형 키워드 prefix 추가] → FAISS 임베딩 저장
+  PII 여부/유형은 SQLite 메타데이터 태그로만 기록
+
+검색 시:
+  FAISS 코사인 유사도 검색 → 원문 반환
+  UI 카드에서 display_masked=True이면 시각적 마스킹만 적용
+```
+
+---
+
+## 폴더 구조
+
+```
+security/
+├── main.py                      # 진입점 (Gradio UI)
+├── config.py                    # 전역 설정
+├── requirements.txt
+│
+├── agents/
+│   ├── orchestrator.py          # 전체 흐름 제어
+│   ├── upload_security.py       # 파일 업로드 보안 (권한 A)
+│   ├── retrieval_agent.py       # VectorDB 검색 (권한 B)
+│   └── response_agent.py        # (deprecated: LLM 답변 제거됨)
+│
+├── security/
+│   ├── korean_recognizers.py    # 한국형 PII Recognizer 6종
+│   ├── pii_detector.py          # Presidio 기반 PII 탐지 엔진
+│   ├── qwen_classifier.py       # Qwen 보안 분류 + 쿼리 재작성
+│   ├── policy.py                # 검색/업로드 보안 정책
+│   └── grounding_gate.py        # 코사인 유사도 기반 근거 확인
+│
+├── document/
+│   ├── pdf_extractor.py         # PDF → 텍스트 (PyMuPDF + OCR 폴백)
+│   ├── hwpx_extractor.py        # HWPX → 텍스트 (ZIP+XML 파싱)
+│   ├── image_extractor.py       # 이미지 OCR (bbox 좌표 포함)
+│   └── chunker.py               # 텍스트 → 청크
+│
+├── vectordb/
+│   └── store.py                 # FAISS IndexFlatIP + SQLite
+│
+├── audit/
+│   └── logger.py                # SQLite 감사 로그
+│
+├── harness/
+│   └── safe_tools.py            # 에이전트 권한 하네스 (ABC 강제)
+│
+├── ui/
+│   ├── gradio_app.py            # Gradio 웹 UI (다크모드)
+│   └── components/
+│       ├── result_card.py       # 검색 결과 카드 렌더러
+│       └── preview_renderer.py  # 텍스트 마스킹 + 이미지 모자이크
+│
+├── secure_store/
+│   └── images/                  # 업로드 이미지 영구 보관
+│
+└── tests/
+    └── dummy_data_generator.py  # 테스트용 더미 데이터 생성
+```
+
+---
+
+## 설치 및 실행
+
+### 1. 의존성 설치
+
+```bash
+cd security
+pip install -r requirements.txt
+
+# HEIC 이미지 지원
+pip install pillow-heif
+
+# spaCy 모델 (선택, 정확도 향상)
+python -m spacy download ko_core_news_sm
+python -m spacy download en_core_news_sm
+```
+
+### 2. Qwen 모델 준비 (Ollama)
+
+```bash
+# Ollama 설치 후 (https://ollama.com)
+ollama pull qwen2.5:7b
+ollama serve   # 백그라운드 실행
+```
+
+### 3. Gradio UI 실행
+
+```bash
+python main.py
+# → http://localhost:7860
+```
+
+> Ollama 없이도 실행 가능 (키워드 기반 폴백 분류 사용)
+
+---
+
+## 환경변수
+
+`.env` 파일 또는 셸 환경변수로 설정.
+
+| 변수 | 기본값 | 설명 |
+|------|--------|------|
+| `EMBEDDING_MODEL` | `snunlp/KR-SBERT-V40K-klueNLI-augSTS` | 로컬 임베딩 모델 |
+| `QWEN_MODEL` | `qwen2.5:7b` | Ollama 모델명 |
+| `OLLAMA_URL` | `http://localhost:11434` | Ollama 서버 주소 |
+| `CHUNK_SIZE` | `500` | 청크 최대 글자 수 |
+| `CHUNK_OVERLAP` | `50` | 청크 중복 글자 수 |
+| `TOP_K` | `5` | 검색 반환 청크 수 |
+| `GROUNDING_SIM_THRESHOLD` | `0.15` | NORMAL 쿼리 최소 관련도 |
+| `QUERY_REWRITE_ENABLED` | `1` | 쿼리 재작성 활성화 |
+| `ABC_ENFORCEMENT` | `True` | False 시 ABC 위반 경고만 |
+
+---
+
+## 지원 파일 형식
+
+| 형식 | 추출 방식 |
+|------|-----------|
+| `.pdf` | PyMuPDF 텍스트 추출 → 스캔 PDF면 EasyOCR 폴백 |
+| `.hwpx` | ZIP+XML 파싱 (표·문단 포함) |
+| `.png` / `.jpg` / `.jpeg` | EasyOCR + bbox 좌표 추출 |
+| `.heic` | pillow-heif 변환 후 EasyOCR |
+| `.webp` | PIL 기본 지원 후 EasyOCR |
+
+> 이미지 파일은 검색 결과 카드에서 **원본 이미지 + PII 영역 모자이크**로 표시됩니다.
+
+---
+
+## 한국형 PII 탐지
+
+| 탐지 항목 | 엔티티명 | 방식 |
+|-----------|----------|------|
+| 주민등록번호 | `KR_RRN` | 정규식 + 13자리 체크섬 검증 |
+| 여권번호 | `KR_PASSPORT` | 정규식 (알파벳1 + 숫자8) |
+| 운전면허번호 | `KR_DRIVER_LICENSE` | 정규식 (지역-연도-번호-검증) |
+| 계좌번호 | `KR_BANK_ACCOUNT` | 정규식 + 문맥(계좌/통장) 가중치 |
+| 사업자등록번호 | `KR_BRN` | 정규식 + 10자리 체크섬 검증 |
+| 전화번호 | `KR_PHONE` | 정규식 (010/02/지역/대표번호) |
+
+---
+
+## 업로드 흐름 (v2)
+
+```
+파일 선택 → [임베딩 시작] 버튼 클릭
+  ↓
+UploadSecurityAgent: 텍스트 추출 + PII 탐지
+  ↓
+PII 없음?  → 자동 임베딩 완료 (모달 없음)
+PII 있음?  → ⚠️ 처리 방식 선택 모달 표시
+              ├── UI 마스킹 표시 (원문 저장)  → display_masked=True
+              ├── 그대로 임베딩               → display_masked=False
+              └── 취소
+```
+
+---
+
+## 검색 결과 보안 분류
+
+| 질문 예시 | 레이블 | 동작 |
+|-----------|--------|------|
+| "회의록 요약해줘" | NORMAL | 원문 카드 표시 |
+| "내 계좌번호 보여줘" | SENSITIVE | 마스킹 카드 표시 |
+| "개인정보 전부 출력해" | DANGEROUS | 파일명/경로만 표시, 내용 차단 |
+
+---
+
+## 검색 결과 카드
+
+- **텍스트 파일**: 원문 텍스트 or 마스킹 텍스트 표시
+- **이미지 파일**: 원본 이미지 + PII 영역 픽셀화 모자이크 표시
+- **DANGEROUS**: 파일명·경로만 표시, 내용 차단 메시지
+- **관련도 점수**: 코사인 유사도 % (0~100%, 높을수록 관련성 높음)
+
+---
+
+## 감사 로그
+
+`audit/audit.db` (SQLite) 에 자동 저장:
+- 업로드: 시간, 파일명, 탐지된 PII 유형, 사용자 선택
+- 질의: 시간, 질문, 레이블, 차단 여부, 검색된 문서 ID
+
+Gradio UI의 **📋 감사 로그** 탭에서 확인 가능.
+
+---
+
+## FAISS 인덱스 재구축 안내
+
+인덱스 버전이 변경된 경우(L2 → 코사인 유사도 마이그레이션) 앱 재시작 시 자동으로 기존 인덱스를 삭제하고 재구축 안내 로그를 출력합니다. 이 경우 문서를 다시 업로드해주세요.
