@@ -1,78 +1,121 @@
-﻿# audio-embedding-agent.md
+# audio-embedding-agent.md
 
 ## 역할
 
-당신은 음성 파일의 처리 및 임베딩을 담당하는 에이전트이다.  
-음성 데이터를 텍스트로 변환하여 검색 가능한 형태로 만드는 것이 목표이다.
+당신은 음성 파일의 임베딩을 담당하는 에이전트이다.
+STT(Speech-to-Text)로 음성을 텍스트로 변환하고
+ko-sroberta 768d 벡터로 임베딩하여 ChromaDB에 저장한다.
 
 ---
 
-## 책임
+## 지원 확장자
 
-- STT 수행 (음성 → 텍스트)
-- 텍스트 정제
-- 시간 기반 chunk 생성
-- 임베딩 수행
-- extracted_DB 및 embedded_DB 생성
+`.mp3`, `.wav`, `.m4a`, `.aac`, `.flac`, `.ogg`
 
 ---
 
-## 처리 흐름
+## 기술 스택 / 모델
 
-음성 처리는 반드시 아래 순서를 따른다.
-
-1. raw_DB에서 파일 정보 확인
-2. STT 수행 (음성 → 텍스트)
-3. extracted_DB 생성
-4. 시간 기반 chunk 분할
-5. 임베딩 수행
-6. embedded_DB 저장
+| 역할 | 모델 |
+|------|------|
+| STT | `faster-whisper medium` 권장 (한국어) — 미구현, TODO |
+| 텍스트 임베딩 | `jhgan/ko-sroberta-multitask` (768d) |
+| ChromaDB 컬렉션 | `files_audio` (`embedded_DB/Rec/`) |
 
 ---
 
-## 텍스트 생성 규칙
+## 파이프라인
 
-- 반드시 STT를 수행해야 한다
-- 음성 데이터는 텍스트로 변환된 후 처리된다
-- 텍스트 손실을 최소화해야 한다
+```python
+embed(file_path: str) -> dict
+```
 
----
-
-## chunking 규칙
-
-- chunk는 시간 기준으로 나눈다 (예: N초 단위)
-- 각 chunk는 의미 단위가 되도록 구성한다
-- chunk 기준은 IndexingSpec.md를 따른다
-
----
-
-## 임베딩 규칙
-
-- 텍스트 기반으로만 임베딩한다
-- extracted_DB 생성 후 임베딩 수행한다
-- 동일 기준으로 일관되게 임베딩한다
+1. **STT 캐시 확인** — `extracted_DB/{name}_{hash}_stt.txt` 존재 시 재사용
+2. **STT 수행** — `_transcribe(file_path)` (TODO: 구현 필요)
+3. **청킹** — `base.make_chunks(text)`
+4. **임베딩** — `base.encode_texts(chunks)` → 768d 벡터
+5. **기존 청크 삭제** — `delete_file(file_path)`
+6. **ChromaDB 저장** — `upsert_chunks(ids, embeddings, metadatas)`
 
 ---
 
-## 데이터 규칙
+## STT 구현 옵션 (TODO)
 
-- file_id는 raw_DB와 동일하게 유지한다
-- chunk_id는 file_id를 포함하여 생성한다
-- 시간 정보는 metadata에 포함한다
-- 데이터 구조는 DataContract.md를 따른다
+| 방식 | 설명 |
+|------|------|
+| A) faster-whisper (권장) | GPU 추천, `WhisperModel("medium", device="cuda", compute_type="float16")` |
+| B) openai-whisper | CPU 호환, `whisper.load_model("base")` |
+| C) 외부 API | OpenAI / Clova 등 |
+
+현재 `_transcribe`는 `NotImplementedError` → `{"status": "skipped"}` 반환.
+
+---
+
+## 캐시 경로
+
+| 파일 | 위치 |
+|------|------|
+| `{name}_{hash}_stt.txt` | `extracted_DB/` (기본 경로, 타입 미분리) |
+
+`hash = md5(file_path).hexdigest()[:12]`
+
+STT 결과를 캐싱하여 재인덱싱 시 STT 재실행 방지.
+
+---
+
+## 반환값
+
+```python
+{"status": "done",    "chunks": int}
+{"status": "skipped", "reason": str}   # 미구현 또는 텍스트 없음
+{"status": "error",   "reason": str}   # 예외 발생
+```
+
+---
+
+## ChromaDB metadata 필드
+
+```
+file_path   : str   — 파일 절대 경로
+file_name   : str   — 파일명 (확장자 포함)
+file_type   : "audio"
+chunk_index : int   — 0-based
+chunk_text  : str   — 최대 300자
+```
+
+---
+
+## chunk_id 형식
+
+```
+{md5(file_path)[:8]}_aud_{index}
+예: a1b2c3d4_aud_0
+```
+
+---
+
+## 쿼리 인코딩 (검색 시)
+
+```python
+encode_query_ko(query)
+# 내부: ko-sroberta → 768d
+```
+
+doc/image(MiniLM 384d)와 모델이 다르므로 혼용 금지.
 
 ---
 
 ## 금지 사항
 
-- 음성 데이터를 직접 임베딩 금지
-- STT 생략 금지
-- raw → embedded 직접 처리 금지
-- chunk 기준 임의 변경 금지
+- 음성 데이터를 직접 임베딩 금지 (반드시 STT → 텍스트 → 임베딩)
+- `file_id` 기반 구현 금지 (→ `file_path` 사용)
+- 임베딩 모델 임의 변경 금지 (ko-sroberta 768d 고정)
+- doc/image용 MiniLM과 혼용 금지
+- metadata 임의 필드 추가 금지
 
 ---
 
 ## 목표
 
-음성 데이터를 정확한 텍스트로 변환하고,  
-시간 기반 의미를 유지한 임베딩 데이터로 생성한다.
+음성 파일을 텍스트로 정확히 전사하고
+한국어 특화 768d 벡터로 변환하여 ChromaDB에 저장한다.

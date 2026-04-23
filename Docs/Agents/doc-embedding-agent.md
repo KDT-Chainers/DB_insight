@@ -1,78 +1,108 @@
-﻿# doc-embedding-agent.md
+# doc-embedding-agent.md
 
 ## 역할
 
-당신은 문서 파일(PDF, DOCX, TXT 등)의 처리 및 임베딩을 담당하는 에이전트이다.  
-문서를 검색 가능한 형태로 변환하는 것이 목표이다.
+당신은 문서 파일(PDF, DOCX, TXT 등)의 텍스트 추출과 임베딩을 담당하는 에이전트이다.
+문서를 의미 단위 청크로 분해하고 MiniLM 384d 벡터로 변환하여 ChromaDB에 저장한다.
 
 ---
 
-## 책임
+## 지원 확장자
 
-- 문서 파일 텍스트 추출
-- 문서 구조 파싱 (페이지, 문단 등)
-- chunk 생성
-- 임베딩 수행
-- extracted_DB 및 embedded_DB 생성
+`.pdf`, `.docx`, `.txt`, `.hwp`, `.pptx`, `.xlsx`
 
 ---
 
-## 처리 흐름
+## 기술 스택 / 모델
 
-문서 처리는 반드시 아래 순서를 따른다.
-
-1. raw_DB에서 파일 정보 확인
-2. 텍스트 추출 수행
-3. extracted_DB 생성
-4. chunk 분할 수행
-5. 임베딩 수행
-6. embedded_DB 저장
+| 역할 | 모델 |
+|------|------|
+| 텍스트 임베딩 | `paraphrase-multilingual-MiniLM-L12-v2` (384d) |
+| ChromaDB 컬렉션 | `files_doc` (`embedded_DB/Doc/`) |
 
 ---
 
-## 텍스트 추출 규칙
+## 파이프라인
 
-- 문서에서 가능한 모든 텍스트를 추출한다
-- 페이지 단위 정보는 유지한다
-- 텍스트 손실이 발생하지 않도록 한다
+```python
+embed(file_path: str) -> dict
+```
 
----
-
-## chunking 규칙
-
-- chunk는 의미 단위로 나눈다
-- 지나치게 긴 chunk는 분할한다
-- 동일 기준으로 일관되게 분할한다
-- chunk 기준은 IndexingSpec.md를 따른다
+1. **텍스트 추출** — 확장자별 파서 호출 (`_extract_text`)
+2. **청킹** — `base.make_chunks(text)` (IndexingSpec.md 기준)
+3. **임베딩** — `base.encode_texts(chunks)` → 384d 벡터
+4. **기존 청크 삭제** — `delete_file(file_path)` (재인덱싱 지원)
+5. **ChromaDB 저장** — `upsert_chunks(ids, embeddings, metadatas)`
 
 ---
 
-## 임베딩 규칙
+## 텍스트 추출 (확장자별)
 
-- 반드시 텍스트 기반으로 임베딩한다
-- extracted_DB 없이 임베딩 수행 금지
-- 동일 chunk에 대해 동일 임베딩 기준을 유지한다
+| 확장자 | 상태 | 구현 방법 |
+|--------|------|----------|
+| `.txt` | ✅ 구현됨 | 직접 UTF-8 읽기 |
+| `.pdf` | ⚠️ TODO | `pdfplumber` 또는 `PyMuPDF` |
+| `.docx` | ⚠️ TODO | `python-docx` |
+| `.hwp` | ⚠️ TODO | `olefile` / `pyhwp` |
+| `.pptx` | ⚠️ TODO | `python-pptx` |
+| `.xlsx` | ⚠️ TODO | `openpyxl` |
+
+미구현 확장자는 `NotImplementedError` → `{"status": "skipped"}` 반환.
 
 ---
 
-## 데이터 규칙
+## 반환값
 
-- file_id는 raw_DB와 동일하게 유지한다
-- chunk_id는 file_id를 포함하여 생성한다
-- 모든 데이터는 DataContract.md 구조를 따른다
+```python
+{"status": "done",    "chunks": int}
+{"status": "skipped", "reason": str}   # 미구현 또는 텍스트 없음
+{"status": "error",   "reason": str}   # 예외 발생
+```
+
+---
+
+## ChromaDB metadata 필드
+
+```
+file_path   : str   — 파일 절대 경로
+file_name   : str   — 파일명 (확장자 포함)
+file_type   : "doc"
+chunk_index : int   — 0-based
+chunk_text  : str   — 최대 300자
+```
+
+---
+
+## chunk_id 형식
+
+```
+{md5(file_path)[:8]}_doc_{index}
+예: a1b2c3d4_doc_0
+```
+
+---
+
+## 쿼리 인코딩 (검색 시)
+
+```python
+encode_query(query)
+# 내부: MiniLM → 384d
+```
+
+embedder는 임베딩만 담당하며, 검색은 `search()` (vector_store.py)가 처리.
 
 ---
 
 ## 금지 사항
 
-- raw → embedded 바로 처리 금지
-- chunk 기준 임의 변경 금지
-- 텍스트 추출 생략 금지
-- 문서 구조 무시 금지
+- 텍스트 추출 없이 임베딩 금지
+- `file_id` 기반 구현 금지 (→ `file_path` 사용)
+- 임베딩 모델 임의 변경 금지 (MiniLM 384d 고정)
+- metadata 임의 필드 추가 금지
 
 ---
 
 ## 목표
 
-문서를 의미 단위로 정확하게 분해하고,  
-검색 가능한 임베딩 데이터로 변환한다.
+다양한 문서 형식의 텍스트를 정확하게 추출하고
+의미 단위 청크로 분해하여 검색 가능한 384d 벡터로 저장한다.
