@@ -325,9 +325,9 @@ DB_insight/
 │   │   └─ qwen_expand.py                 ← 쿼리 확장
 │   └─ routes/trichef.py                  ← Flask REST API
 │
-├─ MM_TriCHEF/
+├─ MR_TriCHEF/
 │   ├─ app.py                             ← Gradio Admin UI (이 파일)
-│   └─ MM_TriCHEF.md                      ← 이 문서
+│   └─ MR_TriCHEF.md                      ← 이 문서
 │
 └─ Data/
     ├─ raw_DB/
@@ -384,8 +384,8 @@ pip install opencv-python pillow scipy
 ## 13. Admin UI 실행 방법
 
 ```bash
-# 1. MM_TriCHEF 폴더로 이동
-cd DB_insight/MM_TriCHEF
+# 1. MR_TriCHEF 폴더로 이동
+cd DB_insight/MR_TriCHEF
 
 # 2. 실행
 python app.py

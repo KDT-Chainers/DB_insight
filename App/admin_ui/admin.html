@@ -50,6 +50,15 @@
   .badge{font-size:10px;padding:2px 8px;border-radius:10px;border:1px solid var(--border);background:#0b1220;color:var(--muted)}
   .badge.domain-image{background:#065f46;color:#d1fae5;border-color:#10b981}
   .badge.domain-doc_page{background:#5b21b6;color:#ede9fe;border-color:#8b5cf6}
+  .badge.domain-movie{background:#7c2d12;color:#ffedd5;border-color:#ea580c}
+  .badge.domain-music{background:#1e40af;color:#dbeafe;border-color:#3b82f6}
+  .av-player{padding:8px 12px;background:#0b1220;border-bottom:1px solid var(--border)}
+  .av-player audio, .av-player video{width:100%;display:block;outline:none}
+  .av-player video{max-height:220px;background:#000}
+  .segments{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+  .seg-btn{font-size:10px;padding:3px 8px;background:#0b1220;color:#cbd5e1;border:1px solid var(--border);border-radius:4px;cursor:pointer;font-family:Consolas,monospace}
+  .seg-btn:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .seg-text{font-size:11px;color:#94a3b8;margin-top:4px;padding:6px 8px;background:#0b1220;border-radius:4px;border:1px solid var(--border);max-height:80px;overflow:auto;white-space:pre-wrap;word-break:break-word}
   .excerpt{font-size:12px;color:#cbd5e1;background:#0b1220;padding:8px;border-radius:4px;max-height:120px;overflow:auto;white-space:pre-wrap;border:1px solid var(--border)}
   .excerpt mark{background:#fbbf24;color:#1f2937;padding:0 2px;border-radius:2px}
   .loading{text-align:center;padding:40px;color:var(--muted)}
@@ -76,9 +85,14 @@
   <div class="options">
     <label><input type="checkbox" id="d-doc_page" checked> doc_page (문서 페이지)</label>
     <label><input type="checkbox" id="d-image" checked> image (이미지)</label>
+    <label><input type="checkbox" id="d-movie"> movie (영상)</label>
+    <label><input type="checkbox" id="d-music"> music (음원)</label>
     <label>상위 N <input type="number" id="topn" value="30" min="5" max="2000" step="5"></label>
+    <label>세그먼트 <input type="number" id="topseg" value="5" min="1" max="20" step="1"></label>
     <label><input type="checkbox" id="use-lex" checked> Lexical 채널</label>
     <label><input type="checkbox" id="use-asf" checked> ASF 채널</label>
+    <label title="BGE-reranker-v2-m3 cross-encoder 로 상위 K 재순위. doc_page 에서 신뢰도-관련성 정합 개선."><input type="checkbox" id="use-rerank" checked> Reranker</label>
+    <label>rerank K <input type="number" id="rerank-k" value="50" min="5" max="200" step="5"></label>
   </div>
   <div id="stats"></div>
   <div id="output"></div>
@@ -101,14 +115,32 @@ modal.addEventListener('click', () => modal.classList.remove('show'));
 
 loadDomains();
 
+let AVAILABLE_DOMAINS = new Set();
+
 async function loadDomains(){
   try{
     const r = await fetch(`${API_BASE}/api/admin/domains`);
     const d = await r.json();
+    AVAILABLE_DOMAINS = new Set(Object.keys(d));
     const parts = Object.entries(d).map(([k,v]) =>
       `${k}: N=${v.count}, vocab=${v.vocab_size}, sparse=${v.has_sparse?'O':'X'}, asf=${v.has_asf?'O':'X'}`
     );
     document.getElementById('dom-info').textContent = '도메인 현황 | ' + parts.join(' | ');
+    // 미인덱싱 도메인은 체크박스 비활성화 + 라벨에 표기
+    for (const dom of ['doc_page','image','movie','music']){
+      const cb = document.getElementById(`d-${dom}`);
+      if (!cb) continue;
+      const label = cb.parentElement;
+      if (!AVAILABLE_DOMAINS.has(dom)){
+        cb.checked = false;
+        cb.disabled = true;
+        label.style.opacity = '0.4';
+        if (!label.dataset.markedMissing){
+          label.append(' (미인덱싱)');
+          label.dataset.markedMissing = '1';
+        }
+      }
+    }
   }catch(e){
     document.getElementById('dom-info').textContent = '⚠️ 백엔드 연결 실패: ' + e.message;
   }
@@ -120,11 +152,17 @@ async function runSearch(){
   const domains = [];
   if (document.getElementById('d-doc_page').checked) domains.push('doc_page');
   if (document.getElementById('d-image').checked) domains.push('image');
+  if (document.getElementById('d-movie').checked) domains.push('movie');
+  if (document.getElementById('d-music').checked) domains.push('music');
   if (!domains.length){ output.innerHTML = '<div class="error">도메인을 1개 이상 선택하세요.</div>'; return; }
 
   const topN = parseInt(document.getElementById('topn').value) || 30;
+  const topSeg = parseInt(document.getElementById('topseg').value) || 5;
   const useLex = document.getElementById('use-lex').checked;
   const useAsf = document.getElementById('use-asf').checked;
+  const useRerank = document.getElementById('use-rerank').checked;
+  const rerankK   = parseInt(document.getElementById('rerank-k').value) || 50;
+  const AV_DOMAINS = new Set(['movie','music']);
 
   btn.disabled = true;
   output.innerHTML = '<div class="loading">검색 중…</div>';
@@ -134,28 +172,60 @@ async function runSearch(){
   try{
     const results = [];
     const perDom = {};
+    const warnings = [];
     for (const dom of domains){
-      const r = await fetch(`${API_BASE}/api/admin/inspect`, {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({query:q, domain:dom, top_n:topN,
-                              use_lexical:useLex, use_asf:useAsf}),
-      });
-      if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
-      const data = await r.json();
-      perDom[dom] = {count:data.total, returned:data.returned, cal:data.calibration};
-      for (const row of data.rows){
-        row.domain = data.domain;
-        results.push(row);
+      if (AV_DOMAINS.has(dom)){
+        const r = await fetch(`${API_BASE}/api/admin/inspect_av`, {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({query:q, domain:dom, top_n:topN, top_segments:topSeg}),
+        });
+        if (!r.ok){
+          const body = await r.text();
+          warnings.push(`${dom}: ${body}`);
+          perDom[dom] = {count:0, returned:0, cal:{mu_null:0,sigma_null:0,abs_threshold:0}};
+          continue;
+        }
+        const data = await r.json();
+        perDom[dom] = {count:data.total, returned:data.returned, cal:data.calibration};
+        for (const f of data.files){
+          results.push({
+            kind:'av', domain:dom,
+            id: f.file_path, filename: f.file_name,
+            source_path: f.file_path,
+            dense: f.score, confidence: f.confidence,
+            z_score: f.z_score, rrf: 0,
+            segments: f.segments || [],
+          });
+        }
+      } else {
+        const r = await fetch(`${API_BASE}/api/admin/inspect`, {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({query:q, domain:dom, top_n:topN,
+                                use_lexical:useLex, use_asf:useAsf,
+                                use_rerank:useRerank, rerank_k:rerankK}),
+        });
+        if (!r.ok){
+          const body = await r.text();
+          warnings.push(`${dom}: ${body}`);
+          perDom[dom] = {count:0, returned:0, cal:{mu_null:0,sigma_null:0,abs_threshold:0}};
+          continue;
+        }
+        const data = await r.json();
+        perDom[dom] = {count:data.total, returned:data.returned, cal:data.calibration};
+        for (const row of data.rows){
+          row.domain = data.domain;
+          row.kind = 'text';
+          results.push(row);
+        }
       }
     }
-    // RRF fusion across domains? 아니, 도메인별 정렬 유지하되 합쳐서 rank 재계산
-    // 각 도메인 내부 순위는 유지. 표시는 도메인 쌍을 interleave 또는 그대로.
-    // 간단히: 도메인별로 rrf 내림차순 이미 정렬됨. merge 시 rrf 기준.
-    results.sort((a,b) => (b.rrf||0) - (a.rrf||0));
+    // 통합 정렬: confidence 우선, 동률이면 dense
+    results.sort((a,b) =>
+      (b.confidence||0) - (a.confidence||0) || (b.dense||0) - (a.dense||0));
     results.forEach((r,i) => r.global_rank = i+1);
 
     const elapsed = ((performance.now()-t0)/1000).toFixed(2);
-    renderStats(q, perDom, results.length, elapsed);
+    renderStats(q, perDom, results.length, elapsed, warnings);
     await renderResults(q, results);
   }catch(e){
     output.innerHTML = `<div class="error">검색 실패: ${e.message}</div>`;
@@ -164,7 +234,7 @@ async function runSearch(){
   }
 }
 
-function renderStats(query, perDom, totalShown, elapsed){
+function renderStats(query, perDom, totalShown, elapsed, warnings){
   const cards = Object.entries(perDom).map(([k,v]) =>
     `<div class="stat-card">
       <div class="lbl">${k}</div>
@@ -174,10 +244,16 @@ function renderStats(query, perDom, totalShown, elapsed){
       </div>
     </div>`
   ).join('');
+  const warnBlock = (warnings && warnings.length)
+    ? `<div style="margin-top:10px;padding:8px 12px;background:#7f1d1d;border:1px solid var(--warn);border-radius:4px;font-size:12px;color:#fecaca">
+         ⚠️ 일부 도메인 스킵됨: ${warnings.map(escapeHtml).join(' · ')}
+       </div>`
+    : '';
   statsDiv.innerHTML = `
     <div class="stats">
       <div><b>${escapeHtml(query)}</b> — ${totalShown}건 표시 (${elapsed}s)</div>
       <div class="stats-grid">${cards}</div>
+      ${warnBlock}
     </div>`;
 }
 
@@ -217,6 +293,7 @@ async function renderResults(query, items){
 }
 
 function card(it){
+  if (it.kind === 'av') return avCard(it);
   const isImage = it.domain === 'image';
   const hasPreview = it.domain === 'image' || it.domain === 'doc_page';
   const fileUrl = `${API_BASE}/api/admin/file?domain=${it.domain}&id=${encodeURIComponent(it.id)}`;
@@ -245,13 +322,76 @@ function card(it){
         <div class="metric"><span class="k">dense</span> <span class="v">${(it.dense??0).toFixed(3)}</span></div>
         <div class="metric"><span class="k">lexical</span> <span class="v">${(it.lexical??0).toFixed(3)}</span></div>
         <div class="metric"><span class="k">ASF</span> <span class="v">${(it.asf??0).toFixed(3)}</span></div>
-        <div class="metric"><span class="k">RRF</span> <span class="v">${(it.rrf??0).toFixed(4)}</span></div>
+        <div class="metric"><span class="k">rerank</span> <span class="v">${it.rerank!=null ? it.rerank.toFixed(2) : '—'}</span></div>
         <div class="metric"><span class="k">z</span> <span class="v">${(it.z_score??0).toFixed(2)}</span></div>
       </div>
       <div class="excerpt" data-load-text data-id="${escapeHtml(it.id)}" data-domain="${it.domain}">로딩 중…</div>
     </div>
   </div>`;
 }
+
+function avCard(it){
+  const isVideo = it.domain === 'movie';
+  const url = `${API_BASE}/api/admin/file?domain=${it.domain}&id=${encodeURIComponent(it.id)}`;
+  const player = isVideo
+    ? `<video src="${url}" controls preload="metadata"></video>`
+    : `<audio src="${url}" controls preload="metadata"></audio>`;
+  const conf = it.confidence ?? 0;
+  const confCls = conf >= 0.8 ? 'hi' : conf >= 0.3 ? '' : 'lo';
+  const segs = (it.segments || []).slice(0, 20).map(s => {
+    const t0 = s.start_sec ?? s.start ?? 0;
+    const t1 = s.end_sec ?? s.end ?? 0;
+    const sc = s.score ?? 0;
+    const tip = (s.text || s.stt_text || s.caption || '').slice(0, 300);
+    return `<button class="seg-btn" data-t="${t0}"
+              title="${escapeHtml(tip)}">
+              ${fmtTime(t0)}-${fmtTime(t1)} · s=${sc.toFixed(3)}
+            </button>`;
+  }).join('');
+  const topText = (it.segments && it.segments[0] &&
+                   (it.segments[0].text || it.segments[0].stt_text || it.segments[0].caption)) || '';
+  const topExcerpt = topText
+    ? `<div class="seg-text">${escapeHtml(topText.slice(0, 400))}</div>`
+    : '';
+  return `<div class="card av-card">
+    <div class="rank">#${it.global_rank}</div>
+    <div class="av-player">${player}</div>
+    <div class="body">
+      <div class="badges">
+        <span class="badge domain-${it.domain}">${it.domain}</span>
+        <span class="badge">세그 ${it.segments ? it.segments.length : 0}</span>
+      </div>
+      <div class="title">${escapeHtml(it.filename || it.id)}</div>
+      <div class="path">${escapeHtml(it.source_path || it.id)}</div>
+      <div class="metrics">
+        <div class="metric"><span class="k">신뢰도</span> <span class="v ${confCls}">${(conf*100).toFixed(1)}%</span></div>
+        <div class="metric"><span class="k">score</span> <span class="v">${(it.dense??0).toFixed(3)}</span></div>
+        <div class="metric"><span class="k">z</span> <span class="v">${(it.z_score??0).toFixed(2)}</span></div>
+        <div class="metric"><span class="k">rank</span> <span class="v">#${it.global_rank}</span></div>
+      </div>
+      <div class="segments">${segs}</div>
+      ${topExcerpt}
+    </div>
+  </div>`;
+}
+
+function fmtTime(sec){
+  const s = Math.max(0, parseFloat(sec) || 0);
+  const m = Math.floor(s/60), r = Math.floor(s%60);
+  return `${String(m).padStart(2,'0')}:${String(r).padStart(2,'0')}`;
+}
+
+// 세그먼트 버튼 클릭 → 해당 카드의 오디오/비디오 플레이어 seek
+document.addEventListener('click', ev => {
+  const btn = ev.target.closest('.seg-btn');
+  if (!btn) return;
+  const card = btn.closest('.card');
+  if (!card) return;
+  const p = card.querySelector('audio, video');
+  if (!p) return;
+  const t = parseFloat(btn.dataset.t) || 0;
+  try { p.currentTime = t; p.play(); } catch(_){}
+});
 
 function highlight(text, matches){
   if (!matches || !matches.length) return escapeHtml(text);

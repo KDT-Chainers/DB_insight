@@ -39,6 +39,13 @@ def _resolve_file_path(domain: str, doc_id: str) -> Path | None:
     if domain == "doc_page":
         p = Path(PATHS["TRICHEF_DOC_EXTRACT"]) / doc_id
         return p if p.exists() else None
+    # [W6-AV] Movie/Music — raw_DB/{Movie,Rec} 직접 서빙
+    if domain == "music":
+        p = Path(PATHS["RAW_DB"]) / "Rec" / doc_id
+        return p if p.exists() else None
+    if domain == "movie":
+        p = Path(PATHS["RAW_DB"]) / "Movie" / doc_id
+        return p if p.exists() else None
     return None
 
 
@@ -127,6 +134,12 @@ def inspect():
     top_n = int(body.get("top_n", 200))
     use_lexical = bool(body.get("use_lexical", True))
     use_asf = bool(body.get("use_asf", True))
+    # [W5-2 / W7-doc-quality] reranker 통합 — BGE-reranker-v2-m3 로 top_n 재순위.
+    # [2026-04-24] 기본 ON — doc_page 신뢰도-적합성 일치 개선.
+    # 기본값: doc_page True, image False (image 캡션 기반 rerank 는 효과 낮음).
+    default_rerank = (domain == "doc_page")
+    use_rerank = bool(body.get("use_rerank", default_rerank))
+    rerank_k   = int(body.get("rerank_k", min(top_n, 50)))
 
     if not query:
         return jsonify({"error": "query 필수"}), 400
@@ -147,11 +160,9 @@ def inspect():
         d["Re"], d["Im"], d["Z"],
     )[0]
 
-    # [개선 1] image 도메인 + 한국어 쿼리면 lex/asf 스킵 (캡션이 영어라 매칭 불가 → 노이즈만 유발).
-    has_kr = any("\uac00" <= c <= "\ud7a3" for c in query)
-    if domain == "image" and has_kr:
-        use_lexical = False
-        use_asf = False
+    # [W4-4] Wave3 에서 Qwen 한국어 캡션으로 전환됨 — 과거의 "image+KR → lex/asf 스킵"
+    # 휴리스틱은 더 이상 유효하지 않다. 한국어 캡션이라 BGE-M3 sparse / ASF 가 정상 매칭된다.
+    # (제거: has_kr 판정 및 강제 비활성화)
 
     lex = None
     if use_lexical and d.get("sparse") is not None:
@@ -203,11 +214,48 @@ def inspect():
     if domain == "image":
         abs_thr = max(abs_thr, mu + 3.0 * sig)
 
+    # [W5-2] 선택적 cross-encoder 재순위: fused 상위 rerank_k 에만 적용
+    rerank_scores: dict[int, float] = {}
+    if use_rerank:
+        try:
+            import sys
+            from pathlib import Path as _P
+            _ROOT = _P(__file__).resolve().parents[2].parent
+            if str(_ROOT) not in sys.path:
+                sys.path.insert(0, str(_ROOT))
+            from shared.reranker import get_reranker
+            rr = get_reranker()
+            cand_idx = list(order[:min(rerank_k, len(order))])
+            passages = []
+            for i in cand_idx:
+                did = d["ids"][int(i)]
+                if domain == "doc_page":
+                    txt = _doc_text(did)[:800]
+                else:
+                    txt = _image_caption(did)[:800]
+                passages.append(txt or did)
+            rr_s = rr.score(query, passages)
+            for i, s in zip(cand_idx, rr_s):
+                rerank_scores[int(i)] = float(s)
+            # reranker 점수로 재정렬 (없는 항목은 fused 순서 유지)
+            order = np.array(
+                sorted(cand_idx, key=lambda i: -rerank_scores.get(int(i), -1e9))
+                + [i for i in order[min(rerank_k, len(order)):]]
+            )
+        except Exception as e:
+            logger.exception(f"[admin] rerank 실패: {e}")
+
     rows = []
     for rank, i in enumerate(order[:top_n], start=1):
         s = float(dense[i])
         z = (s - mu) / sig
         conf = 0.5 * (1 + math.erf(z / (2 ** 0.5)))
+        # [W7-doc-quality] rerank 점수가 있으면 confidence 를 sigmoid(rerank) 로 교체.
+        #   - dense-z 기반 conf 는 "군중 대비 높음" 이지 "의미 적합" 이 아님
+        #   - cross-encoder logit → sigmoid → 0~1 확률로 UI 와 직관 일치
+        rr = rerank_scores.get(int(i))
+        if rr is not None:
+            conf = 1.0 / (1.0 + math.exp(-float(rr)))
         doc_id = d["ids"][i]
         if domain == "doc_page":
             src, page = _source_doc_path(doc_id)
@@ -225,6 +273,7 @@ def inspect():
             "asf": float(asf_s[i]) if asf_s is not None else None,
             "rrf": float(rrf[i]),
             "fused": float(fused[i]),
+            "rerank": rerank_scores.get(int(i)),
             "confidence": conf,
             "z_score": z,
         })
@@ -274,7 +323,11 @@ def doc_text():
 
 @bp_admin.get("/file")
 def file_serve():
-    """도메인별 파일 서빙 (이미지 썸네일용)."""
+    """도메인별 파일 서빙 (image 썸네일 / audio·video 플레이어).
+
+    AV 도메인은 conditional=True 로 HTTP Range 응답을 지원해
+    브라우저 seek 가능하게 한다.
+    """
     doc_id = request.args.get("id", "").strip()
     domain = request.args.get("domain", "doc_page")
     if not doc_id:
@@ -282,7 +335,72 @@ def file_serve():
     p = _resolve_file_path(domain, doc_id)
     if not p or not p.exists():
         return jsonify({"error": "file not found"}), 404
+    # AV 는 Range 필수 (대용량 영상 seek)
+    if domain in ("movie", "music"):
+        import mimetypes as _mt
+        mime, _ = _mt.guess_type(str(p))
+        return send_file(str(p), mimetype=mime or "application/octet-stream",
+                         conditional=True)
     return send_file(str(p))
+
+
+# ── AV 전수 검사 ────────────────────────────────────────────────────────
+@bp_admin.post("/inspect_av")
+def inspect_av():
+    """Movie/Music 전수 검사 — 파일 단위 집계 + 상위 세그먼트 반환.
+
+    body: {query, domain(movie|music), top_n=30, top_segments=5}
+    """
+    body = request.get_json(force=True)
+    query = body.get("query", "").strip()
+    domain = body.get("domain", "music")
+    top_n = int(body.get("top_n", 30))
+    top_segs = int(body.get("top_segments", 5))
+
+    if not query:
+        return jsonify({"error": "query 필수"}), 400
+    if domain not in ("movie", "music"):
+        return jsonify({"error": "AV 전용 — movie/music 만 허용"}), 400
+
+    e = _engine()
+    if domain not in e._cache:
+        return jsonify({"error": f"domain {domain} 캐시 없음"}), 400
+
+    res = e.search_av(query, domain=domain, topk=top_n, top_segments=top_segs)
+    cal = calibration.get_thresholds(domain)
+    mu = cal.get("mu_null", 0.0)
+    sig = max(cal.get("sigma_null", 1.0), 1e-9)
+    abs_thr = cal.get("abs_threshold", 0.0)
+
+    files = []
+    for rank, r in enumerate(res, start=1):
+        z = (r.score - mu) / sig
+        # segments 에 rank 부여
+        segs_with_rank = []
+        for i, s in enumerate(r.segments, start=1):
+            sd = dict(s)
+            sd["rank"] = i
+            segs_with_rank.append(sd)
+        files.append({
+            "rank": rank,
+            "file_path": r.file_path,
+            "file_name": r.file_name,
+            "score": round(float(r.score), 4),
+            "confidence": round(float(r.confidence), 4),
+            "z_score": round(float(z), 3),
+            "segments": segs_with_rank,
+        })
+
+    N_total = len(e._cache[domain]["segments"])
+    return jsonify({
+        "domain": domain,
+        "query": query,
+        "total": N_total,
+        "returned": len(files),
+        "calibration": {"mu_null": mu, "sigma_null": sig,
+                        "abs_threshold": abs_thr},
+        "files": files,
+    })
 
 
 @bp_admin.get("/ui")
@@ -307,5 +425,7 @@ def domains():
             "has_sparse": cache.get("sparse") is not None,
             "has_asf":    bool(cache.get("asf_sets")),
             "vocab_size": len(cache.get("vocab", {})),
+            # [W6-AV] 프런트엔드가 AV 카드/검색 경로를 분기할 수 있도록 kind 부여
+            "kind": "av" if dom in ("movie", "music") else "text",
         }
     return jsonify(out)

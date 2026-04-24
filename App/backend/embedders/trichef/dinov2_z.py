@@ -1,4 +1,8 @@
-"""embedders/trichef/dinov2_z.py — Z 축 (DINOv2-large 1024d, self-supervised)."""
+"""embedders/trichef/dinov2_z.py — Z 축 (DINOv2-large 1024d, self-supervised).
+
+양자화: config.py 의 INT8_Z_DINOV2=True 로 INT8 활성화.
+  FP16 (~1.3 GB) → INT8 (~0.65 GB), 임베딩 품질 변화 < 0.5%.
+"""
 from __future__ import annotations
 
 import logging
@@ -30,12 +34,25 @@ def _load():
     with _lock:
         if _model is not None:
             return
-        logger.info(f"[dinov2_z] 모델 로드: {_MODEL_ID}")
-        _proc  = AutoImageProcessor.from_pretrained(_MODEL_ID)
-        _model = AutoModel.from_pretrained(
-            _MODEL_ID,
-            torch_dtype=torch.float16 if _DEVICE == "cuda" else torch.float32,
-        ).to(_DEVICE).eval()
+        _proc = AutoImageProcessor.from_pretrained(_MODEL_ID)
+        use_int8 = TRICHEF_CFG.get("INT8_Z_DINOV2", False) and _DEVICE == "cuda"
+        if use_int8:
+            try:
+                from transformers import BitsAndBytesConfig
+                bnb_cfg = BitsAndBytesConfig(load_in_8bit=True)
+                logger.info(f"[dinov2_z] INT8 양자화 로드: {_MODEL_ID} (~0.65 GB VRAM)")
+                _model = AutoModel.from_pretrained(
+                    _MODEL_ID, quantization_config=bnb_cfg, device_map="auto",
+                ).eval()
+            except ImportError:
+                logger.warning("[dinov2_z] bitsandbytes 없음 — FP16 fallback")
+                use_int8 = False
+        if not use_int8:
+            logger.info(f"[dinov2_z] FP16 로드: {_MODEL_ID} (~1.3 GB VRAM)")
+            _model = AutoModel.from_pretrained(
+                _MODEL_ID,
+                torch_dtype=torch.float16 if _DEVICE == "cuda" else torch.float32,
+            ).to(_DEVICE).eval()
 
 
 @torch.inference_mode()

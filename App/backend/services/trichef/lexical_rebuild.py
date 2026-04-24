@@ -108,7 +108,17 @@ def rebuild_image_lexical() -> dict:
         return {"skipped": True, "reason": "img_ids.json 없음"}
     ids = json.loads(ids_path.read_text(encoding="utf-8"))["ids"]
     cap_dir = Path(PATHS["TRICHEF_IMG_EXTRACT"]) / "captions"
-    docs = [load_caption(cap_dir, stem_key_for(i)) for i in ids]
+    # stem_key_for(i) 우선, 없으면 plain stem fallback (Qwen recaption_all 은 plain stem 사용)
+    docs = []
+    empty = 0
+    for i in ids:
+        txt = load_caption(cap_dir, stem_key_for(i))
+        if not txt:
+            txt = load_caption(cap_dir, Path(i).stem)
+        if not txt:
+            empty += 1
+        docs.append(txt)
+    logger.info(f"[lexical_rebuild:image] 캡션 로드: 빈 {empty}/{len(docs)}")
 
     vocab = auto_vocab.build_vocab(docs, min_df=2, max_df_ratio=0.5, top_k=5000)
     auto_vocab.save_vocab(cache / "auto_vocab.json", vocab)

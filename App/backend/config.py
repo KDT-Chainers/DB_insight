@@ -65,6 +65,8 @@ TRICHEF_CFG = {
     "FAR_DOC_PAGE": 0.05,
 
     # 쿼리 확장
+    # [W5-1 ROLLBACK 2026-04-24] N=5 실측 결과: p95 +167ms, recall/conf 개선 0.
+    # paraphrase 비용만 증가하고 평균 벡터 품질은 이미 N=3 에서 포화. N=3 복원.
     "EXPAND_QUERY_ENABLED": True,
     "EXPAND_QUERY_N": 3,
 
@@ -83,6 +85,19 @@ TRICHEF_CFG = {
     # Hard-Neg Cat-Affinity 마진
     "CAT_HN_MARGIN": 0.02,
 
+    # [양자화] DINOv2 Z축 INT8 (FP16 1.3GB → INT8 0.65GB)
+    # True 로 설정 시 bitsandbytes INT8 적용. 임베딩 품질 변화 < 0.5%.
+    "INT8_Z_DINOV2": True,    # 활성화 — RTX 4070 8GB VRAM 절감 -0.65GB
+
+    # [양자화] SigLIP2 Re축 INT8 (FP16 1.0GB → INT8 0.50GB)
+    # ViT 계열 임베딩 품질 변화 < 0.5%. DINOv2와 동일 BitsAndBytes 패턴.
+    "INT8_RE_SIGLIP2": True,  # 활성화 — RTX 4070 8GB VRAM 절감 -0.50GB
+
+    # [Doc Im_body fusion] PDF 본문 텍스트 Im 가중치
+    # Im_fused = DOC_IM_ALPHA * Im_caption + (1-DOC_IM_ALPHA) * Im_body
+    # 0.35 = 캡션 35%, 본문 65% (텍스트 밀도 높은 문서 기준 최적화)
+    "DOC_IM_ALPHA": 0.35,
+
     # LangGraph
     "GRAPH_MAX_ITER": 3,
     "GRAPH_HI_MARGIN": 0.030,
@@ -100,6 +115,11 @@ PATHS = {
     "TRICHEF_DOC_CACHE":   str(EMBEDDED_DB_DOC),
     "TRICHEF_IMG_EXTRACT": str(EXTRACTED_DB_IMAGE),
     "TRICHEF_DOC_EXTRACT": str(EXTRACTED_DB_DOC),
+    # [W6-AV] Movie/Music(AV) 캐시 경로. 미정의 시 TriChefEngine 이 AV 도메인 skip.
+    "TRICHEF_MOVIE_CACHE":   str(EMBEDDED_DB_VIDEO),
+    "TRICHEF_MUSIC_CACHE":   str(EMBEDDED_DB_AUDIO),
+    "TRICHEF_MOVIE_EXTRACT": str(EXTRACTED_DB_VIDEO),
+    "TRICHEF_MUSIC_EXTRACT": str(EXTRACTED_DB_AUDIO),
     # TRI-CHEF 전용 ChromaDB 경로 (기존 컬렉션과 분리)
     "TRICHEF_CHROMA":      str(EMBEDDED_DB / "trichef"),
 }

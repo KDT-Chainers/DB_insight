@@ -19,6 +19,7 @@ from embedders.trichef import bgem3_caption_im as e5_caption_im  # v2 P1: e5→B
 from embedders.trichef import bgem3_sparse  # v2 P2: lexical channel
 from scipy import sparse as sp
 from services.trichef import asf_filter, auto_vocab, calibration, qwen_expand, tri_gs
+from services.trichef import snippet  # [항목4] preview 추출
 
 logger = logging.getLogger(__name__)
 
@@ -31,8 +32,20 @@ class TriChefResult:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass
+class TriChefAVResult:
+    """Movie/Music 검색 결과 — 파일 단위 집계 + 하이라이트 세그먼트 목록."""
+    file_path: str
+    file_name: str
+    domain: str              # "movie" | "music"
+    score: float
+    confidence: float
+    segments: list[dict]     # 상위 매칭 세그먼트 (start_sec, end_sec, text, score)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
 class TriChefEngine:
-    """3축 복소수 검색 엔진. 이미지/문서 양쪽 재사용 가능."""
+    """3축 복소수 검색 엔진. 이미지/문서/영상/음원 재사용 가능."""
 
     def __init__(self):
         self._cache: dict[str, dict] = {}
@@ -55,6 +68,17 @@ class TriChefEngine:
                 "cache_doc_page_Z.npy", "doc_page_ids.json", "cache_doc_page_sparse.npz",
                 domain_label="doc_page",
             )
+        # Movie / Music (AV) — MR_TriCHEF 로 분리됨. PATHS 키 없으면 skip.
+        mv_path = PATHS.get("TRICHEF_MOVIE_CACHE")
+        if mv_path:
+            mdir = Path(mv_path)
+            if (mdir / "cache_movie_Re.npy").exists():
+                self._cache["movie"] = self._build_av_entry(mdir, "movie")
+        mu_path = PATHS.get("TRICHEF_MUSIC_CACHE")
+        if mu_path:
+            mudir = Path(mu_path)
+            if (mudir / "cache_music_Re.npy").exists():
+                self._cache["music"] = self._build_av_entry(mudir, "music")
         logger.info(f"[engine] 캐시 로드 완료: {list(self._cache.keys())}")
 
     def _build_entry(self, dir: Path, re_fn: str, im_fn: str, z_fn: str,
@@ -79,9 +103,30 @@ class TriChefEngine:
                            f"ASF 채널 비활성화 (rebuild 필요)")
             asf_sets = []
 
+        Im = np.load(dir / im_fn)
+
+        # [Doc Im_body fusion] PDF 본문 텍스트 Im 캐시가 있으면 caption과 혼합.
+        # Im_body = pdfplumber 추출 텍스트 → BGE-M3 (1024d), 같은 공간.
+        # Im_fused = α·Im_caption + (1-α)·Im_body  → renormalize
+        # α=0.35: 시각 캡션 35%, 본문 텍스트 65% (텍스트 밀도 높은 문서에 유리)
+        if domain_label == "doc_page":
+            body_path = dir / "cache_doc_page_Im_body.npy"
+            if body_path.exists():
+                Im_body = np.load(body_path)
+                if Im_body.shape == Im.shape:
+                    _alpha = float(TRICHEF_CFG.get("DOC_IM_ALPHA", 0.35))
+                    Im_fused = _alpha * Im + (1.0 - _alpha) * Im_body
+                    norms = np.linalg.norm(Im_fused, axis=1, keepdims=True)
+                    Im = Im_fused / np.maximum(norms, 1e-9)
+                    logger.info(f"[engine:doc_page] Im_body fusion 활성화 "
+                                f"(alpha={_alpha:.2f}, shape={Im.shape})")
+                else:
+                    logger.warning(f"[engine:doc_page] Im_body shape {Im_body.shape} "
+                                   f"!= Im {Im.shape} — fusion 스킵")
+
         return {
             "Re": Re,
-            "Im": np.load(dir / im_fn),
+            "Im": Im,
             "Z":  np.load(dir / z_fn),
             "ids": ids,
             "sparse": sparse_mat,
@@ -89,7 +134,59 @@ class TriChefEngine:
             "asf_sets": asf_sets,
         }
 
+    def _build_av_entry(self, cache_dir: Path, kind: str) -> dict:
+        """Movie/Music 캐시 로드. segments.json을 함께 로드."""
+        prefix  = "movie" if kind == "movie" else "music"
+        Re      = np.load(cache_dir / f"cache_{prefix}_Re.npy")
+        Im_path = cache_dir / f"cache_{prefix}_Im.npy"
+        Im      = np.load(Im_path) if Im_path.exists() else Re
+        Z_path  = cache_dir / f"cache_{prefix}_Z.npy"
+        Z       = np.load(Z_path) if Z_path.exists() else np.zeros_like(Re)
+
+        ids_path  = cache_dir / f"{prefix}_ids.json"
+        # [W6-AV] segments.json 파일명 fallback — MR_TriCHEF 계보는 "{prefix}_segments.json"
+        #   을 쓰지만 DI 측 기존 파일은 단순 "segments.json". 둘 다 허용.
+        segs_path = cache_dir / f"{prefix}_segments.json"
+        if not segs_path.exists():
+            segs_path = cache_dir / "segments.json"
+        ids  = json.loads(ids_path.read_text(encoding="utf-8"))["ids"] if ids_path.exists() else []
+        segs = json.loads(segs_path.read_text(encoding="utf-8")) if segs_path.exists() else []
+        # [W6-AV] 스키마 정규화 — 일부 세그먼트는 "file"/"t_start"/"t_end" 를 사용.
+        #   search_av 는 file_path/file_name/start_sec/end_sec 를 기대하므로 변환한다.
+        for s in segs:
+            if "file_path" not in s and "file" in s:
+                s["file_path"] = s["file"]
+            if "file_name" not in s and "file" in s:
+                from pathlib import Path as _Pp
+                s["file_name"] = _Pp(s["file"]).name
+            if "start_sec" not in s and "t_start" in s:
+                s["start_sec"] = s["t_start"]
+            if "end_sec" not in s and "t_end" in s:
+                s["end_sec"] = s["t_end"]
+
+        N = Re.shape[0]
+        if len(ids) != N:
+            logger.warning(f"[engine:{kind}] ids({len(ids)}) != Re({N}); 절단")
+            ids  = ids[:N]
+            segs = segs[:N]
+
+        return {"Re": Re, "Im": Im, "Z": Z, "ids": ids, "segments": segs,
+                "sparse": None, "vocab": {}, "asf_sets": []}
+
     def _embed_query(self, query: str) -> tuple[np.ndarray, np.ndarray]:
+        variants = qwen_expand.expand(query)
+        q_Re = qwen_expand.avg_normalize(siglip2_re.embed_texts(variants))
+        q_Im = qwen_expand.avg_normalize(e5_caption_im.embed_query(variants))
+        return q_Re, q_Im
+
+    def _embed_query_for_domain(self, query: str, domain: str
+                                ) -> tuple[np.ndarray, np.ndarray]:
+        """도메인별 쿼리 임베딩 반환.
+
+        모든 도메인 Re = SigLIP2 text (1152d).
+        Music Re 축이 SigLIP2 text-encoder 로 통일되어 Movie/Image 와 동일 공간.
+        Im = BGE-M3 (1024d) — 언어 의미 채널.
+        """
         variants = qwen_expand.expand(query)
         q_Re = qwen_expand.avg_normalize(siglip2_re.embed_texts(variants))
         q_Im = qwen_expand.avg_normalize(e5_caption_im.embed_query(variants))
@@ -101,7 +198,7 @@ class TriChefEngine:
         if domain not in self._cache:
             logger.warning(f"[engine] 도메인 {domain} 캐시 없음")
             return []
-        q_Re, q_Im = self._embed_query(query)
+        q_Re, q_Im = self._embed_query_for_domain(query, domain)
         d = self._cache[domain]
         q_Z = q_Im
         dense_scores = tri_gs.hermitian_score(
@@ -141,7 +238,13 @@ class TriChefEngine:
                 continue
             z = (s - mu) / max(sig, 1e-9)
             conf = 0.5 * (1 + math.erf(z / (2 ** 0.5)))
-            meta = {"domain": domain, "dense": s}
+            # [항목3] low_confidence 이중 조건 (PROJECT_PIPELINE_SPEC §9)
+            # cosine 점수 약 AND sparse lexical 신호도 없음 → confidence 상한 캡 0.40
+            sparse_s = float(sparse_scores[i]) if sparse_scores is not None else None
+            weak_evidence = (s < abs_thr * 1.1) and (sparse_s is None or sparse_s < 0.05)
+            if weak_evidence:
+                conf = min(conf, 0.40)
+            meta = {"domain": domain, "dense": s, "low_confidence": weak_evidence}
             if sparse_scores is not None:
                 meta["lexical"] = float(sparse_scores[i])
             if asf_s is not None:
@@ -152,6 +255,82 @@ class TriChefEngine:
             if len(out) >= topk:
                 break
         return out
+
+    def search_av(self, query: str, domain: str, topk: int = 10,
+                  top_segments: int = 5) -> list[TriChefAVResult]:
+        """Movie/Music 검색 — 파일 단위 집계 + 상위 세그먼트 타임라인 반환."""
+        if domain not in self._cache:
+            logger.warning(f"[engine] AV 도메인 {domain} 캐시 없음")
+            return []
+
+        d = self._cache[domain]
+        q_Re, q_Im = self._embed_query_for_domain(query, domain)
+        q_Z = q_Im
+
+        seg_scores = tri_gs.hermitian_score(
+            q_Re[None, :], q_Im[None, :], q_Z[None, :],
+            d["Re"], d["Im"], d["Z"],
+        )[0]   # (N,)
+
+        cal     = calibration.get_thresholds(domain)
+        abs_thr = cal["abs_threshold"]
+        mu, sig = cal["mu_null"], cal["sigma_null"]
+
+        file_best: dict[str, dict] = {}
+        segs_list: dict[str, list] = {}
+
+        for i, (seg_id, meta) in enumerate(zip(d["ids"], d["segments"])):
+            s = float(seg_scores[i])
+            if s < abs_thr * 0.5:
+                continue
+            fp = meta.get("file_path", seg_id)
+            if fp not in file_best or s > file_best[fp]["score"]:
+                file_best[fp] = {
+                    "score": s, "file_name": meta.get("file_name", ""),
+                    "domain": domain,
+                }
+            seg_text = meta.get("stt_text", "") or meta.get("caption", "")
+            segs_list.setdefault(fp, []).append({
+                "start":   meta.get("start_sec", 0.0),
+                "end":     meta.get("end_sec", 0.0),
+                "score":   round(s, 4),
+                "text":    meta.get("stt_text", ""),
+                "caption": meta.get("caption", ""),
+                "type":    meta.get("type", "stt"),
+                # [항목4] 질의-원문 overlap 최대 구간 preview (질의 복붙 아님)
+                "preview": snippet.extract_best_snippet(seg_text, query),
+            })
+
+        out: list[TriChefAVResult] = []
+        for fp, best in file_best.items():
+            s = best["score"]
+            if s < abs_thr:
+                continue
+            z    = (s - mu) / max(sig, 1e-9)
+            conf = 0.5 * (1 + math.erf(z / (2 ** 0.5)))
+            top_segs = sorted(segs_list.get(fp, []), key=lambda x: -x["score"])[:top_segments]
+            # [항목3] low_confidence 이중 조건: 점수 약 AND STT/caption 텍스트 전혀 없음 (BGM/무음)
+            no_text = not any(
+                (seg.get("text", "").strip() or seg.get("caption", "").strip())
+                for seg in top_segs
+            )
+            weak_evidence = (s < abs_thr * 1.1) and no_text
+            if weak_evidence:
+                conf = min(conf, 0.40)
+            out.append(TriChefAVResult(
+                file_path=fp,
+                file_name=best["file_name"],
+                domain=domain,
+                score=round(s, 4),
+                confidence=round(conf, 4),
+                segments=top_segs,
+                metadata={"low_confidence": weak_evidence},
+            ))
+            if len(out) >= topk * 3:
+                break
+
+        out.sort(key=lambda x: -x.score)
+        return out[:topk]
 
     def reload(self) -> None:
         """캐시 재로드 (재임베딩 후 호출)."""
@@ -172,5 +351,3 @@ def _rrf_merge(rankings: list[np.ndarray], n: int, k: int = 60) -> np.ndarray:
         for rank, idx in enumerate(order):
             agg[int(idx)] += 1.0 / (k + rank + 1)
     return agg
-
-

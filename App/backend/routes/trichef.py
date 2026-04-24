@@ -13,10 +13,8 @@ from services.trichef.unified_engine import TriChefEngine
 from embedders.trichef.incremental_runner import (
     run_image_incremental,
     run_doc_incremental,
-    embed_image_file,
-    embed_doc_file,
-    IMAGE_EMBED_EXTS,
-    DOC_EMBED_EXTS,
+    run_movie_incremental,
+    run_music_incremental,
 )
 
 logger = logging.getLogger(__name__)
@@ -68,32 +66,63 @@ def search():
     stats: dict = {"per_domain": {}}
 
     from services.trichef import calibration
+
+    _AV_DOMAINS = {"movie", "music"}
+
     for d in domains:
         try:
-            res = engine.search(query, domain=d, topk=topk,
-                                use_lexical=use_lexical, use_asf=use_asf,
-                                pool=pool)
+            if d in _AV_DOMAINS:
+                av_res = engine.search_av(query, domain=d, topk=topk)
+                cal = calibration.get_thresholds(d)
+                stats["per_domain"][d] = {
+                    "count": len(av_res),
+                    "mu_null":       round(cal["mu_null"], 4),
+                    "sigma_null":    round(cal["sigma_null"], 4),
+                    "abs_threshold": round(cal["abs_threshold"], 4),
+                }
+                for rank, r in enumerate(av_res, 1):
+                    all_items.append({
+                        "rank":           rank,
+                        "domain":         d,
+                        "id":             r.file_path,
+                        "file_name":      r.file_name,
+                        "score":          r.score,
+                        "confidence":     r.confidence,
+                        "dense":          r.score,
+                        "lexical":        0.0,
+                        "asf":            0.0,
+                        "segments":       r.segments,   # 각 세그먼트에 preview 필드 포함
+                        "low_confidence": r.metadata.get("low_confidence", False),
+                        "preview_url":    None,
+                    })
+            else:
+                res = engine.search(query, domain=d, topk=topk,
+                                    use_lexical=use_lexical, use_asf=use_asf,
+                                    pool=pool)
+                cal = calibration.get_thresholds(d)
+                stats["per_domain"][d] = {
+                    "count": len(res),
+                    "mu_null":        round(cal["mu_null"], 4),
+                    "sigma_null":     round(cal["sigma_null"], 4),
+                    "abs_threshold":  round(cal["abs_threshold"], 4),
+                }
+                for rank, r in enumerate(res, 1):
+                    all_items.append({
+                        "rank":           rank,
+                        "domain":         d,
+                        "id":             r.id,
+                        "score":          round(r.score, 4),
+                        "confidence":     round(r.confidence, 4),
+                        "dense":          round(r.metadata.get("dense", r.score), 4),
+                        "lexical":        round(r.metadata.get("lexical", 0.0), 4),
+                        "asf":            round(r.metadata.get("asf", 0.0), 4),
+                        "low_confidence": r.metadata.get("low_confidence", False),
+                        "segments":       [],
+                        "preview_url":    f"/api/trichef/file?domain={d}&path={r.id}",
+                    })
         except Exception as e:
             logger.exception(f"domain={d} 검색 실패")
             stats["per_domain"][d] = {"error": str(e)[:200], "count": 0}
-            continue
-        cal = calibration.get_thresholds(d)
-        stats["per_domain"][d] = {
-            "count": len(res),
-            "mu_null":        round(cal["mu_null"], 4),
-            "sigma_null":     round(cal["sigma_null"], 4),
-            "abs_threshold":  round(cal["abs_threshold"], 4),
-        }
-        for rank, r in enumerate(res, 1):
-            all_items.append({
-                "rank": rank, "domain": d,
-                "id": r.id, "score": round(r.score, 4),
-                "confidence": round(r.confidence, 4),
-                "dense":   round(r.metadata.get("dense", r.score), 4),
-                "lexical": round(r.metadata.get("lexical", 0.0), 4),
-                "asf":     round(r.metadata.get("asf", 0.0), 4),
-                "preview_url": f"/api/trichef/file?domain={d}&path={r.id}",
-            })
 
     all_items.sort(key=lambda x: -x["confidence"])
     top = all_items[:topk]
@@ -116,6 +145,8 @@ def serve_file():
     domain = request.args.get("domain", "image")
     if not rel:
         return jsonify({"error": "path 필수"}), 400
+    if ".." in rel or rel.startswith("/") or rel.startswith("\\"):
+        return jsonify({"error": "허용되지 않은 경로"}), 400
 
     if domain == "image":
         candidate = Path(PATHS["RAW_DB"]) / "Img" / rel
@@ -137,8 +168,9 @@ def serve_file():
 
 @bp.post("/reindex")
 def reindex():
-    body = request.get_json(silent=True) or {}
-    scope = body.get("scope", "all")   # "image" | "document" | "all"
+    body  = request.get_json(silent=True) or {}
+    scope = body.get("scope", "all")
+    # scope: "image" | "document" | "movie" | "music" | "all"
     results = {}
     if scope in ("image", "all"):
         try:
@@ -152,6 +184,18 @@ def reindex():
         except Exception as e:
             logger.exception("document reindex 실패")
             results["document"] = {"error": str(e)[:400]}
+    if scope in ("movie", "all"):
+        try:
+            results["movie"] = run_movie_incremental().__dict__
+        except Exception as e:
+            logger.exception("movie reindex 실패")
+            results["movie"] = {"error": str(e)[:400]}
+    if scope in ("music", "all"):
+        try:
+            results["music"] = run_music_incremental().__dict__
+        except Exception as e:
+            logger.exception("music reindex 실패")
+            results["music"] = {"error": str(e)[:400]}
     global _engine
     with _engine_lock:
         if _engine is not None:
@@ -162,23 +206,29 @@ def reindex():
 @bp.get("/status")
 def status():
     """캐시 현황 빠른 조회 (모델 로드 없음)."""
-    idir = Path(PATHS["TRICHEF_IMG_CACHE"])
-    ddir = Path(PATHS["TRICHEF_DOC_CACHE"])
+    idir  = Path(PATHS["TRICHEF_IMG_CACHE"])
+    ddir  = Path(PATHS["TRICHEF_DOC_CACHE"])
+    mdir  = Path(PATHS["TRICHEF_MOVIE_CACHE"])
+    mudir = Path(PATHS["TRICHEF_MUSIC_CACHE"])
     img_n, doc_n = _raw_counts()
+
+    def _npy_rows(npy_path: Path) -> int:
+        try:
+            import numpy as np
+            return int(np.load(npy_path, mmap_mode="r").shape[0])
+        except Exception:
+            return 0
+
     return jsonify({
-        "image_cached":    (idir / "cache_img_Re_siglip2.npy").exists(),
-        "doc_page_cached": (ddir / "cache_doc_page_Re.npy").exists(),
+        "image_cached":    (idir  / "cache_img_Re_siglip2.npy").exists(),
+        "doc_page_cached": (ddir  / "cache_doc_page_Re.npy").exists(),
+        "movie_cached":    (mdir  / "cache_movie_Re.npy").exists(),
+        "music_cached":    (mudir / "cache_music_Re.npy").exists(),
         "img_raw_count":   img_n,
         "doc_raw_count":   doc_n,
+        "movie_segments":  _npy_rows(mdir  / "cache_movie_Re.npy"),
+        "music_segments":  _npy_rows(mudir / "cache_music_Re.npy"),
     })
-
-
-def reload_engine():
-    """임베딩 완료 후 엔진 캐시 재로드 (routes/index.py 에서 호출)."""
-    global _engine
-    with _engine_lock:
-        if _engine is not None:
-            _engine.reload()
 
 
 @bp.get("/image-tags")

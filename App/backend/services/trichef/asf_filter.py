@@ -1,4 +1,4 @@
-"""services/trichef/asf_filter.py — Attention-Similarity-Filter (v3 P4).
+"""services/trichef/asf_filter.py — Adaptive Sieve Filter (v3 P4).
 
 쿼리↔문서 간 도메인 어휘 오버랩 기반 보정 점수.
 소스: auto_vocab.json ({token: {df, idf}}) + 문서별 텍스트(캡션+원문).

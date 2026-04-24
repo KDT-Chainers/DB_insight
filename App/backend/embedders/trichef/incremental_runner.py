@@ -19,36 +19,70 @@ from tqdm import tqdm
 from config import PATHS, TRICHEF_CFG
 from embedders.trichef import siglip2_re, dinov2_z, qwen_caption, doc_page_render
 from embedders.trichef import bgem3_caption_im as im_embedder  # v2 P1: e5→BGE-M3
-from embedders.trichef import blip_caption_triple, doc_ingest  # v2 P1 Phase B
+from embedders.trichef import blip_caption_triple, doc_ingest  # v2 P1 Phase B (doc_ingest 공용 유지)
 from services.trichef import tri_gs
 from services.trichef.prune import prune_domain
 from services.trichef import lexical_rebuild
 
+logger = logging.getLogger(__name__)
+
+
+# W4-B: BLIP 영어 캡셔너 → Qwen2-VL 한국어 캡셔너 교체. lazy 싱글톤.
+_QWEN_CAPTIONER = None
+def _get_qwen_captioner():
+    global _QWEN_CAPTIONER
+    if _QWEN_CAPTIONER is None:
+        import sys
+        from pathlib import Path as _P
+        _DI_ROOT = _P(__file__).resolve().parents[4] / "DI_TriCHEF"
+        if str(_DI_ROOT) not in sys.path:
+            sys.path.insert(0, str(_DI_ROOT))
+        from captioner.qwen_vl_ko import QwenKoCaptioner
+        _QWEN_CAPTIONER = QwenKoCaptioner(dtype="float16")
+    return _QWEN_CAPTIONER
+
 
 def _caption_for_im(cap_dir: Path, img_path: Path, key: str | None = None) -> str:
-    """Phase B: .caption.json(L1/L2/L3) → .txt 레거시 → 신규 3단계 생성 순.
-
-    `key` (예: "sub/foo.jpg") 가 주어지면 `stem_key_for(key)` 로 파일명을 생성하여
-    동일 stem 충돌을 방지한다. 미지정 시 레거시 `img_path.stem` 폴백.
+    """캡션 로드/생성 우선순위:
+      1) `<hash_stem>.caption.json` (레거시 BLIP L1/L2/L3)
+      2) `<hash_stem>.txt`
+      3) `<plain_stem>.txt` (Qwen 재캡션 결과 — W4-B fallback)
+      4) 없으면 Qwen2-VL 로 신규 한국어 캡션 생성 → plain_stem `.txt` 저장
     """
     stem = doc_page_render.stem_key_for(key) if key else img_path.stem
+    plain = img_path.stem
     jp = cap_dir / f"{stem}.caption.json"
     tp = cap_dir / f"{stem}.txt"
+    plain_tp = cap_dir / f"{plain}.txt"
     if jp.exists():
         try:
             d = json.loads(jp.read_text(encoding="utf-8"))
-            return d.get("L3") or d.get("L1") or ""
+            txt = d.get("L3") or d.get("L1") or ""
+            if txt:
+                return txt
         except Exception:
             pass
     if tp.exists():
-        return tp.read_text(encoding="utf-8")
-    c3 = blip_caption_triple.caption_triple(img_path)
-    jp.write_text(c3.to_json(), encoding="utf-8")
-    # .txt 호환 유지
-    tp.write_text(c3.L1, encoding="utf-8")
-    return c3.L3 or c3.L1
-
-logger = logging.getLogger(__name__)
+        t = tp.read_text(encoding="utf-8").strip()
+        if t:
+            return t
+    if plain_tp.exists():
+        t = plain_tp.read_text(encoding="utf-8").strip()
+        if t:
+            return t
+    # 신규: Qwen 한국어 캡션 생성
+    try:
+        from PIL import Image
+        im = Image.open(img_path).convert("RGB")
+        text = _get_qwen_captioner().caption(im, max_new_tokens=60, max_image_side=896)
+    except Exception as e:
+        logger.warning(f"[caption] Qwen 캡션 실패 {img_path.name}: {type(e).__name__}: {e}")
+        text = ""
+    # plain stem 에 저장 (recaption_all / fix_non_korean 과 동일 규약)
+    if text:
+        plain_tp.write_text(text, encoding="utf-8")
+        (cap_dir / f"{plain}.qwen").write_text("", encoding="utf-8")
+    return text
 
 
 @dataclass
@@ -272,10 +306,21 @@ def run_image_incremental() -> IncrementalResult:
     except Exception as e:
         logger.exception(f"[image] lexical rebuild 실패: {e}")
 
-    # 6. calibration 재보정
-    # NOTE: 쿼리 기반 null 분포 (scripts/recalibrate_query_null.py) 를 별도
-    # 실행. 기존 doc-doc self-score 방식은 threshold 과대평가 이슈로 폐기.
-    logger.info("[image] calibration: run scripts/recalibrate_query_null.py")
+    # 6. calibration 재보정 (W4-5: cross-modal 자동 훅)
+    try:
+        from services.trichef import calibration as _cal
+        from embedders.trichef.caption_io import load_caption as _load_cap
+        caps = []
+        for i in all_ids:
+            t = _load_cap(cap_dir, doc_page_render.stem_key_for(i))
+            if not t: t = _load_cap(cap_dir, Path(i).stem)
+            caps.append(t)
+        info = _cal.calibrate_image_crossmodal(caps, Re_all, Im_perp, Z_perp,
+                                                sample_q=200, pairs_per_q=5)
+        logger.info(f"[image] crossmodal calibration: mu={info['mu_null']:.4f} "
+                    f"sig={info['sigma_null']:.4f} thr={info['abs_threshold']:.4f}")
+    except Exception as e:
+        logger.exception(f"[image] calibration 실패: {e}")
 
     # 7. registry save
     _save_registry(reg_path, registry)
@@ -404,7 +449,13 @@ def run_doc_incremental() -> IncrementalResult:
     except Exception as e:
         logger.exception(f"[doc_page] lexical rebuild 실패: {e}")
 
-    logger.info("[doc_page] calibration: run scripts/recalibrate_query_null.py")
+    # [W5-3 ROLLBACK 2026-04-24] doc_page 에 crossmodal_v1 적용 실측 결과:
+    #   thr 0.205 → 0.355 (+73%) 로 인해 실제 쿼리 4/4 가 0 hits 로 무너졌다.
+    #   caption-pseudo-query 가 같은 문서의 다른 페이지와도 높은 점수를 받아
+    #   μ_null/σ_null 이 cross-modal 이 아닌 within-doc 분포로 편향된다.
+    #   Doc 스케일(34170 페이지)에서는 random_query_null_v2 가 더 안정적이다.
+    logger.info("[doc_page] calibration skipped — use scripts/recalibrate_query_null.py "
+                "for random_query_null_v2")
 
     return IncrementalResult("document", len(ingested_docs), len(registry), len(registry))
 
@@ -633,3 +684,16 @@ def embed_doc_file(file_path: str, progress_cb=None) -> dict:
     _save_registry(reg_path, registry)
 
     return {"status": "done", "chunks": len(img_pages), "pages": len(img_pages)}
+
+
+# ── MR (Movie/Music) stubs ─────────────────────────────────────────────
+# Movie/Rec 파이프라인은 MR_TriCHEF/ 로 분리되어 독립 실행.
+# 여기서는 기존 /api/trichef/reindex?scope=all 호환을 위해 no-op 스텁 제공.
+def run_movie_incremental() -> IncrementalResult:
+    logger.info("[run_movie_incremental] MR_TriCHEF 로 분리됨 — skip.")
+    return IncrementalResult("movie", 0, 0, 0)
+
+
+def run_music_incremental() -> IncrementalResult:
+    logger.info("[run_music_incremental] MR_TriCHEF 로 분리됨 — skip.")
+    return IncrementalResult("music", 0, 0, 0)

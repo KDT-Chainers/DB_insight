@@ -1,6 +1,10 @@
 """embedders/trichef/siglip2_re.py — Re 축 (SigLIP2-SO400M 1152d).
 
 이미지와 텍스트 양쪽을 동일 공간에 임베딩하여 cross-modal 코사인 유사도를 얻는다.
+
+[양자화] INT8_RE_SIGLIP2=True 시 BitsAndBytes INT8 적용:
+  FP16 ~1.0 GB → INT8 ~0.50 GB  (-0.50 GB)
+  ViT 계열 임베딩 품질 변화 < 0.5% (dinov2_z.py 와 동일 패턴)
 """
 from __future__ import annotations
 
@@ -33,12 +37,25 @@ def _load() -> None:
     with _lock:
         if _model is not None:
             return
-        logger.info(f"[siglip2_re] 모델 로드: {_MODEL_ID} on {_DEVICE}")
-        _proc  = AutoProcessor.from_pretrained(_MODEL_ID)
-        _model = AutoModel.from_pretrained(
-            _MODEL_ID,
-            torch_dtype=torch.float16 if _DEVICE == "cuda" else torch.float32,
-        ).to(_DEVICE).eval()
+        _proc = AutoProcessor.from_pretrained(_MODEL_ID)
+        use_int8 = TRICHEF_CFG.get("INT8_RE_SIGLIP2", False) and _DEVICE == "cuda"
+        if use_int8:
+            try:
+                from transformers import BitsAndBytesConfig
+                bnb_cfg = BitsAndBytesConfig(load_in_8bit=True)
+                logger.info(f"[siglip2_re] INT8 양자화 로드: {_MODEL_ID} (~0.50 GB VRAM)")
+                _model = AutoModel.from_pretrained(
+                    _MODEL_ID, quantization_config=bnb_cfg, device_map="auto",
+                ).eval()
+            except ImportError:
+                logger.warning("[siglip2_re] bitsandbytes 없음 — FP16 fallback")
+                use_int8 = False
+        if not use_int8:
+            logger.info(f"[siglip2_re] FP16 로드: {_MODEL_ID} (~1.0 GB VRAM)")
+            _model = AutoModel.from_pretrained(
+                _MODEL_ID,
+                torch_dtype=torch.float16 if _DEVICE == "cuda" else torch.float32,
+            ).to(_DEVICE).eval()
 
 
 @torch.inference_mode()
