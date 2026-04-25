@@ -65,7 +65,14 @@ def measure_domain(cache_dir: Path, kind: str, encoders: dict) -> dict:
             A = Re @ q_sig
             B = Im @ q_bge if Im is not None else np.zeros_like(A)
             per_seg = np.sqrt(A**2 + (0.4 * B)**2).astype(np.float32)
-        else:  # music: A only
+        elif kind == "music" and sig is not None:
+            # Music Re 축이 BGE-M3(1024) → SigLIP2-text(1152)로 전환됨.
+            # Movie와 동일한 크로스모달 공식 사용.
+            q_sig = sig.embed_texts([q])[0]
+            A = Re @ q_sig
+            B = Im @ q_bge if Im is not None else np.zeros_like(A)
+            per_seg = np.sqrt(A**2 + (0.4 * B)**2).astype(np.float32)
+        else:
             per_seg = (Re @ q_bge).astype(np.float32)
 
         # 파일별 top-3 평균 집계 (search._aggregate 와 동일 구조)
@@ -141,14 +148,105 @@ def calibrate_crossmodal_movie(cache_dir: Path, encoders: dict,
     }
 
 
+def _apply_safety_guard(new_result: dict, prev: dict) -> dict:
+    """[P2A.1] App 쪽 W5-SAFETY 와 동등한 2배 드리프트 거부 장치.
+
+    App/backend/services/trichef/calibration.py 의 가드를 MR 에 포팅.
+    μ_null 또는 abs_threshold (p95 대체) 가 이전 값의 2배 이상/0.5배 이하로
+    튀면 새 값을 버리고 이전 값 유지. 원인: query/reference shuffle 혹은
+    캐시 부분 손상 시 분포가 극단적으로 왜곡되는 경우 자동 차단.
+    """
+    import logging
+    log = logging.getLogger("mr.calibration")
+    for dom, nd in list(new_result.items()):
+        if nd.get("status") != "ok":
+            continue
+        od = prev.get(dom) or {}
+        if od.get("status") != "ok":
+            continue  # 비교 기준 없음 → 그대로 통과
+        old_mu  = float(od.get("mu_null") or 0.0)
+        new_mu  = float(nd.get("mu_null") or 0.0)
+        old_thr = float(od.get("abs_threshold") or od.get("p95") or 0.0)
+        new_thr = float(nd.get("abs_threshold") or nd.get("p95") or 0.0)
+
+        mu_drift  = (old_mu > 0 and (new_mu > 2.0 * old_mu or new_mu < 0.5 * old_mu))
+        thr_drift = (old_thr > 0 and (new_thr > 2.0 * old_thr or new_thr < 0.5 * old_thr))
+        if mu_drift or thr_drift:
+            log.warning(
+                f"[calibration:{dom}] REJECTED — drift >2×. "
+                f"old_mu={old_mu:.4f} new_mu={new_mu:.4f}  "
+                f"old_thr={old_thr:.4f} new_thr={new_thr:.4f}. 이전 값 유지."
+            )
+            # 거부: 이전 값 유지 + 사유 기록
+            new_result[dom] = {
+                **od,
+                "status": "ok",
+                "last_rejected": {
+                    "mu_null":    new_mu,
+                    "abs_threshold": new_thr,
+                    "reason":     "drift_>2x",
+                },
+            }
+    return new_result
+
+
+def _sync_to_shared(result: dict) -> None:
+    """[P2A.2] MR → App 역방향 자동 동기화.
+
+    MR 이 `MR_TriCHEF/pipeline/_calibration.json` 에 쓰지만, App 의
+    unified_engine 은 `Data/embedded_DB/trichef_calibration.json` 에서 읽는다.
+    직접 MR 경로로 recalibrate() 가 호출된 경우에도 두 파일이 일관되도록 병합.
+    """
+    shared = Path(__file__).resolve().parents[2] / "Data" / "embedded_DB" / "trichef_calibration.json"
+    try:
+        cur = json.loads(shared.read_text(encoding="utf-8")) if shared.exists() else {}
+    except Exception:
+        cur = {}
+    for dom in ("movie", "music"):
+        r = result.get(dom, {})
+        if r.get("status") != "ok":
+            continue
+        entry = {
+            "mu_null":       r.get("mu_null"),
+            "sigma_null":    r.get("sigma_null"),
+            "abs_threshold": r.get("abs_threshold", r.get("p95", 0.0)),
+            "p95":           r.get("p95", 0.0),
+            "p99":           r.get("p99", 0.0),
+            "N":             r.get("n", 0),
+            "method":        r.get("method",
+                                    "text_text_siglip2_null_v1" if dom == "music"
+                                    else "crossmodal_v1"),
+        }
+        if dom == "music":
+            entry["note"] = ("Music Re=SigLIP2-text, same-encoder baseline high. "
+                              "Do not cross-compare with cross-modal domains.")
+        # 거부된 항목도 이전 값이 유지된 채로 들어오므로 안전하게 merge
+        if "last_rejected" in r:
+            entry["last_rejected"] = r["last_rejected"]
+        cur[dom] = entry
+    try:
+        shared.parent.mkdir(parents=True, exist_ok=True)
+        shared.write_text(json.dumps(cur, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception as e:
+        import logging
+        logging.getLogger("mr.calibration").warning(
+            f"[calibration] shared sync 실패: {type(e).__name__}: {e}"
+        )
+
+
 def recalibrate() -> dict:
     """Movie + Music 모두 재측정 → json 저장.
 
     Movie: crossmodal_v1 (텍스트쿼리→프레임 분포)
     Music: 기존 null 분포 측정 (Re=Im=BGE-M3 이므로 동일 공간)
+
+    [P2A.1] 2배 드리프트 거부 가드 적용.
+    [P2A.2] 완료 후 App 의 trichef_calibration.json 과 자동 동기화.
     """
     from .text import BGEM3Encoder
     from .vision import SigLIP2Encoder
+
+    prev = load()  # 비교 기준 (이전 _calibration.json)
 
     encoders = {"bge": BGEM3Encoder(), "sig": SigLIP2Encoder()}
     try:
@@ -160,10 +258,17 @@ def recalibrate() -> dict:
         encoders["bge"].unload()
         encoders["sig"].unload()
 
+    # safety guard 적용
+    result = _apply_safety_guard(result, prev)
+
     CAL_PATH.write_text(
         json.dumps(result, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+
+    # App trichef_calibration.json 자동 sync
+    _sync_to_shared(result)
+
     return result
 
 
