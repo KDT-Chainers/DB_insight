@@ -35,6 +35,22 @@ DEFAULT_PROMPT = (
     "보이는 사물과 장면만 기술하세요."
 )
 
+# BLIP v2 스타일 3단계 캡션 프롬프트 (양자화로 확보된 VRAM 여유 활용)
+PROMPT_L1 = (
+    "이 이미지를 한국어 한 문장(20자 이내)으로 짧게 설명하세요. "
+    "핵심 주제만 기술하세요. 예: '안개에 덮인 산'."
+)
+PROMPT_L2 = (
+    "이 이미지에 보이는 사물, 장소, 활동, 분위기를 "
+    "쉼표로 구분된 한국어 키워드 5-10개로 나열하세요. "
+    "형식: '키워드1, 키워드2, ...'. 문장 금지."
+)
+PROMPT_L3 = (
+    "이 이미지를 한국어로 30-60자 범위에서 상세히 설명하세요. "
+    "보이는 것만 기술하고 추측하지 마세요. "
+    "공간/배치/색감/동작이 있다면 포함하세요."
+)
+
 
 class QwenKoCaptioner:
     def __init__(self, model_id: str = MODEL_ID, device: str | None = None,
@@ -153,3 +169,33 @@ class QwenKoCaptioner:
     def caption_batch(self, images: list[Any], prompt: str = DEFAULT_PROMPT,
                       max_new_tokens: int = 80) -> list[str]:
         return [self.caption(im, prompt, max_new_tokens) for im in images]
+
+    # ── BLIP v2 스타일 3단계 캡션 ─────────────────────────────────────────
+    def caption_triple(self, image: Any,
+                       max_image_side: int = 896) -> dict[str, str]:
+        """L1(짧은 캡션) + L2(키워드) + L3(상세) 3단계 한국어 캡션.
+
+        1회 모델 로드 후 3회 generate → 약 3배 소요 (~4.5s/image NF4 기준).
+        각 레벨은 BGE-M3 multilingual Im축에 독립 임베딩하여 의미 다채널 확보.
+
+        Returns:
+            {"L1": "...", "L2": "...", "L3": "..."}
+        """
+        return {
+            "L1": self.caption(image, prompt=PROMPT_L1,
+                               max_new_tokens=30,
+                               max_image_side=max_image_side),
+            "L2": self.caption(image, prompt=PROMPT_L2,
+                               max_new_tokens=60,
+                               max_image_side=max_image_side),
+            "L3": self.caption(image, prompt=PROMPT_L3,
+                               max_new_tokens=90,
+                               max_image_side=max_image_side),
+        }
+
+    def caption_triple_batch(self, images: list[Any],
+                             max_image_side: int = 896) -> list[dict[str, str]]:
+        """다수 이미지 3단계 캡션 — 모델 1회 로드, 순차 처리."""
+        self._load()
+        return [self.caption_triple(im, max_image_side=max_image_side)
+                for im in images]
