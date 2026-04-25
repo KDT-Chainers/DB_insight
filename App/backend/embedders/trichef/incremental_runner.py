@@ -347,16 +347,10 @@ def run_doc_incremental() -> IncrementalResult:
     reg_path  = cache_dir / "registry.json"
     registry  = _load_registry(reg_path)
 
-    # v2 P1 Phase B: doc_ingest 지원 확장자 전체
-    DOC_EXTS = {".pdf",
-                ".docx", ".doc", ".pptx", ".ppt", ".xlsx", ".xls",
-                ".odt", ".odp", ".ods", ".rtf",
-                ".hwp", ".hwpx",
-                ".txt", ".md", ".markdown", ".rst", ".log",
-                ".csv", ".html", ".htm", ".epub"}
+    # v2 P1 Phase B: doc_ingest 지원 확장자 전체 (SSOT: _extensions.DOC_EXTS via DOC_EMBED_EXTS)
     doc_files = sorted(
         p for p in raw_dir.rglob("*")
-        if p.is_file() and p.suffix.lower() in DOC_EXTS
+        if p.is_file() and p.suffix.lower() in DOC_EMBED_EXTS
     )
     current_keys = {str(p.relative_to(raw_dir)).replace("\\", "/") for p in doc_files}
     stale = set(registry.keys()) - current_keys
@@ -470,16 +464,7 @@ def run_doc_incremental() -> IncrementalResult:
 
 # ── 단일 파일 임베딩 (UI 인덱싱 진입점) ────────────────────────────────────
 
-IMAGE_EMBED_EXTS = {
-    ".jpg", ".jpeg", ".png", ".webp",
-    ".bmp", ".gif", ".tiff", ".heic", ".heif",
-}
-DOC_EMBED_EXTS = {
-    ".pdf", ".docx", ".doc", ".pptx", ".ppt", ".xlsx", ".xls",
-    ".odt", ".odp", ".ods", ".rtf", ".hwp", ".hwpx",
-    ".txt", ".md", ".markdown", ".rst", ".log",
-    ".csv", ".html", ".htm", ".epub",
-}
+from _extensions import IMAGE_EMBED_EXTS, DOC_EXTS as DOC_EMBED_EXTS
 
 
 def embed_image_file(file_path: str, progress_cb=None) -> dict:

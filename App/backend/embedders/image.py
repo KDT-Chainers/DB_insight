@@ -25,10 +25,8 @@ try:
 except ImportError:
     pass
 
-SUPPORTED_EXTENSIONS = {
-    ".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".tiff",
-    ".heic", ".heif", ".avif",
-}
+from _extensions import IMG_EXTS as _IMG_EXTS
+SUPPORTED_EXTENSIONS = set(_IMG_EXTS)
 
 # ── 캐시 경로 ─────────────────────────────────────────────────────
 from config import EXTRACTED_DB

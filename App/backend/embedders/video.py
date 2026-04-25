@@ -35,10 +35,8 @@ import re
 import numpy as np
 from pathlib import Path
 
-SUPPORTED_EXTENSIONS = {
-    ".mp4", ".avi", ".mov", ".mkv", ".wmv",
-    ".webm", ".flv", ".m4v", ".mpg", ".mpeg", ".3gp", ".ts", ".mts", ".m2ts",
-}
+from _extensions import VID_EXTS as _VID_EXTS
+SUPPORTED_EXTENSIONS = set(_VID_EXTS)
 
 # ── 설정값 (spec 고정) ────────────────────────────────────────────
 FRAME_INTERVAL    = 30

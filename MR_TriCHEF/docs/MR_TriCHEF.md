@@ -1,7 +1,8 @@
-# MM Tri-CHEF — Movie & Music 검색 구현 로직
+# MR Tri-CHEF — Movie & Music 검색 구현 로직
 
 > **3축 복소수 검색엔진 (Tri-CHEF)** 의 Movie / Music 도메인 확장 구현 문서.  
-> 작성일: 2026-04-23 · 브랜치: `feature/trichef-port`
+> 작성일: 2026-04-23 · 갱신: 2026-04-25 19:30 · 브랜치: `feature/trichef-port`
+> **최신 변경**: replace_by_file 원자화, calibration sig guard, sparse lazy import, 확장자 확장
 
 ---
 
@@ -55,14 +56,48 @@ raw_DB/
 
 | 축 | 의미 | Movie 모델 | Music 모델 | 차원 |
 |:--:|------|-----------|-----------|:----:|
-| **Re** | 시각/의미 (Real) | SigLIP2-SO400M | BGE-M3 | Movie:1152 / Music:1024 |
+| **Re** | 시각/의미 (Real) | SigLIP2-image (1152d) | SigLIP2-text (1152d) | 1152 |
 | **Im** | 텍스트 의미 (Imaginary) | BGE-M3 (Whisper STT) | BGE-M3 (Whisper STT) | 1024 |
 | **Z** | 세부 어휘 (Sparse/Caption) | BGE-M3 (BLIP 캡션) | zeros (lexical_rebuild) | 1024 |
 
-### Re=Im 인 이유 (Music)
+### replace_by_file 원자화 (commit 697dfcf, P2B.1)
 
-Music은 **순수 텍스트 도메인** — 이미지 키프레임이 없으므로 시각 축(Re)에 활용할 비주얼 정보가 없다. 대신 STT 텍스트 임베딩(BGE-M3)을 Re·Im 양쪽에 사용하여 텍스트 의미를 두 방향에서 강화한다.  
-Movie의 Re는 SigLIP2(1152d)이므로, **Music 도메인 검색 시에는 쿼리 Re 축도 반드시 BGE-M3(1024d) 를 사용해야 차원 불일치를 방지**한다 (`_embed_query_for_domain` 참조).
+**문제**: 동일 파일 재인덱싱 시 stale 행 누적 → segments.json과 npy 행수 불일치
+
+**해결** (`MR_TriCHEF/pipeline/cache.py`):
+```
+prev_ids 로드
+  ↓
+keep_mask = rid not in file_keys (중복 제거)
+  ↓
+npy: prev[keep_mask] (stale 행 제거)
+  ↓
+vstack(kept + new_arr) (새 데이터 추가)
+  ↓
+save to np.save + ids.json + segments.json
+```
+
+**호출처**:
+- `movie_runner.py:154` (commit c33f675)
+- `music_runner.py:199` (commit c33f675)
+- dim mismatch 또는 행수 불일치 시 prev 유지 + 경고
+
+### calibration sig=None 가드 (commit 697dfcf, P2A.1)
+
+**문제**: Music SigLIP2 인코더 누락 시 shape mismatch → ValueError 크래시
+
+**해결** (`MR_TriCHEF/pipeline/calibration.py`):
+- `measure_domain(kind="music")` 에서 encoder 체크
+- SigLIP2 없으면 legacy 공식 사용 또는 status="no_sig_encoder" 반환
+- numpy shape 오류 방지, 현재 lexical 채널 noop (beta=0)
+
+**sparse lazy import** (commit 697dfcf, P2A.2):
+- `MR_TriCHEF/pipeline/sparse.py`: App/backend sys.path 주입 제거
+- ImportError 시 lexical 채널 noop (현재 beta=0)
+
+**확장자 확장** (commit 2c3b1ff, P3):
+- MOVIE_EXTS: `.flv .m4v .mpg .mpeg .3gp .ts .mts .m2ts` 추가 (App+MR 정렬)
+- MUSIC_EXTS: `.wma .opus .aiff .aif .amr` 추가
 
 ### Hermitian 점수 공식
 
@@ -137,10 +172,14 @@ WAV/MP3/M4A/… 파일
 │    ├─ 세그먼트 경계를 자르지 않음
 │    └─ 캐시: chunks.json
 │
-└─ Step 3: BGE-M3 임베딩
-     ├─ Re = bgem3.embed_passage(texts)   → (N, 1024)
-     ├─ Im = Re (동일 텍스트 도메인이므로 Re=Im)
-     └─ Z  = zeros (sparse는 lexical_rebuild에서 별도 처리)
+├─ Step 3: Cross-modal 임베딩 (2026-04 전환, commit 192f157)
+│    ├─ Re = SigLIP2-text.embed_texts(texts)  → (N, 1152)  [NEW]
+│    ├─ Im = BGE-M3.embed_passage(texts)       → (N, 1024)
+│    └─ Z  = zeros (sparse는 lexical_rebuild에서 별도 처리)
+│
+└─ Step 4: replace_by_file 캐시 (commit c33f675, P2B.1)
+     ├─ 동일 파일 재인덱싱 시 stale 행 제거 후 교체
+     └─ 캐시: cache_music_{Re,Im,Z}.npy + music_ids.json
 ```
 
 ---
@@ -200,7 +239,7 @@ query
   │
   ├─ 도메인-안전 쿼리 임베딩 (_embed_query_for_domain)
   │    ├─ Movie: q_Re = SigLIP2(variants), q_Im = BGE-M3(variants)
-  │    └─ Music: q_Re = BGE-M3(variants) = q_Im  ← 차원 불일치 방지
+  │    └─ Music: q_Re = SigLIP2-text(variants) (1152d), q_Im = BGE-M3(variants) (1024d)
   │
   └─ Hermitian 점수 (세그먼트 단위)
        seg_scores = hermitian_score(q_Re, q_Im, q_Z, d_Re, d_Im, d_Z)
@@ -234,7 +273,7 @@ null_scores = hermitian_score(q, d)  # 쿼리≠응답 파일
 
 μ = mean(null_scores)
 σ = std(null_scores)
-FAR = TRICHEF_CFG["FAR_MOVIE"]  # 0.10 (10% 오탐율)
+FAR = TRICHEF_CFG["FAR_MOVIE"]  # 0.05 (5% 오탐율)
 abs_threshold = μ + Φ⁻¹(1 - FAR) × σ
 ```
 
@@ -370,7 +409,7 @@ DB_insight/
 |------|------|:----:|:-------------:|
 | `google/siglip2-so400m-patch16-naflex` | Movie Re (시각) | ~3.4 GB | ✅ HuggingFace |
 | `BAAI/bge-m3` | Im/Z 텍스트 임베딩 | ~2.3 GB | ✅ HuggingFace |
-| `Qwen/Qwen2.5-VL-3B-Instruct` | BLIP 캡션 / 쿼리 확장 | ~6.2 GB | ✅ HuggingFace |
+| `Qwen/Qwen2-VL-2B-Instruct` | caption_triple (L1/L2/L3) / 쿼리 확장 | ~4.5 GB | ✅ HuggingFace |
 | `faster-whisper medium` | STT (한/영) | ~1.5 GB | ✅ HuggingFace |
 
 **필수 pip 패키지:**
