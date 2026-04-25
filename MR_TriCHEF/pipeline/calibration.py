@@ -58,21 +58,23 @@ def measure_domain(cache_dir: Path, kind: str, encoders: dict) -> dict:
 
     all_scores: list[float] = []
 
+    # Music/Movie Re 축은 SigLIP2-text(1152d). sig 인코더가 없으면 BGE-M3(1024d)
+    # fallback 시 차원 불일치(1152 vs 1024) → numpy shape mismatch 크래시.
+    # 안전 가드: cross-modal 도메인은 sig encoder 필수.
+    if kind in ("movie", "music") and sig is None:
+        return {"status": "no_sig_encoder",
+                "reason": f"{kind} calibration requires SigLIP2 text encoder"}
+
     for q in NULL_QUERIES:
         q_bge = bge.embed([q])[0]
-        if kind == "movie" and sig is not None:
-            q_sig = sig.embed_texts([q])[0]
-            A = Re @ q_sig
-            B = Im @ q_bge if Im is not None else np.zeros_like(A)
-            per_seg = np.sqrt(A**2 + (0.4 * B)**2).astype(np.float32)
-        elif kind == "music" and sig is not None:
-            # Music Re 축이 BGE-M3(1024) → SigLIP2-text(1152)로 전환됨.
-            # Movie와 동일한 크로스모달 공식 사용.
+        if kind in ("movie", "music"):
+            # Movie/Music: SigLIP2-text(1152) Re + BGE-M3(1024) Im 크로스모달.
             q_sig = sig.embed_texts([q])[0]
             A = Re @ q_sig
             B = Im @ q_bge if Im is not None else np.zeros_like(A)
             per_seg = np.sqrt(A**2 + (0.4 * B)**2).astype(np.float32)
         else:
+            # image / doc_page: BGE-M3 단일 도메인 (Re=BGE 또는 동일 차원)
             per_seg = (Re @ q_bge).astype(np.float32)
 
         # 파일별 top-3 평균 집계 (search._aggregate 와 동일 구조)
