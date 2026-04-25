@@ -2,8 +2,8 @@
 
 Movie: A = q_sig · Re(1152),  B = q_bge · Im(1024),  C = 0 (쿼리 비전 없음)
        per_seg_dense = sqrt(A² + (0.4·B)²)
-Music: A = q_bge · Re(1024),  (Re = Im, Z = zeros → A 단독)
-       per_seg_dense = A
+Music: A = q_sig · Re(1152 SigLIP2-text),  B = q_bge · Im(1024 BGE-M3)
+       per_seg_dense = sqrt(A² + (0.4·B)²)  # Re축이 BGE-M3→SigLIP2로 전환됨
 
 파일 집계: 세그먼트 top-3 평균 → 도메인 null calibration → z-score.
 최종:      final = α·z_dense + β·lexical + γ·asf
@@ -107,7 +107,7 @@ def search_movie(query: str, topk: int = 5,
 
 
 def search_music(query: str, topk: int = 5,
-                 bge_encoder=None,
+                 siglip_encoder=None, bge_encoder=None,
                  cache_dir: Path | None = None) -> list[SearchHit]:
     from .paths import MUSIC_CACHE_DIR
     cache_dir = cache_dir or MUSIC_CACHE_DIR
@@ -116,9 +116,18 @@ def search_music(query: str, topk: int = 5,
     if Re.shape[0] == 0:
         return []
 
-    q_bge = bge_encoder.embed([query])[0]
-    # Re = Im 이므로 A 축만 사용
-    per_seg_dense = _cos(q_bge, Re).astype(np.float32)
+    # Music Re 는 SigLIP2-text 1152d (2026-04 전환) — q_sig 로 내적.
+    # Im 은 BGE-M3 1024d — q_bge 로 내적. Movie 와 동일한 크로스모달 공식.
+    q_sig = None
+    if siglip_encoder is not None:
+        v = siglip_encoder.embed_texts([query])
+        if v.size:
+            q_sig = v[0]
+    q_bge = bge_encoder.embed([query])[0] if bge_encoder is not None else None
+
+    A = _cos(q_sig, Re) if q_sig is not None else np.zeros(Re.shape[0], dtype=np.float32)
+    B = _cos(q_bge, Im) if q_bge is not None else np.zeros(Im.shape[0], dtype=np.float32)
+    per_seg_dense = np.sqrt(A**2 + (0.4 * B)**2).astype(np.float32)
 
     vocab, toks = _load_asf_assets(cache_dir, "music")
     return _aggregate(per_seg_dense, ids, segs, topk,
