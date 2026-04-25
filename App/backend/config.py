@@ -113,6 +113,15 @@ TRICHEF_CFG = {
     # 필요 시 search(use_asf=True) 명시적 호출로 활성 가능.
     "USE_ASF_DEFAULT": False,
 
+    # [Domain-specific lexical/asf gating] bench v2 (caption-aware, 2026-04-25):
+    #   image: dense_ct=0.820 / +sparse=0.680 (-14pp) / +asf=0.580 (-24pp)
+    #     → image 도메인은 sparse/asf 모두 손해. 짧은 캡션 텍스트로 인한 OOV/노이즈.
+    #   doc_page/movie/music: sparse 도움 또는 중립 → 화이트리스트 유지.
+    # 호출자가 use_lexical=True 로 명시해도 image 도메인은 무시 (해석용 명시 override 는
+    # routes/trichef_admin.py 의 디버그 엔드포인트가 강제 활성화 가능 — 운영은 기본값 우선).
+    "LEXICAL_DOMAINS": {"doc_page", "movie", "music"},  # image 제외
+    "ASF_DOMAINS":     {"doc_page", "movie", "music"},  # image 제외 (USE_ASF_DEFAULT=False 와 별개)
+
     # [Img 3-stage caption fusion] BLIP v2 스타일 L1/L2/L3 캡션 가중치.
     # cache_img_Im_L1/L2/L3.npy 모두 존재 시 자동 활성화 (build_img_caption_triple.py).
     # L1(짧은 주제) 0.15, L2(키워드) 0.25, L3(상세 묘사) 0.60 — 상세도 비례.

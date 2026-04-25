@@ -226,6 +226,15 @@ class TriChefEngine:
         if domain not in self._cache:
             logger.warning(f"[engine] 도메인 {domain} 캐시 없음")
             return []
+
+        # 도메인별 lexical/asf 게이팅 (bench v2, 2026-04-25):
+        # image 도메인은 sparse/asf 가 dense 대비 -14~-24pp 손해라 화이트리스트에서 제외.
+        lex_domains = TRICHEF_CFG.get("LEXICAL_DOMAINS")
+        asf_domains = TRICHEF_CFG.get("ASF_DOMAINS")
+        if lex_domains is not None and domain not in lex_domains:
+            use_lexical = False
+        if asf_domains is not None and domain not in asf_domains:
+            use_asf = False
         q_Re, q_Im = self._embed_query_for_domain(query, domain)
         d = self._cache[domain]
         q_Z = q_Im
