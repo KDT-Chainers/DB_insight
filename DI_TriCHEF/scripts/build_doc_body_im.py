@@ -28,7 +28,7 @@ from pathlib import Path
 import numpy as np
 
 _root = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(_root / "MR_TriCHEF"))
+sys.path.insert(0, str(_root / "App" / "backend"))
 
 DOC_CACHE_DIR = _root / "Data" / "embedded_DB" / "Doc"
 DOC_RAW_DIR   = _root / "Data" / "raw_DB" / "Doc"
@@ -140,18 +140,18 @@ def phase2_embed(texts: list[str], batch: int = 64) -> np.ndarray:
     """2단계: BGE-M3 임베딩 (GPU). phase1 완료 후 실행."""
     N = len(texts)
     print(f"[doc_body:2단계] BGE-M3 임베딩 — {N:,} 텍스트  batch={batch}")
-    from pipeline.text import BGEM3Encoder
-    bge = BGEM3Encoder()
+    # App/backend SSOT: embedders.trichef.bgem3_caption_im (DI→App 의존 허용)
+    from embedders.trichef import bgem3_caption_im as _bge
 
     vecs: list[np.ndarray] = []
     for i in range(0, N, batch):
-        emb = bge.embed(texts[i:i + batch], batch=batch)
+        chunk = texts[i:i + batch]
+        emb = _bge.embed_passage(chunk, batch_size=batch)
         vecs.append(emb)
-        done = i + len(texts[i:i + batch])
+        done = i + len(chunk)
         if (i // batch) % 50 == 0:
             print(f"  임베딩 {done:,}/{N:,} ({done/N*100:.1f}%)")
 
-    bge.unload(); del bge
     result = np.vstack(vecs).astype(np.float32)
     print(f"[doc_body:2단계] 완료 — shape: {result.shape}")
     return result

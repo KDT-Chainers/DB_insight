@@ -20,6 +20,10 @@
   python DI_TriCHEF/scripts/build_img_caption_triple.py
   python DI_TriCHEF/scripts/build_img_caption_triple.py --resume    # 중단 후 재개
   python DI_TriCHEF/scripts/build_img_caption_triple.py --embed-only  # 캡션 JSONL만 있으면 임베딩만
+
+→ 후속 fuse_img_caption_triple.py 실행 필요:
+  python DI_TriCHEF/scripts/fuse_img_caption_triple.py
+  (L1/L2/L3 .npy 를 α=0.15/0.25/0.60 으로 가중치 합산 → cache_img_Im.npy 생성)
 """
 from __future__ import annotations
 
