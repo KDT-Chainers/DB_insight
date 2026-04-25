@@ -90,16 +90,19 @@ CONFIGS = [
 
 # ── content-aware gold 임계값 (도메인별) ─────────────────────────────────────
 CONTENT_THETA: dict[str, float] = {
-    # BGE-M3 cross-modal 코사인 분포에 맞춘 도메인별 임계값.
-    # image: caption 짧음 → 분포 높음, θ=0.55 OK
-    # doc_page: body text 길고 풍부 → θ=0.50
-    # movie: 파일별 aggregated STT 매우 김 → 평균 코사인 낮아짐, θ=0.40
-    # music: corpus 14 파일, max sim ~0.48 (실측) → θ=0.35
-    "image":    0.55,
-    "doc_page": 0.50,
-    "movie":    0.40,
-    "music":    0.35,
+    # P3 (2026-04-25): 절대 θ + K_MIN/K_MAX clamp 하이브리드.
+    # θ 만으로는 쿼리별 코사인 분포 편차 (movie max 0.43~0.63) 를 흡수 못함.
+    # gold = top-K  where K = clip(|sims≥θ|, K_MIN, K_MAX)
+    "image":    0.50,
+    "doc_page": 0.45,
+    "movie":    0.35,
+    "music":    0.30,
 }
+
+# K_MIN: gold 가 K_MIN 미만이면 top K_MIN 으로 확장 (sparse corpus, 좁은 분포)
+# K_MAX: gold 가 K_MAX 초과면 top K_MAX 로 축소 (평탄 분포의 noise 차단)
+CONTENT_KMIN: dict[str, int] = {"image": 10, "doc_page": 20, "movie": 20, "music": 3}
+CONTENT_KMAX: dict[str, int] = {"image": 300, "doc_page": 2000, "movie": 200, "music": 14}
 
 # ── 데이터 경로 ──────────────────────────────────────────────────────────────
 DATA_DIR = ROOT / "Data" / "embedded_DB"
@@ -315,9 +318,25 @@ class ContentGoldDB:
 
         mat = self._mats[domain]                  # (N, D) L2-norm
         sims = mat @ q_vec                        # (N,) cosine (양쪽 L2-norm)
-        theta = CONTENT_THETA.get(domain, 0.50)
         ids = self._ids_in_order[domain]
-        return {ids[i] for i in np.where(sims >= theta)[0]}
+        n_total = len(ids)
+
+        # P3 하이브리드: top-K (K = clip(|sims≥θ|, K_MIN, K_MAX))
+        theta = CONTENT_THETA.get(domain, 0.50)
+        k_min = max(0, CONTENT_KMIN.get(domain, 0))
+        k_max = max(k_min, CONTENT_KMAX.get(domain, n_total))
+        k_max = min(k_max, n_total)
+
+        n_pass = int((sims >= theta).sum())
+        K = max(k_min, min(n_pass, k_max))
+        if K <= 0:
+            return set()
+        # 상위 K 인덱스 (효율: argpartition)
+        if K >= n_total:
+            top_idx = np.arange(n_total)
+        else:
+            top_idx = np.argpartition(-sims, K - 1)[:K]
+        return {ids[int(i)] for i in top_idx}
 
 
 # ── 결과 집계 헬퍼 ────────────────────────────────────────────────────────────
