@@ -1,4 +1,12 @@
-"""fuse_img_caption_triple.py — L1/L2/L3 캡션 임베딩 가중치 합산 → cache_img_Im.npy 생성.
+"""fuse_img_caption_triple.py — L1/L2/L3 캡션 임베딩 stand-alone fusion 산출물.
+
+[NOTE] 실제 검색 경로에서는 이 스크립트 산출물을 사용하지 않습니다.
+`App/backend/services/trichef/unified_engine.py:108-132` 가 L1/L2/L3 .npy 가
+모두 존재할 때 동일한 가중치 합산을 자동 수행합니다(런타임 fusion).
+이 스크립트는 다음 보조 용도로만 유지됩니다:
+  • 분석/디버깅: 정적 fusion 결과를 numpy 로 직접 검사
+  • 외부 도구 연동: backend 의존 없이 cache_img_Im.npy 산출물 필요 시
+  • α 가중치 sweep 실험: 다른 α 조합의 결과를 빠르게 비교
 
 build_img_caption_triple.py 가 저장한 세 개의 level별 .npy 파일을 불러와
 가중치 합산(fusion) 후 L2 정규화하여 cache_img_Im.npy 로 덮어씁니다.

@@ -21,17 +21,26 @@
   python DI_TriCHEF/scripts/build_img_caption_triple.py --resume    # 중단 후 재개
   python DI_TriCHEF/scripts/build_img_caption_triple.py --embed-only  # 캡션 JSONL만 있으면 임베딩만
 
-→ 후속 fuse_img_caption_triple.py 실행 필요:
-  python DI_TriCHEF/scripts/fuse_img_caption_triple.py
-  (L1/L2/L3 .npy 를 α=0.15/0.25/0.60 으로 가중치 합산 → cache_img_Im.npy 생성)
+→ 후속 fusion 은 자동:
+  L1/L2/L3 .npy 가 모두 존재하면 backend (unified_engine.py:108-132) 가
+  런타임에 α=0.15/0.25/0.60 가중치 합산 + L2 정규화를 수행한다.
+  별도 스크립트 실행 불필요. (분석용 stand-alone 산출물이 필요하면
+  fuse_img_caption_triple.py 사용)
 """
 from __future__ import annotations
 
 import argparse
+import io
 import json
 import sys
 import time
 from pathlib import Path
+
+# Windows cp949 콘솔에서 em-dash 등 유니코드 print 시 UnicodeEncodeError 방지
+if hasattr(sys.stdout, "buffer"):
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "buffer"):
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
 _root = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_root / "DI_TriCHEF"))
