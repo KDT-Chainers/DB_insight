@@ -178,16 +178,11 @@ def run_music_incremental(
 
             Z  = np.zeros((Im.shape[0], Z_DIM_MUSIC), dtype=np.float32)
 
-            cache.append_npy(MUSIC_CACHE_DIR / "cache_music_Re.npy", Re)
-            cache.append_npy(MUSIC_CACHE_DIR / "cache_music_Im.npy", Im)
-            cache.append_npy(MUSIC_CACHE_DIR / "cache_music_Z.npy",  Z)
-
             ids = [rel] * len(windows)
-            cache.append_ids(MUSIC_CACHE_DIR / "music_ids.json", ids)
-
             seg_meta = [
                 {
                     "file":                rel,
+                    "file_path":           rel,   # replace_by_file 키
                     "file_name":           aud.name,
                     "window_idx":          w["window_idx"],
                     "t_start":             w["t_start"],
@@ -201,7 +196,16 @@ def run_music_incremental(
                 }
                 for w in windows
             ]
-            cache.append_segments(MUSIC_CACHE_DIR / "segments.json", seg_meta)
+            cache.replace_by_file(
+                cache_dir=MUSIC_CACHE_DIR,
+                file_keys=[rel],
+                arrays={"Re": Re, "Im": Im, "Z": Z},
+                new_ids=ids,
+                new_segs=seg_meta,
+                npy_prefix="cache_music",
+                ids_file="music_ids.json",
+                segs_file="segments.json",
+            )
 
             # [항목7] registry에 stt_status 기록
             reg[rel] = {"sha": sha, "windows": len(windows), "duration": dur,
