@@ -7,6 +7,8 @@
 출력:
   bench_results/{ts}_local_bench_v2.json
   콘솔 표: 도메인 × config × {fn_metric, ct_metric}
+
+공통 라이브러리: scripts/_bench_common.py
 """
 from __future__ import annotations
 
@@ -20,6 +22,7 @@ from typing import Optional
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "App" / "backend"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 os.chdir(ROOT / "App" / "backend")
 
 try:
@@ -28,6 +31,13 @@ except Exception:
     pass
 
 from services.trichef.unified_engine import TriChefEngine  # noqa: E402
+from _bench_common import (  # noqa: E402
+    ContentGoldDB,
+    CONTENT_THETA,
+    _ensure_encoder,
+    _precision_at_k,
+)
+import _bench_common as _bc
 
 # ── 쿼리 셋 (도메인별 ≥ 10개) ──────────────────────────────────────────────
 # (쿼리, 도메인, 기대 키워드 리스트)
@@ -88,267 +98,11 @@ CONFIGS = [
     ("dense+sp+asf", {"use_lexical": True,  "use_asf": True}),
 ]
 
-# ── content-aware gold 임계값 (도메인별) ─────────────────────────────────────
-CONTENT_THETA: dict[str, float] = {
-    # P3 (2026-04-25): 절대 θ + K_MIN/K_MAX clamp 하이브리드.
-    # θ 만으로는 쿼리별 코사인 분포 편차 (movie max 0.43~0.63) 를 흡수 못함.
-    # gold = top-K  where K = clip(|sims≥θ|, K_MIN, K_MAX)
-    "image":    0.50,
-    "doc_page": 0.45,
-    "movie":    0.35,
-    "music":    0.30,
-}
-
-# K_MIN: gold 가 K_MIN 미만이면 top K_MIN 으로 확장 (sparse corpus, 좁은 분포)
-# K_MAX: gold 가 K_MAX 초과면 top K_MAX 로 축소 (평탄 분포의 noise 차단)
-CONTENT_KMIN: dict[str, int] = {"image": 10, "doc_page": 20, "movie": 20, "music": 3}
-CONTENT_KMAX: dict[str, int] = {"image": 300, "doc_page": 2000, "movie": 200, "music": 14}
-
-# ── 데이터 경로 ──────────────────────────────────────────────────────────────
-DATA_DIR = ROOT / "Data" / "embedded_DB"
-CAPTION_TRIPLE_PATH = DATA_DIR / "Img" / "captions_triple.jsonl"
-MOVIE_SEGMENTS_PATH = DATA_DIR / "Movie" / "segments.json"
-MUSIC_SEGMENTS_PATH = DATA_DIR / "Rec" / "segments.json"
-DOC_BODY_TEXTS_PATH = DATA_DIR / "Doc" / "_body_texts.json"
-IMG_IDS_PATH        = DATA_DIR / "Img" / "img_ids.json"
-DOC_IDS_PATH        = DATA_DIR / "Doc" / "doc_page_ids.json"
-MOVIE_IDS_PATH      = DATA_DIR / "Movie" / "movie_ids.json"
-MUSIC_IDS_PATH      = DATA_DIR / "Rec" / "music_ids.json"
-
 
 # ── filename-kw 히트 ─────────────────────────────────────────────────────────
 def _hit(id_str: str, kws: list[str]) -> bool:
     low = id_str.lower()
     return any(k.lower() in low for k in kws)
-
-
-# ── content-aware gold 구축 ──────────────────────────────────────────────────
-
-_bgem3_ok: Optional[bool] = None   # None = 아직 미확인
-_embed_fn = None
-_embed_passage_fn = None  # batch passage encoder (max_length=1024)
-
-
-def _ensure_encoder() -> bool:
-    global _bgem3_ok, _embed_fn, _embed_passage_fn
-    if _bgem3_ok is not None:
-        return _bgem3_ok
-    try:
-        import embedders.trichef.bgem3_caption_im as _enc
-        _embed_fn = _enc.embed_query
-        _embed_passage_fn = _enc.embed_passage
-        _bgem3_ok = True
-        print("[v2] BGE-M3 인코더 로드 성공")
-    except Exception as e:
-        warnings.warn(f"[v2] BGE-M3 로드 실패 → content metric 비활성화: {e}")
-        _bgem3_ok = False
-    return _bgem3_ok
-
-
-def _cosine(a: "np.ndarray", b: "np.ndarray") -> float:
-    import numpy as np
-    na = np.linalg.norm(a) + 1e-12
-    nb = np.linalg.norm(b) + 1e-12
-    return float(np.dot(a, b) / (na * nb))
-
-
-class ContentGoldDB:
-    """도메인별 (id → text) 매핑 + 쿼리별 gold id 집합 반환.
-
-    O(Q+N) 최적화: 도메인별 corpus 를 1회 batch 인코딩하여 (N, D) 행렬로
-    캐시 (`_mats`, `_ids_in_order`). gold_ids() 는 쿼리 1회 인코딩 후
-    (1, D) @ (D, N) dot product 로 즉시 N 개 cosine 계산.
-    """
-
-    def __init__(self):
-        self._dbs: dict[str, dict[str, str]] = {}   # domain → {id: text}
-        self._mats: dict[str, "np.ndarray"] = {}    # domain → (N, D) L2-norm
-        self._ids_in_order: dict[str, list[str]] = {}  # domain → [id..N]
-        self._encoded: set[str] = set()             # domain 인코딩 완료 mark
-        self._ready: dict[str, bool] = {}
-        self._build_all()
-
-    # ── 구축 ─────────────────────────────────────────────────────────────────
-
-    def _build_all(self):
-        self._dbs["image"]    = self._load_image()
-        self._dbs["doc_page"] = self._load_doc()
-        self._dbs["movie"]    = self._load_av(MOVIE_SEGMENTS_PATH, MOVIE_IDS_PATH)
-        self._dbs["music"]    = self._load_av(MUSIC_SEGMENTS_PATH, MUSIC_IDS_PATH)
-
-    def _load_image(self) -> dict[str, str]:
-        """captions_triple.jsonl → {rel: L1+L2+L3}"""
-        db: dict[str, str] = {}
-        if not CAPTION_TRIPLE_PATH.exists():
-            print(f"[v2] captions_triple.jsonl 없음 ({CAPTION_TRIPLE_PATH}) → image content None")
-            return db
-        try:
-            with CAPTION_TRIPLE_PATH.open(encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    try:
-                        obj = json.loads(line)
-                    except json.JSONDecodeError:
-                        continue
-                    rel = obj.get("rel", "")
-                    parts = [obj.get(k, "") for k in ("L1", "L2", "L3") if obj.get(k)]
-                    text = " ".join(parts)
-                    if rel and text:
-                        db[rel] = text
-            print(f"[v2] image caption DB: {len(db)} 항목")
-        except Exception as e:
-            print(f"[v2] image caption 로드 오류: {e}")
-        return db
-
-    @staticmethod
-    def _load_ids(ids_path: Path) -> list[str]:
-        """ids.json 로드 + dict {"ids":[...]} 자동 unwrap. 실패 시 빈 list."""
-        if not ids_path.exists():
-            return []
-        try:
-            raw = json.loads(ids_path.read_bytes().decode("utf-8", errors="replace"))
-        except Exception:
-            return []
-        if isinstance(raw, dict):
-            raw = raw.get("ids", [])
-        return list(raw) if isinstance(raw, list) else []
-
-    def _load_doc(self) -> dict[str, str]:
-        """_body_texts.json → {id: text}  (list[str] or dict[str,str])"""
-        db: dict[str, str] = {}
-        if not DOC_BODY_TEXTS_PATH.exists():
-            print(f"[v2] _body_texts.json 없음 → doc_page content None")
-            return db
-        try:
-            raw = json.loads(DOC_BODY_TEXTS_PATH.read_bytes().decode("utf-8", errors="replace"))
-            if isinstance(raw, list):
-                # list[str] → id 는 doc_page_ids.json 순서와 동일
-                ids_raw = self._load_ids(DOC_IDS_PATH)
-                for idx, txt in enumerate(raw):
-                    if idx < len(ids_raw) and txt:
-                        db[ids_raw[idx]] = str(txt)
-            elif isinstance(raw, dict):
-                for k, v in raw.items():
-                    if v:
-                        db[k] = str(v)
-            print(f"[v2] doc_page body DB: {len(db)} 항목")
-        except Exception as e:
-            print(f"[v2] doc body 로드 오류: {e}")
-        return db
-
-    def _load_av(self, seg_path: Path, ids_path: Path) -> dict[str, str]:
-        """segments.json → {segment_id: stt_text}
-        segment_id 는 unified_engine 이 사용하는 ids.json 의 항목과 동일.
-        segments 의 file + frame_idx/window_idx 조합이 key."""
-        db: dict[str, str] = {}
-        if not seg_path.exists():
-            print(f"[v2] {seg_path.name} 없음 → {seg_path.parent.name} content None")
-            return db
-        try:
-            raw = json.loads(seg_path.read_bytes().decode("utf-8", errors="replace"))
-            # ids.json 은 {"ids":[...]} 또는 [...] 양쪽 가능 → _load_ids 가 정규화
-            ids_raw = self._load_ids(ids_path)
-            ids_set = set(ids_raw)
-
-            for seg in raw:
-                # key 후보: file 경로 자체, file_name, frame_idx/window_idx 조합
-                file_ = seg.get("file", seg.get("file_name", ""))
-                fidx  = seg.get("frame_idx", seg.get("window_idx", 0))
-                stt   = seg.get("stt_text", seg.get("text", ""))
-                if not stt:
-                    continue
-                # ids.json 과 매칭 — 가장 단순한 방법: 정확한 일치 먼저,
-                # 없으면 file 포함 id 중 frame_idx 일치 항목 탐색
-                seg_id = f"{file_}::{fidx}"
-                # ids_set 기반 보강: ids.json 에 '파일경로' 가 그대로 들어 있으면 file_ 이 id
-                if file_ in ids_set:
-                    db[file_] = (db.get(file_, "") + " " + stt).strip()
-                else:
-                    db[seg_id] = stt
-            print(f"[v2] {seg_path.parent.name} STT DB: {len(db)} 항목")
-        except Exception as e:
-            print(f"[v2] {seg_path.name} 로드 오류: {e}")
-        return db
-
-    # ── gold 산출 ─────────────────────────────────────────────────────────────
-
-    def _encode_corpus(self, domain: str) -> bool:
-        """도메인 corpus 를 1회 batch 인코딩하여 (N, D) 행렬 캐시.
-        성공 True / 실패(또는 빈 db) False."""
-        if domain in self._encoded:
-            return domain in self._mats
-        self._encoded.add(domain)
-        if not _ensure_encoder():
-            return False
-        db = self._dbs.get(domain) or {}
-        if not db:
-            return False
-        import numpy as np
-        ids = list(db.keys())
-        texts = [db[i] for i in ids]
-        try:
-            mat = _embed_passage_fn(texts, batch_size=32, max_length=1024)
-        except Exception as e:
-            warnings.warn(f"[v2] {domain} corpus 인코딩 실패: {e}")
-            return False
-        self._mats[domain] = np.asarray(mat, dtype=np.float32)
-        self._ids_in_order[domain] = ids
-        print(f"[v2] {domain} corpus 인코딩 완료 — shape={self._mats[domain].shape}")
-        return True
-
-    def gold_ids(self, query: str, domain: str) -> Optional[set[str]]:
-        """BGE-M3 코사인 ≥ θ 인 id 집합. 인코더 없으면 None.
-
-        O(N) 비용: 쿼리 1회 인코딩 + 캐시된 (N,D) 행렬과 dot product.
-        """
-        if not _ensure_encoder():
-            return None
-        if not self._encode_corpus(domain):
-            return None
-
-        import numpy as np
-        try:
-            q = _embed_fn(query)  # (1, D) — list 입력 시 (1,D)
-            q_vec = np.asarray(q, dtype=np.float32).reshape(-1)
-        except Exception as e:
-            warnings.warn(f"[v2] 쿼리 임베딩 오류: {e}")
-            return None
-
-        mat = self._mats[domain]                  # (N, D) L2-norm
-        sims = mat @ q_vec                        # (N,) cosine (양쪽 L2-norm)
-        ids = self._ids_in_order[domain]
-        n_total = len(ids)
-
-        # P3 하이브리드: top-K (K = clip(|sims≥θ|, K_MIN, K_MAX))
-        theta = CONTENT_THETA.get(domain, 0.50)
-        k_min = max(0, CONTENT_KMIN.get(domain, 0))
-        k_max = max(k_min, CONTENT_KMAX.get(domain, n_total))
-        k_max = min(k_max, n_total)
-
-        n_pass = int((sims >= theta).sum())
-        K = max(k_min, min(n_pass, k_max))
-        if K <= 0:
-            return set()
-        # 상위 K 인덱스 (효율: argpartition)
-        if K >= n_total:
-            top_idx = np.arange(n_total)
-        else:
-            top_idx = np.argpartition(-sims, K - 1)[:K]
-        return {ids[int(i)] for i in top_idx}
-
-
-# ── 결과 집계 헬퍼 ────────────────────────────────────────────────────────────
-
-def _precision_at_k(hits: list, gold: Optional[set[str]], id_fn) -> Optional[float]:
-    """gold 가 None 이거나 비면 None. 아니면 precision@k."""
-    if gold is None:
-        return None
-    if not gold:
-        return None   # gold 없는 쿼리 skip
-    matched = sum(1 for h in hits if id_fn(h) in gold)
-    return round(matched / max(len(hits), 1), 4)
 
 
 # ── main ─────────────────────────────────────────────────────────────────────
@@ -369,7 +123,7 @@ def main() -> None:
         "topk": TOPK,
         "configs": [c for c, _ in CONFIGS],
         "content_theta": CONTENT_THETA,
-        "encoder_ok": _bgem3_ok,
+        "encoder_ok": _bc._bgem3_ok,
         "per_query": [],
         "summary_by_domain": {},
         "summary_overall": {},
@@ -415,8 +169,6 @@ def main() -> None:
             fn_hits = sum(1 for h in results if _hit(h.id, kws))
 
             # (B) content-aware metric
-            # ids.json の항목과 segments DB 항목 간 매핑:
-            # movie/music 의 경우 h.id 가 파일 경로이므로 gold_db 에도 파일 경로 키가 있어야 함
             ct_p5: Optional[float] = None
             ct_hits_val = None
             if gold_set is not None:
@@ -537,7 +289,7 @@ def main() -> None:
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     out = out_dir / f"{ts}_local_bench_v2.json"
     # 저장 전 encoder_ok 갱신 (lazy 로드 후 상태 반영)
-    report["encoder_ok"] = bool(_bgem3_ok)
+    report["encoder_ok"] = bool(_bc._bgem3_ok)
     out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"\n[saved] {out}")
 
