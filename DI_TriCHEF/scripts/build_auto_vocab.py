@@ -1,4 +1,4 @@
-"""scripts/build_auto_vocab.py — image/doc 도메인 자동 어휘 사전 빌드 (v3 P3)."""
+"""DI_TriCHEF/scripts/build_auto_vocab.py — image/doc 도메인 자동 어휘 사전 빌드 (v3 P3)."""
 from __future__ import annotations
 
 import json
@@ -8,7 +8,7 @@ from pathlib import Path
 
 from tqdm import tqdm
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "App" / "backend"))
 os.chdir(ROOT / "App" / "backend")
 

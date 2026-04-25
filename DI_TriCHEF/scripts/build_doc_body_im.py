@@ -1,4 +1,4 @@
-"""build_doc_body_im.py — PDF 본문 텍스트 추출 → BGE-M3 Im_body 캐시 생성.
+"""DI_TriCHEF/scripts/build_doc_body_im.py — PDF 본문 텍스트 추출 → BGE-M3 Im_body 캐시 생성.
 
 기존 cache_doc_page_Im.npy 는 Qwen 이미지 캡션 기반 (시각 설명).
 이 스크립트는 pdfplumber 로 각 페이지 텍스트를 직접 추출 → BGE-M3 임베딩하여
@@ -10,13 +10,13 @@ unified_engine.py 의 score fusion:
 
 2단계 실행 (GPU 독립적 단계 분리):
   # 1단계: CPU만 사용 — GPU 작업과 병렬 실행 가능
-  python MR_TriCHEF/scripts/build_doc_body_im.py --extract-only
+  python DI_TriCHEF/scripts/build_doc_body_im.py --extract-only
 
   # 2단계: GPU(BGE-M3) 임베딩 — GPU 여유 시 실행
-  python MR_TriCHEF/scripts/build_doc_body_im.py --embed-only
+  python DI_TriCHEF/scripts/build_doc_body_im.py --embed-only
 
   # 전체 한번에:
-  python MR_TriCHEF/scripts/build_doc_body_im.py --batch 32 --resume
+  python DI_TriCHEF/scripts/build_doc_body_im.py --batch 32 --resume
 """
 from __future__ import annotations
 
@@ -200,7 +200,7 @@ def main():
 
     if args.extract_only:
         print("\n[doc_body] --extract-only 완료. 다음 단계:")
-        print("  python MR_TriCHEF/scripts/build_doc_body_im.py --embed-only")
+        print("  python DI_TriCHEF/scripts/build_doc_body_im.py --embed-only")
         return
 
     # ── 2단계: 임베딩 ────────────────────────────────────────────

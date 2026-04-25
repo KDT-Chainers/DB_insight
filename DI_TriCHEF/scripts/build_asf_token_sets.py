@@ -1,4 +1,4 @@
-"""scripts/build_asf_token_sets.py — 문서별 vocab-token 집합 precompute (v3 P4).
+"""DI_TriCHEF/scripts/build_asf_token_sets.py — 문서별 vocab-token 집합 precompute (v3 P4).
 
 ASF 필터가 런타임에서 재토큰화하지 않도록 {token: idf} 리스트를 디스크에 저장.
 """
@@ -12,7 +12,7 @@ from pathlib import Path
 import fitz
 from tqdm import tqdm
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "App" / "backend"))
 os.chdir(ROOT / "App" / "backend")
 

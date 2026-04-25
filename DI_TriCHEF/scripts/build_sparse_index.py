@@ -1,4 +1,4 @@
-"""scripts/build_sparse_index.py — BGE-M3 Sparse 인덱스 빌드 (v2 P2).
+"""DI_TriCHEF/scripts/build_sparse_index.py — BGE-M3 Sparse 인덱스 빌드 (v2 P2).
 
 image / doc_page 각 도메인의 캡션을 BGE-M3 sparse 로 인코딩, CSR sparse matrix 저장.
 """
@@ -12,7 +12,7 @@ from pathlib import Path
 from scipy import sparse as sp
 from tqdm import tqdm
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "App" / "backend"))
 os.chdir(ROOT / "App" / "backend")
 

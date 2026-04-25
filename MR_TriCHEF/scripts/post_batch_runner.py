@@ -81,7 +81,7 @@ def main():
     # Step 4: PDF body text 임베딩
     if not args.skip_pdf:
         steps.append(("PDF body text 2단계 BGE-M3 임베딩 (34,170페이지)",
-                      SCRIPTS / "build_doc_body_im.py",
+                      _root / "DI_TriCHEF" / "scripts" / "build_doc_body_im.py",
                       ["--embed-only", "--batch", "64"]))
 
     results: list[tuple[str, bool]] = []

@@ -1,4 +1,4 @@
-"""bench_av.py — Movie/Music AV 전용 regression 벤치.
+"""MR_TriCHEF/scripts/bench_av.py — Movie/Music AV 전용 regression 벤치.
 
 게이트:
   1. music 쿼리 5개 모두 hits > 0

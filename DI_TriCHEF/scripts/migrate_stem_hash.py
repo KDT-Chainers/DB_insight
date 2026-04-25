@@ -1,4 +1,4 @@
-"""scripts/migrate_stem_hash.py — H-2: 기존 page_images/captions 를 hash-suffix stem 으로 이관.
+"""DI_TriCHEF/scripts/migrate_stem_hash.py — H-2: 기존 page_images/captions 를 hash-suffix stem 으로 이관.
 
 변경 대상:
   [Doc]
@@ -19,8 +19,8 @@
   (positional order 유지)
 
 사용법:
-  python scripts/migrate_stem_hash.py --dry-run
-  python scripts/migrate_stem_hash.py
+  python DI_TriCHEF/scripts/migrate_stem_hash.py --dry-run
+  python DI_TriCHEF/scripts/migrate_stem_hash.py
 """
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ import shutil
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "App" / "backend"))
 os.chdir(ROOT / "App" / "backend")
 

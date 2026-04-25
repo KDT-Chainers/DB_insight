@@ -1,4 +1,4 @@
-"""scripts/rebuild_im_axis.py — Im 축 e5-large → BGE-M3 Dense 재구축.
+"""DI_TriCHEF/scripts/rebuild_im_axis.py — Im 축 e5-large → BGE-M3 Dense 재구축.
 
 기존 캡션(.txt)은 그대로 재사용. Re/Z 축은 건드리지 않음.
 1. ids.json 기반 캡션 재로딩
@@ -18,7 +18,7 @@ from pathlib import Path
 import numpy as np
 from tqdm import tqdm
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "App" / "backend"))
 os.chdir(ROOT / "App" / "backend")
 

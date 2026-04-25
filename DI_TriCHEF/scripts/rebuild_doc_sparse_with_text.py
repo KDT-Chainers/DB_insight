@@ -1,4 +1,4 @@
-"""scripts/rebuild_doc_sparse_with_text.py — PDF 원문 텍스트 포함 sparse 재구축.
+"""DI_TriCHEF/scripts/rebuild_doc_sparse_with_text.py — PDF 원문 텍스트 포함 sparse 재구축.
 
 기존 BLIP 영어 캡션만으로는 한글 쿼리가 lexical 채널에 매칭되지 않음.
 PyMuPDF(fitz)로 페이지별 실제 텍스트를 추출하여 캡션과 결합 후 sparse 재인덱싱.
@@ -14,7 +14,7 @@ import fitz
 from scipy import sparse as sp
 from tqdm import tqdm
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "App" / "backend"))
 os.chdir(ROOT / "App" / "backend")
 
