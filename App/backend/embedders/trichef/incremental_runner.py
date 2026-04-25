@@ -251,7 +251,7 @@ def run_image_incremental() -> IncrementalResult:
 
     img_files = sorted(
         p for p in raw_dir.rglob("*")
-        if p.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}
+        if p.suffix.lower() in IMAGE_EMBED_EXTS
     )
     # v2 P1: stale 정리
     current_keys = {str(p.relative_to(raw_dir)).replace("\\", "/") for p in img_files}
@@ -353,7 +353,7 @@ def run_doc_incremental() -> IncrementalResult:
                 ".odt", ".odp", ".ods", ".rtf",
                 ".hwp", ".hwpx",
                 ".txt", ".md", ".markdown", ".rst", ".log",
-                ".csv", ".html", ".htm"}
+                ".csv", ".html", ".htm", ".epub"}
     doc_files = sorted(
         p for p in raw_dir.rglob("*")
         if p.is_file() and p.suffix.lower() in DOC_EXTS
@@ -470,12 +470,15 @@ def run_doc_incremental() -> IncrementalResult:
 
 # ── 단일 파일 임베딩 (UI 인덱싱 진입점) ────────────────────────────────────
 
-IMAGE_EMBED_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
+IMAGE_EMBED_EXTS = {
+    ".jpg", ".jpeg", ".png", ".webp",
+    ".bmp", ".gif", ".tiff", ".heic", ".heif",
+}
 DOC_EMBED_EXTS = {
     ".pdf", ".docx", ".doc", ".pptx", ".ppt", ".xlsx", ".xls",
     ".odt", ".odp", ".ods", ".rtf", ".hwp", ".hwpx",
     ".txt", ".md", ".markdown", ".rst", ".log",
-    ".csv", ".html", ".htm",
+    ".csv", ".html", ".htm", ".epub",
 }
 
 

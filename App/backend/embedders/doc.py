@@ -14,7 +14,14 @@ from __future__ import annotations
 import hashlib
 import os
 
-SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".txt", ".hwp", ".pptx", ".xlsx"}
+SUPPORTED_EXTENSIONS = {
+    ".pdf",
+    ".docx", ".doc", ".pptx", ".ppt", ".xlsx", ".xls",
+    ".odt", ".odp", ".ods", ".rtf",
+    ".hwp", ".hwpx",
+    ".txt", ".md", ".markdown", ".rst", ".csv", ".tsv",
+    ".html", ".htm", ".epub",
+}
 
 
 # ── 텍스트 추출 ───────────────────────────────────────────────────

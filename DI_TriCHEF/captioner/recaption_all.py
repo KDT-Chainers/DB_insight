@@ -29,7 +29,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from captioner.qwen_vl_ko import QwenKoCaptioner  # noqa: E402
 
-EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".gif", ".tiff", ".heic", ".heif", ".avif"}
 
 _STOP = False
 def _handle_sigint(signum, frame):

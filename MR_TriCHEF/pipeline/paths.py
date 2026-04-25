@@ -27,8 +27,14 @@ MUSIC_CACHE_DIR = EMBEDDED_ROOT / "Rec"
 for d in (MOVIE_CACHE_DIR, MUSIC_CACHE_DIR):
     d.mkdir(parents=True, exist_ok=True)
 
-MOVIE_EXTS = {".mp4", ".mov", ".mkv", ".avi", ".webm", ".wmv"}
-MUSIC_EXTS = {".m4a", ".mp3", ".wav", ".flac", ".aac", ".ogg"}
+MOVIE_EXTS = {
+    ".mp4", ".mov", ".mkv", ".avi", ".webm", ".wmv",
+    ".flv", ".m4v", ".mpg", ".mpeg", ".3gp", ".ts", ".mts", ".m2ts",
+}
+MUSIC_EXTS = {
+    ".m4a", ".mp3", ".wav", ".flac", ".aac", ".ogg",
+    ".wma", ".opus", ".aiff", ".aif", ".amr",
+}
 
 # 모델 식별자 (로컬 HF 캐시)
 MODEL_WHISPER = "large-v3"                                # faster-whisper

@@ -14,7 +14,21 @@ from __future__ import annotations
 import hashlib
 import os
 
-SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".tiff"}
+# HEIC/HEIF/AVIF 지원 (PIL plugin 자동 등록)
+try:
+    import pillow_heif
+    pillow_heif.register_heif_opener()
+except ImportError:
+    pass  # .heic/.heif 파일은 skip, 다른 포맷은 정상 동작
+try:
+    import pillow_avif  # noqa: F401  # plugin 자동 등록
+except ImportError:
+    pass
+
+SUPPORTED_EXTENSIONS = {
+    ".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".tiff",
+    ".heic", ".heif", ".avif",
+}
 
 # ── 캐시 경로 ─────────────────────────────────────────────────────
 from config import EXTRACTED_DB
@@ -38,10 +52,12 @@ def _generate_caption(file_path: str) -> str:
     TODO: 원하는 방식으로 구현
     예시 A) BLIP 캡션
       from transformers import BlipProcessor, BlipForConditionalGeneration
-      from PIL import Image
+      from PIL import Image, ImageOps
       processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
       model     = BlipForConditionalGeneration.from_pretrained(...)
-      image     = Image.open(file_path).convert("RGB")
+      image     = Image.open(file_path)
+      image     = ImageOps.exif_transpose(image)   # iPhone HEIC EXIF 회전 정합
+      image     = image.convert("RGB")
       inputs    = processor(image, return_tensors="pt")
       out       = model.generate(**inputs)
       return processor.decode(out[0], skip_special_tokens=True)
