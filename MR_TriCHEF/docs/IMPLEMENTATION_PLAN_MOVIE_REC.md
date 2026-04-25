@@ -228,7 +228,7 @@ MR_TriCHEF/                            ← 병행 사이드프로젝트 (계보)
 
 ### 6.2 통합 (신규 작성 TODO)
 
-`DI_TriCHEF/scripts/bench_av.py`  (가칭, Phase 6 산출물)
+`MR_TriCHEF/scripts/bench_av.py`  (가칭, Phase 6 산출물)
 - 20 고정 쿼리 × {movie, music}
 - 각 쿼리별: 정답 파일 Top-1 포함 여부 / 타임코드 허용오차
 - 게이트: Top-1 정답률 ≥ 70%, 타임코드 오차 ±2s 내 비율 ≥ 90%
@@ -307,10 +307,10 @@ torch (CUDA), transformers, openai-whisper, ffmpeg-python, soundfile, numpy, Fla
 
 | 문서 / 코드 | 위치 |
 |---|---|
-| 본 계획서 | `DI_TriCHEF/docs/IMPLEMENTATION_PLAN_MOVIE_REC.md` |
-| 파이프라인 개요 | `DI_TriCHEF/docs/TRICHEF_PIPELINE_AND_CONCEPTS.md` |
-| (TODO) AV 회귀 스위트 | `DI_TriCHEF/scripts/bench_av.py` |
-| (TODO) 타임코드 검증 | `DI_TriCHEF/scripts/check_timestamps.py` |
+| 본 계획서 | `MR_TriCHEF/docs/IMPLEMENTATION_PLAN_MOVIE_REC.md` |
+| 파이프라인 개요 | `md/TRICHEF_PIPELINE_AND_CONCEPTS.md` |
+| (TODO) AV 회귀 스위트 | `MR_TriCHEF/scripts/bench_av.py` |
+| (TODO) 타임코드 검증 | `MR_TriCHEF/scripts/check_timestamps.py` |
 | 세그먼트 · STT 모듈(계보) | `MR_TriCHEF/` |
 
 ---
@@ -332,4 +332,4 @@ torch (CUDA), transformers, openai-whisper, ffmpeg-python, soundfile, numpy, Fla
 
 ---
 
-*문서 끝 · `DI_TriCHEF/docs/IMPLEMENTATION_PLAN_MOVIE_REC.md`*
+*문서 끝 · `MR_TriCHEF/docs/IMPLEMENTATION_PLAN_MOVIE_REC.md`*

@@ -210,4 +210,4 @@ class TriChefEngine:
 
 ---
 
-*문서 끝 · `DI_TriCHEF/docs/TRICHEF_SPECIFIC.md`*
+*문서 끝 · `md/TRICHEF_SPECIFIC.md`*

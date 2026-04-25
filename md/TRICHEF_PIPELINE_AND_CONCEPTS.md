@@ -269,4 +269,4 @@ confidence = Φ(z) = ½·(1 + erf(z/√2))
 
 ---
 
-_문서 끝 · `DI_TriCHEF/docs/TRICHEF_PIPELINE_AND_CONCEPTS.md`_
+_문서 끝 · `md/TRICHEF_PIPELINE_AND_CONCEPTS.md`_

@@ -297,8 +297,8 @@ torch (CUDA/CPU), transformers, FlagEmbedding, chromadb, PyMuPDF (`fitz`), Pillo
 | 문서 | 위치 |
 |---|---|
 | 본 계획서 | `DI_TriCHEF/docs/IMPLEMENTATION_PLAN_DOC_IMG.md` |
-| 파이프라인 개요 + 핵심 개념 | `DI_TriCHEF/docs/TRICHEF_PIPELINE_AND_CONCEPTS.md` |
-| TriCHEF 전용 상세 | `DI_TriCHEF/docs/TRICHEF_SPECIFIC.md` |
+| 파이프라인 개요 + 핵심 개념 | `md/TRICHEF_PIPELINE_AND_CONCEPTS.md` |
+| TriCHEF 전용 상세 | `md/TRICHEF_SPECIFIC.md` |
 | 벤치/회귀 스위트 | `DI_TriCHEF/scripts/bench_w5.py` |
 | Reranker 효과 스크립트 | `DI_TriCHEF/scripts/bench_rerank.py` |
 | Doc crossmodal 실험 | `DI_TriCHEF/scripts/run_doc_crossmodal_calib.py` |

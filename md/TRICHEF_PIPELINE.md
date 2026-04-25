@@ -297,4 +297,4 @@ fused = w_d · minmax(dense) + w_l · minmax(lex) + w_a · minmax(asf)
 
 ---
 
-*문서 끝 · `DI_TriCHEF/docs/TRICHEF_PIPELINE.md`*
+*문서 끝 · `md/TRICHEF_PIPELINE.md`*

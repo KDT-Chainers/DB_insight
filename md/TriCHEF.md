@@ -359,6 +359,23 @@ score = np.sqrt(A**2 + (0.4*B)**2 + (0.2*C)**2)
 
 ## 5. 핵심 수식 카탈로그
 
+> **계보**: 본 카탈로그의 수식은 1세대 CHEF (e5+BGE 단일 복소축, 2개-모델 위상 필터) 에서
+> 출발하여, TRI-CHEF 에 와서 3축(Re/Im/Z) Hermitian, RRF 융합, cross-modal calibration,
+> Im_body fusion, 3-stage caption fusion 으로 확장되었다. CHEF 의 위상(phase) 필터 (`|θ|<0.6 rad`)
+> 는 1차원적 모델 합의 측정이었으나, 현 TRI-CHEF 는 **세 축의 직교 정보 보존 + 채널별 감쇠 가중치**
+> 로 동일 목적을 더 풍부하게 달성한다.
+
+### 5.0 CHEF → TRI-CHEF 수식 진화 비교
+
+| 항목 | CHEF (1세대) | TRI-CHEF (현재) |
+|------|--------------|-----------------|
+| 결합 식 | `<z_q*, z_d> = <a_q,a_d>+<b_q,b_d> + i(<a_q,b_d>−<b_q,a_d>)` | `s = √(A² + (αB)² + (βC)²)` |
+| 축 개수 | 2 (Re=e5, Im=BGE) | 3 (Re=SigLIP2, Im=BGE-M3, Z=DINOv2) |
+| 필터 | 위상 `\|θ\|<0.6 rad` | μ_null + Φ⁻¹(1−FAR)·σ_null (도메인별) |
+| 신뢰도 | 위상 합치도 (이산) | Φ((s−μ_null)/σ_null) (확률 CDF) |
+| 직교화 | Gram-Schmidt + MCR | 차원 불일치 → L2-norm only |
+| 가중치 | 균등 합산 | α=0.4 (Im 감쇠), β=0.2 (Z 감쇠) |
+
 ### 5.1 Gram-Schmidt 직교화
 
 Re 공간에 투영되는 Im, Z 성분을 제거하여 독립적 정보만 추출한다.
@@ -448,6 +465,158 @@ $$w_d = 0.6, \quad w_l = 0.25, \quad w_a = 0.15$$
 **Abs threshold 상향 보호** (image 도메인 σ 저평가 대비):
 
 $$\text{abs\_thr} = \max\!\left(\text{abs\_thr},\; \mu_{\text{null}} + 3\sigma_{\text{null}}\right) \quad (\text{domain} = \text{image})$$
+
+---
+
+### 5.6 Doc Im_body Fusion (PDF 본문 텍스트 결합)
+
+`cache_doc_page_Im.npy` 는 Qwen2-VL 이 페이지 이미지를 보고 생성한 **시각 캡션** Im 임베딩이다. 그러나 PDF 본문에는 이미지 캡션으로 포착되지 않는 표·수식·연속 문단 텍스트가 존재한다. `build_doc_body_im.py` 가 pdfplumber 로 페이지별 본문을 직접 추출하여 BGE-M3 로 별도 임베딩한 `cache_doc_page_Im_body.npy` 를 생성하면, 검색 엔진은 두 채널을 가중 평균한다.
+
+$$\mathbf{Im}_{\text{fused}} = \alpha \cdot \mathbf{Im}_{\text{caption}} + (1-\alpha) \cdot \mathbf{Im}_{\text{body}}, \qquad \alpha = \text{DOC\_IM\_ALPHA} = 0.20$$
+
+$$\mathbf{Im} \;\leftarrow\; \frac{\mathbf{Im}_{\text{fused}}}{\|\mathbf{Im}_{\text{fused}}\|_2}$$
+
+**Phase 4-2 α 튜닝 결과** (LOO eval, n=150, dense + sparse RRF):
+
+| α | R@5 (dense) | R@5 (+sparse) | 비고 |
+|---|:----------:|:-------------:|------|
+| 0.20 | **0.907** | 0.900 | 채택 (현재) |
+| 0.35 | 0.880 | 0.900 | 이전 기본값 |
+| 1.00 | 0.000 | — | Im_body 무시 → 본문 검색 완전 실패 |
+
+**구현** (`unified_engine.py:138-148`)
+
+```python
+if domain_label == "doc_page":
+    body_path = dir / "cache_doc_page_Im_body.npy"
+    if body_path.exists():
+        Im_body = np.load(body_path)
+        if Im_body.shape == Im.shape:
+            _alpha = float(TRICHEF_CFG.get("DOC_IM_ALPHA", 0.35))
+            Im_fused = _alpha * Im + (1.0 - _alpha) * Im_body
+            norms = np.linalg.norm(Im_fused, axis=1, keepdims=True)
+            Im = Im_fused / np.maximum(norms, 1e-9)
+```
+
+> **튜닝 의도**: α=0.20 → 시각 캡션 20%, 본문 텍스트 80%. PDF 도메인은 텍스트 밀도가 높아 본문 가중을 강하게 두는 것이 LOO recall 에서 유리. Phase 4-2 (2026-04-25) 튜닝으로 0.35→0.20 하향.
+
+---
+
+### 5.7 Img 3-Stage Caption Fusion (L1/L2/L3 가중 합산)
+
+이미지 도메인은 Qwen2-VL 이 한 장의 사진에 대해 3단계 한국어 캡션을 생성한다 (`build_img_caption_triple.py`):
+
+| 레벨 | 길이/형식 | 임베딩 캐시 |
+|------|-----------|-------------|
+| **L1** (주제) | 1문장 (≤30 token), 중심 주제 | `cache_img_Im_L1.npy` |
+| **L2** (키워드) | 콤마 키워드 5–10개 | `cache_img_Im_L2.npy` |
+| **L3** (상세) | 3–5문장 상세 묘사 | `cache_img_Im_L3.npy` |
+
+세 캐시가 모두 존재하면 엔진은 BGE-M3 동일 1024d 공간에서 직접 가중 평균한다.
+
+$$\mathbf{Im}_{\text{fused}} = w_1 \mathbf{Im}_{L1} + w_2 \mathbf{Im}_{L2} + w_3 \mathbf{Im}_{L3}, \quad (w_1, w_2, w_3) = (0.15,\; 0.25,\; 0.60)$$
+
+$$\mathbf{Im} \;\leftarrow\; \frac{\mathbf{Im}_{\text{fused}}}{\|\mathbf{Im}_{\text{fused}}\|_2}$$
+
+**구현** (`unified_engine.py:112-132`)
+
+```python
+if domain_label == "image":
+    if L1p.exists() and L2p.exists() and L3p.exists():
+        L1 = np.load(L1p); L2 = np.load(L2p); L3 = np.load(L3p)
+        w1 = float(TRICHEF_CFG.get("IMG_IM_L1_ALPHA", 0.15))
+        w2 = float(TRICHEF_CFG.get("IMG_IM_L2_ALPHA", 0.25))
+        w3 = float(TRICHEF_CFG.get("IMG_IM_L3_ALPHA", 0.60))
+        tot = max(w1 + w2 + w3, 1e-9)
+        w1, w2, w3 = w1/tot, w2/tot, w3/tot
+        Im_fused = w1 * L1 + w2 * L2 + w3 * L3
+        norms = np.linalg.norm(Im_fused, axis=1, keepdims=True)
+        Im = Im_fused / np.maximum(norms, 1e-9)
+```
+
+> **가중치 의도**: 상세도가 높을수록 멀티모달 검색 신호가 풍부 → L3 60%. L1 은 주제 거시 정렬, L2 는 토픽 키워드 보강.
+
+---
+
+### 5.8 Movie/Music AV Hermitian (실제 검색 식)
+
+`MR_TriCHEF/pipeline/search.py` 의 AV 도메인 dense 점수는 Z 채널 미사용 형태이다.
+
+$$\text{per\_seg\_dense} = \sqrt{A^2 + (0.4 \cdot B)^2}, \quad A = \mathbf{q}_{\text{Re}}\!\cdot\!\mathbf{d}_{\text{Re}}, \; B = \mathbf{q}_{\text{Im}}\!\cdot\!\mathbf{d}_{\text{Im}}$$
+
+- **Movie**: $\mathbf{q}_{\text{Re}}$ = SigLIP2-text(1152d), $\mathbf{d}_{\text{Re}}$ = SigLIP2-image(1152d), 즉 **cross-modal text→image**
+- **Music**: $\mathbf{q}_{\text{Re}}$ = SigLIP2-text(1152d), $\mathbf{d}_{\text{Re}}$ = **SigLIP2-text**(1152d) — 2026-04 전환. 이전엔 Re = BGE-M3(1024d) 동질 공간이었음. SigLIP2-text 로 통일하면서 Movie/Music 이 **동일 Re 공간**을 공유 → 크로스도메인 후처리 가능.
+
+**파일 단위 집계** (`search.py:_aggregate`):
+
+$$\text{file\_score} = \alpha \cdot z(\text{mean(top-3 segments)}) + \gamma \cdot \text{ASF}_{\text{file-max}}$$
+
+$$(\alpha, \beta, \gamma) = (0.75, 0, 0.25), \qquad z = \frac{x - \mu_{\text{null}}}{\sigma_{\text{null}}}, \qquad \text{conf} = \sigma(z/2)$$
+
+> 본 식은 App 의 통합 엔진(`unified_engine.search_av`) 의 3축 Hermitian 과 별개이며,
+> MR_TriCHEF standalone CLI 에서 적용된다. App 측에서는 Z=Im 으로 대체되어 5.2 의
+> 일반 식이 그대로 사용된다.
+
+---
+
+### 5.9 Music SigLIP2-Text 통일 (2026-04 전환) 과 동질 baseline
+
+Music Re 축이 BGE-M3(1024d) → SigLIP2-text(1152d) 로 전환되며, calibration 메타에 명시적 표기가 추가되었다.
+
+```json
+"music": {
+  "mu_null": 0.7884941697120667,
+  "sigma_null": 0.039009857922792435,
+  "abs_threshold": 0.8427863717079163,
+  "method": "text_text_siglip2_null_v1",
+  "note": "Music Re=SigLIP2-text, same-encoder baseline high. Do not cross-compare with cross-modal domains."
+}
+```
+
+**해석**: SigLIP2-text 가 query 와 doc 양쪽 모두에 동일하게 적용되므로 (text↔text, 동질 공간) μ_null ≈ 0.79 로 cross-modal 도메인(image/movie μ ≈ 0.16) 대비 수치가 매우 높다. 이는 부정합이 아니라 **동질 인코더 baseline** 의 자연스러운 결과로, 도메인 간 raw score 비교는 금지하고 z-score 또는 confidence 만 비교 단위로 사용해야 한다.
+
+---
+
+### 5.10 INT8 양자화 (DINOv2-Z + SigLIP2-Re)
+
+```python
+"INT8_Z_DINOV2": True,    # FP16 1.30GB → INT8 0.65GB
+"INT8_RE_SIGLIP2": True,  # FP16 1.00GB → INT8 0.50GB
+```
+
+bitsandbytes 8-bit 로 두 ViT 모델을 로드. 임베딩 품질 변화 < 0.5%, RTX 4070 8GB VRAM 환경에서 약 -1.15GB 절감으로 Whisper(STT) + Qwen2-VL(NF4) + BGE-M3 동시 상주가 가능해진다. config.py 의 `_check_int8_support()` 가 bitsandbytes 미설치 시 silent FP16 fallback 을 시작 시점에 경고.
+
+---
+
+### 5.11 calibration 2× drift safety guard
+
+App 측(`calibration.py:151-161`) 과 MR 측(`pipeline/calibration.py:151-190`) 모두에서 새 calibration 결과가 이전 abs_threshold 의 2배 이상으로 폭증/0.5배 이하로 폭락하면 새 값을 거부한다.
+
+```python
+prev_thr = float(prev.get("abs_threshold", 0.0) or 0.0)
+if prev_thr > 0 and thr > prev_thr * 2.0:
+    logger.warning(f"[calibration:{domain}] REJECTED new thr {thr:.4f} > 2× prev {prev_thr:.4f}.")
+    return prev
+```
+
+도입 계기는 W5-3 doc_page 사례 — within-doc caption 상관이 μ/σ 를 오염시켜 thr 0.205 → 0.355 로 치솟아 전 쿼리가 zero-hit 이 되었음. MR↔App 양방향 동기화는 `_sync_to_shared()` (`MR_TriCHEF/pipeline/calibration.py:193-234`) 가 `MR_TriCHEF/pipeline/_calibration.json` → `Data/embedded_DB/trichef_calibration.json` 으로 자동 머지.
+
+---
+
+### 5.12 replace_by_file 캐시 시맨틱 (P2B.1)
+
+이전 `append_npy/append_ids/append_segments` 는 항상 뒤에 붙이기 때문에, 동일 파일을 SHA mismatch 로 재인덱싱하면 stale 행이 누적되었다. P2B.1 부터 도입된 `cache.replace_by_file()` 은 다음을 보장한다:
+
+1. `file_keys` 에 포함된 파일에 해당하는 기존 행을 모든 `cache_*_{Re,Im,Z}.npy` + `*_ids.json` + `segments.json` 에서 제거 (keep_mask)
+2. 새 embedding 만 append
+3. dim mismatch / row 수 불일치 시 안전하게 prev 유지 + 경고
+
+```python
+keep_mask = np.array([rid not in keyset for rid in prev_ids], dtype=bool)
+# ... 모든 npy 슬라이스 후 vstack(kept, new_arr)
+```
+
+Movie/Music incremental runner(`movie_runner.py:154`, `music_runner.py:199`) 가 호출하며, 결과로 `{"rows": 최종_행수, "removed": 제거된_기존_행수}` 반환.
 
 ---
 
@@ -928,35 +1097,72 @@ class TriChefEngine:
 
 ## 15. Calibration 현재 상태
 
-**파일**: `Data/embedded_DB/trichef_calibration.json`
+**파일**: `Data/embedded_DB/trichef_calibration.json` (2026-04-25 스냅샷)
 
 ```json
 {
   "image": {
-    "mu_null": 0.1865,
-    "sigma_null": 0.0365,
-    "abs_threshold": 0.2172,
+    "mu_null": 0.1586,
+    "sigma_null": 0.0290,
+    "abs_threshold": 0.1830,
     "far": 0.2,
     "N": 2390,
-    "method": "crossmodal_v1",
-    "n_queries": 200,
-    "n_pairs": 1000
+    "method": "random_query_null_v2"
+  },
+  "doc_page": {
+    "mu_null": 0.1767,
+    "sigma_null": 0.0319,
+    "abs_threshold": 0.2292,
+    "far": 0.05,
+    "N": 34170,
+    "method": "random_query_null_v2"
+  },
+  "movie": {
+    "mu_null": 0.1592,
+    "sigma_null": 0.0367,
+    "abs_threshold": 0.2196,
+    "p95": 0.2301,
+    "p99": 0.2441,
+    "N": 200,
+    "method": "crossmodal_v1"
+  },
+  "music": {
+    "mu_null": 0.7885,
+    "sigma_null": 0.0390,
+    "abs_threshold": 0.8428,
+    "p95": 0.8428,
+    "p99": 0.8603,
+    "N": 280,
+    "method": "text_text_siglip2_null_v1",
+    "note": "Music Re=SigLIP2-text, same-encoder baseline high."
   }
 }
 ```
 
-`abs_threshold = 0.1865 + Φ⁻¹(0.8) × 0.0365 ≈ 0.2172` (FAR=0.2 → Φ⁻¹(0.8) ≈ 0.842)
+**관찰**:
+- image/doc_page: cross-modal text→image, μ ≈ 0.16~0.18
+- movie: cross-modal text→frame, μ = 0.1592 ≈ image (정합)
+- music: text↔text 동질, μ = 0.7885 (cross-domain 비교 금지, z-score 만 사용)
+
+`abs_threshold(image) = 0.1586 + Φ⁻¹(0.8) × 0.0290 ≈ 0.183` (FAR=0.2 → Φ⁻¹(0.8) ≈ 0.842)
+`abs_threshold(movie) = 0.1592 + Φ⁻¹(0.95) × 0.0367 ≈ 0.220` (FAR=0.05 → Φ⁻¹(0.95) ≈ 1.645)
 
 ---
 
-## 16. 데이터셋 현재 규모 (2026-04-24 스냅샷)
+## 16. 데이터셋 현재 규모 (2026-04-25 스냅샷)
 
 | 도메인 | raw 파일 | 임베딩 벡터 | 캐시 크기 |
 |--------|---------|------------|----------|
 | **Img** | 2,391 | 2,390 (Re 1152d / Im 1024d / Z 1024d) | ~30 MB |
-| **Doc** | 444 (PDF/HWP/DOCX) | 34,170 페이지 (Re 1152d / Im 1024d / Z 1024d) | ~419 MB |
-| **Movie** | 163 | STT 세그먼트 가변 | — |
-| **Rec (Music)** | 16 | STT 세그먼트 | `cache_music_*.npy` 존재 |
+| **Doc** | 422 (PDF/HWP/DOCX) | 34,170 페이지 (Re 1152d / Im 1024d / Z 1024d, +Im_body 1024d) | ~419 MB |
+| **Movie** | 173 (155 1차 + 18 YS_다큐_1차, 2차 25 진행중) | 프레임 세그먼트 (~1 fps + scene cuts) | — |
+| **Rec (Music)** | 14 | 651 windows (30s win, 15s hop) | — |
+
+**최근 변경 이력**:
+- Movie: YS_다큐_1차 18편 추가 (155→173). 2차 25편 indexing 진행중.
+- Music: 14파일 651 segments, Re 축 SigLIP2-text(1152d) 로 재인덱싱(`reindex_music_siglip2.py`).
+- Doc: `cache_doc_page_Im_body.npy` 추가 — pdfplumber 본문 텍스트 BGE-M3 임베딩 (DOC_IM_ALPHA=0.20 fusion).
+- Img: L1/L2/L3 3-stage caption fusion 활성화 (build_img_caption_triple.py 산출물).
 
 ---
 
@@ -1049,4 +1255,4 @@ class TriChefEngine:
 
 ---
 
-*문서 끝 · `DI_TriCHEF/docs/TriCHEF.md`*
+*문서 끝 · `md/TriCHEF.md`*

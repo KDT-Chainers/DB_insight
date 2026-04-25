@@ -1,0 +1,1509 @@
+{
+  "timestamp": "2026-04-25T01:12:23",
+  "domain": "doc_page",
+  "topk": 5,
+  "alphas": [
+    0.2,
+    0.35,
+    0.5,
+    0.65,
+    1.0
+  ],
+  "results": [
+    {
+      "alpha": 0.2,
+      "per_query": [
+        {
+          "query": "환경 정책",
+          "configs": {
+            "dense": {
+              "returned": 5,
+              "kw_hits": 4,
+              "top": [
+                {
+                  "id": "page_images/환경정의_포럼_자료집/p0042.jpg",
+                  "score": 0.2938
+                },
+                {
+                  "id": "page_images/환경정의_포럼_자료집/p0136.jpg",
+                  "score": 0.2906
+                },
+                {
+                  "id": "page_images/정책자료집_2017_02/p0207.jpg",
+                  "score": 0.2857
+                }
+              ]
+            },
+            "dense+sparse": {
+              "returned": 5,
+              "kw_hits": 5,
+              "top": [
+                {
+                  "id": "page_images/환경정의_포럼_자료집/p0262.jpg",
+                  "score": 0.2751
+                },
+                {
+                  "id": "page_images/환경정의_포럼_자료집/p0261.jpg",
+                  "score": 0.279
+                },
+                {
+                  "id": "page_images/환경정의_포럼_자료집/p0156.jpg",
+                  "score": 0.2826
+                }
+              ]
+            },
+            "dense+sp+asf": {
+              "returned": 5,
+              "kw_hits": 5,
+              "top": [
+                {
+                  "id": "page_images/환경정의_포럼_자료집/p0170.jpg",
+                  "score": 0.2775
+                },
+                {
+                  "id": "page_images/환경정의_포럼_자료집/p0262.jpg",
+                  "score": 0.2751
+                },
+                {
+                  "id": "page_images/환경정의_포럼_자료집/p0261.jpg",
+                  "score": 0.279
+                }
+              ]
+            }
+          }
+        },
+        {
+          "query": "인공지능 교육",
+          "configs": {
+            "dense": {
+              "returned": 5,
+              "kw_hits": 4,
+              "top": [
+                {
+                  "id": "page_images/(최종)소프트 9월호(단면)/p0057.jpg",
+                  "score": 0.3075
+                },
+                {
+                  "id": "page_images/2023년 소프트웨어산업 연간보고서/p0145.jpg",
+                  "score": 0.303
+                },
+                {
+                  "id": "page_images/SW 중심사회 132(2025.06)/p0021.jpg",
+                  "score": 0.2917
+                }
+              ]
+            },
+            "dense+sparse": {
+              "returned": 5,
+              "kw_hits": 4,
+              "top": [
+                {
+                  "id": "page_images/연구보고서 2024-07 국내기업의 인공지능 활용과 정책과제/p0239.jpg",
+                  "score": 0.2902
+                },
+                {
+                  "id": "page_images/(최종)소프트 9월호(단면)/p0057.jpg",
+                  "score": 0.3075
+                },
+                {
+                  "id": "page_images/월간SW중심사회 2021년 2월호/p0011.jpg",
+                  "score": 0.2839
+                }
+              ]
+            },
+            "dense+sp+asf": {
+              "returned": 5,
+              "kw_hits": 4,
+              "top": [
+                {
+                  "id": "page_images/SW중심사회_6월 최종(단면)/p0008.jpg",
+                  "score": 0.2803
+                },
+                {
+                  "id": "page_images/연구보고서 2024-07 국내기업의 인공지능 활용과 정책과제/p0239.jpg",
+                  "score": 0.2902
+                },
+                {
+                  "id": "page_images/(최종)소프트 9월호(단면)/p0057.jpg",
+                  "score": 0.3075
+                }
+              ]
+            }
+          }
+        },
+        {
+          "query": "탄소중립",
+          "configs": {
+            "dense": {
+              "returned": 5,
+              "kw_hits": 1,
+              "top": [
+                {
+                  "id": "page_images/202407_SW중심사회 7월호/p0002.jpg",
+                  "score": 0.2745
+                },
+                {
+                  "id": "page_images/202407_SW중심사회 7월호/p0004.jpg",
+                  "score": 0.2562
+                },
+                {
+                  "id": "page_images/202407_SW중심사회 7월호/p0003.jpg",
+                  "score": 0.2516
+                }
+              ]
+            },
+            "dense+sparse": {
+              "returned": 5,
+              "kw_hits": 0,
+              "top": [
+                {
+                  "id": "page_images/202407_SW중심사회 7월호/p0007.jpg",
+                  "score": 0.2484
+                },
+                {
+                  "id": "page_images/202407_SW중심사회 7월호/p0023.jpg",
+                  "score": 0.2449
+                },
+                {
+                  "id": "page_images/202407_SW중심사회 7월호/p0003.jpg",
+                  "score": 0.2516
+                }
+              ]
+            },
+            "dense+sp+asf": {
+              "returned": 5,
+              "kw_hits": 0,
+              "top": [
+                {
+                  "id": "page_images/202407_SW중심사회 7월호/p0007.jpg",
+                  "score": 0.2484
+                },
+                {
+                  "id": "page_images/202407_SW중심사회 7월호/p0003.jpg",
+                  "score": 0.2516
+                },
+                {
+                  "id": "page_images/202407_SW중심사회 7월호/p0023.jpg",
+                  "score": 0.2449
+                }
+              ]
+            }
+          }
+        },
+        {
+          "query": "디지털 전환",
+          "configs": {
+            "dense": {
+              "returned": 5,
+              "kw_hits": 4,
+              "top": [
+                {
+                  "id": "page_images/월간SW중심사회_2016년_9월호(전체).pdf/p0003.jpg",
+                  "score": 0.3153
+                },
+                {
+                  "id": "page_images/(현안 2019-05)안용성-항만지역 대기질 개선을 위한 데이터의 연계활용방안 연구/p0041.jpg",
+                  "score": 0.2999
+                },
+                {
+                  "id": "page_images/월간 SW 중심사회 6월호_최종/p0005.jpg",
+                  "score": 0.2928
+                }
+              ]
+            },
+            "dense+sparse": {
+              "returned": 5,
+              "kw_hits": 4,
+              "top": [
+                {
+                  "id": "page_images/월간SW중심사회_2016년_9월호(전체).pdf/p0003.jpg",
+                  "score": 0.3153
+                },
+                {
+                  "id": "page_images/SW중심사회_8월 월간호/p0005.jpg",
+                  "score": 0.2904
+                },
+                {
+                  "id": "page_images/SW중심사회_8월 월간호/p0014.jpg",
+                  "score": 0.2901
+                }
+              ]
+            },
+            "dense+sp+asf": {
+              "returned": 5,
+              "kw_hits": 4,
+              "top": [
+                {
+                  "id": "page_images/(현안 2019-05)안용성-항만지역 대기질 개선을 위한 데이터의 연계활용방안 연구/p0041.jpg",
+                  "score": 0.2999
+                },
+                {
+                  "id": "page_images/월간SW중심사회_2016년_9월호(전체).pdf/p0003.jpg",
+                  "score": 0.3153
+                },
+                {
+                  "id": "page_images/SW중심사회_8월 월간호/p0005.jpg",
+                  "score": 0.2904
+                }
+              ]
+            }
+          }
+        },
+        {
+          "query": "반도체 산업",
+          "configs": {
+            "dense": {
+              "returned": 5,
+              "kw_hits": 0,
+              "top": [
+                {
+                  "id": "page_images/(최종)소프트 9월호(단면)/p0069.jpg",
+                  "score": 0.2696
+                },
+                {
+                  "id": "page_images/B090039_2001_M_0040/p0124.jpg",
+                  "score": 0.2614
+                },
+                {
+                  "id": "page_images/(최종)소프트 9월호(단면)/p0077.jpg",
+                  "score": 0.2596
+                }
+              ]
+            },
+            "dense+sparse": {
+              "returned": 5,
+              "kw_hits": 1,
+              "top": [
+                {
+                  "id": "page_images/SW 중심사회 5월호 전문/p0047.jpg",
+                  "score": 0.2483
+                },
+                {
+                  "id": "page_images/SW중심사회_4월 최종(단면)/p0004.jpg",
+                  "score": 0.2483
+                },
+                {
+                  "id": "page_images/SW 중심사회 135(2025.09)/p0081.jpg",
+                  "score": 0.2405
+                }
+              ]
+            },
+            "dense+sp+asf": {
+              "returned": 5,
+              "kw_hits": 1,
+              "top": [
+                {
+                  "id": "page_images/(최종)소프트 9월호(단면)/p0077.jpg",
+                  "score": 0.2596
+                },
+                {
+                  "id": "page_images/SW 중심사회 5월호 전문/p0047.jpg",
+                  "score": 0.2483
+                },
+                {
+                  "id": "page_images/SW중심사회_4월 최종(단면)/p0004.jpg",
+                  "score": 0.2483
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "summary": {
+        "dense": {
+          "hits": 13,
+          "returned": 25,
+          "hit_rate": 0.52
+        },
+        "dense+sparse": {
+          "hits": 14,
+          "returned": 25,
+          "hit_rate": 0.56
+        },
+        "dense+sp+asf": {
+          "hits": 14,
+          "returned": 25,
+          "hit_rate": 0.56
+        }
+      }
+    },
+    {
+      "alpha": 0.35,
+      "per_query": [
+        {
+          "query": "환경 정책",
+          "configs": {
+            "dense": {
+              "returned": 5,
+              "kw_hits": 4,
+              "top": [
+                {
+                  "id": "page_images/정책자료집_2017_02/p0207.jpg",
+                  "score": 0.2877
+                },
+                {
+                  "id": "page_images/환경정의_포럼_자료집/p0042.jpg",
+                  "score": 0.2869
+                },
+                {
+                  "id": "page_images/환경정의_포럼_자료집/p0136.jpg",
+                  "score": 0.2864
+                }
+              ]
+            },
+            "dense+sparse": {
+              "returned": 5,
+              "kw_hits": 5,
+              "top": [
+                {
+                  "id": "page_images/환경정의_포럼_자료집/p0262.jpg",
+                  "score": 0.2697
+                },
+                {
+                  "id": "page_images/환경정의_포럼_자료집/p0261.jpg",
+                  "score": 0.2762
+                },
+                {
+                  "id": "page_images/환경정의_포럼_자료집/p0156.jpg",
+                  "score": 0.2774
+                }
+              ]
+            },
+            "dense+sp+asf": {
+              "returned": 5,
+              "kw_hits": 4,
+              "top": [
+                {
+                  "id": "page_images/환경정의_포럼_자료집/p0170.jpg",
+                  "score": 0.272
+                },
+                {
+                  "id": "page_images/환경정의_포럼_자료집/p0262.jpg",
+                  "score": 0.2697
+                },
+                {
+                  "id": "page_images/환경정의_포럼_자료집/p0261.jpg",
+                  "score": 0.2762
+                }
+              ]
+            }
+          }
+        },
+        {
+          "query": "인공지능 교육",
+          "configs": {
+            "dense": {
+              "returned": 5,
+              "kw_hits": 4,
+              "top": [
+                {
+                  "id": "page_images/(최종)소프트 9월호(단면)/p0057.jpg",
+                  "score": 0.3052
+                },
+                {
+                  "id": "page_images/SW 중심사회 132(2025.06)/p0021.jpg",
+                  "score": 0.3003
+                },
+                {
+                  "id": "page_images/2023년 소프트웨어산업 연간보고서/p0145.jpg",
+                  "score": 0.2929
+                }
+              ]
+            },
+            "dense+sparse": {
+              "returned": 5,
+              "kw_hits": 4,
+              "top": [
+                {
+                  "id": "page_images/(최종)소프트 9월호(단면)/p0057.jpg",
+                  "score": 0.3052
+                },
+                {
+                  "id": "page_images/연구보고서 2024-07 국내기업의 인공지능 활용과 정책과제/p0239.jpg",
+                  "score": 0.2866
+                },
+                {
+                  "id": "page_images/월간SW중심사회 2021년 2월호/p0011.jpg",
+                  "score": 0.2818
+                }
+              ]
+            },
+            "dense+sp+asf": {
+              "returned": 5,
+              "kw_hits": 4,
+              "top": [
+                {
+                  "id": "page_images/SW중심사회_6월 최종(단면)/p0008.jpg",
+                  "score": 0.2799
+                },
+                {
+                  "id": "page_images/(최종)소프트 9월호(단면)/p0057.jpg",
+                  "score": 0.3052
+                },
+                {
+                  "id": "page_images/연구보고서 2024-07 국내기업의 인공지능 활용과 정책과제/p0239.jpg",
+                  "score": 0.2866
+                }
+              ]
+            }
+          }
+        },
+        {
+          "query": "탄소중립",
+          "configs": {
+            "dense": {
+              "returned": 5,
+              "kw_hits": 2,
+              "top": [
+                {
+                  "id": "page_images/202407_SW중심사회 7월호/p0002.jpg",
+                  "score": 0.2639
+                },
+                {
+                  "id": "page_images/202407_SW중심사회 7월호/p0004.jpg",
+                  "score": 0.2546
+                },
+                {
+                  "id": "page_images/탄소중립을 위한 사람 중심 접근 평가체계/p0039.jpg",
+                  "score": 0.2453
+                }
+              ]
+            },
+            "dense+sparse": {
+              "returned": 5,
+              "kw_hits": 0,
+              "top": [
+                {
+                  "id": "page_images/202407_SW중심사회 7월호/p0007.jpg",
+                  "score": 0.2444
+                },
+                {
+                  "id": "page_images/202407_SW중심사회 7월호/p0023.jpg",
+                  "score": 0.2429
+                },
+                {
+                  "id": "page_images/202407_SW중심사회 7월호/p0003.jpg",
+                  "score": 0.2431
+                }
+              ]
+            },
+            "dense+sp+asf": {
+              "returned": 5,
+              "kw_hits": 0,
+              "top": [
+                {
+                  "id": "page_images/202407_SW중심사회 7월호/p0007.jpg",
+                  "score": 0.2444
+                },
+                {
+                  "id": "page_images/202407_SW중심사회 7월호/p0023.jpg",
+                  "score": 0.2429
+                },
+                {
+                  "id": "page_images/202407_SW중심사회 7월호/p0003.jpg",
+                  "score": 0.2431
+                }
+              ]
+            }
+          }
+        },
+        {
+          "query": "디지털 전환",
+          "configs": {
+            "dense": {
+              "returned": 5,
+              "kw_hits": 5,
+              "top": [
+                {
+                  "id": "page_images/월간SW중심사회_2016년_9월호(전체).pdf/p0003.jpg",
+                  "score": 0.3115
+                },
+                {
+                  "id": "page_images/월간SW중심사회_2019년_12월호/p0017.jpg",
+                  "score": 0.309
+                },
+                {
+                  "id": "page_images/월간SW중심사회_2019년_6월호/p0013.jpg",
+                  "score": 0.3088
+                }
+              ]
+            },
+            "dense+sparse": {
+              "returned": 5,
+              "kw_hits": 5,
+              "top": [
+                {
+                  "id": "page_images/월간SW중심사회_2016년_9월호(전체).pdf/p0003.jpg",
+                  "score": 0.3115
+                },
+                {
+                  "id": "page_images/SW중심사회_8월 월간호/p0005.jpg",
+                  "score": 0.2893
+                },
+                {
+                  "id": "page_images/SW중심사회_8월 월간호/p0014.jpg",
+                  "score": 0.2903
+                }
+              ]
+            },
+            "dense+sp+asf": {
+              "returned": 5,
+              "kw_hits": 4,
+              "top": [
+                {
+                  "id": "page_images/(현안 2019-05)안용성-항만지역 대기질 개선을 위한 데이터의 연계활용방안 연구/p0041.jpg",
+                  "score": 0.2978
+                },
+                {
+                  "id": "page_images/월간SW중심사회_2016년_9월호(전체).pdf/p0003.jpg",
+                  "score": 0.3115
+                },
+                {
+                  "id": "page_images/SW중심사회_8월 월간호/p0005.jpg",
+                  "score": 0.2893
+                }
+              ]
+            }
+          }
+        },
+        {
+          "query": "반도체 산업",
+          "configs": {
+            "dense": {
+              "returned": 5,
+              "kw_hits": 0,
+              "top": [
+                {
+                  "id": "page_images/(최종)소프트 9월호(단면)/p0069.jpg",
+                  "score": 0.2704
+                },
+                {
+                  "id": "page_images/B090039_2001_M_0040/p0124.jpg",
+                  "score": 0.2619
+                },
+                {
+                  "id": "page_images/(최종)소프트 9월호(단면)/p0077.jpg",
+                  "score": 0.2617
+                }
+              ]
+            },
+            "dense+sparse": {
+              "returned": 5,
+              "kw_hits": 0,
+              "top": [
+                {
+                  "id": "page_images/SW중심사회_4월 최종(단면)/p0004.jpg",
+                  "score": 0.2525
+                },
+                {
+                  "id": "page_images/SW 중심사회 5월호 전문/p0047.jpg",
+                  "score": 0.2435
+                },
+                {
+                  "id": "page_images/SW 중심사회 135(2025.09)/p0081.jpg",
+                  "score": 0.2405
+                }
+              ]
+            },
+            "dense+sp+asf": {
+              "returned": 5,
+              "kw_hits": 0,
+              "top": [
+                {
+                  "id": "page_images/(최종)소프트 9월호(단면)/p0077.jpg",
+                  "score": 0.2617
+                },
+                {
+                  "id": "page_images/SW중심사회_4월 최종(단면)/p0004.jpg",
+                  "score": 0.2525
+                },
+                {
+                  "id": "page_images/SW 중심사회 5월호 전문/p0047.jpg",
+                  "score": 0.2435
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "summary": {
+        "dense": {
+          "hits": 15,
+          "returned": 25,
+          "hit_rate": 0.6
+        },
+        "dense+sparse": {
+          "hits": 14,
+          "returned": 25,
+          "hit_rate": 0.56
+        },
+        "dense+sp+asf": {
+          "hits": 12,
+          "returned": 25,
+          "hit_rate": 0.48
+        }
+      }
+    },
+    {
+      "alpha": 0.5,
+      "per_query": [
+        {
+          "query": "환경 정책",
+          "configs": {
+            "dense": {
+              "returned": 5,
+              "kw_hits": 3,
+              "top": [
+                {
+                  "id": "page_images/2016_환경포럼_모음집/p0000.jpg",
+                  "score": 0.2825
+                },
+                {
+                  "id": "page_images/정책자료집_2017_02/p0207.jpg",
+                  "score": 0.2794
+                },
+                {
+                  "id": "page_images/B090039_2011_M_0042/p0236.jpg",
+                  "score": 0.2752
+                }
+              ]
+            },
+            "dense+sparse": {
+              "returned": 5,
+              "kw_hits": 4,
+              "top": [
+                {
+                  "id": "page_images/환경정의_포럼_자료집/p0261.jpg",
+                  "score": 0.2636
+                },
+                {
+                  "id": "page_images/환경정의_포럼_자료집/p0042.jpg",
+                  "score": 0.2704
+                },
+                {
+                  "id": "page_images/B090003_2012_M_0089/p0026.jpg",
+                  "score": 0.2736
+                }
+              ]
+            },
+            "dense+sp+asf": {
+              "returned": 5,
+              "kw_hits": 4,
+              "top": [
+                {
+                  "id": "page_images/환경정의_포럼_자료집/p0170.jpg",
+                  "score": 0.2551
+                },
+                {
+                  "id": "page_images/환경정의_포럼_자료집/p0261.jpg",
+                  "score": 0.2636
+                },
+                {
+                  "id": "page_images/환경정의_포럼_자료집/p0042.jpg",
+                  "score": 0.2704
+                }
+              ]
+            }
+          }
+        },
+        {
+          "query": "인공지능 교육",
+          "configs": {
+            "dense": {
+              "returned": 5,
+              "kw_hits": 4,
+              "top": [
+                {
+                  "id": "page_images/SW 중심사회 132(2025.06)/p0021.jpg",
+                  "score": 0.3034
+                },
+                {
+                  "id": "page_images/월간SW중심사회_2016년 05월호/p0007.jpg",
+                  "score": 0.2956
+                },
+                {
+                  "id": "page_images/(최종)소프트 9월호(단면)/p0057.jpg",
+                  "score": 0.2941
+                }
+              ]
+            },
+            "dense+sparse": {
+              "returned": 5,
+              "kw_hits": 4,
+              "top": [
+                {
+                  "id": "page_images/(최종)소프트 9월호(단면)/p0057.jpg",
+                  "score": 0.2941
+                },
+                {
+                  "id": "page_images/월간SW중심사회 2021년 2월호/p0011.jpg",
+                  "score": 0.2717
+                },
+                {
+                  "id": "page_images/월간SW중심사회 2020년 11월호/p0061.jpg",
+                  "score": 0.2807
+                }
+              ]
+            },
+            "dense+sp+asf": {
+              "returned": 5,
+              "kw_hits": 4,
+              "top": [
+                {
+                  "id": "page_images/(최종)소프트 9월호(단면)/p0057.jpg",
+                  "score": 0.2941
+                },
+                {
+                  "id": "page_images/SW중심사회_6월 최종(단면)/p0008.jpg",
+                  "score": 0.2709
+                },
+                {
+                  "id": "page_images/SW중심사회 2월호/p0079.jpg",
+                  "score": 0.2496
+                }
+              ]
+            }
+          }
+        },
+        {
+          "query": "탄소중립",
+          "configs": {
+            "dense": {
+              "returned": 5,
+              "kw_hits": 1,
+              "top": [
+                {
+                  "id": "page_images/202407_SW중심사회 7월호/p0004.jpg",
+                  "score": 0.2442
+                },
+                {
+                  "id": "page_images/202407_SW중심사회 7월호/p0002.jpg",
+                  "score": 0.2441
+                },
+                {
+                  "id": "page_images/탄소중립을 위한 사람 중심 접근 평가체계/p0039.jpg",
+                  "score": 0.2355
+                }
+              ]
+            },
+            "dense+sparse": {
+              "returned": 5,
+              "kw_hits": 1,
+              "top": [
+                {
+                  "id": "page_images/202407_SW중심사회 7월호/p0007.jpg",
+                  "score": 0.2317
+                },
+                {
+                  "id": "page_images/202407_SW중심사회 7월호/p0023.jpg",
+                  "score": 0.2308
+                },
+                {
+                  "id": "page_images/탄소중립을 위한 사람 중심 접근 평가체계/p0025.jpg",
+                  "score": 0.2303
+                }
+              ]
+            },
+            "dense+sp+asf": {
+              "returned": 5,
+              "kw_hits": 1,
+              "top": [
+                {
+                  "id": "page_images/202407_SW중심사회 7월호/p0007.jpg",
+                  "score": 0.2317
+                },
+                {
+                  "id": "page_images/202407_SW중심사회 7월호/p0023.jpg",
+                  "score": 0.2308
+                },
+                {
+                  "id": "page_images/탄소중립을 위한 사람 중심 접근 평가체계/p0025.jpg",
+                  "score": 0.2303
+                }
+              ]
+            }
+          }
+        },
+        {
+          "query": "디지털 전환",
+          "configs": {
+            "dense": {
+              "returned": 5,
+              "kw_hits": 5,
+              "top": [
+                {
+                  "id": "page_images/월간SW중심사회_2019년_6월호/p0013.jpg",
+                  "score": 0.3213
+                },
+                {
+                  "id": "page_images/월간SW중심사회_2019년_12월호/p0017.jpg",
+                  "score": 0.3209
+                },
+                {
+                  "id": "page_images/월간SW중심사회_2019년_2월호/p0019.jpg",
+                  "score": 0.32
+                }
+              ]
+            },
+            "dense+sparse": {
+              "returned": 5,
+              "kw_hits": 5,
+              "top": [
+                {
+                  "id": "page_images/월간SW중심사회_2016년_9월호(전체).pdf/p0003.jpg",
+                  "score": 0.2967
+                },
+                {
+                  "id": "page_images/SW중심사회_8월 월간호/p0005.jpg",
+                  "score": 0.2766
+                },
+                {
+                  "id": "page_images/SW중심사회_8월 월간호/p0014.jpg",
+                  "score": 0.2811
+                }
+              ]
+            },
+            "dense+sp+asf": {
+              "returned": 5,
+              "kw_hits": 4,
+              "top": [
+                {
+                  "id": "page_images/(현안 2019-05)안용성-항만지역 대기질 개선을 위한 데이터의 연계활용방안 연구/p0041.jpg",
+                  "score": 0.2846
+                },
+                {
+                  "id": "page_images/월간SW중심사회_2016년_9월호(전체).pdf/p0003.jpg",
+                  "score": 0.2967
+                },
+                {
+                  "id": "page_images/SW중심사회_8월 월간호/p0005.jpg",
+                  "score": 0.2766
+                }
+              ]
+            }
+          }
+        },
+        {
+          "query": "반도체 산업",
+          "configs": {
+            "dense": {
+              "returned": 5,
+              "kw_hits": 0,
+              "top": [
+                {
+                  "id": "page_images/(최종)소프트 9월호(단면)/p0069.jpg",
+                  "score": 0.264
+                },
+                {
+                  "id": "page_images/(최종)소프트 9월호(단면)/p0077.jpg",
+                  "score": 0.2574
+                },
+                {
+                  "id": "page_images/월간SW중심사회_2019년_1월호/p0047.jpg",
+                  "score": 0.2567
+                }
+              ]
+            },
+            "dense+sparse": {
+              "returned": 5,
+              "kw_hits": 0,
+              "top": [
+                {
+                  "id": "page_images/SW중심사회_4월 최종(단면)/p0004.jpg",
+                  "score": 0.2499
+                },
+                {
+                  "id": "page_images/(최종)소프트 9월호(단면)/p0077.jpg",
+                  "score": 0.2574
+                },
+                {
+                  "id": "page_images/(최종)소프트 9월호(단면)/p0069.jpg",
+                  "score": 0.264
+                }
+              ]
+            },
+            "dense+sp+asf": {
+              "returned": 5,
+              "kw_hits": 0,
+              "top": [
+                {
+                  "id": "page_images/(최종)소프트 9월호(단면)/p0077.jpg",
+                  "score": 0.2574
+                },
+                {
+                  "id": "page_images/SW중심사회_4월 최종(단면)/p0004.jpg",
+                  "score": 0.2499
+                },
+                {
+                  "id": "page_images/sw 중심사회 22년 1월호/p0026.jpg",
+                  "score": 0.2412
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "summary": {
+        "dense": {
+          "hits": 13,
+          "returned": 25,
+          "hit_rate": 0.52
+        },
+        "dense+sparse": {
+          "hits": 14,
+          "returned": 25,
+          "hit_rate": 0.56
+        },
+        "dense+sp+asf": {
+          "hits": 13,
+          "returned": 25,
+          "hit_rate": 0.52
+        }
+      }
+    },
+    {
+      "alpha": 0.65,
+      "per_query": [
+        {
+          "query": "환경 정책",
+          "configs": {
+            "dense": {
+              "returned": 5,
+              "kw_hits": 2,
+              "top": [
+                {
+                  "id": "page_images/B090039_2011_M_0042/p0236.jpg",
+                  "score": 0.2884
+                },
+                {
+                  "id": "page_images/2016_환경포럼_모음집/p0000.jpg",
+                  "score": 0.276
+                },
+                {
+                  "id": "page_images/B090039_2011_M_0042/p0145.jpg",
+                  "score": 0.2648
+                }
+              ]
+            },
+            "dense+sparse": {
+              "returned": 5,
+              "kw_hits": 2,
+              "top": [
+                {
+                  "id": "page_images/B090003_2012_M_0089/p0026.jpg",
+                  "score": 0.2594
+                },
+                {
+                  "id": "page_images/환경정의_포럼_자료집/p0261.jpg",
+                  "score": 0.242
+                },
+                {
+                  "id": "page_images/B090039_2011_M_0042/p0236.jpg",
+                  "score": 0.2884
+                }
+              ]
+            },
+            "dense+sp+asf": {
+              "returned": 5,
+              "kw_hits": 2,
+              "top": [
+                {
+                  "id": "page_images/B090003_2012_M_0089/p0026.jpg",
+                  "score": 0.2594
+                },
+                {
+                  "id": "page_images/환경정의_포럼_자료집/p0261.jpg",
+                  "score": 0.242
+                },
+                {
+                  "id": "page_images/Samsung_Electronics_Sustainability_Report_2025_KOR/p0031.jpg",
+                  "score": 0.2368
+                }
+              ]
+            }
+          }
+        },
+        {
+          "query": "인공지능 교육",
+          "configs": {
+            "dense": {
+              "returned": 5,
+              "kw_hits": 5,
+              "top": [
+                {
+                  "id": "page_images/SW 중심사회 132(2025.06)/p0021.jpg",
+                  "score": 0.3001
+                },
+                {
+                  "id": "page_images/월간SW중심사회_2016년 05월호/p0007.jpg",
+                  "score": 0.2937
+                },
+                {
+                  "id": "page_images/월간SW중심사회_2019년_12월호/p0009.jpg",
+                  "score": 0.2888
+                }
+              ]
+            },
+            "dense+sparse": {
+              "returned": 5,
+              "kw_hits": 3,
+              "top": [
+                {
+                  "id": "page_images/(최종)소프트 9월호(단면)/p0057.jpg",
+                  "score": 0.2747
+                },
+                {
+                  "id": "page_images/월간SW중심사회 2020년 11월호/p0061.jpg",
+                  "score": 0.2694
+                },
+                {
+                  "id": "page_images/월간SW중심사회 2021년 2월호/p0011.jpg",
+                  "score": 0.2543
+                }
+              ]
+            },
+            "dense+sp+asf": {
+              "returned": 5,
+              "kw_hits": 4,
+              "top": [
+                {
+                  "id": "page_images/(최종)소프트 9월호(단면)/p0057.jpg",
+                  "score": 0.2747
+                },
+                {
+                  "id": "page_images/SW중심사회_6월 최종(단면)/p0008.jpg",
+                  "score": 0.2534
+                },
+                {
+                  "id": "page_images/월간 SW 중심사회 10월호/p0013.jpg",
+                  "score": 0.2461
+                }
+              ]
+            }
+          }
+        },
+        {
+          "query": "탄소중립",
+          "configs": {
+            "dense": {
+              "returned": 0,
+              "kw_hits": 0,
+              "top": []
+            },
+            "dense+sparse": {
+              "returned": 0,
+              "kw_hits": 0,
+              "top": []
+            },
+            "dense+sp+asf": {
+              "returned": 0,
+              "kw_hits": 0,
+              "top": []
+            }
+          }
+        },
+        {
+          "query": "디지털 전환",
+          "configs": {
+            "dense": {
+              "returned": 5,
+              "kw_hits": 5,
+              "top": [
+                {
+                  "id": "page_images/월간SW중심사회_2019년_12월호/p0017.jpg",
+                  "score": 0.3254
+                },
+                {
+                  "id": "page_images/월간SW중심사회_2019년_6월호/p0013.jpg",
+                  "score": 0.3248
+                },
+                {
+                  "id": "page_images/월간SW중심사회_2019년_2월호/p0019.jpg",
+                  "score": 0.3225
+                }
+              ]
+            },
+            "dense+sparse": {
+              "returned": 5,
+              "kw_hits": 4,
+              "top": [
+                {
+                  "id": "page_images/월간SW중심사회_2016년_9월호(전체).pdf/p0003.jpg",
+                  "score": 0.2721
+                },
+                {
+                  "id": "page_images/SW중심사회_8월 월간호/p0014.jpg",
+                  "score": 0.2627
+                },
+                {
+                  "id": "page_images/SW중심사회_8월 월간호/p0005.jpg",
+                  "score": 0.253
+                }
+              ]
+            },
+            "dense+sp+asf": {
+              "returned": 5,
+              "kw_hits": 4,
+              "top": [
+                {
+                  "id": "page_images/(현안 2019-05)안용성-항만지역 대기질 개선을 위한 데이터의 연계활용방안 연구/p0041.jpg",
+                  "score": 0.2611
+                },
+                {
+                  "id": "page_images/월간SW중심사회_2016년_9월호(전체).pdf/p0003.jpg",
+                  "score": 0.2721
+                },
+                {
+                  "id": "page_images/월간SW중심사회_2016년_9월호(전체).pdf/p0007.jpg",
+                  "score": 0.2325
+                }
+              ]
+            }
+          }
+        },
+        {
+          "query": "반도체 산업",
+          "configs": {
+            "dense": {
+              "returned": 5,
+              "kw_hits": 0,
+              "top": [
+                {
+                  "id": "page_images/(최종)소프트 9월호(단면)/p0076.jpg",
+                  "score": 0.2528
+                },
+                {
+                  "id": "page_images/(최종)소프트 9월호(단면)/p0069.jpg",
+                  "score": 0.2508
+                },
+                {
+                  "id": "page_images/월간SW중심사회 2018년 02월호/p0038.jpg",
+                  "score": 0.2489
+                }
+              ]
+            },
+            "dense+sparse": {
+              "returned": 5,
+              "kw_hits": 0,
+              "top": [
+                {
+                  "id": "page_images/SW중심사회_4월 최종(단면)/p0004.jpg",
+                  "score": 0.24
+                },
+                {
+                  "id": "page_images/(최종)소프트 9월호(단면)/p0077.jpg",
+                  "score": 0.2468
+                },
+                {
+                  "id": "page_images/(최종)소프트 9월호(단면)/p0076.jpg",
+                  "score": 0.2528
+                }
+              ]
+            },
+            "dense+sp+asf": {
+              "returned": 5,
+              "kw_hits": 0,
+              "top": [
+                {
+                  "id": "page_images/(최종)소프트 9월호(단면)/p0077.jpg",
+                  "score": 0.2468
+                },
+                {
+                  "id": "page_images/sw 중심사회 22년 1월호/p0026.jpg",
+                  "score": 0.2415
+                },
+                {
+                  "id": "page_images/SW중심사회_4월 최종(단면)/p0004.jpg",
+                  "score": 0.24
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "summary": {
+        "dense": {
+          "hits": 12,
+          "returned": 20,
+          "hit_rate": 0.6
+        },
+        "dense+sparse": {
+          "hits": 9,
+          "returned": 20,
+          "hit_rate": 0.45
+        },
+        "dense+sp+asf": {
+          "hits": 10,
+          "returned": 20,
+          "hit_rate": 0.5
+        }
+      }
+    },
+    {
+      "alpha": 1.0,
+      "per_query": [
+        {
+          "query": "환경 정책",
+          "configs": {
+            "dense": {
+              "returned": 5,
+              "kw_hits": 1,
+              "top": [
+                {
+                  "id": "page_images/B090039_2011_M_0042/p0236.jpg",
+                  "score": 0.2855
+                },
+                {
+                  "id": "page_images/2016_환경포럼_모음집/p0000.jpg",
+                  "score": 0.245
+                },
+                {
+                  "id": "page_images/B090039_2011_M_0042/p0145.jpg",
+                  "score": 0.2436
+                }
+              ]
+            },
+            "dense+sparse": {
+              "returned": 5,
+              "kw_hits": 1,
+              "top": [
+                {
+                  "id": "page_images/B090039_2011_M_0042/p0236.jpg",
+                  "score": 0.2855
+                },
+                {
+                  "id": "page_images/2016_환경포럼_모음집/p0000.jpg",
+                  "score": 0.245
+                },
+                {
+                  "id": "page_images/B090039_2011_M_0042/p0145.jpg",
+                  "score": 0.2436
+                }
+              ]
+            },
+            "dense+sp+asf": {
+              "returned": 4,
+              "kw_hits": 1,
+              "top": [
+                {
+                  "id": "page_images/B090039_2011_M_0042/p0236.jpg",
+                  "score": 0.2855
+                },
+                {
+                  "id": "page_images/2016_환경포럼_모음집/p0000.jpg",
+                  "score": 0.245
+                },
+                {
+                  "id": "page_images/B090039_2011_M_0042/p0145.jpg",
+                  "score": 0.2436
+                }
+              ]
+            }
+          }
+        },
+        {
+          "query": "인공지능 교육",
+          "configs": {
+            "dense": {
+              "returned": 5,
+              "kw_hits": 4,
+              "top": [
+                {
+                  "id": "page_images/SW 중심사회 132(2025.06)/p0021.jpg",
+                  "score": 0.2745
+                },
+                {
+                  "id": "page_images/월간SW중심사회_2016년 05월호/p0007.jpg",
+                  "score": 0.2703
+                },
+                {
+                  "id": "page_images/월간SW중심사회_2019년_12월호/p0009.jpg",
+                  "score": 0.2686
+                }
+              ]
+            },
+            "dense+sparse": {
+              "returned": 5,
+              "kw_hits": 4,
+              "top": [
+                {
+                  "id": "page_images/월간SW중심사회 2020년 11월호/p0061.jpg",
+                  "score": 0.2301
+                },
+                {
+                  "id": "page_images/SW 중심사회 132(2025.06)/p0021.jpg",
+                  "score": 0.2745
+                },
+                {
+                  "id": "page_images/월간SW중심사회_2016년 05월호/p0007.jpg",
+                  "score": 0.2703
+                }
+              ]
+            },
+            "dense+sp+asf": {
+              "returned": 4,
+              "kw_hits": 4,
+              "top": [
+                {
+                  "id": "page_images/월간SW중심사회 2020년 11월호/p0061.jpg",
+                  "score": 0.2301
+                },
+                {
+                  "id": "page_images/SW 중심사회 132(2025.06)/p0021.jpg",
+                  "score": 0.2745
+                },
+                {
+                  "id": "page_images/월간SW중심사회_2016년 05월호/p0007.jpg",
+                  "score": 0.2703
+                }
+              ]
+            }
+          }
+        },
+        {
+          "query": "탄소중립",
+          "configs": {
+            "dense": {
+              "returned": 0,
+              "kw_hits": 0,
+              "top": []
+            },
+            "dense+sparse": {
+              "returned": 0,
+              "kw_hits": 0,
+              "top": []
+            },
+            "dense+sp+asf": {
+              "returned": 0,
+              "kw_hits": 0,
+              "top": []
+            }
+          }
+        },
+        {
+          "query": "디지털 전환",
+          "configs": {
+            "dense": {
+              "returned": 5,
+              "kw_hits": 5,
+              "top": [
+                {
+                  "id": "page_images/월간 SW 중심사회 11월호/p0039.jpg",
+                  "score": 0.3161
+                },
+                {
+                  "id": "page_images/월간SW중심사회_2019년_12월호/p0017.jpg",
+                  "score": 0.3111
+                },
+                {
+                  "id": "page_images/월간SW중심사회_2019년_6월호/p0013.jpg",
+                  "score": 0.3047
+                }
+              ]
+            },
+            "dense+sparse": {
+              "returned": 5,
+              "kw_hits": 5,
+              "top": [
+                {
+                  "id": "page_images/월간 SW 중심사회 11월호/p0039.jpg",
+                  "score": 0.3161
+                },
+                {
+                  "id": "page_images/월간 SW 중심사회 6월호_최종/p0005.jpg",
+                  "score": 0.2634
+                },
+                {
+                  "id": "page_images/월간SW중심사회_2019년_12월호/p0017.jpg",
+                  "score": 0.3111
+                }
+              ]
+            },
+            "dense+sp+asf": {
+              "returned": 4,
+              "kw_hits": 4,
+              "top": [
+                {
+                  "id": "page_images/월간 SW 중심사회 11월호/p0039.jpg",
+                  "score": 0.3161
+                },
+                {
+                  "id": "page_images/월간 SW 중심사회 6월호_최종/p0005.jpg",
+                  "score": 0.2634
+                },
+                {
+                  "id": "page_images/월간SW중심사회_2019년_12월호/p0017.jpg",
+                  "score": 0.3111
+                }
+              ]
+            }
+          }
+        },
+        {
+          "query": "반도체 산업",
+          "configs": {
+            "dense": {
+              "returned": 2,
+              "kw_hits": 0,
+              "top": [
+                {
+                  "id": "page_images/(최종)소프트 9월호(단면)/p0076.jpg",
+                  "score": 0.233
+                },
+                {
+                  "id": "page_images/월간SW중심사회_2016년10월호/p0066.jpg",
+                  "score": 0.231
+                }
+              ]
+            },
+            "dense+sparse": {
+              "returned": 2,
+              "kw_hits": 0,
+              "top": [
+                {
+                  "id": "page_images/(최종)소프트 9월호(단면)/p0076.jpg",
+                  "score": 0.233
+                },
+                {
+                  "id": "page_images/월간SW중심사회_2016년10월호/p0066.jpg",
+                  "score": 0.231
+                }
+              ]
+            },
+            "dense+sp+asf": {
+              "returned": 2,
+              "kw_hits": 0,
+              "top": [
+                {
+                  "id": "page_images/(최종)소프트 9월호(단면)/p0076.jpg",
+                  "score": 0.233
+                },
+                {
+                  "id": "page_images/월간SW중심사회_2016년10월호/p0066.jpg",
+                  "score": 0.231
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "summary": {
+        "dense": {
+          "hits": 10,
+          "returned": 17,
+          "hit_rate": 0.588
+        },
+        "dense+sparse": {
+          "hits": 10,
+          "returned": 17,
+          "hit_rate": 0.588
+        },
+        "dense+sp+asf": {
+          "hits": 9,
+          "returned": 14,
+          "hit_rate": 0.643
+        }
+      }
+    }
+  ]
+}
