@@ -91,8 +91,8 @@ def main():
         }
         print(f"{name:<16} {hit_rate:<12.3f} {avg_ret:<14.2f}")
 
-    out = ROOT / "Docs" / "e2e_eval_report.json"
-    out.parent.mkdir(exist_ok=True)
+    out = ROOT / "DI_TriCHEF" / "results" / "e2e_eval_report.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(report, ensure_ascii=False, indent=2),
                    encoding="utf-8")
     print(f"\n[saved] {out}")
