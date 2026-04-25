@@ -1,10 +1,16 @@
-"""snippet.py — 검색 결과 preview 추출.
+"""snippet.py — 검색 결과 preview 추출 (DI/App 측 사본).
 
 질의 토큰과 overlap이 최대인 문장 구간을 원문에서 선택.
-PROJECT_PIPELINE_SPEC.md §10 알고리즘을 App/backend 용으로 이식.
+PROJECT_PIPELINE_SPEC.md §10 알고리즘.
 
-- MR_TriCHEF/pipeline/snippet.py 와 동일 로직 (경로 분리로 중복 유지)
-- unified_engine.search_av() 의 segments preview 필드에 사용
+[SSOT note]
+MR_TriCHEF/pipeline/snippet.py 와 의도적 복제 (도메인 격리 — App 이
+MR 패키지를 sys.path 에 의존하지 않도록). 로직 변경 시 반드시 양쪽 동기화.
+변경 시 동기화 가이드: docs/SYNC_NOTES.md 또는 PR 체크리스트 참조.
+
+사용:
+    from services.trichef.snippet import extract_best_snippet
+    preview = extract_best_snippet(stt_text, query)
 """
 from __future__ import annotations
 
@@ -28,6 +34,7 @@ def extract_best_snippet(text: str, query: str, window_size: int = 220) -> str:
     if not text:
         return ""
 
+    # 문장 분리: 마침표/느낌표/물음표 뒤 공백, 또는 줄바꿈
     sentences = re.split(r"(?<=[.!?。])\s+|\n+", text)
     sentences = [s.strip() for s in sentences if s.strip()]
     if not sentences:
@@ -43,6 +50,10 @@ def extract_best_snippet(text: str, query: str, window_size: int = 220) -> str:
             best_count = count
             best_sent = sent
 
+    # 질의 토큰 overlap이 전혀 없으면 앞부분 반환
     if best_count == 0:
         return text[:window_size]
     return best_sent[:window_size]
+
+
+__all__ = ["extract_best_snippet"]
