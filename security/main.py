@@ -91,6 +91,8 @@ def run_cli() -> None:
             result = orch.commit_upload(scan, policy_choice)
             if result["status"] == "cancelled":
                 print("🚫 취소되었습니다.")
+            elif result["status"] == "duplicate":
+                print(f"⚠️  {result.get('message', '동일 파일이 이미 임베딩되어 있습니다.')}")
             else:
                 print(f"✅ 임베딩 완료: {result['embedded_chunks']} 청크 저장")
 

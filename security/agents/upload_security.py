@@ -48,6 +48,8 @@ class UploadScanResult:
     has_pii: bool = False
     pii_summary: Dict[str, Any] = field(default_factory=dict)
     error: Optional[str] = None
+    # 원본 바이트 SHA-256 (전체) — 동일 파일 재업로드 시 중복 임베딩 판별용
+    content_sha256: str = ""
     # ── 이미지 전용 ──────────────────────────────────────────────────────────
     is_image: bool = False
     image_path: str = ""          # 영구 저장된 이미지 경로 (IMAGE_STORE_DIR)
@@ -92,6 +94,14 @@ class UploadSecurityAgent:
         ext         = resolved.suffix.lower()
         source_path = str(resolved)
 
+        try:
+            content_sha256 = hashlib.sha256(resolved.read_bytes()).hexdigest()
+        except OSError as exc:
+            return UploadScanResult(
+                filename=filename,
+                error=f"파일 읽기 오류: {exc}",
+            )
+
         # ── 1. 텍스트 추출 ────────────────────────────────────────────────────
         ocr_results: List[Tuple] = []
         persistent_image_path: str = ""
@@ -117,11 +127,16 @@ class UploadSecurityAgent:
                 return UploadScanResult(
                     filename=filename,
                     error=f"지원하지 않는 파일 형식: {ext}",
+                    content_sha256=content_sha256,
                 )
 
         except Exception as exc:
             logger.error("텍스트 추출 실패: %s", exc)
-            return UploadScanResult(filename=filename, error=f"텍스트 추출 오류: {exc}")
+            return UploadScanResult(
+                filename=filename,
+                error=f"텍스트 추출 오류: {exc}",
+                content_sha256=content_sha256,
+            )
 
         # ── 2. 청킹 ──────────────────────────────────────────────────────────
         chunks = chunk_pages(pages, doc_name=filename, source_path=source_path)
@@ -134,6 +149,7 @@ class UploadSecurityAgent:
                 pii_summary={"message": "추출된 텍스트 없음"},
                 is_image=(ext in IMAGE_EXTENSIONS),
                 image_path=persistent_image_path,
+                content_sha256=content_sha256,
             )
 
         # ── 3. PII 탐지 ───────────────────────────────────────────────────────
@@ -166,6 +182,7 @@ class UploadSecurityAgent:
             image_path=persistent_image_path,
             image_pii_regions=image_pii_regions,
             _ocr_results=ocr_results,
+            content_sha256=content_sha256,
         )
 
     # ── 내부 헬퍼 ─────────────────────────────────────────────────────────────

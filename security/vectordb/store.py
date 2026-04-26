@@ -163,7 +163,14 @@ class VectorStore:
                     display_masked    INTEGER DEFAULT 0,
                     is_image          INTEGER DEFAULT 0,
                     image_path        TEXT    DEFAULT '',
-                    pii_regions       TEXT    DEFAULT '[]'
+                    pii_regions       TEXT    DEFAULT '[]',
+                    content_sha256    TEXT    DEFAULT ''
+                )
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS app_state (
+                    k TEXT PRIMARY KEY,
+                    v TEXT NOT NULL
                 )
             """)
             conn.commit()
@@ -184,6 +191,7 @@ class VectorStore:
             "is_image":          "INTEGER DEFAULT 0",
             "image_path":        "TEXT    DEFAULT ''",
             "pii_regions":       "TEXT    DEFAULT '[]'",
+            "content_sha256":    "TEXT    DEFAULT ''",
         }
         with sqlite3.connect(self._meta_db) as conn:
             existing = {row[1] for row in conn.execute("PRAGMA table_info(chunks)")}
@@ -229,10 +237,56 @@ class VectorStore:
 
     # ── 청크 추가 ─────────────────────────────────────────────────────────────
 
+    def has_content_sha256(self, sha256_hex: str) -> bool:
+        """
+        동일 바이트 내용의 문서가 이미 인덱스에 있는지 확인한다.
+        (각 청크 행에 동일 해시가 저장되므로 한 행만 있어도 True)
+        """
+        if not sha256_hex or not sha256_hex.strip():
+            return False
+        with sqlite3.connect(self._meta_db) as conn:
+            row = conn.execute(
+                "SELECT 1 FROM chunks WHERE content_sha256 = ? LIMIT 1",
+                (sha256_hex.strip(),),
+            ).fetchone()
+        return row is not None
+
+    def set_recent_upload_keys(self, keys: List[str]) -> None:
+        """최근 업로드 문서 식별자 목록을 영구 저장한다."""
+        clean = [k.strip() for k in keys if isinstance(k, str) and k.strip()]
+        val = json.dumps(list(dict.fromkeys(clean)), ensure_ascii=False)
+        with sqlite3.connect(self._meta_db) as conn:
+            conn.execute(
+                """
+                INSERT INTO app_state(k, v) VALUES(?, ?)
+                ON CONFLICT(k) DO UPDATE SET v=excluded.v
+                """,
+                ("recent_upload_keys", val),
+            )
+            conn.commit()
+
+    def get_recent_upload_keys(self) -> List[str]:
+        """영구 저장된 최근 업로드 문서 식별자 목록을 읽는다."""
+        with sqlite3.connect(self._meta_db) as conn:
+            row = conn.execute(
+                "SELECT v FROM app_state WHERE k=?",
+                ("recent_upload_keys",),
+            ).fetchone()
+        if not row or not row[0]:
+            return []
+        try:
+            data = json.loads(row[0])
+            if isinstance(data, list):
+                return [str(x) for x in data if str(x).strip()]
+        except Exception:
+            logger.warning("recent_upload_keys 파싱 실패, 빈 목록으로 처리")
+        return []
+
     def add_chunks(
         self,
         chunks: List[Chunk],
         pii_metadata: Optional[Dict[int, Dict[str, Any]]] = None,
+        content_sha256: str = "",
     ) -> None:
         """
         청크 원문을 그대로 임베딩하여 저장한다.
@@ -243,11 +297,13 @@ class VectorStore:
             pii_metadata: {chunk.index: {"has_pii", "pii_types", "sensitivity_score",
                           "display_masked"}} 형태의 PII 태그 dict.
                           해당 청크가 UI에서 마스킹 표시되어야 하면 display_masked=True.
+            content_sha256: 업로드 원본 파일 SHA-256(hex). 중복 검사·추적용.
         """
         if not chunks:
             return
 
         pii_meta = pii_metadata or {}
+        sha_val = (content_sha256 or "").strip()
 
         # ── 임베딩용 텍스트 보강 ──────────────────────────────────────────────
         # 원문은 그대로 DB에 저장하고, 임베딩에는 파일명·PII유형 키워드를 앞에 붙여
@@ -304,11 +360,11 @@ class VectorStore:
                        (doc_name, source_page, chunk_index, start_char, end_char,
                         text, source_path, file_name, bbox,
                         has_pii, pii_types, sensitivity_score, display_masked,
-                        is_image, image_path, pii_regions)
+                        is_image, image_path, pii_regions, content_sha256)
                        VALUES (?, ?, ?, ?, ?,
                                ?, ?, ?, ?,
                                ?, ?, ?, ?,
-                               ?, ?, ?)""",
+                               ?, ?, ?, ?)""",
                     (
                         chunk.doc_name,
                         chunk.source_page,
@@ -326,6 +382,7 @@ class VectorStore:
                         is_image,
                         image_path,
                         pii_regions_json,
+                        sha_val,
                     ),
                 )
                 self._chunk_ids.append(cursor.lastrowid)
@@ -363,7 +420,7 @@ class VectorStore:
                     continue
                 db_id = self._chunk_ids[int(idx)]
                 row = conn.execute(
-                    """SELECT id, doc_name, source_page, text,
+                    """SELECT id, doc_name, source_page, chunk_index, start_char, text,
                               source_path, file_name, bbox,
                               has_pii, pii_types, sensitivity_score, display_masked,
                               is_image, image_path, pii_regions
@@ -377,17 +434,19 @@ class VectorStore:
                         "id":                row[0],
                         "doc_name":          row[1],
                         "source_page":       row[2],
-                        "text":              row[3],
-                        "source_path":       row[4] or "",
-                        "file_name":         row[5] or row[1] or "",
-                        "bbox":              json.loads(row[6]) if row[6] else None,
-                        "has_pii":           bool(row[7]),
-                        "pii_types":         json.loads(row[8]) if row[8] else [],
-                        "sensitivity_score": float(row[9]),
-                        "display_masked":    bool(row[10]),
-                        "is_image":          bool(row[11]),
-                        "image_path":        row[12] or "",
-                        "pii_regions":       json.loads(row[13]) if row[13] else [],
+                        "chunk_index":       row[3],
+                        "start_char":        row[4],
+                        "text":              row[5],
+                        "source_path":       row[6] or "",
+                        "file_name":         row[7] or row[1] or "",
+                        "bbox":              json.loads(row[8]) if row[8] else None,
+                        "has_pii":           bool(row[9]),
+                        "pii_types":         json.loads(row[10]) if row[10] else [],
+                        "sensitivity_score": float(row[11]),
+                        "display_masked":    bool(row[12]),
+                        "is_image":          bool(row[13]),
+                        "image_path":        row[14] or "",
+                        "pii_regions":       json.loads(row[15]) if row[15] else [],
                         "score":             cosine_sim,
                     })
         return results
@@ -442,6 +501,7 @@ class VectorStore:
             self._index_path.unlink()
         with sqlite3.connect(self._meta_db) as conn:
             conn.execute("DELETE FROM chunks")
+            conn.execute("DELETE FROM app_state WHERE k='recent_upload_keys'")
             conn.commit()
         logger.info("VectorStore 초기화 완료")
 

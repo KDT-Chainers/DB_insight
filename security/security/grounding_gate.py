@@ -25,6 +25,20 @@ logger = logging.getLogger(__name__)
 _PASSPORT_KW = frozenset({"여권", "passport", "여권번호", "여권사진", "여권 사진", "여권 번호"})
 _ID_KW       = frozenset({"주민번호", "주민등록", "rrn", "신분증", "민증"})
 _BIZ_KW      = frozenset({"계좌번호", "사업자번호", "사업자등록"})
+# 짧은 질의 + 긴 본문 조합에서 유사도가 낮게 나오기 쉬운 유형 → 임계값 완화
+_SUMMARYISH_KW = (
+    "요약", "줄거리", "핵심", "정리", "간단히", "스토리", "내용", "plot", "summary", "synopsis",
+)
+
+
+def _is_summaryish_query(user_query: str) -> bool:
+    q = user_query.strip().lower()
+    if not q:
+        return False
+    for kw in _SUMMARYISH_KW:
+        if kw.lower() in q:
+            return True
+    return False
 
 
 def _threshold_discount(user_query: str) -> float:
@@ -83,10 +97,19 @@ class GroundingGate:
             logger.info("GroundingGate: context 텍스트 없음 → 차단")
             return False
 
+        max_ctx = int(getattr(config, "GROUNDING_EMBED_CONTEXT_MAX_CHARS", 3000))
+        if len(context) > max_ctx:
+            context = context[:max_ctx]
+            logger.debug("GroundingGate: context %d자로 절단(유사도 계산용)", max_ctx)
+
         sim = self._cosine_sim(user_query, context)
 
-        discount  = _threshold_discount(user_query)
-        threshold = max(config.GROUNDING_SIM_THRESHOLD - discount, 0.05)
+        discount = _threshold_discount(user_query)
+        if _is_summaryish_query(user_query):
+            base_thr = float(getattr(config, "GROUNDING_SIM_THRESHOLD_SUMMARY", 0.07))
+        else:
+            base_thr = float(config.GROUNDING_SIM_THRESHOLD)
+        threshold = max(base_thr - discount, 0.05)
 
         passed = sim >= threshold
         logger.info(

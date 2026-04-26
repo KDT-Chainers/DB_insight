@@ -37,6 +37,8 @@ from document.chunker import Chunk
 from security.grounding_gate import GroundingGate
 from security.pii_detector import PIIDetector
 from security.policy import SecurityPolicy, UploadPolicy
+from agents.summary import SummaryAgent, SummaryResult
+from security.privacy_risk_score import classify_by_prs
 from security.qwen_classifier import QwenClassifier
 from vectordb.store import VectorStore
 
@@ -54,6 +56,7 @@ class QueryResponse:
     reason: str
     retrieved_chunk_ids: List[int] = field(default_factory=list)
     retrieved_chunks: List[Dict[str, Any]] = field(default_factory=list)  # UI 소스 카드용
+    summary: Optional[SummaryResult] = None  # 요약 요청일 때만 SummaryAgent 결과
 
 
 class Orchestrator:
@@ -71,7 +74,7 @@ class Orchestrator:
         self,
         upload_agent:    UploadSecurityAgent,
         retrieval_agent: RetrievalAgent,
-        qwen:            QwenClassifier,
+        qwen:            Optional[QwenClassifier],
         policy:          SecurityPolicy,
         store:           VectorStore,
         audit:           AuditLogger,
@@ -84,14 +87,23 @@ class Orchestrator:
         self._store           = store
         self._audit           = audit
         self._grounding_gate  = grounding_gate
+        self._summary_agent    = SummaryAgent()
+        # 최근 업로드 문서 식별자(source_path/file_name)를 기억해
+        # 요약 질의 시 과거 문서와의 혼입을 줄인다.
+        self._recent_upload_keys: List[str] = self._store.get_recent_upload_keys()
+        if self._recent_upload_keys:
+            logger.info(
+                "[Orchestrator] 최근 업로드 키 %d개 복원",
+                len(self._recent_upload_keys),
+            )
 
     # ── 팩토리 ────────────────────────────────────────────────────────────────
 
     @classmethod
     def build(cls) -> "Orchestrator":
         """의존성을 자동 생성하여 Orchestrator를 반환한다."""
-        store    = VectorStore()
-        qwen     = QwenClassifier()
+        store = VectorStore()
+        qwen: Optional[QwenClassifier] = QwenClassifier() if config.USE_QWEN else None
         detector = PIIDetector(qwen_classifier=qwen)
         audit    = AuditLogger()
 
@@ -151,6 +163,40 @@ class Orchestrator:
             return {"status": "cancelled", "message": "업로드가 취소되었습니다."}
 
         chunks    = scan_result.chunks
+        content_sha = (getattr(scan_result, "content_sha256", None) or "").strip()
+
+        # 이번 요청 문서 키 후보는 중복 여부와 무관하게 먼저 구성
+        fresh_keys: List[str] = []
+        for c in chunks:
+            if c.source_path:
+                fresh_keys.append(str(c.source_path))
+            if c.doc_name:
+                fresh_keys.append(str(c.doc_name))
+        dedup_fresh = list(dict.fromkeys(fresh_keys))
+
+        # 동일 바이트 내용이 이미 인덱스에 있으면 중복 임베딩 방지
+        if content_sha and chunks and self._store.has_content_sha256(content_sha):
+            if dedup_fresh:
+                self._recent_upload_keys = dedup_fresh
+                self._store.set_recent_upload_keys(self._recent_upload_keys)
+            logger.info(
+                "[Orchestrator] 동일 내용 파일 이미 임베딩됨 — 건너뜀: %s",
+                scan_result.filename,
+            )
+            self._audit.log_upload(
+                filename=scan_result.filename,
+                pii_types=[],
+                user_choice="duplicate_skipped",
+            )
+            return {
+                "status":          "duplicate",
+                "message":         "동일한 내용의 파일이 이미 인덱스에 있습니다. 중복 임베딩을 건너뜁니다.",
+                "total_chunks":    len(chunks),
+                "embedded_chunks": 0,
+                "pii_tagged":      0,
+                "ui_masked":       0,
+            }
+
         pii_types: List[str] = []
 
         processed_chunks: List[Chunk] = []
@@ -191,8 +237,17 @@ class Orchestrator:
 
             processed_chunks.append(chunk)
 
+        # 이번 업로드 문서 키를 최신 상태로 갱신 (요약 시 우선 필터링에 사용)
+        if dedup_fresh:
+            self._recent_upload_keys = dedup_fresh
+            self._store.set_recent_upload_keys(self._recent_upload_keys)
+
         # 원문 임베딩 저장 (마스킹 없음)
-        self._store.add_chunks(processed_chunks, pii_metadata=pii_metadata)
+        self._store.add_chunks(
+            processed_chunks,
+            pii_metadata=pii_metadata,
+            content_sha256=content_sha,
+        )
 
         self._audit.log_upload(
             filename=scan_result.filename,
@@ -240,9 +295,15 @@ class Orchestrator:
         Returns:
             QueryResponse
         """
-        # ── Step 1: Query Rewrite ─────────────────────────────────────────────
+        # ── Step 1: Query Rewrite (USE_QWEN=1 + Ollama 사용 가능할 때만)
+        is_summary = Orchestrator.is_summary_request(user_query)
         rewritten_query = user_query
-        if config.QUERY_REWRITE_ENABLED and self._qwen.is_available():
+        if (
+            config.USE_QWEN
+            and config.QUERY_REWRITE_ENABLED
+            and self._qwen is not None
+            and self._qwen.is_available()
+        ):
             rewritten_query = self._qwen.rewrite_query(
                 user_query,
                 max_chars=config.QUERY_REWRITE_MAX_CHARS,
@@ -251,15 +312,22 @@ class Orchestrator:
                 logger.info("Query rewrite: '%s' → '%s'", user_query, rewritten_query)
 
         # ── Step 2: 원문 검색 ─────────────────────────────────────────────────
-        retrieval_result = self._retrieval_agent.retrieve(rewritten_query)
+        retrieval_top_k = config.SUMMARY_TOP_K if is_summary else config.TOP_K
+        retrieval_result = self._retrieval_agent.retrieve(
+            rewritten_query,
+            top_k=retrieval_top_k,
+        )
         feature_map = retrieval_result.feature_map
         chunks      = retrieval_result.chunks
 
-        # ── Step 3: Qwen 보안 분류 ────────────────────────────────────────────
-        if self._qwen.is_available():
+        # ── Step 3: 보안 분류 (Qwen 또는 PRS 규칙 기반)
+        if config.USE_QWEN and self._qwen is not None and self._qwen.is_available():
             classification = self._qwen.classify_query(user_query, feature_map)
+            if not classification.raw_response.strip():
+                logger.warning("[Orchestrator] Qwen 빈 응답(타임아웃 추정) → PRS 규칙 폴백")
+                classification = classify_by_prs(user_query, feature_map)
         else:
-            classification = self._fallback_classify(user_query, feature_map)
+            classification = classify_by_prs(user_query, feature_map)
 
         label  = classification.label
         reason = classification.reason
@@ -300,6 +368,7 @@ class Orchestrator:
                 answer="", label=label, action=effective_action,
                 blocked=True, masked_preview=False, reason=reason,
                 retrieved_chunk_ids=chunk_ids, retrieved_chunks=path_only_chunks,
+                summary=None,
             )
 
         # ── Step 5b: GroundingGate ────────────────────────────────────────────
@@ -316,21 +385,54 @@ class Orchestrator:
 
         # GroundingGate 미통과 → 빈 결과 반환 (소스 카드 없음)
         if not grounded:
+            notice = (
+                "검색은 되었으나 질문과 문서의 연관도(Grounding)가 낮아 소스를 표시하지 않았습니다. "
+                "줄거리·요약은 문서 속 인물·장소·고유명사를 질문에 포함해 다시 검색해 보세요."
+            )
             return QueryResponse(
-                answer="", label=label, action=effective_action,
+                answer=notice, label=label, action=effective_action,
                 blocked=False, masked_preview=False, reason=reason,
                 retrieved_chunk_ids=[], retrieved_chunks=[],
+                summary=None,
             )
 
-        # ── Step 6: 검색 결과 반환 (LLM 답변 없음) ───────────────────────────
+        # ── Step 6: 요약 요청 시 SummaryAgent ─────────────────────────────────
+        summary_result: Optional[SummaryResult] = None
+        answer_txt = ""
+        display_chunks = chunks
+        if is_summary:
+            logger.info("[Orchestrator] 요약 요청 감지 → SummaryAgent 호출")
+            summary_input = self._filter_recent_upload_chunks(chunks)
+            summary_chunks = self._select_summary_chunks(summary_input)
+            display_chunks = summary_chunks or chunks
+            summary_result = self._summary_agent.summarize(user_query, summary_chunks)
+            if summary_result.is_ok():
+                answer_txt = summary_result.text
+
+        # ── Step 7: 검색 결과 반환 ───────────────────────────────────────────
         masked_preview = bool(label == "SENSITIVE" and decision.masked_preview and not full_view)
         return QueryResponse(
-            answer="", label=label, action=effective_action,
+            answer=answer_txt, label=label, action=effective_action,
             blocked=False, masked_preview=masked_preview, reason=reason,
-            retrieved_chunk_ids=chunk_ids, retrieved_chunks=chunks,
+            retrieved_chunk_ids=[c.get("id", 0) for c in display_chunks],
+            retrieved_chunks=display_chunks,
+            summary=summary_result,
         )
 
     # ── 내부 헬퍼 ─────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def is_summary_request(user_query: str) -> bool:
+        """요약·줄거리 등 요약 의도가 있는지 규칙 기반 판별."""
+        q = (user_query or "").strip().lower()
+        if not q:
+            return False
+        keywords = (
+            "요약", "정리", "핵심", "간단히", "줄여", "한줄", "한 줄",
+            "3줄", "세줄", "요점", "정리해", "요약해", "summarize",
+            "줄거리", "스토리", "내용만",
+        )
+        return any(k in user_query for k in keywords) or any(k in q for k in ("plot", "summary"))
 
     @staticmethod
     def _calc_sensitivity(pii_types: List[str]) -> float:
@@ -348,28 +450,6 @@ class Orchestrator:
         return round(base, 4)
 
     @staticmethod
-    def _fallback_classify(user_query: str, feature_map: Dict[str, Any]):
-        """Ollama 없을 때 키워드 기반 간이 분류."""
-        from security.qwen_classifier import ClassificationResult
-        q = user_query.lower()
-        dangerous_kw = ["전부", "모두", "전체 출력", "dump", "export", "삭제", "all records"]
-        sensitive_kw = [
-            "계좌번호", "주민번호", "비밀번호", "카드번호", "패스워드",
-            "여권", "passport", "운전면허", "사업자번호", "사업자등록",
-        ]
-        if any(kw in q for kw in dangerous_kw) or feature_map.get("bulk_request"):
-            return ClassificationResult(
-                label="DANGEROUS", reason="위험 키워드 감지 (폴백)", action="block",
-            )
-        if any(kw in q for kw in sensitive_kw) or feature_map.get("contains_pii"):
-            return ClassificationResult(
-                label="SENSITIVE", reason="민감 키워드 감지 (폴백)", action="confirm",
-            )
-        return ClassificationResult(
-            label="NORMAL", reason="일반 질문 (폴백)", action="allow",
-        )
-
-    @staticmethod
     def _policy_action(decision: Any, full_view: bool) -> str:
         """UI/로그 표시는 최종 정책 action으로 통일한다."""
         if not decision.allow:
@@ -377,3 +457,74 @@ class Orchestrator:
         if decision.require_confirm and not full_view:
             return "confirm"
         return "allow"
+
+    @staticmethod
+    def _select_summary_chunks(chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        요약 품질을 위해 검색 청크를 단일 문서 중심으로 재정렬한다.
+        - 여러 문서가 섞여 있으면 가장 많은 청크를 가진 문서를 우선
+        - 동률이면 score 합이 높은 문서 우선
+        - 선택된 문서 청크는 페이지 순서로 정렬해 줄거리 흐름을 보존
+        """
+        if not chunks:
+            return []
+        groups: Dict[str, List[Dict[str, Any]]] = {}
+        for c in chunks:
+            key = (
+                c.get("source_path")
+                or c.get("file_name")
+                or c.get("doc_name")
+                or "__unknown__"
+            )
+            groups.setdefault(str(key), []).append(c)
+        if len(groups) == 1:
+            selected = next(iter(groups.values()))
+        else:
+            ranked = sorted(
+                groups.values(),
+                key=lambda arr: (
+                    len(arr),
+                    sum(float(x.get("score") or 0.0) for x in arr),
+                ),
+                reverse=True,
+            )
+            selected = ranked[0]
+            logger.info(
+                "[Orchestrator] 요약 문서 집중: 총 %d문서 중 1문서(%d청크) 선택",
+                len(groups),
+                len(selected),
+            )
+        return sorted(
+            selected,
+            key=lambda c: (
+                int(c.get("source_page") or 0),
+                int(c.get("chunk_index") or 0),
+                int(c.get("start_char") or 0),
+            ),
+        )
+
+    def _filter_recent_upload_chunks(
+        self,
+        chunks: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        """
+        최근 업로드한 문서(source_path/doc_name)와 일치하는 청크만 우선 선택한다.
+        일치 청크가 없으면 원본 검색 결과를 그대로 사용한다.
+        """
+        if not chunks or not self._recent_upload_keys:
+            return chunks
+        keys = set(self._recent_upload_keys)
+        filtered = [
+            c for c in chunks
+            if (c.get("source_path") in keys)
+            or (c.get("doc_name") in keys)
+            or (c.get("file_name") in keys)
+        ]
+        if filtered:
+            logger.info(
+                "[Orchestrator] 최근 업로드 문서 우선 적용: %d -> %d청크",
+                len(chunks),
+                len(filtered),
+            )
+            return filtered
+        return chunks
