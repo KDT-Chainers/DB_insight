@@ -70,6 +70,8 @@ def embed_images(paths: list[Path]) -> np.ndarray:
                 batch.append(_img.convert("RGB"))
         inp = _proc(images=batch, return_tensors="pt").to(_DEVICE)
         vec = _model.get_image_features(**inp)
+        if not isinstance(vec, torch.Tensor):
+            vec = vec.pooler_output
         vec = torch.nn.functional.normalize(vec, dim=-1)
         out.append(vec.cpu().float().numpy())
         if _DEVICE == "cuda":

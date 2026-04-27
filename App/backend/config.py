@@ -71,8 +71,8 @@ TRICHEF_CFG = {
     "EXPAND_QUERY_N": 3,
 
     # 배치
-    "BATCH_IMG": 64,
-    "BATCH_TXT": 128,
+    "BATCH_IMG": 8,
+    "BATCH_TXT": 32,
 
     # 디바이스
     "DEVICE": "cuda" if os.environ.get("FORCE_CPU") != "1" else "cpu",
@@ -87,11 +87,11 @@ TRICHEF_CFG = {
 
     # [양자화] DINOv2 Z축 INT8 (FP16 1.3GB → INT8 0.65GB)
     # True 로 설정 시 bitsandbytes INT8 적용. 임베딩 품질 변화 < 0.5%.
-    "INT8_Z_DINOV2": True,    # 활성화 — RTX 4070 8GB VRAM 절감 -0.65GB
+    "INT8_Z_DINOV2": False,    # DINOv2: INT8 -> FP16 (Windows 호환성)
 
     # [양자화] SigLIP2 Re축 INT8 (FP16 1.0GB → INT8 0.50GB)
     # ViT 계열 임베딩 품질 변화 < 0.5%. DINOv2와 동일 BitsAndBytes 패턴.
-    "INT8_RE_SIGLIP2": True,  # 활성화 — RTX 4070 8GB VRAM 절감 -0.50GB
+    "INT8_RE_SIGLIP2": False,  # SigLIP2: INT8 -> FP16 (Windows 호환성)
 
     # [Doc Im_body fusion] PDF 본문 텍스트 Im 가중치
     # Im_fused = DOC_IM_ALPHA * Im_caption + (1-DOC_IM_ALPHA) * Im_body

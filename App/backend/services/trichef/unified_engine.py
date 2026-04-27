@@ -332,6 +332,50 @@ class TriChefEngine:
         out.sort(key=lambda x: -x.score)
         return out[:topk]
 
+    def search_by_image(self, image_path: Path, domain: str = "image", topk: int = 20) -> list[TriChefResult]:
+        """이미지 파일을 쿼리로 사용하는 유사 이미지 검색 (Image-to-Image)."""
+        if domain not in self._cache:
+            return []
+
+        # 1. 쿼리 이미지에서 시각 벡터 추출
+        # Re 축 (SigLIP2 1152d), Z 축 (DINOv2 1024d)
+        from embedders.trichef import siglip2_re, dinov2_z
+        q_Re = siglip2_re.embed_images([image_path])[0]   # (1152,)
+        q_Z  = dinov2_z.embed_images([image_path])[0]    # (1024,)
+
+        # 2. Im 축(의미)은 텍스트가 없으므로 0벡터 처리
+        # Re(1152d)와 Z(1024d) 시각 특징 위주로 검색
+        q_Im = np.zeros(1024, dtype=np.float32)
+
+        # 3. 3축 Hermitian Score 로 유사도 계산
+        d = self._cache[domain]
+        dense_scores = tri_gs.hermitian_score(
+            q_Re[None, :], q_Im[None, :], q_Z[None, :],
+            d["Re"], d["Im"], d["Z"],
+        )[0]
+        combined_order = np.argsort(-dense_scores)
+
+        # 4. 신뢰도 계산 및 결과 조립
+        cal = calibration.get_thresholds(domain)
+        abs_thr = cal.get("abs_threshold", 0.15)
+        mu, sig = cal.get("mu_null", 0.0), max(cal.get("sigma_null", 1.0), 1e-9)
+
+        out: list[TriChefResult] = []
+        for i in combined_order[: topk * 3]:
+            s = float(dense_scores[i])
+            # 이미지 검색은 임계치를 조금 완화 (0.5배)
+            if s < abs_thr * 0.5:
+                continue
+            z = (s - mu) / sig
+            conf = 0.5 * (1 + math.erf(z / (2 ** 0.5)))
+            meta = {"domain": domain, "dense": s, "is_image_query": True}
+            out.append(TriChefResult(
+                id=d["ids"][i], score=s, confidence=conf, metadata=meta,
+            ))
+            if len(out) >= topk:
+                break
+        return out
+
     def reload(self) -> None:
         """캐시 재로드 (재임베딩 후 호출)."""
         self._cache.clear()

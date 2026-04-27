@@ -429,3 +429,35 @@ def domains():
             "kind": "av" if dom in ("movie", "music") else "text",
         }
     return jsonify(out)
+
+
+@bp_admin.route("/search-by-image", methods=["POST"])
+def search_by_image():
+    """이미지 파일을 업로드하여 유사 이미지를 검색."""
+    import tempfile
+    if "image" not in request.files:
+        return jsonify({"error": "이미지 파일이 없습니다."}), 400
+
+    file = request.files["image"]
+    domain = request.form.get("domain", "image")
+    topk = int(request.form.get("topk", 20))
+
+    # 임시 파일로 저장하여 엔진에 전달
+    suffix = Path(file.filename).suffix if file.filename else ".jpg"
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        file.save(tmp.name)
+        tmp_path = Path(tmp.name)
+
+    try:
+        results = _engine().search_by_image(tmp_path, domain=domain, topk=topk)
+        out = []
+        for r in results:
+            out.append({
+                "id": r.id,
+                "score": round(r.score, 4),
+                "confidence": round(r.confidence, 4),
+                "metadata": r.metadata
+            })
+        return jsonify({"results": out})
+    finally:
+        tmp_path.unlink(missing_ok=True)   # 임시 파일 삭제

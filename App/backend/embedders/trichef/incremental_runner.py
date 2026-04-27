@@ -38,8 +38,20 @@ def _get_qwen_captioner():
         if str(_DI_ROOT) not in sys.path:
             sys.path.insert(0, str(_DI_ROOT))
         from captioner.qwen_vl_ko import QwenKoCaptioner
-        _QWEN_CAPTIONER = QwenKoCaptioner(dtype="float16")
+        _QWEN_CAPTIONER = QwenKoCaptioner(dtype="float16", quantize="nf4")
     return _QWEN_CAPTIONER
+
+def _unload_qwen_captioner():
+    global _QWEN_CAPTIONER
+    if _QWEN_CAPTIONER is not None:
+        import torch, gc
+        # 모델 인스턴스 참조 제거
+        del _QWEN_CAPTIONER
+        _QWEN_CAPTIONER = None
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        logger.info("[qwen] VRAM un-loaded for 6GB environment.")
 
 
 def _caption_for_im(cap_dir: Path, img_path: Path, key: str | None = None) -> str:
@@ -74,7 +86,7 @@ def _caption_for_im(cap_dir: Path, img_path: Path, key: str | None = None) -> st
     try:
         from PIL import Image
         im = Image.open(img_path).convert("RGB")
-        text = _get_qwen_captioner().caption(im, max_new_tokens=60, max_image_side=896)
+        text = _get_qwen_captioner().caption(im, max_new_tokens=60, max_image_side=448)
     except Exception as e:
         logger.warning(f"[caption] Qwen 캡션 실패 {img_path.name}: {type(e).__name__}: {e}")
         text = ""
@@ -264,29 +276,51 @@ def run_image_incremental() -> IncrementalResult:
     cap_dir = Path(PATHS["TRICHEF_IMG_EXTRACT"]) / "captions"
     cap_dir.mkdir(parents=True, exist_ok=True)
     captions: list[str] = []
-    for p in tqdm(new_files, desc="BLIP caption"):
+    for i, p in enumerate(tqdm(new_files, desc="Qwen caption (KR)")):
         key = str(p.relative_to(raw_dir)).replace("\\", "/")
         captions.append(_caption_for_im(cap_dir, p, key))
+        
+        # 10장마다 메모리 캐시 정리 (노트북 VRAM 안정성 확보)
+        if (i + 1) % 10 == 0:
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+    
+    # 6GB VRAM 최적화: 임베딩 모델 로딩 전 캡셔너 해제
+    _unload_qwen_captioner()
 
-    # 2. 3축 임베딩
-    new_Re = siglip2_re.embed_images(new_files)
-    new_Im = im_embedder.embed_passage(captions)
-    new_Z  = dinov2_z.embed_images(new_files)
+    # 2. 3축 임베딩 및 즉시 병합 (100장 단위 배치)
+    batch_size = 100
+    for i in range(0, len(new_files), batch_size):
+        batch = new_files[i:i+batch_size]
+        batch_caps = captions[i:i+batch_size]
+        
+        logger.info(f"[img_inc] Batch {i//batch_size + 1}: Embedding {len(batch)} images...")
+        
+        # 특징 추출
+        b_Re = siglip2_re.embed_images(batch)
+        b_Im = im_embedder.embed_passage(batch_caps)
+        b_Z  = dinov2_z.embed_images(batch)
+        
+        # 누적 concat (개별 배치마다 즉시 파일 저장)
+        def _merge_inc(name: str, new_vec: np.ndarray) -> np.ndarray:
+            p = cache_dir / name
+            if p.exists():
+                prev = np.load(p)
+                merged = np.vstack([prev, new_vec])
+            else:
+                merged = new_vec
+            np.save(p, merged)
+            return merged
 
-    # 3. 누적 concat
-    def _merge(name: str, new_vec: np.ndarray) -> np.ndarray:
-        p = cache_dir / name
-        if p.exists():
-            prev = np.load(p)
-            merged = np.vstack([prev, new_vec])
-        else:
-            merged = new_vec
-        np.save(p, merged)
-        return merged
-
-    Re_all = _merge("cache_img_Re_siglip2.npy", new_Re)
-    Im_all = _merge("cache_img_Im_e5cap.npy",   new_Im)
-    Z_all  = _merge("cache_img_Z_dinov2.npy",   new_Z)
+        Re_all = _merge_inc("cache_img_Re_siglip2.npy", b_Re)
+        Im_all = _merge_inc("cache_img_Im_e5cap.npy",   b_Im)
+        Z_all  = _merge_inc("cache_img_Z_dinov2.npy",   b_Z)
+        
+        # 배치 끝날 때마다 VRAM 비우기
+        import torch
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
     # ids 파일 갱신
     ids_path = cache_dir / "img_ids.json"
@@ -394,6 +428,9 @@ def run_doc_incremental() -> IncrementalResult:
             all_page_imgs.append(pg)
             all_page_captions.append(_caption_for_im(cap_dir, pg))
         ingested_docs.append(p)
+
+    # 6GB VRAM 최적화: 임베딩 모델 로딩 전 캡셔너 해제
+    _unload_qwen_captioner()
 
     logger.info(f"[doc_inc] 처리 성공 {len(ingested_docs)}, 스킵 {len(skipped_docs)} "
                 f"(LibreOffice 미설치/빈 파일 등)")

@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, send_from_directory
 from flask_cors import CORS
 
 from db.init_db import init_db
@@ -12,7 +12,11 @@ from routes.trichef_admin import bp_admin as trichef_admin_bp
 
 
 def create_app() -> Flask:
-    app = Flask(__name__)
+    import os
+    # App/admin_ui 경로를 절대 경로로 지정
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    ui_path = os.path.abspath(os.path.join(current_dir, "..", "admin_ui"))
+    app = Flask(__name__, static_folder=ui_path, static_url_path="/ui")
     # 개발(localhost:3000) + 패키징 앱(file://) 모두 허용
     CORS(app, resources={r"/api/*": {"origins": "*"}},
          supports_credentials=False)
@@ -26,6 +30,10 @@ def create_app() -> Flask:
     app.register_blueprint(files_bp)
     app.register_blueprint(trichef_bp)
     app.register_blueprint(trichef_admin_bp)
+
+    @app.route("/admin")
+    def admin_page():
+        return send_from_directory(app.static_folder, "admin.html")
 
     # [W5-4] Warmup — 기동 시 TriChefEngine 싱글턴 로드 + dummy 쿼리 1회 실행하여
     # SigLIP2 / BGE-M3 / DINOv2 / Qwen 을 선로딩. 첫 사용자 쿼리 430ms 지연 제거.
