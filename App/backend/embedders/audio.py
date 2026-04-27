@@ -24,7 +24,8 @@ import os
 import re
 from pathlib import Path
 
-SUPPORTED_EXTENSIONS = {".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".wma"}
+from _extensions import AUD_EXTS as _AUD_EXTS
+SUPPORTED_EXTENSIONS = set(_AUD_EXTS)
 
 # ── 캐시 경로 ────────────────────────────────────────────────────────
 from config import EXTRACTED_DB_AUDIO as _CACHE_DIR

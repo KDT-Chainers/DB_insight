@@ -105,6 +105,32 @@ class TriChefEngine:
 
         Im = np.load(dir / im_fn)
 
+        # [Img 3-stage caption fusion] BLIP v2 스타일 L1/L2/L3 캡션 Im 캐시가
+        # 모두 존재하면 기존 e5cap 대신 3채널 가중 평균으로 교체.
+        # 각 레벨은 BGE-M3 (1024d) 동일 공간이므로 직접 가중 합산 가능.
+        # w_L1=0.15 (주제), w_L2=0.25 (키워드), w_L3=0.60 (상세 묘사) — 상세도 비례.
+        if domain_label == "image":
+            L1p = dir / "cache_img_Im_L1.npy"
+            L2p = dir / "cache_img_Im_L2.npy"
+            L3p = dir / "cache_img_Im_L3.npy"
+            if L1p.exists() and L2p.exists() and L3p.exists():
+                L1 = np.load(L1p); L2 = np.load(L2p); L3 = np.load(L3p)
+                if L1.shape == L2.shape == L3.shape and L1.shape[0] == Im.shape[0]:
+                    w1 = float(TRICHEF_CFG.get("IMG_IM_L1_ALPHA", 0.15))
+                    w2 = float(TRICHEF_CFG.get("IMG_IM_L2_ALPHA", 0.25))
+                    w3 = float(TRICHEF_CFG.get("IMG_IM_L3_ALPHA", 0.60))
+                    tot = max(w1 + w2 + w3, 1e-9)
+                    w1, w2, w3 = w1/tot, w2/tot, w3/tot
+                    Im_fused = w1 * L1 + w2 * L2 + w3 * L3
+                    norms = np.linalg.norm(Im_fused, axis=1, keepdims=True)
+                    Im = Im_fused / np.maximum(norms, 1e-9)
+                    logger.info(f"[engine:image] L1/L2/L3 3-stage caption fusion "
+                                f"활성화 (w=[{w1:.2f},{w2:.2f},{w3:.2f}], "
+                                f"shape={Im.shape})")
+                else:
+                    logger.warning(f"[engine:image] L1/L2/L3 shape mismatch vs Im "
+                                   f"{Im.shape} — 3-stage fusion 스킵")
+
         # [Doc Im_body fusion] PDF 본문 텍스트 Im 캐시가 있으면 caption과 혼합.
         # Im_body = pdfplumber 추출 텍스트 → BGE-M3 (1024d), 같은 공간.
         # Im_fused = α·Im_caption + (1-α)·Im_body  → renormalize
@@ -193,11 +219,22 @@ class TriChefEngine:
         return q_Re, q_Im
 
     def search(self, query: str, domain: str, topk: int = 20,
-               use_lexical: bool = True, use_asf: bool = True,
+               use_lexical: bool = True, use_asf: bool | None = None,
                pool: int = 200) -> list[TriChefResult]:
+        if use_asf is None:
+            use_asf = bool(TRICHEF_CFG.get("USE_ASF_DEFAULT", False))
         if domain not in self._cache:
             logger.warning(f"[engine] 도메인 {domain} 캐시 없음")
             return []
+
+        # 도메인별 lexical/asf 게이팅 (bench v2, 2026-04-25):
+        # image 도메인은 sparse/asf 가 dense 대비 -14~-24pp 손해라 화이트리스트에서 제외.
+        lex_domains = TRICHEF_CFG.get("LEXICAL_DOMAINS")
+        asf_domains = TRICHEF_CFG.get("ASF_DOMAINS")
+        if lex_domains is not None and domain not in lex_domains:
+            use_lexical = False
+        if asf_domains is not None and domain not in asf_domains:
+            use_asf = False
         q_Re, q_Im = self._embed_query_for_domain(query, domain)
         d = self._cache[domain]
         q_Z = q_Im

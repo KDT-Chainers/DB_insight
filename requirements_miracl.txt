@@ -1,0 +1,16 @@
+# MIRACL-ko 평가 인프라 의존성
+# Stage 3 실행 전: pip install -r requirements_miracl.txt
+#
+# 주의:
+#   - pyserini 는 Java 11+ 가 필요 (BM25 baseline 전용)
+#   - faiss-cpu 는 GPU 없는 환경용; GPU 환경은 faiss-gpu 로 교체
+#   - torch / transformers 는 이미 App/backend/requirements.txt 에 포함 가능
+
+datasets>=2.14
+pytrec_eval>=0.5
+pyserini>=0.22
+faiss-cpu>=1.7
+transformers>=4.30
+torch>=2.0
+FlagEmbedding>=1.2
+numpy>=1.24

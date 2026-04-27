@@ -140,10 +140,22 @@ desktop.ini
 
 실행방법.txt
 실행메모.txt
+publication/
+LICENSE
+LICENSE_DRAFT
+README_DRAFT.md
+DRAFT_SUMMARY.txt
 
 # oh-my-claudecode / Claude Code
 .omc/
 .claude/scheduled_tasks.lock
+.claude/settings.local.json
+
+# Bench 임시 산출물 (영구 보관은 DI_TriCHEF/results/, MR_TriCHEF/results/ 사용)
+bench_results/
+
+# MR_TriCHEF 자동 생성 calibration 데이터 (run_calibration.py 산출물)
+MR_TriCHEF/pipeline/_calibration.json
 
 # Admin UI (Gradio) 별도 venv
 App/admin_ui/.venv-admin/
@@ -153,3 +165,30 @@ App/backend/=*
 
 merge
 기획서
+md/
+
+# ============================================================
+# LaTeX intermediate artifacts
+# ============================================================
+*.aux
+*.log
+*.out
+*.toc
+*.lof
+*.lot
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.synctex.gz
+*.nav
+*.snm
+*.vrb
+
+# Pandoc conversion intermediates
+publication/paper/main_korean_export.tex
+publication/paper/fig*_ko.tex
+publication/paper/fig*_ko.pdf
+publication/paper/fig*_ko.png
+
+.claude/

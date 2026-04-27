@@ -28,8 +28,7 @@ sys.path.insert(0, str(ROOT / "App" / "backend"))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from captioner.qwen_vl_ko import QwenKoCaptioner  # noqa: E402
-
-EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+from _extensions import IMG_EXTS as EXTS  # noqa: E402  (DI_TriCHEF/_extensions.py SSOT)
 
 _STOP = False
 def _handle_sigint(signum, frame):

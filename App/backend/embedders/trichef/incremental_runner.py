@@ -90,6 +90,22 @@ def _caption_for_im(cap_dir: Path, img_path: Path, key: str | None = None) -> st
     except Exception as e:
         logger.warning(f"[caption] Qwen 캡션 실패 {img_path.name}: {type(e).__name__}: {e}")
         text = ""
+        # [P1.5] 실패 파일 추적용 append-only ledger — 추후 재처리 스크립트에서 활용.
+        try:
+            ledger = cap_dir / "_caption_failures.jsonl"
+            ledger.parent.mkdir(parents=True, exist_ok=True)
+            import time as _t
+            with ledger.open("a", encoding="utf-8") as f:
+                f.write(json.dumps({
+                    "ts":       _t.strftime("%Y-%m-%d %H:%M:%S"),
+                    "img":      str(img_path),
+                    "key":      key,
+                    "stem":     stem,
+                    "err_type": type(e).__name__,
+                    "err_msg":  str(e)[:500],
+                }, ensure_ascii=False) + "\n")
+        except Exception:  # ledger 실패는 본류에 영향 주지 않음
+            pass
     # plain stem 에 저장 (recaption_all / fix_non_korean 과 동일 규약)
     if text:
         plain_tp.write_text(text, encoding="utf-8")
@@ -247,7 +263,7 @@ def run_image_incremental() -> IncrementalResult:
 
     img_files = sorted(
         p for p in raw_dir.rglob("*")
-        if p.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}
+        if p.suffix.lower() in IMAGE_EMBED_EXTS
     )
     # v2 P1: stale 정리
     current_keys = {str(p.relative_to(raw_dir)).replace("\\", "/") for p in img_files}
@@ -313,22 +329,24 @@ def run_image_incremental() -> IncrementalResult:
             np.save(p, merged)
             return merged
 
-        Re_all = _merge_inc("cache_img_Re_siglip2.npy", b_Re)
-        Im_all = _merge_inc("cache_img_Im_e5cap.npy",   b_Im)
-        Z_all  = _merge_inc("cache_img_Z_dinov2.npy",   b_Z)
-        
-        # 배치 끝날 때마다 VRAM 비우기
-        import torch
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-
-    # ids 파일 갱신
-    ids_path = cache_dir / "img_ids.json"
-    prev_ids = _load_registry(ids_path).get("ids", []) if ids_path.exists() else []
+    # 3. [P2B.2] replace-by-file: 동일 파일 재인덱싱 시 stale 행 제거 후 교체
+    from . import cache_ops as _co
     new_ids  = [str(p.relative_to(raw_dir)).replace("\\", "/") for p in new_files]
-    all_ids  = prev_ids + new_ids
-    ids_path.write_text(json.dumps({"ids": all_ids}, ensure_ascii=False, indent=2),
-                        encoding="utf-8")
+    _res = _co.replace_by_file(
+        cache_dir=cache_dir,
+        file_keys=new_ids,
+        arrays={
+            "cache_img_Re_siglip2.npy": new_Re,
+            "cache_img_Im_e5cap.npy":   new_Im,
+            "cache_img_Z_dinov2.npy":   new_Z,
+        },
+        new_ids=new_ids,
+        ids_file="img_ids.json",
+    )
+    Re_all = _res["merged"]["cache_img_Re_siglip2.npy"]
+    Im_all = _res["merged"]["cache_img_Im_e5cap.npy"]
+    Z_all  = _res["merged"]["cache_img_Z_dinov2.npy"]
+    all_ids = _res["ids"]
 
     # 4. Gram-Schmidt 직교화 + ChromaDB upsert
     Im_perp, Z_perp = tri_gs.orthogonalize(Re_all, Im_all, Z_all)
@@ -369,16 +387,10 @@ def run_doc_incremental() -> IncrementalResult:
     reg_path  = cache_dir / "registry.json"
     registry  = _load_registry(reg_path)
 
-    # v2 P1 Phase B: doc_ingest 지원 확장자 전체
-    DOC_EXTS = {".pdf",
-                ".docx", ".doc", ".pptx", ".ppt", ".xlsx", ".xls",
-                ".odt", ".odp", ".ods", ".rtf",
-                ".hwp", ".hwpx",
-                ".txt", ".md", ".markdown", ".rst", ".log",
-                ".csv", ".html", ".htm"}
+    # v2 P1 Phase B: doc_ingest 지원 확장자 전체 (SSOT: _extensions.DOC_EXTS via DOC_EMBED_EXTS)
     doc_files = sorted(
         p for p in raw_dir.rglob("*")
-        if p.is_file() and p.suffix.lower() in DOC_EXTS
+        if p.is_file() and p.suffix.lower() in DOC_EMBED_EXTS
     )
     current_keys = {str(p.relative_to(raw_dir)).replace("\\", "/") for p in doc_files}
     stale = set(registry.keys()) - current_keys
@@ -443,31 +455,27 @@ def run_doc_incremental() -> IncrementalResult:
     new_Im = im_embedder.embed_passage(all_page_captions)
     new_Z  = dinov2_z.embed_images(all_page_imgs)
 
-    # 3. 캐시 누적
-    def _merge(name: str, new_vec: np.ndarray) -> np.ndarray:
-        p = cache_dir / name
-        if p.exists():
-            prev = np.load(p)
-            merged = np.vstack([prev, new_vec])
-        else:
-            merged = new_vec
-        np.save(p, merged)
-        return merged
-
-    Re_all = _merge("cache_doc_page_Re.npy", new_Re)
-    Im_all = _merge("cache_doc_page_Im.npy", new_Im)
-    Z_all  = _merge("cache_doc_page_Z.npy",  new_Z)
-
-    # 4. ids 갱신
-    ids_path = cache_dir / "doc_page_ids.json"
-    prev = _load_registry(ids_path).get("ids", []) if ids_path.exists() else []
+    # 3. [P2B.2] replace-by-file: 재인덱싱 문서의 기존 page 행 제거 후 교체
+    from . import cache_ops as _co
     new_ids = [
         str(pg.relative_to(Path(PATHS["TRICHEF_DOC_EXTRACT"]))).replace("\\", "/")
         for pg in all_page_imgs
     ]
-    all_ids = prev + new_ids
-    ids_path.write_text(json.dumps({"ids": all_ids}, ensure_ascii=False, indent=2),
-                        encoding="utf-8")
+    _res = _co.replace_by_file(
+        cache_dir=cache_dir,
+        file_keys=new_ids,
+        arrays={
+            "cache_doc_page_Re.npy": new_Re,
+            "cache_doc_page_Im.npy": new_Im,
+            "cache_doc_page_Z.npy":  new_Z,
+        },
+        new_ids=new_ids,
+        ids_file="doc_page_ids.json",
+    )
+    Re_all = _res["merged"]["cache_doc_page_Re.npy"]
+    Im_all = _res["merged"]["cache_doc_page_Im.npy"]
+    Z_all  = _res["merged"]["cache_doc_page_Z.npy"]
+    all_ids = _res["ids"]
 
     Im_perp, Z_perp = tri_gs.orthogonalize(Re_all, Im_all, Z_all)
     _upsert_chroma(TRICHEF_CFG["COL_DOC_PAGE"], all_ids, Re_all, Im_perp, Z_perp,
@@ -499,13 +507,7 @@ def run_doc_incremental() -> IncrementalResult:
 
 # ── 단일 파일 임베딩 (UI 인덱싱 진입점) ────────────────────────────────────
 
-IMAGE_EMBED_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
-DOC_EMBED_EXTS = {
-    ".pdf", ".docx", ".doc", ".pptx", ".ppt", ".xlsx", ".xls",
-    ".odt", ".odp", ".ods", ".rtf", ".hwp", ".hwpx",
-    ".txt", ".md", ".markdown", ".rst", ".log",
-    ".csv", ".html", ".htm",
-}
+from _extensions import IMAGE_EMBED_EXTS, DOC_EXTS as DOC_EMBED_EXTS
 
 
 def embed_image_file(file_path: str, progress_cb=None) -> dict:
@@ -569,27 +571,23 @@ def embed_image_file(file_path: str, progress_cb=None) -> dict:
     new_Im = im_embedder.embed_passage([caption])
     new_Z  = dinov2_z.embed_images([staged])
 
-    def _merge(name: str, new_vec: np.ndarray) -> np.ndarray:
-        pth = cache_dir / name
-        if pth.exists():
-            prev = np.load(pth)
-            merged = np.vstack([prev, new_vec])
-        else:
-            merged = new_vec
-        np.save(pth, merged)
-        return merged
-
-    Re_all = _merge("cache_img_Re_siglip2.npy", new_Re)
-    Im_all = _merge("cache_img_Im_e5cap.npy",   new_Im)
-    Z_all  = _merge("cache_img_Z_dinov2.npy",   new_Z)
-
-    ids_path = cache_dir / "img_ids.json"
-    prev_ids = _load_registry(ids_path).get("ids", []) if ids_path.exists() else []
-    all_ids  = prev_ids + [key]
-    ids_path.write_text(
-        json.dumps({"ids": all_ids}, ensure_ascii=False, indent=2),
-        encoding="utf-8",
+    # [P2B.2] replace-by-file
+    from . import cache_ops as _co
+    _res = _co.replace_by_file(
+        cache_dir=cache_dir,
+        file_keys=[key],
+        arrays={
+            "cache_img_Re_siglip2.npy": new_Re,
+            "cache_img_Im_e5cap.npy":   new_Im,
+            "cache_img_Z_dinov2.npy":   new_Z,
+        },
+        new_ids=[key],
+        ids_file="img_ids.json",
     )
+    Re_all = _res["merged"]["cache_img_Re_siglip2.npy"]
+    Im_all = _res["merged"]["cache_img_Im_e5cap.npy"]
+    Z_all  = _res["merged"]["cache_img_Z_dinov2.npy"]
+    all_ids = _res["ids"]
 
     # ── Step 3/3: GS 직교화 + ChromaDB 저장 ─────────────
     if progress_cb:
@@ -675,32 +673,28 @@ def embed_doc_file(file_path: str, progress_cb=None) -> dict:
     new_Im = im_embedder.embed_passage(captions)
     new_Z  = dinov2_z.embed_images(img_pages)
 
-    def _merge(name: str, new_vec: np.ndarray) -> np.ndarray:
-        pth = cache_dir / name
-        if pth.exists():
-            prev = np.load(pth)
-            merged = np.vstack([prev, new_vec])
-        else:
-            merged = new_vec
-        np.save(pth, merged)
-        return merged
-
-    Re_all = _merge("cache_doc_page_Re.npy", new_Re)
-    Im_all = _merge("cache_doc_page_Im.npy", new_Im)
-    Z_all  = _merge("cache_doc_page_Z.npy",  new_Z)
-
+    # [P2B.2] replace-by-file
+    from . import cache_ops as _co
     doc_extract = Path(PATHS["TRICHEF_DOC_EXTRACT"])
-    ids_path    = cache_dir / "doc_page_ids.json"
-    prev_ids    = _load_registry(ids_path).get("ids", []) if ids_path.exists() else []
     new_page_ids = [
         str(pg.relative_to(doc_extract)).replace("\\", "/")
         for pg in img_pages
     ]
-    all_ids = prev_ids + new_page_ids
-    ids_path.write_text(
-        json.dumps({"ids": all_ids}, ensure_ascii=False, indent=2),
-        encoding="utf-8",
+    _res = _co.replace_by_file(
+        cache_dir=cache_dir,
+        file_keys=new_page_ids,
+        arrays={
+            "cache_doc_page_Re.npy": new_Re,
+            "cache_doc_page_Im.npy": new_Im,
+            "cache_doc_page_Z.npy":  new_Z,
+        },
+        new_ids=new_page_ids,
+        ids_file="doc_page_ids.json",
     )
+    Re_all = _res["merged"]["cache_doc_page_Re.npy"]
+    Im_all = _res["merged"]["cache_doc_page_Im.npy"]
+    Z_all  = _res["merged"]["cache_doc_page_Z.npy"]
+    all_ids = _res["ids"]
 
     # ── Step 3/3: GS 직교화 + ChromaDB 저장 ─────────────
     if progress_cb:
@@ -725,12 +719,23 @@ def embed_doc_file(file_path: str, progress_cb=None) -> dict:
 
 # ── MR (Movie/Music) stubs ─────────────────────────────────────────────
 # Movie/Rec 파이프라인은 MR_TriCHEF/ 로 분리되어 독립 실행.
-# 여기서는 기존 /api/trichef/reindex?scope=all 호환을 위해 no-op 스텁 제공.
+# [P3.1] 과거: no-op 스텁이 `IncrementalResult(0,0,0)` 을 반환하여 /reindex
+# 응답이 "성공 + files=0" 으로 보여 호출자가 **무반응을 성공으로 오인**하는 문제.
+# 이제: NotImplementedError 로 명시적 실패 → /reindex 엔드포인트가 error 필드로
+# 포워딩하여 호출자가 MR_TriCHEF CLI 를 쓰도록 유도.
+_MR_GUIDANCE = (
+    "MR_TriCHEF 로 분리됨. CLI 사용: "
+    "`python MR_TriCHEF/scripts/run_{movie,music}_incremental.py` "
+    "또는 `python -m MR_TriCHEF.pipeline.{movie,music}_runner`. "
+    "/reindex?scope=all 은 image/document 만 처리함."
+)
+
+
 def run_movie_incremental() -> IncrementalResult:
-    logger.info("[run_movie_incremental] MR_TriCHEF 로 분리됨 — skip.")
-    return IncrementalResult("movie", 0, 0, 0)
+    logger.warning("[run_movie_incremental] " + _MR_GUIDANCE)
+    raise NotImplementedError("movie: " + _MR_GUIDANCE)
 
 
 def run_music_incremental() -> IncrementalResult:
-    logger.info("[run_music_incremental] MR_TriCHEF 로 분리됨 — skip.")
-    return IncrementalResult("music", 0, 0, 0)
+    logger.warning("[run_music_incremental] " + _MR_GUIDANCE)
+    raise NotImplementedError("music: " + _MR_GUIDANCE)

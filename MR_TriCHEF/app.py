@@ -184,7 +184,8 @@ def run_search(query: str, domain_labels: list[str], topk: int) -> tuple[str, st
                 hits = search_movie(query, topk=int(topk),
                                     siglip_encoder=sig, bge_encoder=bge)
             else:
-                hits = search_music(query, topk=int(topk), bge_encoder=bge)
+                hits = search_music(query, topk=int(topk),
+                                    siglip_encoder=sig, bge_encoder=bge)
             for h in hits:
                 all_hits.append((label, h))
         except Exception as e:

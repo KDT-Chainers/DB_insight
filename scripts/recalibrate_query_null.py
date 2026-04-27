@@ -37,7 +37,7 @@ def recalibrate(domain: str, eng: TriChefEngine) -> dict:
     Re, Im, Z = d["Re"], d["Im"], d["Z"]
     scores_all: list[float] = []
     for q in NULL_QUERIES:
-        q_Re, q_Im = eng._embed_query(q)
+        q_Re, q_Im = eng._embed_query_for_domain(q, domain)
         s = tri_gs.hermitian_score(
             q_Re[None, :], q_Im[None, :], q_Im[None, :], Re, Im, Z,
         )[0]
@@ -45,8 +45,12 @@ def recalibrate(domain: str, eng: TriChefEngine) -> dict:
     flat = np.concatenate(scores_all)
     mu, sig = float(flat.mean()), float(flat.std())
 
-    far_key = "FAR_IMG" if domain == "image" else "FAR_DOC_PAGE"
-    FAR = TRICHEF_CFG[far_key]
+    far_key_map = {
+        "image": "FAR_IMG", "doc_page": "FAR_DOC_PAGE",
+        "movie": "FAR_MOVIE", "music": "FAR_MUSIC",
+    }
+    far_key = far_key_map.get(domain, "FAR_DOC_PAGE")
+    FAR = TRICHEF_CFG.get(far_key, 0.05)
     thr = mu + calibration._acklam_inv_phi(1 - FAR) * sig
 
     data = calibration._load_all()
@@ -68,7 +72,7 @@ def recalibrate(domain: str, eng: TriChefEngine) -> dict:
 
 def main():
     eng = TriChefEngine()
-    for dom in ["image", "doc_page"]:
+    for dom in ["image", "doc_page", "movie", "music"]:
         if dom in eng._cache:
             recalibrate(dom, eng)
 

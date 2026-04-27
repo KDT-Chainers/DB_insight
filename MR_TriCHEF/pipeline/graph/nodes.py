@@ -9,6 +9,7 @@
 """
 from __future__ import annotations
 
+import os
 import re
 from typing import Any
 
@@ -25,10 +26,12 @@ _TEXTUAL_HINTS = re.compile(
     r"said|lyrics|caption|description|news|summary"
 )
 
-# z-score 임계값
-TAU_HIGH   = 3.0      # 확신 → 바로 반환
-TAU_LOW    = 1.0      # 재작성 트리거
-MAX_TRIES  = 2
+# z-score 임계값.  App/backend/config.py TRICHEF_CFG["GRAPH_TAU_HIGH/LOW"] 가
+# 단일 진실 원천. MR_TriCHEF 는 독립 실행 패키지이므로 직접 import 대신
+# env var 로 오버라이드를 허용한다 (App 프로세스가 읽어 주입하거나 수동 설정).
+TAU_HIGH   = float(os.environ.get("TRICHEF_GRAPH_TAU_HIGH", 3.0))   # 확신 → 바로 반환
+TAU_LOW    = float(os.environ.get("TRICHEF_GRAPH_TAU_LOW",  1.0))   # 재작성 트리거
+MAX_TRIES  = int(os.environ.get("TRICHEF_GRAPH_MAX_TRIES", 2))
 
 
 # ─── 1. 쿼리 분석 ────────────────────────────────────────────────────────────
@@ -69,6 +72,7 @@ def dense_search(state: SearchState) -> dict:
                                    bge_encoder=ctx.get("bge"))
         if domain in ("music", "all"):
             hits += S.search_music(q, topk=10,
+                                   siglip_encoder=ctx.get("sig"),
                                    bge_encoder=ctx.get("bge"))
     finally:
         if prev_w is not None:

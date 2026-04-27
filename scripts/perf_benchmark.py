@@ -4,7 +4,10 @@
 1. 엔진 초기화 시간 + 메모리
 2. 쿼리별 latency (cold/warm), 채널별 시간
 3. 3채널 기여도 (top-K 변화율)
-4. 신규 hwp/hwpx 콘텐츠 검색 가능성 (한글 쿼리 recall proxy)
+4. 신규 hwp/hwpx 콘텐츠 검색 가능성 (한글 쿼리 recall proxy) + ct_p5
+5. caption-aware quality (ct_p5) — 메인 쿼리 집합 대상
+
+공통 라이브러리: scripts/_bench_common.py
 """
 from __future__ import annotations
 
@@ -15,12 +18,14 @@ import sys
 import time
 import tracemalloc
 from pathlib import Path
+from typing import Optional
 
 import numpy as np
 import psutil
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "App" / "backend"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 os.chdir(ROOT / "App" / "backend")
 try:
     sys.stdout.reconfigure(encoding="utf-8")
@@ -113,8 +118,54 @@ def main():
               + (f"top={hwp_topk[0].id[:60]}" if hwp_topk else ""))
     print(f"  hwp coverage: {hwp_hits}/{len(hwp_queries)} 쿼리에서 hwp 결과 등장")
 
+    # ── section 5: caption-aware quality ─────────────────────────────────────
     print("\n" + "="*70)
-    print("5. 최종 RSS")
+    print("5. Caption-aware quality (ct_p5) — 메인 쿼리 집합")
+    print("="*70)
+    print("  content-aware gold DB 구축 중...")
+    from _bench_common import ContentGoldDB
+    gold_db = ContentGoldDB()
+
+    # (쿼리, 도메인, 기대 키워드) — section 2 queries + doc keywords
+    quality_queries = [
+        ("환경 정책",    "doc_page", ["환경", "정책", "기후"]),
+        ("인공지능 교육","doc_page", ["인공지능", "AI", "교육"]),
+        ("탄소중립",     "doc_page", ["탄소", "중립", "기후"]),
+        ("사람 얼굴",    "image",    ["face", "portrait", "person"]),
+    ]
+
+    print(f"  {'쿼리':<20} {'domain':<10} {'gold':>6} {'fn_p5':>7} {'ct_p5':>7}")
+    print(f"  {'-'*20} {'-'*10} {'-'*6} {'-'*7} {'-'*7}")
+    ct_results = []
+    for q, dom, kws in quality_queries:
+        res = eng.search(q, domain=dom, topk=TOPK, use_lexical=True, use_asf=True)
+        fn_hits = sum(1 for r in res if any(k.lower() in r.id.lower() for k in kws))
+        fn_p5 = fn_hits / max(len(res), 1)
+
+        gold_set = gold_db.gold_ids(q, dom)
+        gold_size = len(gold_set) if gold_set is not None else None
+        ct_p5: Optional[float] = None
+        if gold_set and gold_size:
+            ct_hits = sum(1 for r in res if r.id in gold_set)
+            ct_p5 = ct_hits / max(len(res), 1)
+
+        gold_str = str(gold_size) if gold_size is not None else "N/A"
+        ct_str   = f"{ct_p5:.3f}" if ct_p5 is not None else "N/A"
+        print(f"  {q:<20} {dom:<10} {gold_str:>6} {fn_p5:>7.3f} {ct_str:>7}")
+        ct_results.append({"query": q, "domain": dom,
+                            "gold_size": gold_size,
+                            "fn_p5": round(fn_p5, 4),
+                            "ct_p5": round(ct_p5, 4) if ct_p5 is not None else None})
+
+    valid_ct = [r["ct_p5"] for r in ct_results if r["ct_p5"] is not None]
+    if valid_ct:
+        print(f"\n  overall avg ct_p5 = {sum(valid_ct)/len(valid_ct):.3f}"
+              f"  ({len(valid_ct)}/{len(ct_results)} 쿼리에 gold 존재)")
+    else:
+        print("  ct_p5: N/A (인코더 없음 또는 gold DB 비어 있음)")
+
+    print("\n" + "="*70)
+    print("6. 최종 RSS")
     print("="*70)
     print(f"  RSS after bench: {rss_mb():.0f} MB  peak {proc.memory_info().peak_wset/1024/1024:.0f} MB"
           if hasattr(proc.memory_info(), 'peak_wset') else f"  RSS: {rss_mb():.0f} MB")

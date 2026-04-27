@@ -3,7 +3,7 @@
 이미지/문서 페이지 썸네일을 DINOv2 로 인코딩 → 기존 `Z=Im` 을 대체하는
 독립 Z축 벡터(~768d) 를 생성.
 
-모델: facebook/dinov2-base  (~330MB)
+모델: facebook/dinov2-large  (~1.2GB) — production 정합성 (App/backend/config.py DIM_Z=1024)
 출력 파일(배치 시): Data/embedded_DB/trichef/{image,doc_page}/cache_Z_dinov2.npy
 
 수식 영향: hermitian_score 의 C = q_Z·d_Z 항이 실질 독립 신호.
@@ -20,8 +20,8 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
-MODEL_ID = "facebook/dinov2-base"
-EMB_DIM = 768
+MODEL_ID = "facebook/dinov2-large"
+EMB_DIM = 1024
 
 
 class DinoV2ZEncoder:
@@ -55,7 +55,7 @@ class DinoV2ZEncoder:
         return x / np.clip(n, 1e-12, None)
 
     def embed_images(self, images: list[Any], batch_size: int = 16) -> np.ndarray:
-        """PIL 이미지 리스트 → (N, 768) L2-normalized 임베딩."""
+        """PIL 이미지 리스트 → (N, 1024) L2-normalized 임베딩 (DINOv2-Large)."""
         import torch
 
         if not images:

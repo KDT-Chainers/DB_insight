@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import numpy as np
@@ -55,3 +56,159 @@ def append_segments(path: Path, new_segs: list[dict]) -> int:
         encoding="utf-8",
     )
     return len(merged)
+
+
+# ─── [P2B] replace-by-file 헬퍼 ──────────────────────────────────────────────
+def _seg_fp(s: dict) -> str:
+    return s.get("file_path") or s.get("file") or ""
+
+
+def replace_by_file(
+    cache_dir: Path,
+    file_keys: list[str],
+    arrays: dict[str, np.ndarray],
+    new_ids: list[str],
+    new_segs: list[dict] | None,
+    npy_prefix: str,
+    ids_file: str,
+    segs_file: str | None = "segments.json",
+) -> dict[str, int]:
+    """[P2B.1] 동일 파일 재인덱싱 시 append 대신 기존 행을 제거하고 교체.
+
+    기존 cache.append_* 는 항상 뒤에 붙이기 때문에, 파일 단위 재인덱싱
+    (SHA mismatch) 시 ids/segments/npy 에 stale 엔트리가 누적된다. 본 함수는
+    `file_keys` 에 포함된 파일들에 해당하는 행을 모든 npy + ids + segments
+    에서 제거한 뒤 새 데이터를 append 하여 일관성을 유지한다.
+
+    Args:
+        cache_dir:   캐시 디렉토리 (MOVIE_CACHE_DIR 등)
+        file_keys:   교체 대상 파일 relpath 목록 (ids 와 동일 포맷)
+        arrays:      {"Re": ndarray, "Im": ndarray, ...} — 새 embedding.
+                     키는 npy 파일 suffix (cache_{prefix}_{suffix}.npy).
+        new_ids:     새로 추가될 ids (각 row 의 원본 파일 relpath).
+        new_segs:    새로 추가될 segments (None → 생략).
+        npy_prefix:  "cache_movie" or "cache_music"
+        ids_file:    "movie_ids.json" 등
+        segs_file:   "segments.json" (None 이면 segments 조작 skip)
+
+    Returns:
+        {"rows": 최종 행 수, "removed": 제거된 기존 행 수}
+    """
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    keyset = set(file_keys)
+
+    # 1) 기존 ids 로드 → keep mask 계산
+    ids_path = cache_dir / ids_file
+    prev_ids: list[str] = []
+    if ids_path.exists():
+        try:
+            data = json.loads(ids_path.read_text(encoding="utf-8"))
+            prev_ids = data.get("ids", []) if isinstance(data, dict) else list(data)
+        except Exception:
+            prev_ids = []
+
+    keep_mask = np.array([rid not in keyset for rid in prev_ids], dtype=bool)
+    removed = int((~keep_mask).sum())
+
+    # 2) 병합 배열 준비 (메모리에서만, 아직 디스크 미기록)
+    npy_items: list[tuple[Path, np.ndarray]] = []   # (final_path, merged_array)
+    final_rows = 0
+    for suffix, new_arr in arrays.items():
+        npy_path = cache_dir / f"{npy_prefix}_{suffix}.npy"
+        if npy_path.exists() and len(prev_ids) > 0:
+            prev = np.load(npy_path)
+            if prev.shape[0] == len(prev_ids):
+                kept = prev[keep_mask]
+            else:
+                # 길이 불일치 → 안전하게 전부 폐기보다는 원본 유지 후 경고
+                import logging
+                logging.getLogger("mr.cache").warning(
+                    f"[replace_by_file] {npy_path.name} rows={prev.shape[0]} "
+                    f"!= ids={len(prev_ids)} → keep_mask 적용 불가, prev 유지"
+                )
+                kept = prev
+        else:
+            kept = np.empty((0, new_arr.shape[1]), dtype=np.float32)
+
+        if kept.size == 0:
+            merged = new_arr
+        elif new_arr.size == 0:
+            merged = kept
+        elif kept.shape[1] != new_arr.shape[1]:
+            raise ValueError(
+                f"dim mismatch: kept {kept.shape} vs new {new_arr.shape} @ {npy_path.name}"
+            )
+        else:
+            merged = np.vstack([kept, new_arr])
+        npy_items.append((npy_path, merged.astype(np.float32)))
+        final_rows = int(merged.shape[0])
+
+    # 3) ids / segments 준비
+    kept_ids = [rid for rid, k in zip(prev_ids, keep_mask) if k]
+    all_ids = kept_ids + list(new_ids)
+
+    seg_item: tuple[Path, str] | None = None
+    if segs_file is not None:
+        seg_path = cache_dir / segs_file
+        prev_segs: list[dict] = []
+        if seg_path.exists():
+            try:
+                prev_segs = json.loads(seg_path.read_text(encoding="utf-8"))
+                if not isinstance(prev_segs, list):
+                    prev_segs = []
+            except Exception:
+                prev_segs = []
+        kept_segs = [s for s in prev_segs if _seg_fp(s) not in keyset]
+        merged_segs = kept_segs + list(new_segs or [])
+        seg_item = (seg_path, json.dumps(merged_segs, ensure_ascii=False))
+
+    ids_text = json.dumps({"ids": all_ids}, ensure_ascii=False, indent=2)
+
+    # 4) 모든 출력을 우선 .tmp 로 저장 (원자적 교체 준비)
+    #    npy tmp 이름: <stem>.tmp.npy  (np.save 가 .npy 를 자동 추가하므로
+    #    확장자가 이미 .npy 이어야 double-extension 없이 정확한 경로 생성)
+    #    어느 하나라도 실패 시 이미 쓴 .tmp 를 정리하고 raise → final 파일 무손상.
+    def _npy_tmp(p: Path) -> Path:
+        """cache_x_Re.npy → cache_x_Re.tmp.npy"""
+        return p.with_name(p.stem + ".tmp.npy")
+
+    tmp_paths: list[Path] = []
+    try:
+        for npy_path, merged in npy_items:
+            tmp = _npy_tmp(npy_path)
+            np.save(tmp, merged)
+            tmp_paths.append(tmp)
+
+        ids_tmp = ids_path.with_name(ids_path.stem + ".tmp.json")
+        ids_tmp.write_text(ids_text, encoding="utf-8")
+        tmp_paths.append(ids_tmp)
+
+        if seg_item is not None:
+            seg_path, seg_text = seg_item
+            seg_tmp = seg_path.with_name(seg_path.stem + ".tmp.json")
+            seg_tmp.write_text(seg_text, encoding="utf-8")
+            tmp_paths.append(seg_tmp)
+
+    except Exception:
+        # .tmp 정리 후 원본 유지
+        for t in tmp_paths:
+            try:
+                t.unlink(missing_ok=True)
+            except OSError:
+                pass
+        raise
+
+    # 5) 모든 .tmp 쓰기 성공 → 일괄 원자적 교체
+    #    os.replace() 는 POSIX/Windows 모두 원자적 (같은 볼륨 내)
+    for npy_path, _ in npy_items:
+        os.replace(_npy_tmp(npy_path), npy_path)
+
+    ids_tmp = ids_path.with_name(ids_path.stem + ".tmp.json")
+    os.replace(ids_tmp, ids_path)
+
+    if seg_item is not None:
+        seg_path, _ = seg_item
+        seg_tmp = seg_path.with_name(seg_path.stem + ".tmp.json")
+        os.replace(seg_tmp, seg_path)
+
+    return {"rows": final_rows, "removed": removed}

@@ -50,9 +50,13 @@ for _d in [
 TRICHEF_CFG = {
     # 모델 ID (HuggingFace)
     "MODEL_RE_SIGLIP2":   "google/siglip2-so400m-patch16-naflex",
+    # [DEPRECATED] v2 P1 에서 e5 → BGE-M3 전환 (bgem3_caption_im). 실사용처 없음.
+    #   key 는 설정 파일 하위 호환성 위해 당분간 유지, 신규 코드 참조 금지.
     "MODEL_IM_E5LARGE":   "intfloat/multilingual-e5-large",
+    "MODEL_IM_BGEM3":     "BAAI/bge-m3",  # 실사용 (bgem3_caption_im)
     "MODEL_Z_DINOV2":     "facebook/dinov2-large",
-    "MODEL_QWEN_VL":      "Qwen/Qwen2.5-VL-3B-Instruct",
+    # Img 캡션용 실사용 모델. 과거 3B 계열 계획(dead config) → 2B NF4 로 정착.
+    "MODEL_QWEN_VL":      "Qwen/Qwen2-VL-2B-Instruct",
 
     # 벡터 차원 (모델 결정값, 수정 금지)
     "DIM_RE": 1152,
@@ -95,14 +99,64 @@ TRICHEF_CFG = {
 
     # [Doc Im_body fusion] PDF 본문 텍스트 Im 가중치
     # Im_fused = DOC_IM_ALPHA * Im_caption + (1-DOC_IM_ALPHA) * Im_body
-    # 0.35 = 캡션 35%, 본문 65% (텍스트 밀도 높은 문서 기준 최적화)
-    "DOC_IM_ALPHA": 0.35,
+    # Phase 4-2 튜닝 (LOO eval, n=150):
+    #   α=0.20 → R@5 0.907 (dense), 0.900 (+sparse)  — 최적
+    #   α=0.35 → R@5 0.880 (dense), 0.900 (+sparse)  — 이전 기본값
+    #   α=1.00 → R@5 0.000  (Im_body 무시 시 본문 검색 완전 실패)
+    # proxy keyword bench 와 non-regression 동시 달성.
+    "DOC_IM_ALPHA": 0.20,
+
+    # [ASF default] LOO/E2E/local_bench 모든 벤치에서 ASF on이 -3~20pp 손해 (2026-04-25 분석).
+    #   LOO R@1: dense+sparse 83.3% → +ASF 63.3% (-20pp)
+    #   E2E hit_rate: 53.3% → +ASF 43.3% (-10pp)
+    #   원인: ASF keyword-set 컷오프가 vocab 미포함어("탄소중립" 등) 과잉 필터링.
+    # 필요 시 search(use_asf=True) 명시적 호출로 활성 가능.
+    "USE_ASF_DEFAULT": False,
+
+    # [Domain-specific lexical/asf gating] bench v2 (caption-aware, 2026-04-25):
+    #   image: dense_ct=0.820 / +sparse=0.680 (-14pp) / +asf=0.580 (-24pp)
+    #     → image 도메인은 sparse/asf 모두 손해. 짧은 캡션 텍스트로 인한 OOV/노이즈.
+    #   doc_page/movie/music: sparse 도움 또는 중립 → 화이트리스트 유지.
+    # 호출자가 use_lexical=True 로 명시해도 image 도메인은 무시 (해석용 명시 override 는
+    # routes/trichef_admin.py 의 디버그 엔드포인트가 강제 활성화 가능 — 운영은 기본값 우선).
+    "LEXICAL_DOMAINS": {"doc_page", "movie", "music"},  # image 제외
+    "ASF_DOMAINS":     {"doc_page", "movie", "music"},  # image 제외 (USE_ASF_DEFAULT=False 와 별개)
+
+    # [Img 3-stage caption fusion] BLIP v2 스타일 L1/L2/L3 캡션 가중치.
+    # cache_img_Im_L1/L2/L3.npy 모두 존재 시 자동 활성화 (build_img_caption_triple.py).
+    # L1(짧은 주제) 0.15, L2(키워드) 0.25, L3(상세 묘사) 0.60 — 상세도 비례.
+    "IMG_IM_L1_ALPHA": 0.15,
+    "IMG_IM_L2_ALPHA": 0.25,
+    "IMG_IM_L3_ALPHA": 0.60,
 
     # LangGraph
     "GRAPH_MAX_ITER": 3,
     "GRAPH_HI_MARGIN": 0.030,
     "GRAPH_HN_MARGIN": 0.020,
+    # [MR_TriCHEF graph] z-score 기반 confidence gate 임계값.
+    # nodes.py 는 독립 실행이므로 env var TRICHEF_GRAPH_TAU_HIGH / LOW 로 오버라이드.
+    # 여기는 단일 진실 원천(문서용) — App 프로세스에서도 읽어 nodes 로 env 주입 가능.
+    "GRAPH_TAU_HIGH": 3.0,
+    "GRAPH_TAU_LOW":  1.0,
+    "GRAPH_MAX_TRIES": 2,
 }
+
+# ── 런타임 체크 ────────────────────────────────────────────────────────
+#   INT8 양자화 플래그가 True 인데 bitsandbytes 가 없으면, 로더마다 FP16 fallback
+#   되는 silent 동작. 시작 시점에서 한 번 명시적으로 경고.
+def _check_int8_support() -> None:
+    if TRICHEF_CFG.get("INT8_Z_DINOV2") or TRICHEF_CFG.get("INT8_RE_SIGLIP2"):
+        try:
+            import bitsandbytes  # noqa: F401
+        except ImportError:
+            import logging
+            logging.getLogger("config").warning(
+                "[config] INT8_Z_DINOV2/INT8_RE_SIGLIP2=True 이지만 bitsandbytes "
+                "미설치 — FP16 fallback 동작. VRAM 절감 효과 없음. "
+                "`pip install bitsandbytes` 로 활성화 가능."
+            )
+
+_check_int8_support()
 
 # PATHS dict — TRI-CHEF 모듈 호환 (문자열 경로)
 PATHS = {

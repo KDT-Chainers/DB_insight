@@ -113,7 +113,7 @@ def run_movie_incremental(
             Re = sig.embed_images(frame_paths, batch=8)
             sig.unload(); del sig; gc.collect()
 
-            # 3) DINOv2 Z (768d)
+            # 3) DINOv2 Z (1024d)
             log("  · DINOv2 로드 → Z 임베딩")
             dino = DINOv2Encoder()
             Z = dino.embed_images(frame_paths, batch=8)
@@ -137,17 +137,12 @@ def run_movie_incremental(
             Im = bge.embed([t if t else " " for t in frame_stt_text], batch=16)
             bge.unload(); del bge; gc.collect()
 
-            # 6) 캐시 append
-            n_tot_Re = cache.append_npy(MOVIE_CACHE_DIR / "cache_movie_Re.npy", Re)
-            cache.append_npy(MOVIE_CACHE_DIR / "cache_movie_Im.npy", Im)
-            cache.append_npy(MOVIE_CACHE_DIR / "cache_movie_Z.npy",  Z)
-
+            # 6) 캐시: replace-by-file (동일 파일 재인덱싱 시 stale 제거 후 교체)
             ids = [rel] * len(frames)
-            cache.append_ids(MOVIE_CACHE_DIR / "movie_ids.json", ids)
-
             seg_meta = [
                 {
                     "file":        rel,
+                    "file_path":   rel,   # replace_by_file 이 file_path 키 사용
                     "file_name":   vid.name,
                     "frame_idx":   i,
                     "t_start":     f.t_start,
@@ -156,7 +151,17 @@ def run_movie_incremental(
                 }
                 for i, f in enumerate(frames)
             ]
-            cache.append_segments(MOVIE_CACHE_DIR / "segments.json", seg_meta)
+            res = cache.replace_by_file(
+                cache_dir=MOVIE_CACHE_DIR,
+                file_keys=[rel],
+                arrays={"Re": Re, "Im": Im, "Z": Z},
+                new_ids=ids,
+                new_segs=seg_meta,
+                npy_prefix="cache_movie",
+                ids_file="movie_ids.json",
+                segs_file="segments.json",
+            )
+            n_tot_Re = res["rows"]
 
             # 7) 레지스트리 체크포인트
             reg[rel] = {"sha": sha, "frames": len(frames), "duration": dur}
