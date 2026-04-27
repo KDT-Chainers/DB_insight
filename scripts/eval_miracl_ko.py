@@ -15,6 +15,7 @@ import json
 import logging
 import math
 import os
+import random
 import sys
 import time
 from datetime import datetime
@@ -22,6 +23,31 @@ from pathlib import Path
 from typing import Protocol, runtime_checkable
 
 import numpy as np
+
+# ── 결정론적 재현성 (논문 §V-E, Table VII, Fig. 7) ─────────────────────────────
+# 논문 보고 값(MIRACL-ko nDCG@10=77.82, R@100=95.46, MRR=76.56)과의 재현성을 위해
+# 평가 시점에 RNG 시드를 42로 고정한다. FAISS IndexFlatIP 자체는 결정론적이지만
+# 모델 로드/임베딩 경로의 어떤 우발적 비결정성도 차단하기 위해 통일.
+GLOBAL_SEED: int = 2026
+
+
+def set_global_seed(seed: int = GLOBAL_SEED) -> None:
+    """Python·NumPy·PyTorch RNG 시드 일괄 설정. PyTorch 미설치 환경에서도 안전."""
+    random.seed(seed)
+    np.random.seed(seed)
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    try:
+        import torch  # type: ignore
+
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
+    except ImportError:
+        pass
+
+
+# 모듈 임포트 시점에 즉시 시드 고정 — baseline 모듈이 로드되기 전에 효과 발휘.
+set_global_seed(GLOBAL_SEED)
 
 # ── 경로 설정 ─────────────────────────────────────────────────────────────────
 ROOT = Path(__file__).resolve().parents[1]
@@ -429,6 +455,11 @@ def main() -> None:
     except ImportError as exc:
         logger.error(f"baseline 모듈 로드 실패: {exc}")
         sys.exit(1)
+
+    # baseline 임포트 후 RNG 재고정 — 일부 baseline 모듈이 import 시점에
+    # 자체 RNG 호출을 일으킬 수 있으므로 retriever 생성 직전에 재시드.
+    set_global_seed(GLOBAL_SEED)
+    logger.info(f"global seed = {GLOBAL_SEED} (paper §V-E reproducibility)")
 
     retriever: Retriever = mod.get_retriever()
     if not isinstance(retriever, Retriever):

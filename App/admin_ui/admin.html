@@ -85,7 +85,10 @@
 
   /* 파이프라인 다이어그램 */
   .pipelines{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:14px 16px;margin-bottom:16px}
-  .pipelines h3{font-size:13px;font-weight:600;margin-bottom:10px;color:#cbd5e1}
+  .pipelines h3{font-size:13px;font-weight:600;margin-bottom:10px;color:#cbd5e1;cursor:pointer;user-select:none;display:flex;align-items:center;gap:8px}
+  .pipelines h3:hover{color:#f1f5f9}
+  .pipe-toggle{font-size:11px;color:var(--muted);transition:transform 0.2s}
+  .pipe-toggle.open{transform:rotate(90deg)}
   .pipe-row{display:flex;align-items:center;gap:6px;margin-bottom:8px;font-size:11px;flex-wrap:wrap}
   .pipe-row:last-child{margin-bottom:0}
   .pipe-label{min-width:90px;font-weight:700;font-size:12px;padding:3px 10px;border-radius:12px}
@@ -111,18 +114,18 @@
 </head>
 <body>
 <header>
-  <h1>🔍 TRI-CHEF 관리자 전수 검사</h1>
+  <h1>TRI-CHEF 관리자 전수 검사</h1>
   <p id="dom-info">도메인 현황 로딩…</p>
 </header>
 <main>
   <div class="conn-bar">
-    <span>🔌 백엔드</span>
+    <span>백엔드</span>
     <input id="backend-url" type="text" placeholder="http://127.0.0.1:5001" />
     <button id="conn-retry">연결 확인</button>
     <span id="conn-status" class="status fail">미확인</span>
   </div>
   <div id="conn-help" class="conn-help" style="display:none">
-    <h3>⚠️ 백엔드 연결 실패</h3>
+    <h3>백엔드 연결 실패</h3>
     <ol style="padding-left:20px;line-height:1.8">
       <li>백엔드 구동: <code>cd App\backend</code> 후 <code>python app.py</code></li>
       <li>구동 확인: <code>http://127.0.0.1:5001/api/admin/domains</code> 가 JSON 반환해야 함</li>
@@ -131,8 +134,11 @@
     </ol>
   </div>
   <div id="pipelines" class="pipelines" style="display:none">
-    <h3>📊 도메인별 파이프라인 (DI-TriCHEF / MR-TriCHEF)</h3>
-    <div id="pipe-rows"></div>
+    <h3 id="pipe-toggle-btn">
+      <span class="pipe-toggle" id="pipe-toggle-icon">&#9654;</span>
+      도메인별 파이프라인 (DI-TriCHEF / MR-TriCHEF)
+    </h3>
+    <div id="pipe-rows" style="display:none"></div>
   </div>
   <div class="search-box">
     <input id="q" type="text" placeholder="검색어를 입력하세요 (예: 고양이, 복지정책, 반도체)" autofocus />
@@ -196,6 +202,15 @@ connRetry.addEventListener('click', () => {
 });
 
 loadDomains();
+
+// 파이프라인 섹션 접기/펼치기
+document.getElementById('pipe-toggle-btn').addEventListener('click', () => {
+  const rows = document.getElementById('pipe-rows');
+  const icon = document.getElementById('pipe-toggle-icon');
+  const isOpen = rows.style.display !== 'none';
+  rows.style.display = isOpen ? 'none' : '';
+  icon.classList.toggle('open', !isOpen);
+});
 
 let AVAILABLE_DOMAINS = new Set();
 
@@ -302,7 +317,7 @@ async function loadDomains(){
     connHelp.style.display = '';
     pipelinesEl.style.display = 'none';
     document.getElementById('dom-info').textContent =
-      `⚠️ ${API_BASE} 연결 실패 — 아래 안내를 확인하고 [연결 확인] 클릭`;
+      `${API_BASE} 연결 실패 — 아래 안내를 확인하고 [연결 확인] 클릭`;
   }
 }
 
@@ -406,7 +421,7 @@ function renderStats(query, perDom, totalShown, elapsed, warnings){
   ).join('');
   const warnBlock = (warnings && warnings.length)
     ? `<div style="margin-top:10px;padding:8px 12px;background:#7f1d1d;border:1px solid var(--warn);border-radius:4px;font-size:12px;color:#fecaca">
-         ⚠️ 일부 도메인 스킵됨: ${warnings.map(escapeHtml).join(' · ')}
+         일부 도메인 스킵됨: ${warnings.map(escapeHtml).join(' · ')}
        </div>`
     : '';
   statsDiv.innerHTML = `
