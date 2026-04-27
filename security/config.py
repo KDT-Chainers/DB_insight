@@ -5,6 +5,9 @@ config.py — 프로젝트 전역 설정
 진단: QWEN_TIMEOUT_SEC 등이 실제로 읽히는지 확인하려면 앱 실행 전에
   DEBUG_CONFIG=1
 를 설정하면 stderr에 핵심 플래그·타임아웃·원시 env 문자열이 한 번 출력된다.
+
+PII 오탐 분석: 업로드 스캔 시 어떤 문자열이 탐지/탈락됐는지 로그로 남기려면
+  PIIDEBUG=1
 """
 from __future__ import annotations
 
@@ -43,6 +46,9 @@ OLLAMA_URL       = os.getenv("OLLAMA_URL", "http://localhost:11434")
 QWEN_MODEL       = os.getenv("QWEN_MODEL", "qwen2.5:3b")
 # 타임아웃 내 응답 없으면 orchestrator 가 PRS 규칙 기반으로 폴백.
 QWEN_TIMEOUT_SEC = int(os.getenv("QWEN_TIMEOUT_SEC", "15"))
+
+# PII 탐지 디버그 로그 (탐지/탈락 원문·앞뒤 문맥). 기본 꺼짐.
+PIIDEBUG = os.getenv("PIIDEBUG", "0").strip().lower() in {"1", "true", "yes", "on"}
 
 # Summary Agent — USE_QWEN 과 독립적으로 동작.
 # Ollama가 살아있으면 SUMMARY_USE_LLM=1 만으로 LLM 요약이 켜진다.
@@ -108,7 +114,7 @@ if os.getenv("DEBUG_CONFIG", "").strip().lower() in {"1", "true", "yes", "on"}:
         f"  USE_QWEN={USE_QWEN}  QWEN_TIMEOUT_SEC={QWEN_TIMEOUT_SEC}  (env QWEN_TIMEOUT_SEC={_raw_qwen_t!r})\n"
         f"  SUMMARY_USE_LLM={SUMMARY_USE_LLM}  SUMMARY_TIMEOUT_SEC={SUMMARY_TIMEOUT_SEC}\n"
         f"  QUERY_REWRITE_ENABLED={QUERY_REWRITE_ENABLED}  OLLAMA_URL={OLLAMA_URL!r}\n"
-        f"  QWEN_MODEL={QWEN_MODEL!r}",
+        f"  QWEN_MODEL={QWEN_MODEL!r}  PIIDEBUG={PIIDEBUG}\n",
         file=sys.stderr,
         flush=True,
     )

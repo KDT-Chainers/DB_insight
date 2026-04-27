@@ -119,7 +119,6 @@ class SecurityCritic:
         # 전화번호 패턴(010/02/지역번호)은 제외하고 계좌번호만 탐지
         (r"(?<!\d)(?!(?:01[0-9]|02|0[3-9]\d)[-\s])\d{3,4}[-\s]\d{2,4}[-\s]\d{4,6}(?:[-\s]\d{1,3})?(?!\d)", "KR_BANK_ACCOUNT"),
         (r"(?<!\d)\d{3}-\d{2}-\d{5}(?!\d)",                                  "KR_BRN"),
-        (r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}",              "EMAIL"),
     ]
 
     # ── Prompt Injection / 우회 탐지 패턴 ────────────────────────────────────
@@ -225,11 +224,15 @@ class SecurityCritic:
                 action="block",
             )
 
-        # 전화번호(KR_PHONE)만 포함된 경우는 비민감으로 간주 (사용자 정책 반영)
-        if contains_pii and pii_types and set(pii_types).issubset({"KR_PHONE", "PHONE_NUMBER"}):
+        # 전화·이메일 등 정책 비보호 유형만 있으면 비민감으로 간주 (구 DB 호환)
+        _non_sensitive_meta = frozenset({
+            "KR_PHONE", "PHONE_NUMBER", "EMAIL_ADDRESS", "EMAIL",
+            "CREDIT_CARD", "IBAN_CODE",
+        })
+        if contains_pii and pii_types and set(pii_types).issubset(_non_sensitive_meta):
             return CriticDecision(
                 decision=APPROVE,
-                reason="전화번호는 비민감 정책으로 분류되어 그대로 출력합니다.",
+                reason="전화·이메일 등은 비민감 정책으로 분류되어 그대로 출력합니다.",
                 risk_score=risk_score,
                 action="show",
             )
@@ -268,13 +271,25 @@ class SecurityCritic:
         """
         출력 텍스트에서 PII 패턴을 직접 탐지.
         DB 접근 없이 정규식만 사용.
+
+        계좌 후보(KR_BANK_ACCOUNT)는 업로드 스캔과 동일하게
+        은행명/계좌 키워드 문맥이 있을 때만 인정한다(숫자만 매칭 방지).
+        이메일·전화는 정책상 출력 PII 심사 대상이 아니다.
         """
+        from security.pii_filter_helpers import bank_account_has_required_context
+
         if not text:
             return []
-        found = []
+        found: List[str] = []
         for pattern, label in self._OUTPUT_PII_PATTERNS:
-            if re.search(pattern, text):
-                found.append(label)
+            if label == "KR_BANK_ACCOUNT":
+                for m in re.finditer(pattern, text):
+                    if bank_account_has_required_context(text, m.start(), m.end()):
+                        found.append(label)
+                        break
+            else:
+                if re.search(pattern, text):
+                    found.append(label)
         return found
 
     def _detect_bypass(self, text: str) -> bool:

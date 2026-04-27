@@ -64,8 +64,9 @@ _QUERY_KW_SCORES: Dict[str, float] = {
     # SENSITIVE 수준 키워드 (0.5~0.75)
     "주민번호":   0.75, "계좌번호":    0.70, "비밀번호":   0.65,
     "카드번호":   0.70, "패스워드":    0.65, "여권":        0.60,
-    "passport":   0.60, "운전면허":    0.60, "사업자번호":  0.55,
-    "사업자등록": 0.55, "이메일":      0.45, "email":       0.45,
+    "passport":   0.60, "운전면허":    0.60,     "사업자번호":  0.55,
+    "사업자등록": 0.55,
+    # 전화·이메일은 비민감 정책: 질의 키워드 위험도에 반영하지 않음
 }
 
 # PII 유형별 노출 위험 가중치 (ExposureRisk 계산용)
@@ -78,7 +79,7 @@ _PII_EXPOSURE_WEIGHTS: Dict[str, float] = {
     # 전화번호는 비민감 정책: PRS 노출 위험도에서 제외 수준으로 낮춤
     "KR_PHONE":          0.00,
     "PERSON":            0.40,
-    "EMAIL_ADDRESS":     0.50,
+    "EMAIL_ADDRESS":     0.00,
     "PHONE_NUMBER":      0.00,
 }
 
@@ -131,7 +132,10 @@ def compute_prs(
     # 키워드별 점수는 '매칭 여부' 판별에만 쓰고, 실제 QueryRisk 는 이진(0 또는 1)로 둔다.
     # 이유: w_q=0.3 이므로 (예) "여권" 0.6 → 0.3*0.6=0.18 < PRS_NORMAL_THRESHOLD(0.3)
     #      이 되어 민감 질의가 NORMAL 로 떨어지는 캘리브 오류를 막는다.
-    matched_kw_scores = [score for kw, score in _QUERY_KW_SCORES.items() if kw in q]
+    matched_kw_scores = [
+        score for kw, score in _QUERY_KW_SCORES.items()
+        if kw in q and score > 0.0
+    ]
     if matched_kw_scores:
         query_risk = 1.0
     else:

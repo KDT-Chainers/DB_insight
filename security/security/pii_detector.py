@@ -4,6 +4,11 @@ pii_detector.py
 1차: Presidio(정규식 + 커스텀 한국형 Recognizer) 탐지
 2차: 애매한 경우 Qwen 분류기로 재검증
 
+정책(이 프로젝트):
+  - 민감 PII로 취급: 주민·여권·운전면허·계좌·사업자만 (security.pii_filter_helpers 참고)
+  - 전화·이메일·카드·IBAN 은 탐지 대상에서 제외(오탐·비대상)
+  - 계좌번호는 은행명 또는 계좌 키워드 문맥 + 반복 제거 후처리로 오탐 억제
+
 출력: List[PIIFinding]  (위치, 유형, 신뢰도, 원문)
 """
 from __future__ import annotations
@@ -16,6 +21,11 @@ from presidio_analyzer import AnalyzerEngine
 from presidio_analyzer.nlp_engine import NlpEngineProvider
 
 from security.korean_recognizers import ALL_KOREAN_RECOGNIZERS
+from security.pii_filter_helpers import (
+    bank_account_has_required_context,
+    log_pii_debug,
+    should_drop_repeated_match,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -64,19 +74,13 @@ class PIIDetector:
         results = detector.scan_chunks(["청크1 텍스트", "청크2 텍스트"])
     """
 
-    # Presidio 에서 기본 지원하는 탐지 항목들
+    # Presidio + 커스텀 Recognizer — 민감 PII만 (전화·이메일·카드·IBAN 제외)
     DEFAULT_ENTITIES = [
-        "PHONE_NUMBER",
-        "EMAIL_ADDRESS",
-        "CREDIT_CARD",
-        "IBAN_CODE",
-        # 한국형 커스텀 추가됨:
         "KR_RRN",
         "KR_PASSPORT",
         "KR_DRIVER_LICENSE",
         "KR_BANK_ACCOUNT",
         "KR_BRN",
-        "KR_PHONE",           # 한국 전화번호 (010/02/지역/대표)
     ]
 
     def __init__(self, qwen_classifier=None, llm_score_threshold: float = 0.5) -> None:
@@ -157,21 +161,51 @@ class PIIDetector:
                 presidio_results = []
 
             for r in presidio_results:
+                span_text = chunk_text[r.start : r.end]
+                et = r.entity_type
+
+                # ── 계좌: 반복(푸터·표) + 문맥(은행명/계좌 키워드) 강제 ─────────
+                if et == "KR_BANK_ACCOUNT":
+                    if should_drop_repeated_match(chunk_text, span_text):
+                        log_pii_debug(
+                            "DROP", et, span_text, chunk_text, r.start, r.end,
+                            reason="repeated_in_chunk",
+                        )
+                        continue
+                    if not bank_account_has_required_context(chunk_text, r.start, r.end):
+                        log_pii_debug(
+                            "DROP", et, span_text, chunk_text, r.start, r.end,
+                            reason="no_bank_or_account_keyword_context",
+                        )
+                        continue
+
+                # ── 사업자번호: 동일 값 반복 시 표/푸터로 간주 ───────────────────
+                if et == "KR_BRN" and should_drop_repeated_match(chunk_text, span_text):
+                    log_pii_debug(
+                        "DROP", et, span_text, chunk_text, r.start, r.end,
+                        reason="repeated_in_chunk",
+                    )
+                    continue
+
                 finding = PIIFinding(
-                    entity_type=r.entity_type,
-                    text=chunk_text[r.start:r.end],
+                    entity_type=et,
+                    text=span_text,
                     start=r.start,
                     end=r.end,
                     score=r.score,
                     chunk_index=idx,
                 )
 
-                # 신뢰도가 낮으면 Qwen 으로 재검증
+                # 신뢰도가 낮으면 Qwen 으로 재검증 (계좌는 문맥 통과한 애매한 경우만)
                 if self._qwen and r.score < self._llm_threshold:
                     finding = self._verify_with_qwen(finding, chunk_text)
                     if finding is None:
                         continue   # Qwen 이 PII 아님으로 판단 → 제외
 
+                log_pii_debug(
+                    "KEEP", et, span_text, chunk_text, r.start, r.end,
+                    reason="passed_filters",
+                )
                 chunk_result.findings.append(finding)
 
             results.append(chunk_result)

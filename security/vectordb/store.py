@@ -70,17 +70,20 @@ _PII_KR_MAP = {
     "KR_DRIVER_LICENSE": "운전면허 면허증",
     "KR_BANK_ACCOUNT":   "계좌번호 통장 은행",
     "KR_BRN":            "사업자번호 사업자등록증",
-    "KR_PHONE":          "전화번호 연락처 휴대폰",
-    "PERSON":            "이름 성명",
-    "EMAIL_ADDRESS":     "이메일 email",
-    "PHONE_NUMBER":      "전화번호 연락처",
 }
 
 
 def _pii_types_to_korean(pii_types: List[str]) -> str:
-    """PII 유형 리스트를 한국어 검색 키워드 문자열로 변환한다."""
+    """
+    PII 유형 리스트를 한국어 검색 키워드 문자열로 변환한다.
+    전화·이메일 등은 임베딩 보강에 쓰지 않는다(정책 비대상).
+    """
+    from security.pii_filter_helpers import POLICY_PROTECTED_PII_TYPES
+
     keywords: List[str] = []
     for t in pii_types:
+        if str(t).upper() not in POLICY_PROTECTED_PII_TYPES:
+            continue
         kw = _PII_KR_MAP.get(t)
         if kw:
             keywords.append(kw)
@@ -546,19 +549,39 @@ class VectorStore:
         검색 결과 + 쿼리를 기반으로 Feature Map 생성.
         실제 청크 원문은 포함하지 않음 — 보안 에이전트에 전달할 메타데이터만 포함.
         """
-        contains_pii = any(r.get("has_pii") for r in results)
+        from security.pii_filter_helpers import (
+            filter_to_protected_pii_types,
+            sensitivity_from_protected_types,
+        )
 
         pii_types: List[str] = []
         for r in results:
-            for t in (r.get("pii_types") or []):
+            for t in filter_to_protected_pii_types(r.get("pii_types") or []):
                 if t not in pii_types:
                     pii_types.append(t)
+
+        contains_pii = any(
+            bool(filter_to_protected_pii_types(r.get("pii_types") or []))
+            for r in results
+        )
+
+        protected_hits = sum(
+            1 for r in results
+            if filter_to_protected_pii_types(r.get("pii_types") or [])
+        )
+        pii_chunk_ratio = round(
+            protected_hits / max(len(results), 1),
+            4,
+        )
 
         bulk_keywords = ["전부", "모두", "전체", "all", "dump", "export"]
         bulk_request  = any(kw in user_query.lower() for kw in bulk_keywords)
 
-        # 검색 결과 중 최대 민감도 점수 사용
-        max_score = max((r.get("sensitivity_score", 0.0) for r in results), default=0.0)
+        # 검색 결과별 민감도는 보호 대상 PII만 반영해 재계산
+        max_score = 0.0
+        for r in results:
+            pts = filter_to_protected_pii_types(r.get("pii_types") or [])
+            max_score = max(max_score, sensitivity_from_protected_types(pts))
         sensitivity_score = max_score
         if bulk_request:
             sensitivity_score = min(1.0, sensitivity_score + 0.4)
@@ -567,6 +590,7 @@ class VectorStore:
             "matched_docs":      len(results),
             "contains_pii":      contains_pii,
             "pii_types":         pii_types,
+            "pii_chunk_ratio":   pii_chunk_ratio,
             "bulk_request":      bulk_request,
             "owner_match":       True,
             "sensitivity_score": round(sensitivity_score, 4),

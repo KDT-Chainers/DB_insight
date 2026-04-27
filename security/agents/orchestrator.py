@@ -39,6 +39,7 @@ from security.grounding_gate import GroundingGate
 from security.pii_detector import PIIDetector
 from security.policy import SecurityPolicy, UploadPolicy
 from agents.summary import SummaryAgent, SummaryResult
+from security.pii_filter_helpers import sensitivity_from_protected_types
 from security.privacy_risk_score import classify_by_prs
 from security.qwen_classifier import QwenClassifier
 from vectordb.store import VectorStore
@@ -458,18 +459,8 @@ class Orchestrator:
 
     @staticmethod
     def _calc_sensitivity(pii_types: List[str]) -> float:
-        """PII 유형 목록에서 민감도 점수를 계산한다 (0.0 ~ 1.0)."""
-        _WEIGHTS = {
-            "KR_RRN": 1.0, "KR_PASSPORT": 0.9, "KR_DRIVER_LICENSE": 0.8,
-            "KR_BANK_ACCOUNT": 0.85, "KR_BRN": 0.6,
-            "PERSON": 0.4, "EMAIL_ADDRESS": 0.5, "PHONE_NUMBER": 0.6,
-        }
-        if not pii_types:
-            return 0.0
-        base = max((_WEIGHTS.get(t, 0.3) for t in pii_types), default=0.0)
-        if len(pii_types) > 1:
-            base = min(1.0, base + 0.05 * (len(pii_types) - 1))
-        return round(base, 4)
+        """정책 보호 PII만 반영한 민감도 점수 (0.0 ~ 1.0)."""
+        return sensitivity_from_protected_types(pii_types)
 
     @staticmethod
     def _policy_action(decision: Any, full_view: bool) -> str:
