@@ -55,7 +55,7 @@ SUMMARY_MAX_CHUNKS  = int(os.getenv("SUMMARY_MAX_CHUNKS", "5"))    # 더 많은 
 SUMMARY_USE_LLM     = os.getenv("SUMMARY_USE_LLM", "1").strip().lower() in {"1", "true", "yes", "on"}
 # Map-reduce 요약 — 청크 수가 이 임계값 이상이면 자동으로 map-reduce 분기.
 # 각 group에 MAP_REDUCE_GROUP_SIZE 개씩 나눠 개별 요약 후 최종 reduce.
-MAP_REDUCE_THRESHOLD  = int(os.getenv("MAP_REDUCE_THRESHOLD", "6"))
+MAP_REDUCE_THRESHOLD  = int(os.getenv("MAP_REDUCE_THRESHOLD", "999"))  # 사실상 비활성화
 MAP_REDUCE_GROUP_SIZE = int(os.getenv("MAP_REDUCE_GROUP_SIZE", "3"))
 
 # ──────────────────────────────────────────────────────────────────────────────

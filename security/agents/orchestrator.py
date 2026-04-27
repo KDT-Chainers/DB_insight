@@ -25,6 +25,7 @@ ABC 원칙:
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -297,6 +298,8 @@ class Orchestrator:
         """
         # ── Step 1: Query Rewrite (USE_QWEN=1 + Ollama 사용 가능할 때만)
         is_summary = Orchestrator.is_summary_request(user_query)
+        # 요약 질의이고 문서명 힌트가 있으면 해당 문서에 집중 검색한다.
+        doc_hint = Orchestrator._extract_doc_hint(user_query, self._store.list_doc_names()) if is_summary else ""
         rewritten_query = user_query
         if (
             config.USE_QWEN
@@ -313,12 +316,29 @@ class Orchestrator:
 
         # ── Step 2: 원문 검색 ─────────────────────────────────────────────────
         retrieval_top_k = config.SUMMARY_TOP_K if is_summary else config.TOP_K
-        retrieval_result = self._retrieval_agent.retrieve(
-            rewritten_query,
-            top_k=retrieval_top_k,
-        )
-        feature_map = retrieval_result.feature_map
-        chunks      = retrieval_result.chunks
+        if doc_hint:
+            # 문서명 힌트가 있으면 해당 문서 한정 검색 → 다른 문서와 섞이지 않음
+            raw_chunks = self._store.search_within_doc(
+                rewritten_query,
+                doc_name_hint=doc_hint,
+                top_k=retrieval_top_k,
+            )
+            logger.info("[Orchestrator] 문서 집중 검색 (hint=%r): %d청크", doc_hint, len(raw_chunks))
+            if raw_chunks:
+                feature_map = self._store.build_feature_map(raw_chunks, rewritten_query)
+                chunks = raw_chunks
+            else:
+                # 힌트 검색 결과 없으면 일반 검색으로 폴백
+                retrieval_result = self._retrieval_agent.retrieve(rewritten_query, top_k=retrieval_top_k)
+                feature_map = retrieval_result.feature_map
+                chunks      = retrieval_result.chunks
+        else:
+            retrieval_result = self._retrieval_agent.retrieve(
+                rewritten_query,
+                top_k=retrieval_top_k,
+            )
+            feature_map = retrieval_result.feature_map
+            chunks      = retrieval_result.chunks
 
         # ── Step 3: 보안 분류 (Qwen 또는 PRS 규칙 기반)
         if config.USE_QWEN and self._qwen is not None and self._qwen.is_available():
@@ -402,7 +422,9 @@ class Orchestrator:
         display_chunks = chunks
         if is_summary:
             logger.info("[Orchestrator] 요약 요청 감지 → SummaryAgent 호출")
-            summary_input = self._filter_recent_upload_chunks(chunks)
+            summary_input = self._filter_chunks_by_query_hint(user_query, chunks)
+            if summary_input is chunks:
+                summary_input = self._filter_recent_upload_chunks(chunks)
             summary_chunks = self._select_summary_chunks(summary_input)
             display_chunks = summary_chunks or chunks
             summary_result = self._summary_agent.summarize(user_query, summary_chunks)
@@ -527,4 +549,81 @@ class Orchestrator:
                 len(filtered),
             )
             return filtered
+        return chunks
+
+    @staticmethod
+    def _extract_doc_hint(user_query: str, doc_names: List[str]) -> str:
+        """
+        DB에 저장된 문서명 목록과 질문을 비교해 가장 잘 매칭되는 문서명을 반환한다.
+        매칭 없으면 빈 문자열을 반환한다.
+
+        예) user_query="AI 브리프 자료 요약해줘", doc_names=["AI브리프_3월.pdf", "역사.pdf"]
+            → "AI브리프_3월.pdf"
+        """
+        if not user_query or not doc_names:
+            return ""
+        q_norm = re.sub(r"[^0-9A-Za-z가-힣]", "", user_query).lower()
+        best_doc, best_score = "", 0
+        for name in doc_names:
+            n_norm = re.sub(r"[^0-9A-Za-z가-힣]", "", name).lower()
+            if not n_norm:
+                continue
+            # 공통 부분 문자열 길이로 점수 계산 (짧은 쪽 기준 비율)
+            shorter = min(len(q_norm), len(n_norm))
+            overlap = sum(
+                1 for ch in set(n_norm) if ch in q_norm
+            )
+            # 파일명에서 핵심 단어(4자 이상) 추출해 질문 포함 여부 확인
+            words = re.findall(r"[가-힣A-Za-z0-9]{2,}", name)
+            word_hits = sum(
+                1 for w in words
+                if len(w) >= 2
+                and re.sub(r"[^0-9A-Za-z가-힣]", "", w).lower() in q_norm
+            )
+            score = overlap + word_hits * 3
+            if score > best_score:
+                best_score = score
+                best_doc = name
+        # 최소 점수 미만이면 힌트 없음으로 처리
+        if best_score < 3:
+            return ""
+        logger.info("[Orchestrator] doc_hint 감지: %r (score=%d)", best_doc, best_score)
+        return best_doc
+
+    @staticmethod
+    def _filter_chunks_by_query_hint(
+        user_query: str,
+        chunks: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        """
+        질문에 특정 문서명이 들어있으면 해당 문서 청크를 우선 선택한다.
+        예) 'AI 브리프 자료 요약' -> file_name/doc_name/source_path 내 'ai브리프' 매칭.
+        매칭이 없으면 원본 리스트를 그대로 반환한다.
+        """
+        if not user_query or not chunks:
+            return chunks
+        # 공백/특수문자 제거해 느슨하게 비교
+        q_norm = re.sub(r"[^0-9A-Za-z가-힣]", "", user_query).lower()
+        if len(q_norm) < 2:
+            return chunks
+        out: List[Dict[str, Any]] = []
+        for c in chunks:
+            blob = " ".join([
+                str(c.get("file_name") or ""),
+                str(c.get("doc_name") or ""),
+                str(c.get("source_path") or ""),
+            ])
+            b_norm = re.sub(r"[^0-9A-Za-z가-힣]", "", blob).lower()
+            if not b_norm:
+                continue
+            # 완전 포함 + 앞 4글자 단서 포함 둘 다 허용
+            if b_norm in q_norm or q_norm in b_norm or q_norm[:4] in b_norm:
+                out.append(c)
+        if out:
+            logger.info(
+                "[Orchestrator] 질문 문서명 힌트 매칭 적용: %d -> %d청크",
+                len(chunks),
+                len(out),
+            )
+            return out
         return chunks

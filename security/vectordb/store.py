@@ -451,6 +451,92 @@ class VectorStore:
                     })
         return results
 
+    def search_within_doc(
+        self,
+        query: str,
+        doc_name_hint: str,
+        top_k: int = 30,
+    ) -> List[Dict[str, Any]]:
+        """
+        doc_name / file_name / source_path 에 hint 문자열이 포함된
+        청크만 대상으로 검색한다.
+
+        일반 search()와 달리 FAISS 전체 검색 후 SQL 필터로 좁히는 방식.
+        문서명을 질문에서 명시했을 때 다른 문서와 섞이는 것을 방지한다.
+        """
+        if self._index is None or self._index.ntotal == 0:
+            return []
+        hint = doc_name_hint.strip().lower()
+        if not hint:
+            return self.search(query, top_k=top_k)
+
+        # FAISS는 전체 대상으로 넉넉하게 검색 (힌트 문서가 하위에 있을 수 있으므로)
+        search_k = min(self._index.ntotal, max(top_k * 6, 120))
+        query_vec = embed_texts([query])
+        distances, indices = self._index.search(query_vec, search_k)
+
+        results: List[Dict[str, Any]] = []
+        with sqlite3.connect(self._meta_db) as conn:
+            for dist, idx in zip(distances[0], indices[0]):
+                if idx < 0 or idx >= len(self._chunk_ids):
+                    continue
+                db_id = self._chunk_ids[int(idx)]
+                row = conn.execute(
+                    """SELECT id, doc_name, source_page, chunk_index, start_char, text,
+                              source_path, file_name, bbox,
+                              has_pii, pii_types, sensitivity_score, display_masked,
+                              is_image, image_path, pii_regions
+                       FROM chunks WHERE id=?""",
+                    (db_id,),
+                ).fetchone()
+                if not row:
+                    continue
+                # 힌트가 doc_name / file_name / source_path 중 하나에라도 포함되면 포함
+                candidate = " ".join([
+                    (row[1] or ""),
+                    (row[7] or ""),
+                    (row[6] or ""),
+                ]).lower()
+                import re as _re
+                cand_norm = _re.sub(r"[^0-9a-z가-힣]", "", candidate)
+                hint_norm = _re.sub(r"[^0-9a-z가-힣]", "", hint)
+                if hint_norm not in cand_norm:
+                    continue
+                cosine_sim = max(0.0, min(1.0, float(dist)))
+                results.append({
+                    "id":                row[0],
+                    "doc_name":          row[1],
+                    "source_page":       row[2],
+                    "chunk_index":       row[3],
+                    "start_char":        row[4],
+                    "text":              row[5],
+                    "source_path":       row[6] or "",
+                    "file_name":         row[7] or row[1] or "",
+                    "bbox":              json.loads(row[8]) if row[8] else None,
+                    "has_pii":           bool(row[9]),
+                    "pii_types":         json.loads(row[10]) if row[10] else [],
+                    "sensitivity_score": float(row[11]),
+                    "display_masked":    bool(row[12]),
+                    "is_image":          bool(row[13]),
+                    "image_path":        row[14] or "",
+                    "pii_regions":       json.loads(row[15]) if row[15] else [],
+                    "score":             cosine_sim,
+                })
+                if len(results) >= top_k:
+                    break
+        logger.info(
+            "[VectorStore] search_within_doc hint=%r → %d청크", hint, len(results)
+        )
+        return results
+
+    def list_doc_names(self) -> List[str]:
+        """저장된 모든 문서의 doc_name 목록을 반환한다."""
+        with sqlite3.connect(self._meta_db) as conn:
+            rows = conn.execute(
+                "SELECT DISTINCT COALESCE(file_name, doc_name) FROM chunks WHERE COALESCE(file_name, doc_name) != ''"
+            ).fetchall()
+        return [r[0] for r in rows if r[0]]
+
     def build_feature_map(
         self,
         results: List[Dict[str, Any]],
