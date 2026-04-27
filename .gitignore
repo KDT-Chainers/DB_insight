@@ -141,6 +141,10 @@ desktop.ini
 실행방법.txt
 실행메모.txt
 publication/
+LICENSE
+LICENSE_DRAFT
+README_DRAFT.md
+DRAFT_SUMMARY.txt
 
 # oh-my-claudecode / Claude Code
 .omc/
@@ -161,6 +165,7 @@ App/backend/=*
 
 merge
 기획서
+md/
 
 # ============================================================
 # LaTeX intermediate artifacts
@@ -185,3 +190,5 @@ publication/paper/main_korean_export.tex
 publication/paper/fig*_ko.tex
 publication/paper/fig*_ko.pdf
 publication/paper/fig*_ko.png
+
+.claude/

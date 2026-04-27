@@ -2,6 +2,11 @@
 
 로컬 파일(문서/영상/이미지/음성)을 자연어로 검색하는 AI 기반 데스크탑 앱.
 
+> **Tri-CHEF 연구 논문 / 슬라이드는 라이선스 검토 완료 후 공개 예정입니다.**
+> (영문 논문 6p, 한글 논문 5p, KDT 발표 슬라이드 21p — 로컬 빌드 완료)
+> 구현 코드는 [`DI_TriCHEF/`](DI_TriCHEF/) (Doc/Img) 와
+> [`MR_TriCHEF/`](MR_TriCHEF/) (Movie/Rec, ~3,000 LOC) 에 있습니다.
+
 ---
 
 ## Architecture

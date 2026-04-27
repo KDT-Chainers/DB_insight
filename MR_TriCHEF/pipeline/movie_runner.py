@@ -113,7 +113,7 @@ def run_movie_incremental(
             Re = sig.embed_images(frame_paths, batch=8)
             sig.unload(); del sig; gc.collect()
 
-            # 3) DINOv2 Z (768d)
+            # 3) DINOv2 Z (1024d)
             log("  · DINOv2 로드 → Z 임베딩")
             dino = DINOv2Encoder()
             Z = dino.embed_images(frame_paths, batch=8)

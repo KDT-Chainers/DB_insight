@@ -1,8 +1,9 @@
 # MR Tri-CHEF — Movie & Music 검색 구현 로직
 
 > **3축 복소수 검색엔진 (Tri-CHEF)** 의 Movie / Music 도메인 확장 구현 문서.  
-> 작성일: 2026-04-23 · 갱신: 2026-04-25 19:30 · 브랜치: `feature/trichef-port`
-> **최신 변경**: replace_by_file 원자화, calibration sig guard, sparse lazy import, 확장자 확장
+> 작성일: 2026-04-23 · 갱신: 2026-04-25 20:50 · 브랜치: `feature/trichef-port`
+> **최신 변경**: 확장자 SSOT (Q1, 1049099) + 평가 라이브러리 통합 (Q3, 73c8bf0) + hybrid θ K-clamp (bdf80af)
+> **v1-2 추가**: MIRACL-ko 평가 인프라 + 텍스트 검색 baseline 비교 참조
 
 ---
 
@@ -35,7 +36,7 @@ raw_DB/
          │
   [Ingest Pipeline]
     ├─ 적응형 프레임 샘플링 (Movie only)
-    ├─ BLIP 캡션 (Movie Z축)
+    ├─ DINOv2 Z축 임베딩 (시각 구조)
     ├─ Whisper STT → 슬라이딩 윈도우 청킹
     └─ BGE-M3 / SigLIP2 임베딩
          │
@@ -58,7 +59,33 @@ raw_DB/
 |:--:|------|-----------|-----------|:----:|
 | **Re** | 시각/의미 (Real) | SigLIP2-image (1152d) | SigLIP2-text (1152d) | 1152 |
 | **Im** | 텍스트 의미 (Imaginary) | BGE-M3 (Whisper STT) | BGE-M3 (Whisper STT) | 1024 |
-| **Z** | 세부 어휘 (Sparse/Caption) | BGE-M3 (BLIP 캡션) | zeros (lexical_rebuild) | 1024 |
+| **Z** | 언어 비의존 시각 구조 | DINOv2-Large (1024d) | zeros (lexical_rebuild) | 1024 |
+
+### 확장자 SSOT (Q1, commit 1049099)
+
+**패턴**: 도메인 격리(App ↔ DI ↔ MR 상호 import 금지)를 유지하면서 확장자 정의 동기화.
+
+`MR_TriCHEF/pipeline/_extensions.py` (신규 19줄):
+```python
+MOVIE_EXTS: frozenset[str] = frozenset({
+    ".mp4", ".avi", ".mov", ".mkv", ".wmv",
+    ".webm", ".flv", ".m4v", ".mpg", ".mpeg", ".3gp", ".ts", ".mts", ".m2ts",
+})
+
+MUSIC_EXTS: frozenset[str] = frozenset({
+    ".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".wma",
+    ".opus", ".aiff", ".aif", ".amr",
+})
+```
+
+**Parity 검증** (`tests/test_extensions_parity.py`, 신규 88줄):
+- `test_mr_app_movie_parity()`: MR MOVIE_EXTS ⊆ App VID_EXTS
+- `test_mr_app_music_parity()`: MR MUSIC_EXTS ⊆ App AUD_EXTS
+
+**호출자 마이그레이션** (commit 1049099):
+- `MR_TriCHEF/pipeline/paths.py`: 9줄 변경 (SSOT 참조)
+
+회귀 검증: 7/7 parity test 통과.
 
 ### replace_by_file 원자화 (commit 697dfcf, P2B.1)
 
@@ -128,12 +155,11 @@ MP4/AVI/… 파일
 ├─ Step 2a: SigLIP2 Re 임베딩 (키프레임별)
 │    └─ siglip2_re.embed_images(pil_images) → (N_kf, 1152)
 │
-├─ Step 2b: BLIP 캡션 Z 임베딩 (키프레임별)
-│    ├─ qwen_caption.caption(frame_path) → str
-│    └─ bgem3_caption_im.embed_passage([captions]) → (N_kf, 1024)
+├─ Step 2b: DINOv2 Z 임베딩 (키프레임별)
+│    └─ dinov2_z.embed_images(frame_paths) → (N_kf, 1024)
 │
 ├─ Step 3: Whisper STT Im 임베딩 (STT 윈도우 청크별)
-│    ├─ WhisperModel("medium", language="ko") → stt_segments.json
+│    ├─ WhisperModel("large-v3", language="ko") → stt_segments.json
 │    ├─ 30s 슬라이딩 윈도우, 50% 오버랩 → chunks
 │    └─ bgem3_caption_im.embed_passage([texts]) → (N_stt, 1024)
 │
@@ -152,7 +178,7 @@ MP4/AVI/… 파일
 
 | type | Re 소스 | Im 소스 | Z 소스 | 언제 생성 |
 |------|---------|---------|--------|----------|
-| `keyframe` | SigLIP2(해당 키프레임) | BGE-M3(STT 오버랩) | BGE-M3(BLIP 캡션) | 시각 변화 구간 |
+| `keyframe` | SigLIP2(해당 키프레임) | BGE-M3(STT 오버랩) | DINOv2(해당 키프레임) | 시각 변화 구간 |
 | `stt` | SigLIP2(가장 가까운 키프레임) | BGE-M3(STT 윈도우) | zeros | 정적 구간 STT 보완 |
 
 ---
@@ -163,7 +189,7 @@ MP4/AVI/… 파일
 WAV/MP3/M4A/… 파일
 │
 ├─ Step 1: Whisper STT (_get_stt_segments)
-│    ├─ WhisperModel("medium", language="ko", vad_filter=True)
+│    ├─ WhisperModel("large-v3", language="ko", vad_filter=True)
 │    ├─ 감지 언어 ≠ ko 이고 결과 없음 → 영어로 재시도
 │    └─ 캐시: TRICHEF_MUSIC_EXTRACT/{stem_hash}/stt_segments.json
 │
@@ -365,8 +391,9 @@ DB_insight/
 │   └─ routes/trichef.py                  ← Flask REST API
 │
 ├─ MR_TriCHEF/
-│   ├─ app.py                             ← Gradio Admin UI (이 파일)
-│   └─ MR_TriCHEF.md                      ← 이 문서
+│   ├─ app.py                             ← Gradio Admin UI
+│   └─ docs/
+│       └─ MR_TriCHEF.md                  ← 이 문서
 │
 └─ Data/
     ├─ raw_DB/
@@ -393,7 +420,7 @@ DB_insight/
         ├─ Movie/
         │   └─ {stem_hash}/
         │       ├─ frames/          ← 키프레임 JPEG
-        │       ├─ captions.json    ← BLIP 캡션
+        │       ├─ captions.json    ← 프레임 캡션 (legacy, Z축은 DINOv2 사용)
         │       └─ stt_segments.json
         └─ Music/
             └─ {stem_hash}/
@@ -407,10 +434,11 @@ DB_insight/
 
 | 모델 | 용도 | 크기 | 자동 다운로드 |
 |------|------|:----:|:-------------:|
-| `google/siglip2-so400m-patch16-naflex` | Movie Re (시각) | ~3.4 GB | ✅ HuggingFace |
-| `BAAI/bge-m3` | Im/Z 텍스트 임베딩 | ~2.3 GB | ✅ HuggingFace |
+| `google/siglip2-so400m-patch16-naflex` | Movie Re (시각) / Music Re (텍스트) | ~3.4 GB | ✅ HuggingFace |
+| `facebook/dinov2-large` | Movie Z (시각 구조, 1024d INT8) | ~1.2 GB | ✅ HuggingFace |
+| `BAAI/bge-m3` | Im 텍스트 임베딩 (STT/캡션) | ~2.3 GB | ✅ HuggingFace |
 | `Qwen/Qwen2-VL-2B-Instruct` | caption_triple (L1/L2/L3) / 쿼리 확장 | ~4.5 GB | ✅ HuggingFace |
-| `faster-whisper medium` | STT (한/영) | ~1.5 GB | ✅ HuggingFace |
+| `faster-whisper large-v3` | STT (한/영, vad_filter) | ~3.0 GB | ✅ HuggingFace |
 
 **필수 pip 패키지:**
 ```bash
@@ -420,7 +448,50 @@ pip install opencv-python pillow scipy
 
 ---
 
-## 13. Admin UI 실행 방법
+## 13. 평가 및 벤치마킹 (v1-2 평가 인프라)
+
+### 13.1 텍스트 검색 baseline 비교 (MIRACL-ko)
+
+Tri-CHEF의 텍스트 검색 성분(Movie STT, Music 텍스트)은 BGE-M3 dense 인코더에 기반하며, 이는 **MIRACL-ko** 한국어 검색 벤치마크에서 다음과 같이 검증됨:
+
+| 시스템 | nDCG@10 | 용도 |
+|--------|:-------:|------|
+| BM25 | 37.1 | 고전 희소 검색 baseline |
+| mDPR | 41.9 | 초기 밀집 검색 |
+| mContriever | 48.3 | 추가 밀집 검색 |
+| mE5-large-v2 | 66.5 | 선행 밀집 모델 |
+| **BGE-M3 dense (Tri-CHEF Im축)** | **69.9** | 한국어 텍스트 검색 SOTA |
+
+BGE-M3은 BM25 대비 **+32.8%p**, mE5 대비 **+3.4%p** 향상을 보여 한국어 다국어 검색의 강력한 기반을 제공.
+
+**자체 재현**: `scripts/eval_miracl_ko.py` 및 baseline 스크립트(`scripts/baselines/{bm25,mdpr,mcontriever,me5,bgem3}.py`)로 결과 재현 가능.
+
+### 13.2 통합 평가 라이브러리 (_bench_common.py)
+
+commit 73c8bf0 (Q3) 에서 도입된 `scripts/_bench_common.py`는 3개 평가 스크립트의 공통 gold 산출 로직을 DRY 원칙으로 통합:
+
+**`ContentGoldDB` 클래스**:
+- 도메인별 텍스트-id 매핑 보유
+- `gold_ids(query, domain)` → cosine ≥ θ인 id 집합 반환
+- O(Q+N) 최적화
+
+**도메인별 상수** (hybrid θ + K_MIN/K_MAX):
+```
+image:    θ=0.50, K_MIN=10,   K_MAX=300
+doc_page: θ=0.45, K_MIN=20,   K_MAX=2000
+movie:    θ=0.35, K_MIN=20,   K_MAX=200
+music:    θ=0.30, K_MIN=3,    K_MAX=14
+```
+
+**성능 메트릭** (2026-04-25 최신):
+- **movie_ct**: 0.460 → **0.740** (+28pp, K_MIN clamp 효과)
+- **music_ct**: **1.000** (SigLIP2-text 크로스모달, 모든 쿼리 hit)
+
+회귀 검증: **23/23 통과** (extensions parity 7/7 + snippet parity 16/16)
+
+---
+
+## 14. Admin UI 실행 방법
 
 ```bash
 # 1. MR_TriCHEF 폴더로 이동

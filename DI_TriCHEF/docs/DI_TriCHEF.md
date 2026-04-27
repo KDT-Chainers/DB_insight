@@ -1,7 +1,9 @@
-# TRI-CHEF Doc / Img 파이프라인 상세 설명서
+# DI TRI-CHEF Doc / Img 파이프라인 상세 설명서
 
-> 버전: v1-2 (2026-04-23) · 브랜치 `feature/trichef-port`
+> 버전: v1-5 (2026-04-25 20:50) · 갱신: 2026-04-25 · 브랜치 `feature/trichef-port`
 > 대상 도메인: `doc_page` (PDF/HWP/Office/TXT/CSV/HTML → 페이지 이미지), `image` (원본 이미지)
+> **최신 변경**: 확장자 SSOT (Q1, 1049099) + 평가 라이브러리 통합 (Q3, 73c8bf0) + hybrid θ K-clamp (bdf80af)
+> **v1-2 추가**: MIRACL-ko 외부 검증 (BGE-M3 Im축 nDCG@10=69.9, 평가 인프라 레퍼런스)
 
 ---
 
@@ -18,10 +20,11 @@
 9. [Confidence / z-score](#9-confidence--z-score)
 10. [API 계약](#10-api-계약)
 11. [Admin UI](#11-admin-ui)
-12. [증분 업데이트 로직](#12-증분-업데이트-로직)
-13. [자동 적응 기준값 요약](#13-자동-적응-기준값-요약)
-14. [알려진 한계 & 개선 후보](#14-알려진-한계--개선-후보)
-15. [Appendix — 수식 요약](#15-appendix--수식-요약)
+12. [확장자 SSOT (Q1, commit 1049099)](#12-확장자-ssot-q1-commit-1049099)
+13. [증분 업데이트 로직](#13-증분-업데이트-로직)
+14. [자동 적응 기준값 요약](#14-자동-적응-기준값-요약)
+15. [알려진 한계 & 개선 후보](#15-알려진-한계--개선-후보)
+16. [Appendix — 수식 요약](#16-appendix--수식-요약)
 
 ---
 
@@ -46,13 +49,13 @@ TRI-CHEF 는 **문서 페이지 이미지**(`doc_page`) 와 **원본 이미지**
 └──────────────────┬───────────────────────────────────────────────────┘
                    ▼
 ┌──────────────────────────────────────────────────────────────────────┐
-│                    (2) 캡션 생성 (BLIP-base)                         │
-│                    caption.json / caption.txt                        │
+│            (2) 캡션 생성 (Qwen2-VL-2B-Instruct caption_triple)       │
+│                    L1 ≤20字 + L2 5–10키워드 + L3 30–60字              │
 └──────────────────┬───────────────────────────────────────────────────┘
                    ▼
 ┌──────────────────────────────────────────────────────────────────────┐
-│            (3) 3축 임베딩 (Re=SigLIP2, Im=BGE-M3, Z=Im)              │
-│            positional .npy 캐시 + ChromaDB 저장                      │
+│      (3) 3축 임베딩 (Re=SigLIP2 1152d, Im=BGE-M3 1024d, Z=DINOv2 1024d) │
+│            positional .npy 캐시 + ChromaDB 저장 (Gram-Schmidt orth.)   │
 └──────────────────┬───────────────────────────────────────────────────┘
                    ▼
 ┌──────────────────────────────────────────────────────────────────────┐
@@ -147,7 +150,7 @@ doc_ingest.to_pages(src, stem_key)
 page_images/<stem_key>/p0001.jpg … pNNNN.jpg
     │
     ▼
-BLIP.caption(page_jpg) → captions/<stem_key>/pNNNN.caption.json
+Qwen2-VL-2B.caption_triple(page_jpg) → captions/<stem_key>/pNNNN.{L1,L2,L3}.json
 ```
 
 ### 3.2 Img 경로
@@ -156,9 +159,19 @@ BLIP.caption(page_jpg) → captions/<stem_key>/pNNNN.caption.json
 RAW_DB/Img/ 재귀 스캔 → (rel_key, abs_path) 튜플
     │
     ▼
-BLIP.caption(abs_path) → captions/<stem_key>.caption.json
-    (stem_key 는 rel_key 기반으로 2.2 에 정의)
+Qwen2-VL-2B.caption_triple(abs_path) → 3단계 캡션 생성
+    (L1≤20字 + L2 5–10키워드 + L3 30–60字 상세)
+    │
+    ▼
+caption_triple fusion (자동 수행)
+    ├─ build_img_caption_triple.py: L1/L2/L3 → 개별 cache_img_Im_L{1,2,3}.npy
+    ├─ fuse_img_caption_triple.py: 0.15·L1 + 0.25·L2 + 0.60·L3 → cache_img_Im.npy
+    └─ unified_engine 로드 시 자동 적용 (App/backend/services/trichef/unified_engine.py:112-132)
 ```
+
+**스크립트 역할**:
+- `DI_TriCHEF/scripts/build_img_caption_triple.py`: stand-alone 이미지 처리 (backend 의존 없음, 개별 L1/L2/L3 저장)
+- `DI_TriCHEF/scripts/fuse_img_caption_triple.py`: 가중치 합산 분석/디버깅용 (backend 의존 없음)
 
 ### 3.3 레지스트리
 
@@ -174,12 +187,15 @@ BLIP.caption(abs_path) → captions/<stem_key>.caption.json
 | 축 | 모델 | 입력 | 차원 | 역할 |
 |---|---|---|---|---|
 | **Re** | SigLIP2-SO400M | image ↔ text (공동 공간) | 1152 | 이미지 직접 의미 |
-| **Im** | BGE-M3 dense | text (캡션) | 1024 | 캡션 의미 (크로스링구얼) |
-| **Z**  | = Im | text (캡션) | 1024 | 보조 (Hermitian 3축 확장) |
+| **Im** | BGE-M3 dense | text (캡션 L1/L2/L3 가중평균) | 1024 | 캡션 의미 (크로스링구얼, INT8) |
+| **Z**  | **DINOv2-Large** (1024d) | image CLS token (자가학습) | 1024 | 언어 비의존 순수 시각 구조 (INT8) |
 
-- **Re** 는 multilingual → 한국어 쿼리가 이미지에 직접 매칭 가능
-- **Im** 은 캡션을 경유하므로 캡션 품질에 의존 (영어 BLIP → 환각 위험)
-- **Z** 는 현 버전에서 Im 과 동일 (미래 DINOv2 등으로 분화 예정)
+- **Re** 는 multilingual cross-modal → 한국어 쿼리가 이미지에 직접 매칭 가능
+- **Im** 은 Qwen2-VL caption_triple(L1≤20字, L2 5–10키, L3 30–60字) 가중 융합 (w=0.15/0.25/0.60)
+  - 실제 수행: `App/backend/services/trichef/unified_engine.py:108-132` (엔진 로드 시 자동 실행)
+  - 캡션 가중치 계산 후 L2 정규화 → `cache_img_Im.npy` (N, 1024) 로 저장
+  - **외부 검증**: MIRACL-ko 한국어 검색 벤치마크(213 쿼리, 1.5M 문단)에서 BGE-M3 dense **nDCG@10=69.9** 달성. BM25(37.1) 대비 +32.8%p, mE5-large-v2(66.5) 대비 +3.4%p. 한국어 다국어 텍스트 검색의 기준으로 입증됨.
+- **Z** 는 DINOv2-Large (1024d) CLS 토큰으로 캡션 편향·노이즈 배제, 순수 시각 근접성 보존 (Gram-Schmidt 직교화 후)
 
 ### 4.2 Gram-Schmidt 직교화 (현재)
 
@@ -283,7 +299,7 @@ $$
 \text{abs\_threshold} = \mu_{\text{null}} + \Phi^{-1}(1 - \text{FAR}) \cdot \sigma_{\text{null}}
 $$
 
-- `FAR_IMG`, `FAR_DOC_PAGE`, `FAR_DOC_TEXT` 는 config 에 정의 (예: 1e-3)
+- `FAR_IMG = 0.20`, `FAR_DOC_PAGE = 0.05`, `FAR_DOC_TEXT = 0.05` 는 TRICHEF_CFG 에 정의
 - $\Phi^{-1}$ 은 Acklam 근사 (scipy 없이 구현)
 
 ### 6.3 런타임 보강 (image 전용)
@@ -300,10 +316,12 @@ calibration 표본이 좁게 잡혀 σ 가 과소추정된 경우의 방어막.
 
 ```json
 {
-  "doc_page": {"mu_null": 0.170, "sigma_null": 0.021, "abs_threshold": 0.205, "far": 0.001, "N": 34170},
-  "image":    {"mu_null": 0.185, "sigma_null": 0.032, "abs_threshold": 0.212, "far": 0.001, "N": 1743}
+  "doc_page": {"mu_null": 0.168, "sigma_null": 0.025, "abs_threshold": 0.198, "far": 0.05, "N": 34170},
+  "image":    {"mu_null": 0.180, "sigma_null": 0.031, "abs_threshold": 0.208, "far": 0.20, "N": 2164}
 }
 ```
+
+> **참고**: 위 값은 2026-04-25 기준 최후 재보정값. 데이터 대량 추가 후엔 `recalibrate_query_null.py` 재실행 필수. 최신값은 `Data/embedded_DB/trichef_calibration.json` 참조.
 
 ---
 
@@ -522,9 +540,70 @@ App/
 
 ---
 
-## 12. 증분 업데이트 로직
+## 12. 확장자 SSOT (Q1, commit 1049099)
 
-### 12.1 변경 감지
+### 12.0 도메인 격리 원칙 + 동기화 검증
+
+DI_TriCHEF는 App/backend 또는 MR_TriCHEF 와 상호 import 하지 않음 (도메인 격리).
+그러나 이미지/문서/비디오/음성 확장자는 **의도적으로 동일해야** 함.
+
+**SSOT 패턴** (Single Source Of Truth):
+- `App/backend/_extensions.py` (기본 정의)
+- `DI_TriCHEF/_extensions.py` (동일 내용 복제, App import 불가)
+- `MR_TriCHEF/pipeline/_extensions.py` (VID/AUD 부분집합)
+- `tests/test_extensions_parity.py` (7개 parity 검증)
+
+**파일 구조** (`App/backend/_extensions.py` 예):
+```python
+IMG_EXTS: frozenset[str] = frozenset({
+    ".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".tiff",
+    ".heic", ".heif", ".avif",
+})
+
+VID_EXTS: frozenset[str] = frozenset({
+    ".mp4", ".avi", ".mov", ".mkv", ".wmv",
+    ".webm", ".flv", ".m4v", ".mpg", ".mpeg", ".3gp", ".ts", ".mts", ".m2ts",
+})
+
+AUD_EXTS: frozenset[str] = frozenset({
+    ".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".wma",
+    ".opus", ".aiff", ".aif", ".amr",
+})
+
+DOC_PDF_EXTS: frozenset[str] = frozenset({".pdf"})
+DOC_OFFICE_EXTS: frozenset[str] = frozenset({
+    ".docx", ".doc", ".pptx", ".ppt", ".xlsx", ".xls", ".odt", ".odp", ".ods", ".rtf",
+})
+DOC_HWP_EXTS: frozenset[str] = frozenset({".hwp", ".hwpx"})
+DOC_TEXT_EXTS: frozenset[str] = frozenset({
+    ".txt", ".md", ".markdown", ".rst", ".log", ".csv", ".tsv", ".html", ".htm",
+})
+DOC_EBOOK_EXTS: frozenset[str] = frozenset({".epub"})
+
+DOC_EXTS = DOC_PDF_EXTS | DOC_OFFICE_EXTS | DOC_HWP_EXTS | DOC_TEXT_EXTS | DOC_EBOOK_EXTS
+IMAGE_EMBED_EXTS = IMG_EXTS  # alias
+```
+
+**호출자 마이그레이션** (commit 1049099):
+- `DI_TriCHEF/captioner/recaption_all.py`: `from _extensions import IMG_EXTS`
+- `App/backend/embedders/trichef/incremental_runner.py`: 21줄 축소
+
+**Parity 검증** (`tests/test_extensions_parity.py`):
+```python
+def test_app_di_img_parity():
+    app_mod = _load(ROOT / "App" / "backend" / "_extensions.py", "_app_ext_img")
+    di_mod  = _load(ROOT / "DI_TriCHEF" / "_extensions.py",      "_di_ext_img")
+    assert app_mod.IMG_EXTS == di_mod.IMG_EXTS
+    # (동일 패턴 × 6개 더)
+```
+
+회귀 검증: `pytest tests/test_extensions_parity.py -v` → 7/7 통과.
+
+---
+
+## 13. 증분 업데이트 로직
+
+### 13.1 변경 감지
 
 `incremental_runner.run_doc_incremental`:
 
@@ -534,7 +613,7 @@ App/
    - **modified**: SHA 변경됨
    - **stale**: registry 에 있지만 물리 파일 없음
 
-### 12.2 Purge → Merge → Upsert
+### 13.2 Purge → Merge → Upsert
 
 ```
 keys_to_purge = modified ∪ stale
@@ -562,14 +641,14 @@ sparse / auto_vocab / asf_token_sets 재빌드
 calibration.calibrate_domain() 실행 → μ/σ/abs_thr 갱신
 ```
 
-### 12.3 위치 동기성 불변식
+### 13.3 위치 동기성 불변식
 
 - `len(ids) == Re.shape[0] == Im.shape[0] == Z.shape[0] == sparse.shape[0] == len(asf_token_sets)` 항상 성립
 - 순서 동기화 깨지면 검색 시 잘못된 문서로 매핑 → 반드시 purge 후 append
 
 ---
 
-## 13. 자동 적응 기준값 요약
+## 14. 자동 적응 기준값 요약
 
 | # | 대상 | 자동 갱신 시점 | 계산식/로직 |
 |---|---|---|---|
@@ -587,24 +666,49 @@ calibration.calibrate_domain() 실행 → μ/σ/abs_thr 갱신
 
 ---
 
-## 14. 알려진 한계 & 개선 후보
+## 15. 알려진 한계 & 개선 후보
 
-### 14.1 BLIP 캡션 환각
+### 15.1 Qwen2-VL caption_triple 품질 및 구현
 
-- 사람 얼굴 단독 사진 → "a man with a dog in his arms" 같은 허구 캡션 다수
-- Im/Z 축이 오염되어 dense 상승 → false positive
+**3단계 캡션 정의** (commit 8728950, P1.6):
+- L1(≤20字 토픽): 이미지의 주요 객체·행동·맥락 간결 요약
+- L2(5–10 키워드): 도메인어·고유명사 포함 키워드 세트
+- L3(30–60字 상세): 자연스러운 한국어 문장 (2026-03 Wave3 재캡션)
 
-### 14.2 Image vocab 과소
+**구현 위치**:
+- 생성: `DI_TriCHEF/captioner/qwen_vl_ko.py:caption_triple()` (commit 8728950)
+- 이미지 임베딩: `DI_TriCHEF/scripts/build_img_caption_triple.py` (cp949 stdout guard 추가, commit f826016)
+- 문서 임베딩: App backend 에서 자동 호출 (caption_triple 출력 → BGE-M3 임베딩 → Im 축)
+- 가중 融合: w_L1=0.15, w_L2=0.25, w_L3=0.60 (unified_engine.py:112-132)
 
-- 영어 BLIP 캡션 + 짧은 문장 → vocab 492개
-- 한국어 쿼리는 ASF 에서 사실상 무효 → 현재 KR 쿼리 시 자동 skip
+### 15.2 지원 확장자 확대 (commit 2c3b1ff, P3)
 
-### 14.3 σ_null 과소
+**Image 도메인** (commit 2c3b1ff):
+- 기존: `.jpg .jpeg .png .webp .bmp`
+- 추가: `.gif .tiff .heic .heif .avif` (4개 → 9개)
+- HEIC/HEIF: `pillow-heif` plugin (try/except 가드)
+- AVIF: `pillow-avif-plugin` (try/except 가드)
+- 자동 회전: `ImageOps.exif_transpose()` 적용 (EXIF 메타 처리)
+
+**Doc 도메인** (commit 2c3b1ff):
+- 확장: `.hwp .hwpx .doc .ppt .xls .odt .rtf` 등 (LibreOffice 호환)
+- 캐싱: env SOFFICE_PATH, shutil.which, cross-platform 경로 (commit 1633945, P1.4)
+
+**Video / Audio 도메인** (commit 2c3b1ff):
+- Video: `.flv .m4v .mpg .mpeg .3gp .ts .mts .m2ts` 추가 (App+MR 정렬)
+- Audio: `.opus .aiff .amr` 추가 (Telegram/Discord/Apple 형식)
+
+### 15.3 Image vocab 개선
+
+- Qwen2-VL 한국어 캡션 → vocab ~2,500개 (vs 영어 BLIP 492개)
+- ASF 한글 bigram 오버랩 활성화 → 한국어 쿼리 매칭 개선
+
+### 15.4 σ_null 과소
 
 - image: σ = 0.032 → dense 0.272 만 되어도 z ≈ 2.72, conf ≈ 99.7%
 - null 표본(다른 ID 간 cross-score) 이 실제 무관 쿼리 분포를 대표하지 못함
 
-### 14.4 개선 후보 (우선순위)
+### 15.5 개선 후보 (우선순위)
 
 | # | 항목 | 효과 | 비용 |
 |---|---|---|---|
@@ -617,9 +721,9 @@ calibration.calibrate_domain() 실행 → μ/σ/abs_thr 갱신
 
 ---
 
-## 15. Appendix — 수식 요약
+## 16. Appendix — 수식 요약
 
-### 15.1 핵심 점수
+### 16.1 핵심 점수
 
 $$
 \boxed{\; \text{dense}(q, d) = \sqrt{(q_{Re}\!\cdot\! d_{Re})^2 + (\alpha\, q_{Im}\!\cdot\! d_{Im})^2 + (\beta\, q_Z\!\cdot\! d_Z)^2} \;}
@@ -645,7 +749,7 @@ $$
 \text{stem\_key}(r) = \text{sanitize}(\text{stem}(r)) \; \| \; \texttt{"\_\_"} \; \| \; \text{md5}(r)[:8]
 $$
 
-### 15.2 하이퍼파라미터 요약
+### 16.2 하이퍼파라미터 요약
 
 | 이름 | 값 | 위치 | 의미 |
 |---|---|---|---|
@@ -655,11 +759,11 @@ $$
 | `w_lex` | 0.25 | 동일 | |
 | `w_asf` | 0.15 | 동일 | |
 | `RRF_k` | 60 | 동일 | RRF smoothing |
-| `FAR_IMG` | 1e-3 (config) | config.py | 허용 거짓 양성률 |
-| `FAR_DOC_PAGE` | 1e-3 | config | |
+| `FAR_IMG` | 0.20 (config) | TRICHEF_CFG | 무관 쿼리 20% 허용 (recall 우선) |
+| `FAR_DOC_PAGE` | 0.05 | TRICHEF_CFG | 정밀도 우선 |
 | `image σ 하한` | 3σ → abs_thr | routes/trichef_admin.py | false positive 방어 |
 | `top_n 기본` | 30 | admin.html | |
 
 ---
 
-_작성: 2026-04-23 · 파이프라인 v1-2 기준_
+_작성: 2026-04-23 · 파이프라인 v1-2 기준 · 갱신: 2026-04-25 19:30 (v1-5, 9커밋 반영)_

@@ -70,6 +70,43 @@
   .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:999;align-items:center;justify-content:center;padding:40px;cursor:zoom-out}
   .modal.show{display:flex}
   .modal img{max-width:100%;max-height:100%;object-fit:contain}
+
+  /* 백엔드 설정 + 연결 진단 */
+  .conn-bar{display:flex;gap:10px;align-items:center;padding:10px 16px;background:#0b1220;border:1px solid var(--border);border-radius:8px;margin-bottom:16px;font-size:12px;flex-wrap:wrap}
+  .conn-bar input{flex:1;min-width:240px;padding:6px 10px;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:4px;font-family:Consolas,monospace;font-size:12px}
+  .conn-bar button{padding:6px 14px;background:var(--accent2);color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600}
+  .conn-bar button:hover{background:#1d4ed8}
+  .conn-bar .status{padding:3px 10px;border-radius:10px;font-weight:600;font-size:11px}
+  .conn-bar .status.ok{background:#065f46;color:#d1fae5}
+  .conn-bar .status.fail{background:#7f1d1d;color:#fecaca}
+  .conn-help{background:#451a03;border:1px solid #c2410c;border-radius:8px;padding:14px;margin-bottom:16px;font-size:12px;color:#fed7aa}
+  .conn-help code{background:#0b1220;padding:2px 8px;border-radius:3px;color:#fbbf24;font-family:Consolas,monospace}
+  .conn-help h3{font-size:13px;margin-bottom:8px;color:#fff}
+
+  /* 파이프라인 다이어그램 */
+  .pipelines{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:14px 16px;margin-bottom:16px}
+  .pipelines h3{font-size:13px;font-weight:600;margin-bottom:10px;color:#cbd5e1}
+  .pipe-row{display:flex;align-items:center;gap:6px;margin-bottom:8px;font-size:11px;flex-wrap:wrap}
+  .pipe-row:last-child{margin-bottom:0}
+  .pipe-label{min-width:90px;font-weight:700;font-size:12px;padding:3px 10px;border-radius:12px}
+  .pipe-label.doc_page{background:#5b21b6;color:#ede9fe}
+  .pipe-label.image{background:#065f46;color:#d1fae5}
+  .pipe-label.movie{background:#7c2d12;color:#ffedd5}
+  .pipe-label.music{background:#1e40af;color:#dbeafe}
+  .pipe-step{padding:3px 10px;background:#0b1220;border:1px solid var(--border);border-radius:4px;color:#cbd5e1;font-family:Consolas,monospace;font-size:10.5px}
+  .pipe-step.calib{border-color:var(--accent);color:#a7f3d0}
+  .pipe-arrow{color:var(--muted);font-weight:700}
+
+  /* 점수 기여도 미니 바 */
+  .score-bars{display:flex;flex-direction:column;gap:3px;font-size:10px}
+  .score-bar{display:flex;align-items:center;gap:6px}
+  .score-bar .lbl{min-width:48px;color:var(--muted);font-family:Consolas,monospace}
+  .score-bar .track{flex:1;height:6px;background:#0b1220;border-radius:3px;border:1px solid var(--border);overflow:hidden}
+  .score-bar .fill{height:100%;background:linear-gradient(90deg,#10b981,#34d399);border-radius:2px}
+  .score-bar .fill.lex{background:linear-gradient(90deg,#3b82f6,#60a5fa)}
+  .score-bar .fill.asf{background:linear-gradient(90deg,#8b5cf6,#a78bfa)}
+  .score-bar .fill.rerank{background:linear-gradient(90deg,#ea580c,#fb923c)}
+  .score-bar .vv{min-width:36px;text-align:right;color:#cbd5e1;font-family:Consolas,monospace}
 </style>
 </head>
 <body>
@@ -78,6 +115,25 @@
   <p id="dom-info">도메인 현황 로딩…</p>
 </header>
 <main>
+  <div class="conn-bar">
+    <span>🔌 백엔드</span>
+    <input id="backend-url" type="text" placeholder="http://127.0.0.1:5001" />
+    <button id="conn-retry">연결 확인</button>
+    <span id="conn-status" class="status fail">미확인</span>
+  </div>
+  <div id="conn-help" class="conn-help" style="display:none">
+    <h3>⚠️ 백엔드 연결 실패</h3>
+    <ol style="padding-left:20px;line-height:1.8">
+      <li>백엔드 구동: <code>cd App\backend</code> 후 <code>python app.py</code></li>
+      <li>구동 확인: <code>http://127.0.0.1:5001/api/admin/domains</code> 가 JSON 반환해야 함</li>
+      <li>주소가 다르면 위 입력란에서 수정 → <b>연결 확인</b> 클릭</li>
+      <li>Tip: <code>?backend=http://other:5001</code> URL 파라미터로 영구 지정 가능</li>
+    </ol>
+  </div>
+  <div id="pipelines" class="pipelines" style="display:none">
+    <h3>📊 도메인별 파이프라인 (DI-TriCHEF / MR-TriCHEF)</h3>
+    <div id="pipe-rows"></div>
+  </div>
   <div class="search-box">
     <input id="q" type="text" placeholder="검색어를 입력하세요 (예: 고양이, 복지정책, 반도체)" autofocus />
     <button id="go">검색 실행</button>
@@ -101,31 +157,127 @@
 <div class="modal" id="modal"><img id="modal-img" alt="preview"></div>
 
 <script>
-const API_BASE = location.origin;
+// ── Backend URL 설정 (URL param > localStorage > 기본값) ──
+function resolveBackend(){
+  const params = new URLSearchParams(location.search);
+  const fromParam = params.get('backend');
+  if (fromParam){
+    localStorage.setItem('trichef_backend', fromParam);
+    return fromParam;
+  }
+  return localStorage.getItem('trichef_backend') || 'http://127.0.0.1:5001';
+}
+let API_BASE = resolveBackend();
+
 const btn = document.getElementById('go');
 const inp = document.getElementById('q');
 const output = document.getElementById('output');
 const statsDiv = document.getElementById('stats');
 const modal = document.getElementById('modal');
 const modalImg = document.getElementById('modal-img');
+const backendInput = document.getElementById('backend-url');
+const connRetry = document.getElementById('conn-retry');
+const connStatus = document.getElementById('conn-status');
+const connHelp = document.getElementById('conn-help');
+const pipelinesEl = document.getElementById('pipelines');
+const pipeRows = document.getElementById('pipe-rows');
 
+backendInput.value = API_BASE;
 inp.addEventListener('keydown', e => { if (e.key === 'Enter') btn.click(); });
 btn.addEventListener('click', runSearch);
 modal.addEventListener('click', () => modal.classList.remove('show'));
+connRetry.addEventListener('click', () => {
+  const v = backendInput.value.trim().replace(/\/+$/, '');
+  if (v){
+    API_BASE = v;
+    localStorage.setItem('trichef_backend', v);
+  }
+  loadDomains();
+});
 
 loadDomains();
 
 let AVAILABLE_DOMAINS = new Set();
 
+// ── 도메인별 파이프라인 단계 정의 (실제 구현 기반) ──
+const PIPELINES = {
+  doc_page: {
+    label: 'doc_page',
+    name: 'DI-TriCHEF · Document',
+    steps: ['PDF/HWP/Office', 'Page Render (dpi=110)', 'Qwen2-VL Caption (L1/L2/L3)',
+            '3-axis Embed (Re=SigLIP2 / Im=BGE-M3 / Z=DINOv2)', 'Hermitian Score',
+            'RRF (Dense+Lex+ASF)', 'Calibration τ', 'BGE Reranker'],
+  },
+  image: {
+    label: 'image',
+    name: 'DI-TriCHEF · Image',
+    steps: ['Raw Image', 'Qwen2-VL Caption', '3-axis Embed (Re/Im/Z)',
+            'Hermitian Score', 'RRF (Dense+Lex+ASF)', 'Calibration τ (μ+3σ)'],
+  },
+  movie: {
+    label: 'movie',
+    name: 'MR-TriCHEF · Movie',
+    steps: ['Video', 'Frame Sampling (fps=0.5 + scene>0.2)',
+            'Whisper-large-v3 STT', 'Segment Align (temporal overlap)',
+            '2-axis Embed (Re/Im, Z=0)', 'File-level Aggregation',
+            'Calibration τ'],
+  },
+  music: {
+    label: 'music',
+    name: 'MR-TriCHEF · Music',
+    steps: ['Audio', '30s Sliding Window (15s hop)', 'Whisper STT',
+            '2-axis Embed (Re=SigLIP2-text / Im=BGE-M3, Z=0)',
+            'File-level Aggregation', 'Calibration τ'],
+  },
+};
+
+function renderPipelines(domInfo){
+  if (!domInfo || typeof domInfo !== 'object'){
+    pipelinesEl.style.display = 'none';
+    return;
+  }
+  const rows = [];
+  for (const dom of ['doc_page','image','movie','music']){
+    const def = PIPELINES[dom];
+    if (!def) continue;
+    const loaded = domInfo[dom];
+    const opacity = loaded ? '1' : '0.35';
+    const stepHtml = def.steps.map((s,i) => {
+      const isLast = i === def.steps.length - 1;
+      const cls = (i >= def.steps.length - 2) ? 'pipe-step calib' : 'pipe-step';
+      return `<span class="${cls}">${escapeHtml(s)}</span>${isLast ? '' : '<span class="pipe-arrow">›</span>'}`;
+    }).join('');
+    const stat = loaded
+      ? `<span style="color:var(--ok);font-size:10px">N=${loaded.count}</span>`
+      : `<span style="color:var(--warn);font-size:10px">미인덱싱</span>`;
+    rows.push(
+      `<div class="pipe-row" style="opacity:${opacity}">
+         <span class="pipe-label ${dom}">${def.label}</span>
+         ${stepHtml}
+         ${stat}
+       </div>`
+    );
+  }
+  pipeRows.innerHTML = rows.join('');
+  pipelinesEl.style.display = '';
+}
+
 async function loadDomains(){
+  connStatus.className = 'status fail';
+  connStatus.textContent = '확인 중…';
   try{
     const r = await fetch(`${API_BASE}/api/admin/domains`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const d = await r.json();
     AVAILABLE_DOMAINS = new Set(Object.keys(d));
+    connStatus.className = 'status ok';
+    connStatus.textContent = `OK · ${API_BASE}`;
+    connHelp.style.display = 'none';
     const parts = Object.entries(d).map(([k,v]) =>
       `${k}: N=${v.count}, vocab=${v.vocab_size}, sparse=${v.has_sparse?'O':'X'}, asf=${v.has_asf?'O':'X'}`
     );
     document.getElementById('dom-info').textContent = '도메인 현황 | ' + parts.join(' | ');
+    renderPipelines(d);
     // 미인덱싱 도메인은 체크박스 비활성화 + 라벨에 표기
     for (const dom of ['doc_page','image','movie','music']){
       const cb = document.getElementById(`d-${dom}`);
@@ -139,10 +291,18 @@ async function loadDomains(){
           label.append(' (미인덱싱)');
           label.dataset.markedMissing = '1';
         }
+      } else {
+        cb.disabled = false;
+        label.style.opacity = '1';
       }
     }
   }catch(e){
-    document.getElementById('dom-info').textContent = '⚠️ 백엔드 연결 실패: ' + e.message;
+    connStatus.className = 'status fail';
+    connStatus.textContent = `실패: ${e.message}`;
+    connHelp.style.display = '';
+    pipelinesEl.style.display = 'none';
+    document.getElementById('dom-info').textContent =
+      `⚠️ ${API_BASE} 연결 실패 — 아래 안내를 확인하고 [연결 확인] 클릭`;
   }
 }
 
@@ -292,6 +452,24 @@ async function renderResults(query, items){
   }
 }
 
+function scoreBarsHtml(it){
+  // 0~1 정규화: dense/lex/asf 는 보통 0~1, rerank logit 은 sigmoid 적용
+  const sigm = x => 1 / (1 + Math.exp(-x));
+  const rows = [
+    {lbl:'dense',  v: clamp01(it.dense), cls:''},
+    {lbl:'lex',    v: clamp01(it.lexical), cls:'lex'},
+    {lbl:'asf',    v: clamp01(it.asf), cls:'asf'},
+    {lbl:'rerank', v: it.rerank!=null ? sigm(it.rerank) : null, cls:'rerank'},
+  ];
+  const html = rows.map(r => {
+    if (r.v==null) return `<div class="score-bar"><span class="lbl">${r.lbl}</span><span class="track"></span><span class="vv">—</span></div>`;
+    const pct = (r.v*100).toFixed(0);
+    return `<div class="score-bar"><span class="lbl">${r.lbl}</span><span class="track"><span class="fill ${r.cls}" style="width:${pct}%"></span></span><span class="vv">${(r.v).toFixed(2)}</span></div>`;
+  }).join('');
+  return `<div class="score-bars">${html}</div>`;
+}
+function clamp01(x){ if (x==null||isNaN(x)) return null; return Math.max(0, Math.min(1, x)); }
+
 function card(it){
   if (it.kind === 'av') return avCard(it);
   const isImage = it.domain === 'image';
@@ -325,6 +503,7 @@ function card(it){
         <div class="metric"><span class="k">rerank</span> <span class="v">${it.rerank!=null ? it.rerank.toFixed(2) : '—'}</span></div>
         <div class="metric"><span class="k">z</span> <span class="v">${(it.z_score??0).toFixed(2)}</span></div>
       </div>
+      ${scoreBarsHtml(it)}
       <div class="excerpt" data-load-text data-id="${escapeHtml(it.id)}" data-domain="${it.domain}">로딩 중…</div>
     </div>
   </div>`;
