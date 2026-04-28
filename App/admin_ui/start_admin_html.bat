@@ -1,13 +1,14 @@
 @echo off
 chcp 65001 >nul
 REM ─────────────────────────────────────────────────────────────────────
-REM  TRI-CHEF Admin HTML 원-클릭 런처 (Windows)
-REM    1) 백엔드(127.0.0.1:5001) health-check
-REM    2) 미구동이면 별도 콘솔에서 `python app.py` 자동 기동
-REM    3) /api/admin/domains 가 200 응답할 때까지 polling (최대 90초)
-REM    4) admin.html 을 기본 브라우저로 오픈
+REM  TRI-CHEF Admin HTML 원-클릭 런처 (Windows) — 진단 강화판
+REM    1) python / curl 존재 확인
+REM    2) 백엔드(127.0.0.1:5001) health-check
+REM    3) 미구동이면 별도 콘솔에서 `python app.py` 자동 기동
+REM    4) /api/admin/domains 가 200 응답할 때까지 polling (최대 90초)
+REM    5) admin.html 을 기본 브라우저로 오픈
 REM
-REM  사용:  이 파일을 더블클릭하거나, cmd에서  start_admin_html.bat
+REM  실패 시 콘솔이 닫히지 않도록 모든 종료 경로에 pause.
 REM ─────────────────────────────────────────────────────────────────────
 
 setlocal EnableDelayedExpansion
@@ -19,11 +20,35 @@ set "BACKEND_DIR=%~dp0..\backend"
 set "ADMIN_HTML=%~dp0admin.html"
 set "MAX_WAIT_SEC=90"
 
-echo [admin] backend health-check: %BACKEND_URL%%HEALTH_PATH%
+echo ======================================================================
+echo  TRI-CHEF Admin Launcher
+echo  backend dir : %BACKEND_DIR%
+echo  admin html  : %ADMIN_HTML%
+echo  health url  : %BACKEND_URL%%HEALTH_PATH%
+echo ======================================================================
+
+REM ── 0) python / curl 존재 확인 ──────────────────────────────────────
+where python >nul 2>&1
+if errorlevel 1 (
+    echo [admin] ERROR: 'python' not in PATH.
+    echo         Python 설치 여부 및 환경변수 PATH 확인 필요.
+    pause
+    exit /b 10
+)
+
+set "HAS_CURL=0"
+where curl >nul 2>&1
+if not errorlevel 1 set "HAS_CURL=1"
+if "%HAS_CURL%"=="1" (
+    echo [admin] curl available.
+) else (
+    echo [admin] curl missing — using PowerShell fallback for health-check.
+)
 
 REM ── 1) 이미 떠 있으면 skip ──────────────────────────────────────────
+echo [admin] step 1: health-check (skip startup if backend already up)
 call :HEALTH_ONCE
-if !ERRORLEVEL! EQU 0 (
+if !HEALTH_OK!==1 (
     echo [admin] backend already running — skip startup
     goto OPEN_BROWSER
 )
@@ -31,47 +56,52 @@ if !ERRORLEVEL! EQU 0 (
 REM ── 2) 백엔드 자동 기동 (별도 콘솔) ─────────────────────────────────
 if not exist "%BACKEND_DIR%\app.py" (
     echo [admin] ERROR: backend not found at "%BACKEND_DIR%\app.py"
-    echo         repo 루트에서 실행했는지 확인하세요.
     pause
-    exit /b 1
+    exit /b 11
 )
 
-echo [admin] starting backend in new console...
+echo [admin] step 2: starting backend in new console window...
 start "TRI-CHEF backend" cmd /k "cd /d ""%BACKEND_DIR%"" && python app.py"
 
 REM ── 3) Health-check polling ─────────────────────────────────────────
+echo [admin] step 3: waiting backend to become ready (max %MAX_WAIT_SEC%s)
 set /a "WAITED=0"
 :WAIT_LOOP
 timeout /t 3 /nobreak >nul
 set /a "WAITED+=3"
 call :HEALTH_ONCE
-if !ERRORLEVEL! EQU 0 (
+if !HEALTH_OK!==1 (
     echo [admin] backend ready after !WAITED!s
     goto OPEN_BROWSER
 )
 if !WAITED! GEQ %MAX_WAIT_SEC% (
+    echo.
     echo [admin] ERROR: backend did not respond within %MAX_WAIT_SEC%s
     echo         새로 열린 [TRI-CHEF backend] 콘솔의 에러 메시지를 확인하세요.
+    echo         (모델 로딩이 90초보다 오래 걸리는 환경이면 MAX_WAIT_SEC 상향 필요)
     pause
-    exit /b 2
+    exit /b 12
 )
-echo [admin] waiting for backend... (!WAITED!s / %MAX_WAIT_SEC%s)
+echo [admin]   ... waiting (!WAITED!s / %MAX_WAIT_SEC%s)
 goto WAIT_LOOP
 
 REM ── 4) 브라우저 오픈 ────────────────────────────────────────────────
 :OPEN_BROWSER
-echo [admin] opening %ADMIN_HTML%
+echo [admin] step 4: opening %ADMIN_HTML%
 start "" "%ADMIN_HTML%"
-echo [admin] done — admin UI launched.
+echo [admin] done.
+timeout /t 2 /nobreak >nul
 endlocal
 exit /b 0
 
-REM ── Helper: health-check 1회 (curl → powershell fallback) ───────────
+REM ── Helper: health-check 1회 → !HEALTH_OK! = 1 (OK) or 0 (fail) ─────
 :HEALTH_ONCE
-where curl >nul 2>&1
-if %ERRORLEVEL% EQU 0 (
-    curl -s -o nul -w "%%{http_code}" --max-time 3 "%BACKEND_URL%%HEALTH_PATH%" 2>nul | findstr /b "200" >nul
-    exit /b %ERRORLEVEL%
+set "HEALTH_OK=0"
+set "HTTP_CODE="
+if "%HAS_CURL%"=="1" (
+    for /f "delims=" %%c in ('curl -s -o nul -w "%%{http_code}" --max-time 5 "%BACKEND_URL%%HEALTH_PATH%" 2^>nul') do set "HTTP_CODE=%%c"
+) else (
+    for /f "delims=" %%c in ('powershell -NoProfile -Command "try { (Invoke-WebRequest -Uri '%BACKEND_URL%%HEALTH_PATH%' -UseBasicParsing -TimeoutSec 5).StatusCode } catch { 0 }"') do set "HTTP_CODE=%%c"
 )
-powershell -NoProfile -Command "try { $r = Invoke-WebRequest -Uri '%BACKEND_URL%%HEALTH_PATH%' -UseBasicParsing -TimeoutSec 3; if ($r.StatusCode -eq 200) { exit 0 } else { exit 1 } } catch { exit 1 }"
-exit /b %ERRORLEVEL%
+if "!HTTP_CODE!"=="200" set "HEALTH_OK=1"
+exit /b 0
