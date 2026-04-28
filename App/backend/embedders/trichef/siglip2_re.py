@@ -89,6 +89,8 @@ def embed_texts(texts: list[str]) -> np.ndarray:
         inp = _proc(text=texts[i:i+B], padding="max_length",
                     truncation=True, return_tensors="pt").to(_DEVICE)
         vec = _model.get_text_features(**inp)
+        if not isinstance(vec, torch.Tensor):
+            vec = vec.pooler_output
         vec = torch.nn.functional.normalize(vec, dim=-1)
         out.append(vec.cpu().float().numpy())
     return np.vstack(out).astype(np.float32)

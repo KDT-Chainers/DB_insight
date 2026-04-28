@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { API_BASE } from "../api";
 import SearchSidebar from "../components/SearchSidebar";
 import { useSidebar } from "../context/SidebarContext";
@@ -9,6 +9,10 @@ export default function TriChefSearch() {
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState(null);
   const [error, setError] = useState("");
+  const [mode, setMode] = useState("text"); // "text" | "image"
+  const [imagePreview, setImagePreview] = useState(null);
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef(null);
   const { open } = useSidebar();
 
   async function runSearch() {
@@ -32,6 +36,49 @@ export default function TriChefSearch() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function runImageSearch(file) {
+    if (!file) return;
+    setLoading(true);
+    setResults(null);
+    setStats(null);
+    setError("");
+    const formData = new FormData();
+    formData.append("image", file);
+    formData.append("domain", "image");
+    formData.append("topk", "20");
+    try {
+      const r = await fetch(`${API_BASE}/api/admin/search-by-image`, {
+        method: "POST",
+        body: formData,
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || "이미지 검색 실패");
+      // admin 엔드포인트 응답을 trichef 결과 형식으로 변환
+      setResults(j.results.map((it) => ({
+        ...it,
+        domain: "image",
+        global_rank: j.results.indexOf(it) + 1,
+        preview_url: `/api/admin/file?domain=image&id=${encodeURIComponent(it.id)}`,
+      })));
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleFile(file) {
+    if (!file || !file.type.startsWith("image/")) return;
+    setImagePreview(URL.createObjectURL(file));
+    runImageSearch(file);
+  }
+
+  function handleDrop(e) {
+    e.preventDefault();
+    setDragOver(false);
+    handleFile(e.dataTransfer.files[0]);
   }
 
   async function runReindex() {
@@ -77,23 +124,85 @@ export default function TriChefSearch() {
             </button>
           </div>
 
-          {/* 검색 입력 */}
-          <div className="flex gap-2 mb-6">
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && runSearch()}
-              placeholder="자연어로 검색… (예: 해변의 일몰, 매출 차트)"
-              className="flex-1 px-4 py-3 bg-surface-container-high border border-outline-variant/20 rounded-xl text-on-surface placeholder-on-surface-variant/50 focus:outline-none focus:border-primary/50 transition-colors"
-            />
+          {/* 모드 탭 */}
+          <div className="flex gap-1 mb-4 p-1 bg-surface-container-high rounded-xl w-fit border border-outline-variant/10">
             <button
-              onClick={runSearch}
-              disabled={loading || !query.trim()}
-              className="px-6 py-3 bg-primary text-on-primary rounded-xl disabled:opacity-40 hover:bg-primary/90 transition-colors font-bold"
+              onClick={() => { setMode("text"); setResults(null); setImagePreview(null); }}
+              className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${mode === "text" ? "bg-primary text-on-primary" : "text-on-surface-variant hover:text-on-surface"}`}
             >
-              {loading ? "검색 중…" : "검색"}
+              텍스트
+            </button>
+            <button
+              onClick={() => { setMode("image"); setResults(null); }}
+              className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${mode === "image" ? "bg-primary text-on-primary" : "text-on-surface-variant hover:text-on-surface"}`}
+            >
+              이미지
             </button>
           </div>
+
+          {/* 텍스트 검색 입력 */}
+          {mode === "text" && (
+            <div className="flex gap-2 mb-6">
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && runSearch()}
+                placeholder="자연어로 검색… (예: 해변의 일몰, 매출 차트)"
+                className="flex-1 px-4 py-3 bg-surface-container-high border border-outline-variant/20 rounded-xl text-on-surface placeholder-on-surface-variant/50 focus:outline-none focus:border-primary/50 transition-colors"
+              />
+              <button
+                onClick={runSearch}
+                disabled={loading || !query.trim()}
+                className="px-6 py-3 bg-primary text-on-primary rounded-xl disabled:opacity-40 hover:bg-primary/90 transition-colors font-bold"
+              >
+                {loading ? "검색 중…" : "검색"}
+              </button>
+            </div>
+          )}
+
+          {/* 이미지 검색 드롭존 */}
+          {mode === "image" && (
+            <div className="mb-6">
+              <div
+                onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+                className={`relative flex flex-col items-center justify-center h-40 rounded-2xl border-2 border-dashed cursor-pointer transition-colors
+                  ${dragOver ? "border-primary bg-primary/10" : "border-outline-variant/30 bg-surface-container-high hover:border-primary/40 hover:bg-primary/5"}`}
+              >
+                {imagePreview ? (
+                  <img src={imagePreview} alt="preview" className="h-full w-full object-contain rounded-2xl p-2" />
+                ) : (
+                  <>
+                    <span className="text-2xl mb-2">🖼️</span>
+                    <p className="text-sm text-on-surface-variant">이미지를 드래그하거나 클릭해서 업로드</p>
+                    <p className="text-xs text-on-surface-variant/50 mt-1">JPG · PNG · WEBP</p>
+                  </>
+                )}
+                {loading && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-2xl">
+                    <span className="text-white text-sm font-bold">검색 중…</span>
+                  </div>
+                )}
+              </div>
+              {imagePreview && !loading && (
+                <button
+                  onClick={() => { setImagePreview(null); setResults(null); }}
+                  className="mt-2 text-xs text-on-surface-variant hover:text-error transition-colors"
+                >
+                  초기화
+                </button>
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => handleFile(e.target.files[0])}
+              />
+            </div>
+          )}
 
           {/* 오류 */}
           {error && (

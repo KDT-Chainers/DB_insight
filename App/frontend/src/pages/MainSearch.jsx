@@ -218,6 +218,9 @@ export default function MainSearch() {
   const [aiTransitioning, setAiTransitioning] = useState(false)
   const [ripplePos, setRipplePos] = useState({ x: '50%', y: '50%' })
 
+  const [imagePreview, setImagePreview] = useState(null)
+  const [dragOver, setDragOver]         = useState(false)
+  const fileInputRef = useRef(null)
   const btnRef  = useRef(null)
   const formRef = useRef(null)
 
@@ -260,8 +263,48 @@ export default function MainSearch() {
     }
   }, [])
 
+  const fetchImageResults = async (file) => {
+    setSearching(true)
+    setSearchError('')
+    setResults([])
+    const formData = new FormData()
+    formData.append('image', file)
+    formData.append('domain', 'image')
+    formData.append('topk', '20')
+    try {
+      const r = await fetch(`${API_BASE}/api/admin/search-by-image`, { method: 'POST', body: formData })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || '이미지 검색 실패')
+      setResults(j.results.map(it => ({
+        file_path: it.id,
+        file_name: it.id.split('/').pop(),
+        file_type: 'image',
+        similarity: it.score,
+        preview_url: `/api/admin/file?domain=image&id=${encodeURIComponent(it.id)}`,
+        snippet: '',
+      })))
+    } catch (e) {
+      setSearchError(e.message)
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  const handleImageFile = (file) => {
+    if (!file || !file.type.startsWith('image/')) return
+    setImagePreview(URL.createObjectURL(file))
+    setQuery('이미지 검색')
+    setInputValue('')
+    setResultsReady(false)
+    setView('results')
+    window.history.pushState({ view: 'results' }, '')
+    requestAnimationFrame(() => setResultsReady(true))
+    fetchImageResults(file)
+  }
+
   const doSearch = (q) => {
     if (!q.trim() || aiTransitioning) return
+    setImagePreview(null)
     setQuery(q)
     setInputValue(q)
 
@@ -365,12 +408,22 @@ export default function MainSearch() {
               </div>
 
               <form ref={formRef} onSubmit={handleSearch} className="w-full relative group"
-                style={homeExiting ? { visibility: 'hidden' } : {}}>
+                style={homeExiting ? { visibility: 'hidden' } : {}}
+                onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={(e) => { e.preventDefault(); setDragOver(false); handleImageFile(e.dataTransfer.files[0]) }}>
                 <div className={`glass-effect rounded-full p-2 flex items-center gap-4 shadow-[0_0_50px_rgba(133,173,255,0.1)] transition-all duration-300
-                  ${listening ? 'border border-red-400/60 shadow-[0_0_30px_rgba(248,113,113,0.2)]' : 'border border-outline-variant/20 hover:border-primary/40'}`}>
-                  <button type="button" className="w-12 h-12 rounded-full bg-gradient-to-r from-primary to-secondary flex items-center justify-center text-on-primary-fixed shadow-lg active:scale-90 transition-transform shrink-0">
-                    <span className="material-symbols-outlined font-bold">add</span>
+                  ${dragOver ? 'border border-primary/60 shadow-[0_0_30px_rgba(133,173,255,0.3)]' :
+                    listening ? 'border border-red-400/60 shadow-[0_0_30px_rgba(248,113,113,0.2)]' :
+                    'border border-outline-variant/20 hover:border-primary/40'}`}>
+                  <button type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-12 h-12 rounded-full bg-gradient-to-r from-primary to-secondary flex items-center justify-center text-on-primary-fixed shadow-lg active:scale-90 transition-transform shrink-0"
+                    title="이미지로 검색">
+                    <span className="material-symbols-outlined font-bold">add_photo_alternate</span>
                   </button>
+                  <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
+                    onChange={(e) => handleImageFile(e.target.files[0])} />
                   <div className="flex-1 relative">
                     <input
                       type="text"
@@ -498,7 +551,10 @@ export default function MainSearch() {
             <div className="flex justify-between items-end mb-10">
               <div className="space-y-2">
                 <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-primary/10 text-primary uppercase tracking-widest border border-primary/20">현재 쿼리</span>
-                <h1 className="text-4xl font-extrabold tracking-tighter text-on-surface">{query}</h1>
+                <div className="flex items-center gap-3">
+                  {imagePreview && <img src={imagePreview} alt="query" className="h-10 w-10 rounded-lg object-cover border border-primary/30" />}
+                  <h1 className="text-4xl font-extrabold tracking-tighter text-on-surface">{query}</h1>
+                </div>
                 {searching
                   ? <p className="text-on-surface-variant flex items-center gap-2">
                       <span className="material-symbols-outlined text-primary text-sm animate-spin">progress_activity</span>검색 중...

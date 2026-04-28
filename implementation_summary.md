@@ -1,51 +1,117 @@
-# 🔧 구현 내역 정리
+# DB Insight — 이미지 검색 파이프라인 구현 정리
 
 ---
 
-## 1. 이미지 기반 유사 검색 (Image-to-Image Search)
+## 시스템 아키텍처
 
-드래그 앤 드롭으로 이미지를 업로드하면 DB에서 유사한 이미지를 찾아주는 기능.
+```mermaid
+graph TB
+    subgraph Frontend["Frontend (React + Vite)"]
+        UI["검색 UI / 인덱싱 UI"]
+    end
 
-### 구현 구조
+    subgraph Backend["Backend (Flask)"]
+        APP["app.py\n블루프린트 라우터 7개"]
+        RT["routes/trichef.py\n검색·인덱싱 엔드포인트"]
+        ENG["unified_engine.py\nTriChefEngine"]
+        EMB["embedders/trichef/\nSigLIP2 · BGE-M3 · DINOv2 · Qwen"]
+        SVC["services/trichef/\nASF 필터 · 캘리브레이션 · 어휘 재구축"]
+    end
+
+    subgraph Data["데이터 레이어"]
+        RAW["raw_DB/\nImg/ · Doc/"]
+        NPY["Cache (.npy)\nRe · Im · Z 벡터"]
+        CHR["ChromaDB\ntrichef_image · trichef_doc_page"]
+        SQL["SQLite\n검색 이력 · 파일 메타"]
+    end
+
+    UI -->|"REST API"| APP
+    APP --> RT
+    RT --> ENG
+    ENG --> NPY
+    ENG --> CHR
+    ENG --> SVC
+    RAW -->|"incremental_runner.py"| EMB
+    EMB --> NPY
+    EMB --> CHR
+```
+
+**Blueprint 구성**
+
+| 라우트 | 파일 | 역할 |
+|---|---|---|
+| `/api/trichef` | `routes/trichef.py` | TRI-CHEF 검색 · 인덱싱 핵심 |
+| `/api/admin` | `routes/trichef_admin.py` | 이미지 검색 · 관리 |
+| `/api/search` | `routes/search.py` | 기존 ChromaDB 검색 |
+| `/api/index` | `routes/index.py` | 파일 인덱싱 작업 관리 |
+| `/api/auth` | `routes/auth.py` | 인증 |
+| `/api/files` | `routes/files.py` | 파일 관리 |
+| `/api/history` | `routes/history.py` | 검색 이력 |
+
+---
+
+## 전체 파이프라인 개요
+
+DB Insight의 이미지 도메인은 **인덱싱**과 **검색** 두 흐름으로 구성됩니다.
+
+```
+[ 인덱싱 흐름 ]
+raw_DB/Img/ → Qwen 캡셔닝 → 3축 임베딩(Re·Im·Z) → Gram-Schmidt 직교화 → ChromaDB + .npy 캐시
+
+[ 검색 흐름 ]
+쿼리 이미지 → Re·Z축 임베딩 → Hermitian Score → 신뢰도 계산 → 결과 반환
+```
+
+**3축 벡터 구성**
+
+| 축 | 모델 | 차원 | 역할 |
+|---|---|---|---|
+| Re | SigLIP2 | 1152d | 시각-언어 특징 |
+| Im | BGE-M3 | 1024d | 텍스트 의미 (캡션 기반) |
+| Z | DINOv2 | 1024d | 시각 디테일 |
+
+---
+
+## 1. 이미지 유사 검색 (Image-to-Image Search)
+
+이미지를 드래그·드롭하거나 클릭해서 첨부하면 DB에서 유사한 이미지를 유사도 순으로 반환합니다.
+**admin.html(관리자 도구)**과 **앱 홈 검색 탭(MainSearch)** 두 곳에서 모두 사용 가능합니다.
 
 ```mermaid
 flowchart LR
-    A["🖼️ 이미지\n드래그 앤 드롭"] --> B["admin.html"]
-    B -->|"POST /api/admin/\nsearch-by-image"| C["trichef_admin.py"]
+    A1["🖼️ 이미지\n(admin.html\n드래그·드롭)"] --> C
+    A2["🖼️ 이미지\n(앱 홈 검색탭\n+ 버튼·드래그)"] --> C
+    C["POST /api/admin/search-by-image\n(trichef_admin.py)"]
     C --> D["unified_engine.py\nsearch_by_image()"]
     D --> E["SigLIP2 Re축\n1152d"]
     D --> F["DINOv2 Z축\n1024d"]
-    E & F --> G["hermitian_score\n유사도 계산"]
-    G --> H["📊 결과 반환"]
+    E & F --> G["Hermitian Score\n유사도 계산"]
+    G --> H["📊 유사 이미지\n순위 반환"]
 ```
 
-### 주요 코드
+### 검색 엔진 — `unified_engine.py`
 
-#### ① 검색 엔진 — `unified_engine.py`
-
-> [!IMPORTANT]
-> **핵심 포인트**: Re축(1152d)과 Z축(1024d)만으로 이미지를 비교하고,
-> Im축(1024d)은 텍스트가 없어 **영벡터로 처리**하여 차원 불일치(`matmul 1024 vs 1152`)를 방지합니다.
+이미지 쿼리는 텍스트가 없으므로 Im축을 영벡터(1024d)로 처리하고, Re·Z 시각 축만으로 유사도를 계산합니다.
 
 ```python
-# unified_engine.py — search_by_image() (Line 259~301)
+# services/trichef/unified_engine.py — search_by_image() (Line 372~414)
 
 def search_by_image(self, image_path: Path, domain: str = "image", topk: int = 20) -> list[TriChefResult]:
     """이미지 파일을 쿼리로 사용하는 유사 이미지 검색 (Image-to-Image)."""
     if domain not in self._cache:
         return []
 
-    from embedders.trichef import siglip2_re, dinov2_z
-
     # 1. 쿼리 이미지에서 시각 벡터 추출
-    q_Re = siglip2_re.embed_images([image_path])[0]   # 1152d
-    q_Z  = dinov2_z.embed_images([image_path])[0]      # 1024d
+    # Re 축 (SigLIP2 1152d), Z 축 (DINOv2 1024d)
+    from embedders.trichef import siglip2_re, dinov2_z
+    q_Re = siglip2_re.embed_images([image_path])[0]   # (1152,)
+    q_Z  = dinov2_z.embed_images([image_path])[0]     # (1024,)
 
-    # 2. Im축(의미)은 텍스트가 없으므로 0벡터로 처리
-    #    → Re(1152d)와 Z(1024d) 시각 특징 위주로 검색
+    # 2. Im 축(의미)은 텍스트가 없으므로 0벡터 처리
+    # Re(1152d)와 Z(1024d) 시각 특징 위주로 검색
     q_Im = np.zeros(1024, dtype=np.float32)
 
-    # 3. 3축 Hermitian Score로 유사도 계산
+    # 3. 3축 Hermitian Score 로 유사도 계산
     d = self._cache[domain]
     dense_scores = tri_gs.hermitian_score(
         q_Re[None, :], q_Im[None, :], q_Z[None, :],
@@ -55,15 +121,16 @@ def search_by_image(self, image_path: Path, domain: str = "image", topk: int = 2
 
     # 4. 신뢰도 계산 및 결과 조립
     cal = calibration.get_thresholds(domain)
-    abs_thr = cal["abs_threshold"]
-    mu, sig = cal["mu_null"], cal["sigma_null"]
+    abs_thr = cal.get("abs_threshold", 0.15)
+    mu, sig = cal.get("mu_null", 0.0), max(cal.get("sigma_null", 1.0), 1e-9)
 
     out: list[TriChefResult] = []
     for i in combined_order[: topk * 3]:
         s = float(dense_scores[i])
-        if s < abs_thr * 0.5:      # 이미지 검색은 임계치를 조금 완화
+        # 이미지 검색은 임계치를 조금 완화 (0.5배)
+        if s < abs_thr * 0.5:
             continue
-        z = (s - mu) / max(sig, 1e-9)
+        z = (s - mu) / sig
         conf = 0.5 * (1 + math.erf(z / (2 ** 0.5)))
         meta = {"domain": domain, "dense": s, "is_image_query": True}
         out.append(TriChefResult(
@@ -74,14 +141,15 @@ def search_by_image(self, image_path: Path, domain: str = "image", topk: int = 2
     return out
 ```
 
-#### ② API 엔드포인트 — `trichef_admin.py`
+### API 엔드포인트 — `trichef_admin.py`
 
 ```python
-# trichef_admin.py (Line 434~472)
+# routes/trichef_admin.py — search_by_image() (Line 434~463)
 
 @bp_admin.route("/search-by-image", methods=["POST"])
 def search_by_image():
     """이미지 파일을 업로드하여 유사 이미지를 검색."""
+    import tempfile
     if "image" not in request.files:
         return jsonify({"error": "이미지 파일이 없습니다."}), 400
 
@@ -110,215 +178,158 @@ def search_by_image():
         tmp_path.unlink(missing_ok=True)   # 임시 파일 삭제
 ```
 
-#### ③ 프론트엔드 — `admin.html`
+### 프론트엔드 ① — `admin.html` (관리자 도구)
+
+드롭존에 이미지를 드래그·드롭하면 자동으로 검색이 실행됩니다.
 
 ```javascript
-// 드래그 앤 드롭 → 미리보기 → 자동 검색
 dropZone.addEventListener('drop', (e) => {
     e.preventDefault();
     const file = e.dataTransfer.files[0];
-    
-    // 미리보기 표시
+
     const reader = new FileReader();
     reader.onload = (ev) => { previewImg.src = ev.target.result; };
     reader.readAsDataURL(file);
-    
-    // API 호출
+
     const formData = new FormData();
     formData.append('image', file);
     formData.append('domain', 'image');
     formData.append('topk', '20');
-    
+
     fetch('/api/admin/search-by-image', { method: 'POST', body: formData })
         .then(res => res.json())
         .then(data => renderResults(data.results));
 });
 ```
 
----
+### 프론트엔드 ② — `MainSearch.jsx` (앱 홈 검색 탭)
 
-## 2. SigLIP2 임베더 안정화
+앱 홈 화면의 검색 탭에서 **`+` 버튼 클릭** 또는 **검색창에 이미지 드래그**로 이미지를 첨부하면 유사 이미지를 검색합니다. 결과는 기존 텍스트 검색과 동일한 카드 그리드로 표시됩니다.
 
-### 문제
-`transformers` 버전에 따라 `model.get_image_features()` 반환값이
-`torch.Tensor`가 아닌 **객체**로 반환되어 후속 연산에서 에러 발생.
+**추가된 state / ref**
 
-### 수정 — `siglip2_re.py` (Line 73~74)
+```jsx
+// App/frontend/src/pages/MainSearch.jsx
 
-```diff
- vec = _model.get_image_features(**inp)
-+if not isinstance(vec, torch.Tensor):
-+    vec = vec.pooler_output
- vec = torch.nn.functional.normalize(vec, dim=-1)
+const [imagePreview, setImagePreview] = useState(null)
+const [dragOver, setDragOver]         = useState(false)
+const fileInputRef = useRef(null)
 ```
 
-> 모델 출력이 객체일 경우 내부의 `pooler_output`(실제 벡터)을 추출하는 안전장치.
+**이미지 검색 함수**
 
----
+```jsx
+// App/frontend/src/pages/MainSearch.jsx — fetchImageResults / handleImageFile
 
-## 3. Qwen 캡셔너 싱글톤 오류 수정
+const fetchImageResults = async (file) => {
+  setSearching(true)
+  setSearchError('')
+  setResults([])
+  const formData = new FormData()
+  formData.append('image', file)
+  formData.append('domain', 'image')
+  formData.append('topk', '20')
+  try {
+    const r = await fetch(`${API_BASE}/api/admin/search-by-image`, { method: 'POST', body: formData })
+    const j = await r.json()
+    if (!r.ok) throw new Error(j.error || '이미지 검색 실패')
+    // admin 응답을 ResultCard 형식으로 변환
+    setResults(j.results.map(it => ({
+      file_path: it.id,
+      file_name: it.id.split('/').pop(),
+      file_type: 'image',
+      similarity: it.score,
+      preview_url: `/api/admin/file?domain=image&id=${encodeURIComponent(it.id)}`,
+      snippet: '',
+    })))
+  } catch (e) {
+    setSearchError(e.message)
+  } finally {
+    setSearching(false)
+  }
+}
 
-### 문제
-`incremental_runner.py`에서 Qwen 모델이 **이미지 1장마다 새로 로딩**되어
-전체 1,329장 인덱싱에 ~2.5시간 소요 (75%가 불필요한 모델 로딩 시간).
-
-```
-reindex.log에서 확인된 패턴:
-  15:10:26 [QwenKoCaptioner] loading Qwen/Qwen2-VL-2B-Instruct...
-  15:10:32 [QwenKoCaptioner] loading Qwen/Qwen2-VL-2B-Instruct...  ← 6초마다 반복!
-  15:10:38 [QwenKoCaptioner] loading Qwen/Qwen2-VL-2B-Instruct...
-  ...
-```
-
-### 원인
-`_caption_for_im()` 함수 내부에서 호출 시마다 `QwenKoCaptioner()`를 **새로 생성**.
-글로벌 싱글톤 변수 `_QWEN_CAPTIONER`가 제대로 참조되지 않았음.
-
-### 수정 — `incremental_runner.py` (Line 30~42)
-
-```python
-# 글로벌 싱글톤 패턴: 최초 1회만 모델 로딩
-_QWEN_CAPTIONER = None
-
-def _get_qwen_captioner():
-    global _QWEN_CAPTIONER
-    if _QWEN_CAPTIONER is None:              # 첫 호출에서만 실행
-        from captioner.qwen_vl_ko import QwenKoCaptioner
-        _QWEN_CAPTIONER = QwenKoCaptioner()  # 2B FP16, ~4.5GB VRAM
-    return _QWEN_CAPTIONER                   # 이후 호출에서는 캐시된 인스턴스 반환
-```
-
-### 효과
-
-```
-              수정 전              수정 후
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-모델 로딩     1,329회 (매번)       1회 (최초만)
-로딩 시간     ~111분               ~5초
-캡션 생성     ~38분                ~38분
-합계          ~149분 (2.5시간)     ~38분
-```
-
-> [!TIP]
-> 싱글톤 패턴만으로 **약 4배(149분 → 38분)** 속도 향상을 달성했습니다.
-> 여기에 배치 처리까지 더하면 ~35분으로 추가 개선됩니다.
-
----
-
-## 4. 트러블슈팅: 좀비 서버 프로세스
-
-### 증상
-`app.py`를 재시작해도 **이전 코드**가 계속 실행됨.
-브라우저에서 새로 추가한 API 호출 시 `404 Not Found` 반환.
-
-### 원인
-이전 Flask 프로세스가 **5001번 포트를 점유**한 채 종료되지 않음.
-새 프로세스가 시작되지만 포트 충돌로 실제 요청은 좀비 프로세스가 처리.
-
-### 해결
-
-```powershell
-# 1. 포트 점유 프로세스 확인
-netstat -ano | findstr :5001
-#   TCP  0.0.0.0:5001  LISTENING  18880  ← 좀비 PID
-
-# 2. 강제 종료
-taskkill /PID 18880 /F
-
-# 3. 서버 재시작
-python app.py
+const handleImageFile = (file) => {
+  if (!file || !file.type.startsWith('image/')) return
+  setImagePreview(URL.createObjectURL(file))
+  setQuery('이미지 검색')
+  setInputValue('')
+  setResultsReady(false)
+  setView('results')
+  window.history.pushState({ view: 'results' }, '')
+  requestAnimationFrame(() => setResultsReady(true))
+  fetchImageResults(file)
+}
 ```
 
-> [!WARNING]
-> 서버 코드를 수정했는데 반영이 안 되면, 반드시 `netstat`으로 좀비 프로세스를 확인하세요.
+**홈 화면 검색 폼 — `+` 버튼 + 드래그 앤 드롭**
 
----
+```jsx
+// App/frontend/src/pages/MainSearch.jsx — home view 검색 폼
 
-## 5. 트러블슈팅: matmul 차원 불일치
+<form ref={formRef} onSubmit={handleSearch} className="w-full relative group"
+  style={homeExiting ? { visibility: 'hidden' } : {}}
+  onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+  onDragLeave={() => setDragOver(false)}
+  onDrop={(e) => { e.preventDefault(); setDragOver(false); handleImageFile(e.dataTransfer.files[0]) }}>
+  <div className={`glass-effect rounded-full p-2 flex items-center gap-4 shadow-[0_0_50px_rgba(133,173,255,0.1)] transition-all duration-300
+    ${dragOver ? 'border border-primary/60 shadow-[0_0_30px_rgba(133,173,255,0.3)]' :
+      listening ? 'border border-red-400/60 shadow-[0_0_30px_rgba(248,113,113,0.2)]' :
+      'border border-outline-variant/20 hover:border-primary/40'}`}>
 
-### 증상
-이미지 검색 시 아래 에러 발생:
-```
-matmul: Input operand 1 has a mismatch in its core dimension 0,
-with gufunc signature (n?,k),(k,m?)->(n?,m?)
-(size 1024 is different from 1152)
-```
+    {/* + 버튼 → 이미지 파일 선택 */}
+    <button type="button"
+      onClick={() => fileInputRef.current?.click()}
+      className="w-12 h-12 rounded-full bg-gradient-to-r from-primary to-secondary flex items-center justify-center text-on-primary-fixed shadow-lg active:scale-90 transition-transform shrink-0"
+      title="이미지로 검색">
+      <span className="material-symbols-outlined font-bold">add_photo_alternate</span>
+    </button>
+    <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
+      onChange={(e) => handleImageFile(e.target.files[0])} />
 
-### 원인
-`hermitian_score` 함수에 전달되는 3축 벡터의 차원이 불일치:
+    {/* 텍스트 입력창 */}
+    <div className="flex-1 relative">
+      <input
+        type="text"
+        value={listening ? '' : inputValue}
+        onChange={(e) => !listening && setInputValue(e.target.value)}
+        placeholder={listening ? '' : '로컬 파일에 대해 무엇이든 물어보세요...'}
+        className="w-full bg-transparent border-none focus:ring-0 text-on-surface placeholder:text-on-surface-variant/40 font-manrope text-lg py-4 outline-none"
+        readOnly={listening}
+      />
+      {listening && (
+        <div className="absolute inset-0 flex items-center gap-3 py-4 pointer-events-none">
+          <span className="text-red-400 font-manrope text-lg truncate">{interim || <span className="text-on-surface-variant/50">듣는 중...</span>}</span>
+          <div className="flex items-center gap-[3px] shrink-0">
+            {[0, 0.15, 0.3, 0.15, 0].map((delay, i) => (
+              <div key={i} className="w-[3px] bg-red-400 rounded-full animate-bounce"
+                style={{ height: `${[12,20,28,20,12][i]}px`, animationDelay: `${delay}s`, animationDuration: '0.8s' }} />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
 
-| 축 | 모델 | 차원 |
-|---|---|---|
-| Re (시각-언어) | SigLIP2 | **1152**d |
-| Im (의미) | BGE-M3 | **1024**d |
-| Z (디테일) | DINOv2 | **1024**d |
-
-이미지 검색 시 텍스트 쿼리가 없어 `q_Im`을 SigLIP2 벡터(1152d)로 대체했더니,
-Im축 DB 벡터(1024d)와 matmul 연산에서 차원이 맞지 않음.
-
-### 해결 — `unified_engine.py` (Line 275)
-
-```python
-# 수정 전: q_Im = q_Re  ← 1152d → 1024d와 matmul 불가
-# 수정 후: Im축은 영벡터(1024d)로 처리 → 시각 특징(Re, Z)만으로 검색
-q_Im = np.zeros(1024, dtype=np.float32)
-```
-
----
-
-## 6. 트러블슈팅: bitsandbytes 윈도우 호환성
-
-### 증상
-Qwen/SigLIP2/DINOv2 모델을 `bitsandbytes`로 양자화(NF4/INT8)하면
-아래 에러가 **반복적으로** 발생:
-
-```
-RuntimeError: data set to a tensor that requires gradients
-must be floating point or complex dtype
-```
-
-에러 위치: `bitsandbytes/nn/modules.py:1104`
-```python
-self.bias.data = self.bias.data.to(x.dtype)
-```
-
-### 원인
-`bitsandbytes` 라이브러리의 **윈도우 지원이 불완전**하여,
-양자화된 레이어의 bias 텐서 타입 변환 시 그래디언트 검사에서 충돌.
-
-> [!NOTE]
-> 리눅스에서는 동일 코드가 정상 작동합니다.
-> 윈도우 전용 버그이며 `float16`, `bfloat16`, `float32` 모두 동일 에러 발생.
-
-### 시도한 방법들
-
-| 시도 | 결과 |
-|---|---|
-| `bnb_4bit_compute_dtype=float16` | ❌ 동일 에러 |
-| `bnb_4bit_compute_dtype=bfloat16` | ❌ 동일 에러 |
-| `bnb_4bit_compute_dtype=float32` | ❌ 동일 에러 |
-| `bnb_4bit_use_double_quant=False` | ❌ 동일 에러 |
-| `model.requires_grad_(False)` | ❌ 동일 에러 |
-| `param.requires_grad = False` (개별) | ❌ 동일 에러 |
-| `BitsAndBytesConfig(load_in_8bit=True)` | ❌ 동일 에러 |
-
-### 최종 해결: 양자화 전면 해제 (FP16)
-
-```python
-# config.py — 모든 bitsandbytes 양자화 비활성화
-"INT8_Z_DINOV2": False,    # DINOv2: INT8 → FP16
-"INT8_RE_SIGLIP2": False,  # SigLIP2: INT8 → FP16
-
-# qwen_vl_ko.py — Qwen 캡셔너도 양자화 없이 FP16
-QwenKoCaptioner(quantize="none")  # NF4 → FP16
+    {/* 마이크 버튼 */}
+    <button type="button" onClick={toggleMic}
+      className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 shrink-0
+        ${listening ? 'bg-red-500/20 text-red-400 animate-pulse' : 'text-on-surface-variant hover:text-primary hover:bg-primary/10'}`}>
+      <span className="material-symbols-outlined" style={listening ? { fontVariationSettings: '"FILL" 1' } : {}}>mic</span>
+    </button>
+  </div>
+</form>
 ```
 
-| 모델 | 변경 전 | 변경 후 |
-|---|---|---|
-| Qwen 캡셔너 | NF4 ~1.2GB | FP16 ~4.5GB |
-| SigLIP2 | INT8 ~0.5GB | FP16 ~1.0GB |
-| DINOv2 | INT8 ~0.65GB | FP16 ~1.3GB |
+**결과 화면 — 이미지 쿼리 썸네일 표시**
 
-> [!TIP]
-> **향후 대안**: GPTQ 또는 AWQ 양자화 라이브러리는 윈도우에서도 안정적으로 작동하므로,
-> VRAM 절약이 필요하면 이들로 전환을 고려할 수 있습니다.
+```jsx
+// App/frontend/src/pages/MainSearch.jsx — results view 헤더
+
+<div className="flex items-center gap-3">
+  {imagePreview && (
+    <img src={imagePreview} alt="query"
+      className="h-10 w-10 rounded-lg object-cover border border-primary/30" />
+  )}
+  <h1 className="text-4xl font-extrabold tracking-tighter text-on-surface">{query}</h1>
+</div>
+```

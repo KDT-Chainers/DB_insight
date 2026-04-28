@@ -17,7 +17,7 @@ from chromadb.config import Settings
 from tqdm import tqdm
 
 from config import PATHS, TRICHEF_CFG
-from embedders.trichef import siglip2_re, dinov2_z, qwen_caption, doc_page_render
+from embedders.trichef import qwen_caption, doc_page_render
 from embedders.trichef import bgem3_caption_im as im_embedder  # v2 P1: e5→BGE-M3
 from embedders.trichef import blip_caption_triple, doc_ingest  # v2 P1 Phase B (doc_ingest 공용 유지)
 from services.trichef import tri_gs
@@ -305,29 +305,26 @@ def run_image_incremental() -> IncrementalResult:
     # 6GB VRAM 최적화: 임베딩 모델 로딩 전 캡셔너 해제
     _unload_qwen_captioner()
 
-    # 2. 3축 임베딩 및 즉시 병합 (100장 단위 배치)
+    # 2. Im 축(BGE-M3, CPU) 먼저 — GPU 작업 전에 완료하여 CUDA 컨텍스트 충돌 방지
+    logger.info(f"[img_inc] 1/3: Im axis (BGE-M3, CPU) {len(captions)} captions...")
+    new_Im = im_embedder.embed_passage(captions)
+
+    # 3. Re·Z 축(GPU) 100장 단위 배치 — BGE-M3 완료 후 GPU 모듈 lazy import
+    from embedders.trichef import siglip2_re, dinov2_z  # noqa: PLC0415
     batch_size = 100
+    Re_batches: list[np.ndarray] = []
+    Z_batches:  list[np.ndarray] = []
     for i in range(0, len(new_files), batch_size):
         batch = new_files[i:i+batch_size]
-        batch_caps = captions[i:i+batch_size]
-        
-        logger.info(f"[img_inc] Batch {i//batch_size + 1}: Embedding {len(batch)} images...")
-        
-        # 특징 추출
+        logger.info(f"[img_inc] Batch {i//batch_size + 1}/{(len(new_files)-1)//batch_size + 1}: "
+                    f"Re+Z {len(batch)} images...")
         b_Re = siglip2_re.embed_images(batch)
-        b_Im = im_embedder.embed_passage(batch_caps)
         b_Z  = dinov2_z.embed_images(batch)
-        
-        # 누적 concat (개별 배치마다 즉시 파일 저장)
-        def _merge_inc(name: str, new_vec: np.ndarray) -> np.ndarray:
-            p = cache_dir / name
-            if p.exists():
-                prev = np.load(p)
-                merged = np.vstack([prev, new_vec])
-            else:
-                merged = new_vec
-            np.save(p, merged)
-            return merged
+        Re_batches.append(b_Re)
+        Z_batches.append(b_Z)
+
+    new_Re = np.vstack(Re_batches)
+    new_Z  = np.vstack(Z_batches)
 
     # 3. [P2B.2] replace-by-file: 동일 파일 재인덱싱 시 stale 행 제거 후 교체
     from . import cache_ops as _co
@@ -451,6 +448,7 @@ def run_doc_incremental() -> IncrementalResult:
         return IncrementalResult("document", 0, len(registry), len(registry))
 
     # 2. 3축 임베딩 (doc_page)
+    from embedders.trichef import siglip2_re, dinov2_z  # noqa: PLC0415
     new_Re = siglip2_re.embed_images(all_page_imgs)
     new_Im = im_embedder.embed_passage(all_page_captions)
     new_Z  = dinov2_z.embed_images(all_page_imgs)
@@ -567,6 +565,7 @@ def embed_image_file(file_path: str, progress_cb=None) -> dict:
         if progress_cb(2, 3, "3축 임베딩 생성 중 (Re·Im·Z)"):
             return {"status": "skipped", "reason": "사용자 중단"}
 
+    from embedders.trichef import siglip2_re, dinov2_z  # noqa: PLC0415
     new_Re = siglip2_re.embed_images([staged])
     new_Im = im_embedder.embed_passage([caption])
     new_Z  = dinov2_z.embed_images([staged])
@@ -669,6 +668,7 @@ def embed_doc_file(file_path: str, progress_cb=None) -> dict:
         if progress_cb(2, 3, f"3축 임베딩 ({len(img_pages)}페이지)"):
             return {"status": "skipped", "reason": "사용자 중단"}
 
+    from embedders.trichef import siglip2_re, dinov2_z  # noqa: PLC0415
     new_Re = siglip2_re.embed_images(img_pages)
     new_Im = im_embedder.embed_passage(captions)
     new_Z  = dinov2_z.embed_images(img_pages)
