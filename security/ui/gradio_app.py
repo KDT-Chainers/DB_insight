@@ -444,6 +444,61 @@ def on_refresh_log() -> Tuple[str, str]:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# 탭 4: 임베딩 관리(관리자)
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _doc_options_and_table() -> Tuple[List[str], str]:
+    """인덱스 문서 목록을 Dropdown 옵션 + Markdown 표로 변환."""
+    orch = _get_orchestrator()
+    docs = orch.list_indexed_documents()
+    if not docs:
+        return [], "_현재 인덱스에 저장된 문서가 없습니다._"
+
+    options: List[str] = []
+    lines = [
+        "| 문서명 | 청크 수 | PII 청크 | 원본 경로 |",
+        "|------|--------:|---------:|-----------|",
+    ]
+    for d in docs:
+        name = str(d.get("doc_name") or "").strip()
+        if not name:
+            continue
+        options.append(name)
+        chunk_cnt = int(d.get("chunk_count") or 0)
+        pii_cnt = int(d.get("pii_chunk_count") or 0)
+        src = str(d.get("source_path") or d.get("image_path") or "-")
+        lines.append(f"| {name} | {chunk_cnt} | {pii_cnt} | {src} |")
+    return options, "\n".join(lines)
+
+
+def on_refresh_index_docs() -> Tuple[Any, str, str]:
+    """임베딩 문서 목록 새로고침."""
+    options, table_md = _doc_options_and_table()
+    return gr.update(choices=options, value=[]), table_md, ""
+
+
+def on_delete_selected_docs(selected_docs: List[str]) -> Tuple[Any, str, str]:
+    """선택한 문서를 인덱스/메타DB에서 삭제."""
+    targets = [str(x).strip() for x in (selected_docs or []) if str(x).strip()]
+    if not targets:
+        options, table_md = _doc_options_and_table()
+        return gr.update(choices=options, value=[]), table_md, "⚠️ 삭제할 문서를 하나 이상 선택해주세요."
+
+    orch = _get_orchestrator()
+    result = orch.delete_indexed_documents(targets)
+    deleted_docs = int(result.get("deleted_docs", 0))
+    deleted_chunks = int(result.get("deleted_chunks", 0))
+
+    options, table_md = _doc_options_and_table()
+    msg = (
+        f"✅ 삭제 완료: 문서 **{deleted_docs}개**, 청크 **{deleted_chunks}개**\n\n"
+        f"- 삭제 문서: {', '.join(targets)}\n"
+        f"- 원본 파일은 삭제되지 않았습니다. 필요하면 파일은 별도로 지워주세요."
+    )
+    return gr.update(choices=options, value=[]), table_md, msg
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # Gradio 앱 빌드
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -708,6 +763,40 @@ def build_app() -> gr.Blocks:
                 outputs=[upload_log_out, query_log_out],
             )
             app.load(on_refresh_log, inputs=[], outputs=[upload_log_out, query_log_out])
+
+        # ── 탭 4: 임베딩 관리(관리자) ───────────────────────────────────────────
+        with gr.Tab("🗂️ 임베딩 관리"):
+            gr.Markdown(
+                "### 인덱스 문서 선택 삭제\n"
+                "- 선택한 문서의 **벡터/메타데이터**만 삭제합니다.\n"
+                "- 원본 파일(`secure_store/images` 등)은 자동 삭제되지 않습니다."
+            )
+            refresh_docs_btn = gr.Button("🔄 목록 새로고침")
+            doc_selector = gr.Dropdown(
+                label="삭제할 임베딩 문서 선택 (복수 가능)",
+                choices=[],
+                multiselect=True,
+                value=[],
+            )
+            delete_docs_btn = gr.Button("🗑️ 선택 문서 삭제", variant="stop")
+            admin_result = gr.Markdown(label="처리 결과", value="")
+            admin_table = gr.Markdown(label="현재 인덱스 문서", value="_로딩 중..._")
+
+            refresh_docs_btn.click(
+                on_refresh_index_docs,
+                inputs=[],
+                outputs=[doc_selector, admin_table, admin_result],
+            )
+            delete_docs_btn.click(
+                on_delete_selected_docs,
+                inputs=[doc_selector],
+                outputs=[doc_selector, admin_table, admin_result],
+            )
+            app.load(
+                on_refresh_index_docs,
+                inputs=[],
+                outputs=[doc_selector, admin_table, admin_result],
+            )
 
     return app
 

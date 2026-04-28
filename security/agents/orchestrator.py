@@ -542,6 +542,21 @@ class Orchestrator:
             return filtered
         return chunks
 
+    # ── 관리자용 인덱스 관리 API ───────────────────────────────────────────────
+
+    def list_indexed_documents(self) -> List[Dict[str, Any]]:
+        """관리자 UI에 표시할 인덱스 문서 목록을 반환한다."""
+        return self._store.list_indexed_documents()
+
+    def delete_indexed_documents(self, doc_names: List[str]) -> Dict[str, Any]:
+        """
+        선택된 문서를 벡터 인덱스/메타DB에서 삭제한다.
+        원본 파일은 삭제하지 않는다.
+        """
+        result = self._store.delete_documents(doc_names)
+        self._recent_upload_keys = self._store.get_recent_upload_keys()
+        return result
+
     @staticmethod
     def _extract_doc_hint(user_query: str, doc_names: List[str]) -> str:
         """

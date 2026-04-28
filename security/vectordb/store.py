@@ -541,6 +541,100 @@ class VectorStore:
             ).fetchall()
         return [r[0] for r in rows if r[0]]
 
+    def list_indexed_documents(self) -> List[Dict[str, Any]]:
+        """
+        UI 관리자용 문서 목록을 반환한다.
+        문서명(file_name 우선) 단위로 청크 수/PII 청크 수를 집계한다.
+        """
+        with sqlite3.connect(self._meta_db) as conn:
+            rows = conn.execute(
+                """
+                SELECT
+                    COALESCE(file_name, doc_name) AS doc_label,
+                    COUNT(*)                      AS chunk_count,
+                    SUM(CASE WHEN has_pii=1 THEN 1 ELSE 0 END) AS pii_chunk_count,
+                    MAX(source_path)              AS source_path,
+                    MAX(image_path)               AS image_path,
+                    MAX(id)                       AS last_id
+                FROM chunks
+                WHERE COALESCE(file_name, doc_name) != ''
+                GROUP BY COALESCE(file_name, doc_name)
+                ORDER BY last_id DESC
+                """
+            ).fetchall()
+        out: List[Dict[str, Any]] = []
+        for r in rows:
+            out.append({
+                "doc_name": str(r[0] or ""),
+                "chunk_count": int(r[1] or 0),
+                "pii_chunk_count": int(r[2] or 0),
+                "source_path": str(r[3] or ""),
+                "image_path": str(r[4] or ""),
+            })
+        return out
+
+    def delete_documents(self, doc_names: List[str]) -> Dict[str, Any]:
+        """
+        문서명(file_name/doc_name) 기준으로 청크를 삭제하고 FAISS 인덱스를 재구성한다.
+        """
+        targets = [str(n).strip() for n in (doc_names or []) if str(n).strip()]
+        targets = list(dict.fromkeys(targets))
+        if not targets:
+            return {"deleted_docs": 0, "deleted_chunks": 0}
+
+        placeholders = ",".join("?" for _ in targets)
+        where = f"COALESCE(file_name, doc_name) IN ({placeholders})"
+
+        with sqlite3.connect(self._meta_db) as conn:
+            row = conn.execute(
+                f"SELECT COUNT(*) FROM chunks WHERE {where}",
+                tuple(targets),
+            ).fetchone()
+            deleted_chunks = int((row or [0])[0] or 0)
+            conn.execute(f"DELETE FROM chunks WHERE {where}", tuple(targets))
+
+            # 최근 업로드 키에서 삭제 대상 문서명을 정리
+            rs = conn.execute(
+                "SELECT v FROM app_state WHERE k=?",
+                ("recent_upload_keys",),
+            ).fetchone()
+            if rs and rs[0]:
+                try:
+                    curr = json.loads(rs[0])
+                    if isinstance(curr, list):
+                        lowered = {t.lower() for t in targets}
+                        kept = []
+                        for key in curr:
+                            s = str(key or "").strip()
+                            if not s:
+                                continue
+                            base = Path(s).name.lower()
+                            if s.lower() in lowered or base in lowered:
+                                continue
+                            kept.append(s)
+                        conn.execute(
+                            """
+                            INSERT INTO app_state(k, v) VALUES(?, ?)
+                            ON CONFLICT(k) DO UPDATE SET v=excluded.v
+                            """,
+                            ("recent_upload_keys", json.dumps(kept, ensure_ascii=False)),
+                        )
+                except Exception:
+                    logger.warning("recent_upload_keys 정리 실패 (무시)")
+
+            conn.commit()
+
+        self._rebuild_index_from_db()
+        logger.info(
+            "문서 선택 삭제 완료: docs=%d, chunks=%d",
+            len(targets),
+            deleted_chunks,
+        )
+        return {
+            "deleted_docs": len(targets),
+            "deleted_chunks": deleted_chunks,
+        }
+
     def build_feature_map(
         self,
         results: List[Dict[str, Any]],
@@ -613,6 +707,58 @@ class VectorStore:
         if self._index is not None:
             import faiss
             faiss.write_index(self._index, str(self._index_path))
+
+    def _rebuild_index_from_db(self) -> None:
+        """
+        현재 chunks 테이블 기준으로 FAISS 인덱스를 다시 만든다.
+        선택 삭제 후 벡터-행 매핑 정합성을 보장하기 위한 내부 유틸.
+        """
+        with sqlite3.connect(self._meta_db) as conn:
+            rows = conn.execute(
+                """
+                SELECT id, text, source_path, doc_name, pii_types
+                FROM chunks
+                ORDER BY id
+                """
+            ).fetchall()
+
+        if not rows:
+            self._index = None
+            self._chunk_ids = []
+            if self._index_path.exists():
+                self._index_path.unlink()
+            return
+
+        embed_texts_list: List[str] = []
+        chunk_ids: List[int] = []
+        for row in rows:
+            rid, text, source_path, doc_name, pii_types_json = row
+            chunk_ids.append(int(rid))
+            pts: List[str] = []
+            if pii_types_json:
+                try:
+                    parsed = json.loads(pii_types_json)
+                    if isinstance(parsed, list):
+                        pts = [str(x) for x in parsed]
+                except Exception:
+                    pts = []
+            pii_kr = _pii_types_to_korean(pts)
+            file_name = Path(source_path).name if source_path else (doc_name or "")
+            prefix_parts = []
+            if file_name:
+                prefix_parts.append(f"[파일: {file_name}]")
+            if pii_kr:
+                prefix_parts.append(f"[문서유형: {pii_kr}]")
+            prefix = " ".join(prefix_parts)
+            embed_texts_list.append(f"{prefix}\n{text}".strip() if prefix else str(text or ""))
+
+        embeddings = embed_texts(embed_texts_list)
+        import faiss
+        dim = embeddings.shape[1]
+        self._index = faiss.IndexFlatIP(dim)
+        self._index.add(embeddings)
+        self._chunk_ids = chunk_ids
+        self._save_index()
 
     def clear(self) -> None:
         """인덱스와 메타데이터 초기화 (테스트용)"""
