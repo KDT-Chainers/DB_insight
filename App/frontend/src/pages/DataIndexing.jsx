@@ -306,16 +306,43 @@ function IndexingModal({ rootPath, selectedCount, jobStatus, jobId, onClose, onS
   }
 
   const runningFileType = runningResult ? _getFileType(runningResult.path) : null
-  const isTriChefMode   = runningFileType === 'image' || runningFileType === 'doc'
 
-  // 동영상 4단계 / TRI-CHEF 3단계
-  const VIDEO_STEPS = ['프레임 캡셔닝', '음성 변환', '임베딩 생성', '벡터DB 저장']
-  const VIDEO_ICONS = ['frame_inspect', 'mic', 'hub', 'database']
-  const CHEF_STEPS  = ['캡션 생성', '3축 임베딩', '벡터DB 저장']
-  const CHEF_ICONS  = ['description', 'hub', 'database']
+  // 파일 타입별 파이프라인 정의
+  const PIPELINE = {
+    image: {
+      label: '이미지 처리 단계 (TRI-CHEF)',
+      steps: ['Qwen2-VL 캡션 생성', '3축 임베딩', '벡터DB 저장'],
+      icons: ['photo_camera', 'hub', 'database'],
+      color: 'emerald',
+      cols: 'grid-cols-3',
+    },
+    doc: {
+      label: '문서 처리 단계 (TRI-CHEF)',
+      steps: ['페이지 렌더링', 'Qwen2-VL 캡션 생성', '3축 임베딩', '벡터DB 저장'],
+      icons: ['picture_as_pdf', 'description', 'hub', 'database'],
+      color: 'emerald',
+      cols: 'grid-cols-4',
+    },
+    video: {
+      label: '동영상 처리 단계',
+      steps: ['BLIP 캡셔닝', 'Whisper STT', 'e5-large 임베딩', '벡터DB 저장'],
+      icons: ['movie_filter', 'mic', 'hub', 'database'],
+      color: 'blue',
+      cols: 'grid-cols-4',
+    },
+    audio: {
+      label: '음성 처리 단계',
+      steps: ['Whisper STT', 'BGE-M3 임베딩', '벡터DB 저장'],
+      icons: ['mic', 'hub', 'database'],
+      color: 'amber',
+      cols: 'grid-cols-3',
+    },
+  }
 
-  const STEPS      = isTriChefMode ? CHEF_STEPS : VIDEO_STEPS
-  const STEP_ICONS = isTriChefMode ? CHEF_ICONS : VIDEO_ICONS
+  const pipeline   = PIPELINE[runningFileType] ?? PIPELINE.video
+  const STEPS      = pipeline.steps
+  const STEP_ICONS = pipeline.icons
+  const isTriChefMode = runningFileType === 'image' || runningFileType === 'doc'
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
@@ -416,61 +443,66 @@ function IndexingModal({ rootPath, selectedCount, jobStatus, jobId, onClose, onS
           {/* 오른쪽: 동영상 스텝 + 파일 목록 */}
           <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
 
-            {/* 처리 단계 (동영상 4단계 / TRI-CHEF 3단계) */}
-            {isRunning && runningResult?.step != null && (
-              <div className="shrink-0 px-6 pt-6 pb-5 border-b border-white/5">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/40 mb-4">
-                  {isTriChefMode ? (runningFileType === 'image' ? '이미지 처리 단계 (TRI-CHEF)' : '문서 처리 단계 (TRI-CHEF)') : '동영상 처리 단계'}
-                </p>
-                <div className={`grid gap-3 ${isTriChefMode ? 'grid-cols-3' : 'grid-cols-4'}`}>
-                  {STEPS.map((label, idx) => {
-                    const sn       = idx + 1
-                    const cur      = runningResult.step
-                    const isPast   = sn < cur
-                    const isActive = sn === cur
-                    const chipColor = isTriChefMode ? 'text-emerald-400' : 'text-[#85adff]'
-                    const chipActiveBg = isTriChefMode ? 'bg-emerald-400 border-emerald-400' : 'bg-[#85adff] border-[#85adff]'
-                    const chipActiveShadow = isTriChefMode
-                      ? 'bg-emerald-500/8 border-emerald-500/30 shadow-[0_0_20px_rgba(52,211,153,0.2)]'
-                      : 'bg-[#85adff]/10 border-[#85adff]/40 shadow-[0_0_20px_rgba(133,173,255,0.2)]'
-                    const pingBorder = isTriChefMode ? 'border-emerald-400/30' : 'border-[#85adff]/30'
-                    return (
-                      <div key={label}
-                        className={`relative flex flex-col items-center gap-2 p-3 rounded-2xl border transition-all duration-300 ${
-                          isActive
-                            ? chipActiveShadow
-                            : isPast
-                              ? 'bg-emerald-500/8 border-emerald-500/20'
-                              : 'bg-white/3 border-white/5'
-                        }`}>
-                        {/* 번호 / 아이콘 */}
-                        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-black border-2 transition-all ${
-                          isActive
-                            ? `${chipActiveBg} text-[#070d1f] scale-110`
-                            : isPast
-                              ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400'
-                              : 'bg-white/5 border-white/10 text-on-surface-variant/30'
-                        }`}>
-                          {isPast
-                            ? <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: '"FILL" 1' }}>check</span>
-                            : isActive
-                              ? <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
-                              : <span className="text-xs">{sn}</span>
-                          }
+            {/* 처리 단계 — 파일 타입별 4종 파이프라인 */}
+            {isRunning && runningResult?.step != null && (() => {
+              const clr = pipeline.color
+              const chipColor       = clr === 'emerald' ? 'text-emerald-400' : clr === 'amber' ? 'text-amber-400' : 'text-[#85adff]'
+              const chipActiveBg    = clr === 'emerald' ? 'bg-emerald-400 border-emerald-400' : clr === 'amber' ? 'bg-amber-400 border-amber-400' : 'bg-[#85adff] border-[#85adff]'
+              const chipActiveShadow = clr === 'emerald'
+                ? 'bg-emerald-500/8 border-emerald-500/30 shadow-[0_0_20px_rgba(52,211,153,0.2)]'
+                : clr === 'amber'
+                  ? 'bg-amber-500/8 border-amber-500/30 shadow-[0_0_20px_rgba(251,191,36,0.2)]'
+                  : 'bg-[#85adff]/10 border-[#85adff]/40 shadow-[0_0_20px_rgba(133,173,255,0.2)]'
+              const pingBorder      = clr === 'emerald' ? 'border-emerald-400/30' : clr === 'amber' ? 'border-amber-400/30' : 'border-[#85adff]/30'
+              return (
+                <div className="shrink-0 px-6 pt-6 pb-5 border-b border-white/5">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/40 mb-4">
+                    {pipeline.label}
+                  </p>
+                  <div className={`grid gap-3 ${pipeline.cols}`}>
+                    {STEPS.map((label, idx) => {
+                      const sn       = idx + 1
+                      const cur      = runningResult.step
+                      const isPast   = sn < cur
+                      const isActive = sn === cur
+                      return (
+                        <div key={label}
+                          className={`relative flex flex-col items-center gap-2 p-3 rounded-2xl border transition-all duration-300 ${
+                            isActive
+                              ? chipActiveShadow
+                              : isPast
+                                ? 'bg-emerald-500/8 border-emerald-500/20'
+                                : 'bg-white/3 border-white/5'
+                          }`}>
+                          {/* 번호 / 아이콘 */}
+                          <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-black border-2 transition-all ${
+                            isActive
+                              ? `${chipActiveBg} text-[#070d1f] scale-110`
+                              : isPast
+                                ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400'
+                                : 'bg-white/5 border-white/10 text-on-surface-variant/30'
+                          }`}>
+                            {isPast
+                              ? <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: '"FILL" 1' }}>check</span>
+                              : isActive
+                                ? <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
+                                : <span className="material-symbols-outlined text-sm opacity-40">{STEP_ICONS[idx]}</span>
+                            }
+                          </div>
+                          <span className={`text-[10px] font-bold text-center leading-tight ${
+                            isActive ? chipColor : isPast ? 'text-emerald-400' : 'text-on-surface-variant/25'
+                          }`}>{label}</span>
+                          {/* 활성 펄스 */}
+                          {isActive && (
+                            <div className={`absolute inset-0 rounded-2xl border-2 ${pingBorder} animate-ping opacity-50`} />
+                          )}
                         </div>
-                        <span className={`text-[10px] font-bold text-center leading-tight ${
-                          isActive ? chipColor : isPast ? 'text-emerald-400' : 'text-on-surface-variant/25'
-                        }`}>{label}</span>
-                        {/* 활성 펄스 */}
-                        {isActive && (
-                          <div className={`absolute inset-0 rounded-2xl border-2 ${pingBorder} animate-ping opacity-50`} />
-                        )}
-                      </div>
-                    )
-                  })}
+                      )
+                    })}
+                  </div>
                 </div>
-              </div>
-            )}
+              )
+            })()}
 
             {/* 파일 전체 목록 */}
             <div className="flex-1 overflow-y-auto min-h-0">
@@ -498,7 +530,7 @@ function IndexingModal({ rootPath, selectedCount, jobStatus, jobId, onClose, onS
                       <div className="flex-1 min-w-0">
                         <p className={`text-xs font-semibold truncate ${isCurrently ? 'text-[#dfe4fe]' : 'text-on-surface/70'}`}>{fname}</p>
                         {isCurrently && r.step_detail && (
-                          <p className="text-[10px] text-[#85adff]/70 mt-0.5">[{r.step}/{r.step_total ?? 4}] {r.step_detail}</p>
+                          <p className="text-[10px] text-[#85adff]/70 mt-0.5">[{r.step}/{r.step_total ?? pipeline.steps.length}] {r.step_detail}</p>
                         )}
                         {r.status === 'error' && r.reason && (
                           <p className="text-[10px] text-red-400/70 mt-0.5 truncate">{r.reason}</p>
@@ -735,10 +767,10 @@ function VectorStoreTab() {
       {/* 타입별 컬렉션 */}
       <div className="grid grid-cols-2 gap-4">
         {[
-          { key: 'video', db: 'embedded_DB/Movie',   dim: '1024d',            model: 'e5-large',       col: 'files_video',        engine: 'ChromaDB' },
-          { key: 'doc',   db: 'embedded_DB/trichef', dim: '3200d (Re+Im+Z)',  model: 'TRI-CHEF 3-axis',col: 'trichef_doc_page',   engine: 'TRI-CHEF' },
-          { key: 'image', db: 'embedded_DB/trichef', dim: '3200d (Re+Im+Z)',  model: 'TRI-CHEF 3-axis',col: 'trichef_image',      engine: 'TRI-CHEF' },
-          { key: 'audio', db: 'embedded_DB/Rec',     dim: '768d',             model: 'ko-sroberta',    col: 'files_audio',        engine: 'ChromaDB' },
+          { key: 'video', db: 'embedded_DB/Movie',   dim: '1024d',            model: 'e5-large (BLIP+STT)',   col: 'files_video',        engine: 'ChromaDB' },
+          { key: 'doc',   db: 'embedded_DB/trichef', dim: '3200d (Re+Im+Z)',  model: 'TRI-CHEF 3-axis',       col: 'trichef_doc_page',   engine: 'TRI-CHEF' },
+          { key: 'image', db: 'embedded_DB/trichef', dim: '3200d (Re+Im+Z)',  model: 'TRI-CHEF 3-axis',       col: 'trichef_image',      engine: 'TRI-CHEF' },
+          { key: 'audio', db: 'embedded_DB/Rec',     dim: '768d',             model: 'ko-sroberta',           col: 'files_audio',        engine: 'ChromaDB' },
         ].map(({ key, db, dim, model, col, engine }) => {
           const t     = byType[key] ?? { file_count: 0, chunk_count: 0 }
           const icon  = TYPE_ICON[key]  ?? 'insert_drive_file'

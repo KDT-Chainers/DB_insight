@@ -13,24 +13,20 @@ search_bp = Blueprint("search", __name__, url_prefix="/api")
 @search_bp.get("/search")
 def search():
     """
-    GET /api/search?q=검색어&top_k=10&type=doc|image|audio|video
+    GET /api/search?q=검색어&top_k=10&type=doc|image|video|audio
 
-    type 미지정 → 인덱싱된 모든 타입에서 검색 후 유사도 합산.
+    type 미지정 → 인덱싱된 모든 타입에서 검색.
 
-    Response:
-    {
-      "query": "검색어",
-      "results": [
-        {
-          "file_path":  str,
-          "file_name":  str,
-          "file_type":  str,   # doc | image | audio | video
-          "similarity": float, # 0.0 ~ 1.0
-          "snippet":    str
-        },
-        ...
-      ]
-    }
+    Response: { "query": str, "results": [...] }
+    결과 항목 공통 스키마:
+      file_path   str
+      file_name   str
+      file_type   str   # doc | image | video | audio
+      confidence  float # 0.0 ~ 1.0  (calibrated)
+      similarity  float # confidence 와 동일 (하위 호환)
+      snippet     str
+      preview_url str | null
+      segments    list  # video/audio 전용 — 세그먼트 타임라인
     """
     query     = request.args.get("q", "").strip()
     top_k     = request.args.get("top_k", default=10, type=int)
@@ -42,32 +38,23 @@ def search():
         top_k = 10
 
     try:
-        from db.vector_store import search as vs_search, search_all, search_video_m11, count
-
         results: list[dict] = []
 
-        if file_type in ("image", "doc"):
-            # TRI-CHEF 전용 검색
-            domain = "image" if file_type == "image" else "doc_page"
-            results = _search_trichef(query, [domain], top_k)
+        if file_type == "image":
+            results = _search_trichef(query, ["image"], top_k)
+        elif file_type == "doc":
+            results = _search_trichef(query, ["doc_page"], top_k)
         elif file_type == "video":
-            from embedders.base import encode_query_e5
-            query_vec = encode_query_e5(query)
-            results   = search_video_m11(query_vec, top_k=top_k)
+            results = _search_legacy_video(query, top_k)
         elif file_type == "audio":
-            query_vec = _encode_for_type(query, "audio")
-            results   = vs_search(query_vec, file_type="audio", top_k=top_k)
+            results = _search_legacy_audio(query, top_k)
         else:
-            # 전체 검색: 레거시(video/audio) + TRI-CHEF(image/doc_page)
-            if count() > 0:
-                embeddings_by_type = _encode_all(query)
-                legacy = search_all(embeddings_by_type, top_k=top_k)
-            else:
-                legacy = []
-            trichef = _search_trichef(query, ["image", "doc_page"], top_k)
-            # 합산 후 similarity 내림차순 정렬
-            combined = legacy + trichef
-            combined.sort(key=lambda r: r.get("similarity", 0), reverse=True)
+            # 전체 검색: 이미지·문서(TRI-CHEF) + 영상·음원(구형 ChromaDB)
+            img_doc  = _search_trichef(query, ["image", "doc_page"], top_k)
+            video    = _search_legacy_video(query, top_k)
+            audio    = _search_legacy_audio(query, top_k)
+            combined = img_doc + video + audio
+            combined.sort(key=lambda r: r.get("confidence", 0), reverse=True)
             results = combined[:top_k]
 
     except Exception as e:
@@ -76,10 +63,12 @@ def search():
     return jsonify({"query": query, "results": results})
 
 
+# ── TRI-CHEF 이미지·문서 검색 ──────────────────────────────────────
+
 def _search_trichef(query: str, domains: list[str], top_k: int) -> list[dict]:
     """
-    TRI-CHEF 엔진으로 이미지/문서 검색 후 통합 검색 결과 스키마로 변환.
-    반환: [{file_path, file_name, file_type, similarity, snippet, preview_url}, ...]
+    TRI-CHEF 엔진으로 이미지/문서 검색.
+    반환: [{file_path, file_name, file_type, confidence, similarity, snippet, preview_url, segments=[]}, ...]
     """
     from config import PATHS
     from routes.trichef import _get_engine
@@ -89,7 +78,7 @@ def _search_trichef(query: str, domains: list[str], top_k: int) -> list[dict]:
     except Exception:
         return []
 
-    # TRI-CHEF 이미지 레지스트리 (staged → 원본 경로 매핑)
+    # TRI-CHEF 레지스트리 (staged → 원본 경로 매핑)
     img_reg: dict = {}
     doc_reg: dict = {}
     try:
@@ -114,47 +103,175 @@ def _search_trichef(query: str, domains: list[str], top_k: int) -> list[dict]:
         except Exception:
             continue
         for hit in hits:
-            rid = hit.id  # e.g. "staged/abc/foo.jpg" or "page_images/stem/p001.png"
+            rid = hit.id
             if domain == "image":
                 file_type = "image"
-                # 원본 경로 (registry 우선, 없으면 staged 경로)
                 reg_entry = img_reg.get(rid, {})
                 orig_path = reg_entry.get("abs") or str(
                     Path(PATHS["RAW_DB"]) / "Img" / rid
                 )
-                file_name = Path(orig_path).name
-                # 캡션 스니펫
-                snippet   = _read_img_caption(Path(PATHS["TRICHEF_IMG_EXTRACT"]) / "captions", rid)
-                # 미리보기 URL — raw_DB/Img/{rid} 경로로 서빙
+                file_name   = Path(orig_path).name
+                snippet     = _read_img_caption(Path(PATHS["TRICHEF_IMG_EXTRACT"]) / "captions", rid)
                 preview_url = f"/api/trichef/file?domain=image&path={rid}"
             else:
-                # doc_page: id = "page_images/stem_key/page_001.png"
                 file_type = "doc"
-                parts = Path(rid).parts
-                stem_key  = parts[1] if len(parts) >= 2 else rid
-                # 원본 문서 경로: doc_reg에서 stem_key 매칭
+                parts    = Path(rid).parts
+                stem_key = parts[1] if len(parts) >= 2 else rid
                 orig_path, file_name = _doc_page_to_source(stem_key, doc_reg)
                 if not orig_path:
                     orig_path = str(doc_extract / rid)
                     file_name = Path(rid).name
                 snippet     = ""
-                # 미리보기 URL — 렌더링된 페이지 이미지
                 preview_url = f"/api/trichef/file?domain=doc_page&path={rid}"
 
+            conf = round(hit.confidence, 4)
             results.append({
-                "file_path":   orig_path,
-                "file_name":   file_name,
-                "file_type":   file_type,
-                "similarity":  round(hit.confidence, 4),
-                "snippet":     snippet,
-                "preview_url": preview_url,
-                "trichef_id":  rid,
+                "file_path":      orig_path,
+                "file_name":      file_name,
+                "file_type":      file_type,
+                "confidence":     conf,
+                "similarity":     conf,       # 하위 호환
+                "snippet":        snippet,
+                "preview_url":    preview_url,
+                "segments":       [],
+                "trichef_id":     rid,
                 "trichef_domain": domain,
             })
 
-    results.sort(key=lambda r: r["similarity"], reverse=True)
+    results.sort(key=lambda r: r["confidence"], reverse=True)
+
+    # ── 같은 원본 파일의 여러 페이지 중 최고 점수 1개만 남김 ──────────
+    # doc_page 도메인은 페이지 단위로 임베딩되므로 동일 파일이 중복 반환됨.
+    seen_files: dict[str, dict] = {}
+    deduped: list[dict] = []
+    for r in results:
+        key = r["file_path"] or r["trichef_id"]
+        if key not in seen_files:
+            seen_files[key] = r
+            deduped.append(r)
+        # 이미 있으면 점수가 더 높은 것으로 교체 (정렬됐으므로 첫 등장이 최고점)
+
+    return deduped[:top_k]
+
+
+# ── TRI-CHEF AV (영상·음원) 검색 ────────────────────────────────────
+
+def _search_trichef_av(query: str, domains: list[str], top_k: int) -> list[dict]:
+    """
+    TRI-CHEF AV 엔진으로 movie/music 검색 — search_av() 호출.
+    반환: [{file_path, file_name, file_type, confidence, similarity, snippet, preview_url, segments}, ...]
+
+    segments 각 항목:
+      start   float   시작 초
+      end     float   종료 초
+      score   float   세그먼트 점수
+      text    str     STT 텍스트
+      caption str     캡션 (영상)
+      type    str     "stt" | "caption"
+      preview str     snippet 미리보기
+    """
+    from routes.trichef import _get_engine
+
+    try:
+        engine = _get_engine()
+    except Exception:
+        return []
+
+    results: list[dict] = []
+
+    for domain in domains:
+        file_type = "video" if domain == "movie" else "audio"
+        try:
+            av_res = engine.search_av(query, domain=domain, topk=top_k, top_segments=5)
+        except Exception:
+            continue
+
+        for r in av_res:
+            # 대표 스니펫: 최고 점수 세그먼트 텍스트
+            top_seg = r.segments[0] if r.segments else {}
+            snippet = (
+                top_seg.get("preview", "")
+                or top_seg.get("text", "")
+                or top_seg.get("caption", "")
+            )[:300]
+
+            # AV 파일 서빙: /api/admin/file?domain=movie|music&id={file_path}
+            # file_path 가 절대경로이므로 관리자 스트림 엔드포인트 재사용
+            av_domain = domain  # "movie" | "music"
+            preview_url = None
+
+            conf = round(r.confidence, 4)
+            results.append({
+                "file_path":      r.file_path,
+                "file_name":      r.file_name,
+                "file_type":      file_type,
+                "confidence":     conf,
+                "similarity":     conf,    # 하위 호환
+                "snippet":        snippet,
+                "preview_url":    preview_url,
+                "segments":       r.segments,
+                "trichef_domain": av_domain,
+            })
+
+    results.sort(key=lambda x: -x["confidence"])
     return results[:top_k]
 
+
+# ── 구형 ChromaDB 비디오/오디오 검색 ────────────────────────────────────
+
+def _search_legacy_video(query: str, top_k: int) -> list[dict]:
+    """구형 파이프라인(e5-large + BLIP/STT) 기반 영상 검색."""
+    from embedders.base import encode_query_e5
+    from db.vector_store import search_video_m11
+
+    try:
+        q_vec = encode_query_e5(query)
+        hits  = search_video_m11(q_vec, top_k=top_k)
+    except Exception:
+        return []
+
+    return [
+        {
+            "file_path":   h["file_path"],
+            "file_name":   h["file_name"],
+            "file_type":   "video",
+            "confidence":  round(h["similarity"], 4),
+            "similarity":  round(h["similarity"], 4),
+            "snippet":     h.get("snippet", ""),
+            "preview_url": None,
+            "segments":    [],
+        }
+        for h in hits
+    ]
+
+
+def _search_legacy_audio(query: str, top_k: int) -> list[dict]:
+    """구형 파이프라인(ko-sroberta + 태그 텍스트) 기반 음성 검색."""
+    from embedders.base import encode_query_ko
+    from db.vector_store import search
+
+    try:
+        q_vec = encode_query_ko(query)
+        hits  = search(q_vec, file_type="audio", top_k=top_k)
+    except Exception:
+        return []
+
+    return [
+        {
+            "file_path":   h["file_path"],
+            "file_name":   h["file_name"],
+            "file_type":   "audio",
+            "confidence":  round(h["similarity"], 4),
+            "similarity":  round(h["similarity"], 4),
+            "snippet":     h.get("snippet", ""),
+            "preview_url": None,
+            "segments":    [],
+        }
+        for h in hits
+    ]
+
+
+# ── 헬퍼 ──────────────────────────────────────────────────────────
 
 def _read_img_caption(cap_root: Path, key: str) -> str:
     """캡션 파일(json 또는 txt)에서 캡션 텍스트 읽기."""
@@ -177,10 +294,7 @@ def _read_img_caption(cap_root: Path, key: str) -> str:
 
 
 def _doc_page_to_source(stem_key: str, doc_reg: dict) -> tuple[str, str]:
-    """
-    stem_key → (원본 파일 경로, 파일명).
-    doc_reg: {rel_key: {sha, abs, staged, pages}}
-    """
+    """stem_key → (원본 파일 경로, 파일명)."""
     try:
         from embedders.trichef.doc_page_render import stem_key_for
         for rel_key, info in doc_reg.items():
@@ -190,44 +304,6 @@ def _doc_page_to_source(stem_key: str, doc_reg: dict) -> tuple[str, str]:
     except Exception:
         pass
     return "", ""
-
-
-def _encode_for_type(query: str, file_type: str) -> list[float]:
-    """파일 타입에 맞는 모델로 쿼리 인코딩."""
-    if file_type == "audio":
-        from embedders.base import encode_query_ko
-        return encode_query_ko(query)
-    elif file_type == "video":
-        from embedders.base import encode_query_e5
-        return encode_query_e5(query)
-    else:
-        from embedders.base import encode_query
-        return encode_query(query)
-
-
-def _encode_all(query: str) -> dict[str, list[float]]:
-    """
-    레거시 컬렉션(video/audio) 전용 타입별 쿼리 인코딩.
-    image/doc 은 TRI-CHEF 엔진으로 별도 처리하므로 여기서 제외.
-      audio → 768d (ko-sroberta)
-      video → 1024d (e5-large, M11)
-    각 컬렉션에 청크가 없으면 포함하지 않음.
-    """
-    from db.vector_store import count as col_count
-
-    result: dict[str, list[float] | None] = {}
-
-    # 768d 모델 (audio)
-    if col_count("audio") > 0:
-        from embedders.base import encode_query_ko
-        result["audio"] = encode_query_ko(query)
-
-    # 1024d 모델 (video, M11 e5-large)
-    if col_count("video") > 0:
-        from embedders.base import encode_query_e5
-        result["video"] = encode_query_e5(query)
-
-    return result
 
 
 # ── 인덱싱된 파일 목록 ────────────────────────────────────────────

@@ -1,0 +1,29 @@
+{
+  "name": "db-insight-setup",
+  "version": "0.1.0",
+  "description": "DB_insight 설치 프로그램",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist":  "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^31.7.7",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId":       "com.dbinsight.setup",
+    "productName": "DB_insight Setup",
+    "npmRebuild":  false,
+    "win": {
+      "target": "portable"
+    },
+    "portable": {
+      "artifactName": "DB_insight_Setup.exe"
+    },
+    "directories": {
+      "output": "out"
+    },
+    "files": ["main.js", "preload.js", "index.html"]
+  }
+}

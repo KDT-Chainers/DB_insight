@@ -93,9 +93,9 @@ TRICHEF_CFG = {
     # True 로 설정 시 bitsandbytes INT8 적용. 임베딩 품질 변화 < 0.5%.
     "INT8_Z_DINOV2": True,    # 활성화 — RTX 4070 8GB VRAM 절감 -0.65GB
 
-    # [양자화] SigLIP2 Re축 INT8 (FP16 1.0GB → INT8 0.50GB)
-    # ViT 계열 임베딩 품질 변화 < 0.5%. DINOv2와 동일 BitsAndBytes 패턴.
-    "INT8_RE_SIGLIP2": True,  # 활성화 — RTX 4070 8GB VRAM 절감 -0.50GB
+    # [양자화] SigLIP2 Re축 INT8 — bitsandbytes INT8이 SigLIP2 pooler head의
+    # multi_head_attention 과 dtype 충돌(Half vs Char) → 비활성화
+    "INT8_RE_SIGLIP2": False,  # 비활성화 (SigLIP2 INT8 호환 불가)
 
     # [Doc Im_body fusion] PDF 본문 텍스트 Im 가중치
     # Im_fused = DOC_IM_ALPHA * Im_caption + (1-DOC_IM_ALPHA) * Im_body

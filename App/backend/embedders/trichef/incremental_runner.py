@@ -471,11 +471,16 @@ def embed_image_file(file_path: str, progress_cb=None) -> dict:
     """
     단일 이미지 파일 TRI-CHEF 3축 임베딩.
     파일을 raw_DB/Img/staged/ 에 하드링크(실패 시 복사)로 스테이징 후
-    기존 TRI-CHEF 파이프라인(캡션→임베딩→GS직교화→ChromaDB)을 수행한다.
+    기존 TRI-CHEF 파이프라인을 수행한다.
+
+    파이프라인:
+      1) Qwen2-VL 한국어 캡션 생성 → Im 축 원천 텍스트
+      2) 3축 임베딩 — Re(SigLIP2-SO400M) + Im(BGE-M3 캡션) + Z(DINOv2-L)
+      3) GS 직교화 + ChromaDB upsert + lexical rebuild
 
     progress_cb(step, total, detail) → bool(True=중단)
-      step 1/3: BLIP 캡션
-      step 2/3: 3축 임베딩
+      step 1/3: Qwen2-VL 캡션 생성
+      step 2/3: 3축 임베딩 (Re·Im·Z)
       step 3/3: 벡터DB 저장
     """
     import os, shutil
@@ -510,9 +515,9 @@ def embed_image_file(file_path: str, progress_cb=None) -> dict:
         except (OSError, NotImplementedError):
             shutil.copy2(str(p), str(staged))
 
-    # ── Step 1/3: BLIP 캡션 ─────────────────────────────
+    # ── Step 1/3: Qwen2-VL 캡션 생성 ───────────────────────
     if progress_cb:
-        if progress_cb(1, 3, "BLIP 캡션 생성 중"):
+        if progress_cb(1, 3, "Qwen2-VL 캡션 생성 중"):
             return {"status": "skipped", "reason": "사용자 중단"}
 
     cap_dir = Path(PATHS["TRICHEF_IMG_EXTRACT"]) / "captions"
@@ -521,7 +526,7 @@ def embed_image_file(file_path: str, progress_cb=None) -> dict:
 
     # ── Step 2/3: 3축 임베딩 ─────────────────────────────
     if progress_cb:
-        if progress_cb(2, 3, "3축 임베딩 생성 중 (Re·Im·Z)"):
+        if progress_cb(2, 3, "3축 임베딩 생성 중 (SigLIP2·BGE-M3·DINOv2)"):
             return {"status": "skipped", "reason": "사용자 중단"}
 
     new_Re = siglip2_re.embed_images([staged])
@@ -570,10 +575,17 @@ def embed_doc_file(file_path: str, progress_cb=None) -> dict:
     단일 문서 파일 TRI-CHEF 3축 임베딩 (페이지 렌더링 포함).
     파일을 raw_DB/Doc/staged/ 에 스테이징 후 기존 파이프라인 실행.
 
+    파이프라인:
+      1) LibreOffice/fitz 로 페이지 이미지 렌더링
+      2) Qwen2-VL 한국어 캡션 생성 (페이지별)
+      3) 3축 임베딩 — Re(SigLIP2-SO400M) + Im(BGE-M3 캡션) + Z(DINOv2-L)
+      4) GS 직교화 + ChromaDB upsert + lexical rebuild
+
     progress_cb(step, total, detail) → bool(True=중단)
-      step 1/3: 문서 페이지 렌더링 + BLIP 캡션
-      step 2/3: 3축 임베딩
-      step 3/3: 벡터DB 저장
+      step 1/4: 페이지 렌더링
+      step 2/4: Qwen2-VL 캡션 생성
+      step 3/4: 3축 임베딩 (Re·Im·Z)
+      step 4/4: 벡터DB 저장
     """
     import os, shutil
 
@@ -605,9 +617,9 @@ def embed_doc_file(file_path: str, progress_cb=None) -> dict:
         except (OSError, NotImplementedError):
             shutil.copy2(str(p), str(staged))
 
-    # ── Step 1/3: 페이지 렌더링 + 캡션 ──────────────────
+    # ── Step 1/4: 페이지 렌더링 ──────────────────────────
     if progress_cb:
-        if progress_cb(1, 3, "문서 페이지 렌더링 + 캡션 생성 중"):
+        if progress_cb(1, 4, "문서 페이지 렌더링 중"):
             return {"status": "skipped", "reason": "사용자 중단"}
 
     stem_key = doc_page_render.stem_key_for(key)
@@ -617,13 +629,18 @@ def embed_doc_file(file_path: str, progress_cb=None) -> dict:
     if not img_pages:
         return {"status": "skipped", "reason": "페이지 이미지 생성 실패 (LibreOffice 필요 또는 빈 파일)"}
 
+    # ── Step 2/4: Qwen2-VL 캡션 생성 ────────────────────
+    if progress_cb:
+        if progress_cb(2, 4, f"Qwen2-VL 캡션 생성 중 ({len(img_pages)}페이지)"):
+            return {"status": "skipped", "reason": "사용자 중단"}
+
     cap_dir = Path(PATHS["TRICHEF_DOC_EXTRACT"]) / "captions" / stem_key
     cap_dir.mkdir(parents=True, exist_ok=True)
     captions = [_caption_for_im(cap_dir, pg) for pg in img_pages]
 
-    # ── Step 2/3: 3축 임베딩 ─────────────────────────────
+    # ── Step 3/4: 3축 임베딩 ─────────────────────────────
     if progress_cb:
-        if progress_cb(2, 3, f"3축 임베딩 ({len(img_pages)}페이지)"):
+        if progress_cb(3, 4, f"3축 임베딩 ({len(img_pages)}페이지)"):
             return {"status": "skipped", "reason": "사용자 중단"}
 
     new_Re = siglip2_re.embed_images(img_pages)
@@ -653,9 +670,9 @@ def embed_doc_file(file_path: str, progress_cb=None) -> dict:
     Z_all  = _res["merged"]["cache_doc_page_Z.npy"]
     all_ids = _res["ids"]
 
-    # ── Step 3/3: GS 직교화 + ChromaDB 저장 ─────────────
+    # ── Step 4/4: GS 직교화 + ChromaDB 저장 ─────────────
     if progress_cb:
-        if progress_cb(3, 3, "벡터DB 저장 중"):
+        if progress_cb(4, 4, "벡터DB 저장 중"):
             return {"status": "skipped", "reason": "사용자 중단"}
 
     Im_perp, Z_perp = tri_gs.orthogonalize(Re_all, Im_all, Z_all)

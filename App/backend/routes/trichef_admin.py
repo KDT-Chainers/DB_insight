@@ -39,12 +39,14 @@ def _resolve_file_path(domain: str, doc_id: str) -> Path | None:
     if domain == "doc_page":
         p = Path(PATHS["TRICHEF_DOC_EXTRACT"]) / doc_id
         return p if p.exists() else None
-    # [W6-AV] Movie/Music — raw_DB/{Movie,Rec} 직접 서빙
-    if domain == "music":
-        p = Path(PATHS["RAW_DB"]) / "Rec" / doc_id
-        return p if p.exists() else None
-    if domain == "movie":
-        p = Path(PATHS["RAW_DB"]) / "Movie" / doc_id
+    # [W6-AV] Movie/Music — TRI-CHEF 캐시 상대경로 또는 레거시 절대경로 모두 지원
+    if domain in ("music", "movie"):
+        abs_p = Path(doc_id)
+        # 절대경로 — 레거시 embedded_DB 파일 (local app이므로 허용)
+        if abs_p.is_absolute():
+            return abs_p if abs_p.exists() else None
+        sub = "Rec" if domain == "music" else "Movie"
+        p = Path(PATHS["RAW_DB"]) / sub / doc_id
         return p if p.exists() else None
     return None
 

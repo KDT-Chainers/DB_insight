@@ -9,6 +9,7 @@ from routes.index import index_bp
 from routes.files import files_bp
 from routes.trichef import bp as trichef_bp
 from routes.trichef_admin import bp_admin as trichef_admin_bp
+from routes.setup_deps import setup_deps_bp
 
 
 def create_app() -> Flask:
@@ -26,6 +27,7 @@ def create_app() -> Flask:
     app.register_blueprint(files_bp)
     app.register_blueprint(trichef_bp)
     app.register_blueprint(trichef_admin_bp)
+    app.register_blueprint(setup_deps_bp)
 
     # [W5-4] Warmup — 기동 시 TriChefEngine 싱글턴 로드 + dummy 쿼리 1회 실행하여
     # SigLIP2 / BGE-M3 / DINOv2 / Qwen 을 선로딩. 첫 사용자 쿼리 430ms 지연 제거.
