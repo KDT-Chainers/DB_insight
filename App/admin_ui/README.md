@@ -27,7 +27,13 @@
 메인 Flask 백엔드(`App/backend/app.py`)가 `127.0.0.1:5001` 에서 구동 중이어야
 한다. 없으면 Gradio 시작 직후 "백엔드 연결 실패" 배너가 표시된다.
 
-### Windows
+> **admin.html 만 쓸 때(권장)**: `start_admin_html.bat` (Windows) /
+> `start_admin_html.sh` (Unix) 를 더블클릭/실행하면 백엔드 health-check →
+> 미구동 시 자동 기동(최대 90초 대기) → 브라우저 오픈까지 한 번에 처리된다.
+> `admin.html` 을 직접 더블클릭하면 백엔드가 안 떠있을 때 "Failed to fetch"
+> 에러만 표시되므로 `start_admin_html.*` 사용을 권장.
+
+### Windows (Gradio UI)
 
 ```cmd
 cd App\admin_ui
@@ -36,7 +42,7 @@ run_admin.bat
 
 첫 실행 시 `.venv-admin/` 생성 + 의존성 설치 (~1분). 이후 실행은 바로 뜬다.
 
-### Linux / macOS
+### Linux / macOS (Gradio UI)
 
 ```bash
 cd App/admin_ui
