@@ -85,7 +85,10 @@
 
   /* 파이프라인 다이어그램 */
   .pipelines{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:14px 16px;margin-bottom:16px}
-  .pipelines h3{font-size:13px;font-weight:600;margin-bottom:10px;color:#cbd5e1}
+  .pipelines h3{font-size:13px;font-weight:600;margin-bottom:10px;color:#cbd5e1;cursor:pointer;user-select:none;display:flex;align-items:center;gap:8px}
+  .pipelines h3:hover{color:#f1f5f9}
+  .pipe-toggle{font-size:11px;color:var(--muted);transition:transform 0.2s}
+  .pipe-toggle.open{transform:rotate(90deg)}
   .pipe-row{display:flex;align-items:center;gap:6px;margin-bottom:8px;font-size:11px;flex-wrap:wrap}
   .pipe-row:last-child{margin-bottom:0}
   .pipe-label{min-width:90px;font-weight:700;font-size:12px;padding:3px 10px;border-radius:12px}
@@ -111,18 +114,18 @@
 </head>
 <body>
 <header>
-  <h1>🔍 TRI-CHEF 관리자 전수 검사</h1>
+  <h1>TRI-CHEF 관리자 전수 검사</h1>
   <p id="dom-info">도메인 현황 로딩…</p>
 </header>
 <main>
   <div class="conn-bar">
-    <span>🔌 백엔드</span>
+    <span>백엔드</span>
     <input id="backend-url" type="text" placeholder="http://127.0.0.1:5001" />
     <button id="conn-retry">연결 확인</button>
     <span id="conn-status" class="status fail">미확인</span>
   </div>
   <div id="conn-help" class="conn-help" style="display:none">
-    <h3>⚠️ 백엔드 연결 실패</h3>
+    <h3>백엔드 연결 실패</h3>
     <ol style="padding-left:20px;line-height:1.8">
       <li>백엔드 구동: <code>cd App\backend</code> 후 <code>python app.py</code></li>
       <li>구동 확인: <code>http://127.0.0.1:5001/api/admin/domains</code> 가 JSON 반환해야 함</li>
@@ -131,8 +134,11 @@
     </ol>
   </div>
   <div id="pipelines" class="pipelines" style="display:none">
-    <h3>📊 도메인별 파이프라인 (DI-TriCHEF / MR-TriCHEF)</h3>
-    <div id="pipe-rows"></div>
+    <h3 id="pipe-toggle-btn">
+      <span class="pipe-toggle" id="pipe-toggle-icon">&#9654;</span>
+      도메인별 파이프라인 (DI-TriCHEF / MR-TriCHEF)
+    </h3>
+    <div id="pipe-rows" style="display:none"></div>
   </div>
   <div class="search-box">
     <input id="q" type="text" placeholder="검색어를 입력하세요 (예: 고양이, 복지정책, 반도체)" autofocus />
@@ -145,9 +151,9 @@
     <label><input type="checkbox" id="d-music"> music (음원)</label>
     <label>상위 N <input type="number" id="topn" value="30" min="5" max="2000" step="5"></label>
     <label>세그먼트 <input type="number" id="topseg" value="5" min="1" max="20" step="1"></label>
-    <label><input type="checkbox" id="use-lex" checked> Lexical 채널</label>
-    <label><input type="checkbox" id="use-asf" checked> ASF 채널</label>
-    <label title="BGE-reranker-v2-m3 cross-encoder 로 상위 K 재순위. doc_page 에서 신뢰도-관련성 정합 개선."><input type="checkbox" id="use-rerank" checked> Reranker</label>
+    <label title="권장: doc_page / movie / music. image 는 짧은 캡션으로 -14pp 손해 (config.LEXICAL_DOMAINS)"><input type="checkbox" id="use-lex" checked> Lexical 채널</label>
+    <label title="USE_ASF_DEFAULT=False — LOO R@1 -20pp, E2E hit_rate -10pp. 키워드 매칭 강한 쿼리에만 ON 권장"><input type="checkbox" id="use-asf"> ASF 채널</label>
+    <label title="BGE-reranker-v2-m3 cross-encoder. doc_page 에서만 신뢰도-적합성 정합 개선. image/movie/music 효과 낮음"><input type="checkbox" id="use-rerank" checked> Reranker</label>
     <label>rerank K <input type="number" id="rerank-k" value="50" min="5" max="200" step="5"></label>
   </div>
   <div id="stats"></div>
@@ -197,35 +203,56 @@ connRetry.addEventListener('click', () => {
 
 loadDomains();
 
+// 파이프라인 섹션 접기/펼치기
+document.getElementById('pipe-toggle-btn').addEventListener('click', () => {
+  const rows = document.getElementById('pipe-rows');
+  const icon = document.getElementById('pipe-toggle-icon');
+  const isOpen = rows.style.display !== 'none';
+  rows.style.display = isOpen ? 'none' : '';
+  icon.classList.toggle('open', !isOpen);
+});
+
 let AVAILABLE_DOMAINS = new Set();
 
 // ── 도메인별 파이프라인 단계 정의 (실제 구현 기반) ──
+//   교차검증 근거: config.py LEXICAL_DOMAINS/ASF_DOMAINS (image 제외),
+//   unified_engine L1/L2/L3 fusion (image-only), trichef_admin default_rerank
+//   (doc_page=ON, image=OFF), MR_TriCHEF Z=DINOv2 keyframe / zeros if STT-only.
 const PIPELINES = {
   doc_page: {
     label: 'doc_page',
     name: 'DI-TriCHEF · Document',
-    steps: ['PDF/HWP/Office', 'Page Render (dpi=110)', 'Qwen2-VL Caption (L1/L2/L3)',
-            '3-axis Embed (Re=SigLIP2 / Im=BGE-M3 / Z=DINOv2)', 'Hermitian Score',
-            'RRF (Dense+Lex+ASF)', 'Calibration τ', 'BGE Reranker'],
+    steps: ['PDF/HWP/Office', 'Page Render (dpi=110)',
+            'Caption: Qwen2-VL (KO) | Legacy BLIP L1+L2+L3',
+            '3-axis Embed (Re=SigLIP2 / Im=BGE-M3 / Z=DINOv2)',
+            'Hermitian Score', 'RRF (Dense+Lex+ASF)',
+            'Calibration τ', 'BGE Reranker (default ON)'],
   },
   image: {
     label: 'image',
     name: 'DI-TriCHEF · Image',
-    steps: ['Raw Image', 'Qwen2-VL Caption', '3-axis Embed (Re/Im/Z)',
-            'Hermitian Score', 'RRF (Dense+Lex+ASF)', 'Calibration τ (μ+3σ)'],
+    steps: ['Raw Image',
+            'Caption: Qwen2-VL (KO) | Legacy BLIP L1/L2/L3 fusion (0.15/0.25/0.60)',
+            '3-axis Embed (Re=SigLIP2 / Im=BGE-M3 / Z=DINOv2)',
+            'Hermitian Score',
+            'Dense-only (Lex/ASF excluded for image)',
+            'Calibration τ (μ+3σ)',
+            'BGE Reranker (optional, default OFF)'],
   },
   movie: {
     label: 'movie',
     name: 'MR-TriCHEF · Movie',
-    steps: ['Video', 'Frame Sampling (fps=0.5 + scene>0.2)',
-            'Whisper-large-v3 STT', 'Segment Align (temporal overlap)',
-            '2-axis Embed (Re/Im, Z=0)', 'File-level Aggregation',
-            'Calibration τ'],
+    steps: ['Video',
+            'Adaptive Frame Sampling (baseline 2s, scene>0.2 → 0.5–5s)',
+            'Whisper-large-v3 STT', 'Segment Align (keyframe ∪ STT)',
+            '3-axis Embed (Re=SigLIP2 / Im=BGE-M3 / Z=DINOv2 keyframe, zeros if STT-only)',
+            'File-level Aggregation', 'Calibration τ'],
   },
   music: {
     label: 'music',
     name: 'MR-TriCHEF · Music',
-    steps: ['Audio', '30s Sliding Window (15s hop)', 'Whisper STT',
+    steps: ['Audio', '30s Sliding Window (15s hop, 50% overlap)',
+            'Whisper-large-v3 STT',
             '2-axis Embed (Re=SigLIP2-text / Im=BGE-M3, Z=0)',
             'File-level Aggregation', 'Calibration τ'],
   },
@@ -302,7 +329,7 @@ async function loadDomains(){
     connHelp.style.display = '';
     pipelinesEl.style.display = 'none';
     document.getElementById('dom-info').textContent =
-      `⚠️ ${API_BASE} 연결 실패 — 아래 안내를 확인하고 [연결 확인] 클릭`;
+      `${API_BASE} 연결 실패 — 아래 안내를 확인하고 [연결 확인] 클릭`;
   }
 }
 
@@ -406,7 +433,7 @@ function renderStats(query, perDom, totalShown, elapsed, warnings){
   ).join('');
   const warnBlock = (warnings && warnings.length)
     ? `<div style="margin-top:10px;padding:8px 12px;background:#7f1d1d;border:1px solid var(--warn);border-radius:4px;font-size:12px;color:#fecaca">
-         ⚠️ 일부 도메인 스킵됨: ${warnings.map(escapeHtml).join(' · ')}
+         일부 도메인 스킵됨: ${warnings.map(escapeHtml).join(' · ')}
        </div>`
     : '';
   statsDiv.innerHTML = `
@@ -439,6 +466,29 @@ async function renderResults(query, items){
       const matches = d.matches || [];
       el.innerHTML = highlight(text.slice(0, 600), matches);
       el.removeAttribute('data-load-text');
+      // doc_page: 첫 매칭이 발견된 줄 번호 계산 → page 뱃지에 "· L<n>" 부착
+      if (dom === 'doc_page' && matches.length){
+        const sorted = [...matches].filter(Boolean).sort((a,b) => b.length - a.length);
+        const lines = text.split(/\r?\n/);
+        let lineNo = -1;
+        outer: for (const m of sorted){
+          for (let i = 0; i < lines.length; i++){
+            if (lines[i].includes(m)){ lineNo = i + 1; break outer; }
+          }
+        }
+        if (lineNo > 0){
+          const card = el.closest('.card');
+          if (card){
+            for (const b of card.querySelectorAll('.badge')){
+              const t = b.textContent.trim();
+              if (t.startsWith('page ')){
+                b.textContent = `${t} · L${lineNo}`;
+                break;
+              }
+            }
+          }
+        }
+      }
     }catch(_){ el.remove(); }
   }
 
@@ -544,10 +594,13 @@ function avCard(it){
       <div class="path">${escapeHtml(it.source_path || it.id)}</div>
       <div class="metrics">
         <div class="metric"><span class="k">신뢰도</span> <span class="v ${confCls}">${(conf*100).toFixed(1)}%</span></div>
-        <div class="metric"><span class="k">score</span> <span class="v">${(it.dense??0).toFixed(3)}</span></div>
+        <div class="metric"><span class="k">dense</span> <span class="v">${(it.dense??0).toFixed(3)}</span></div>
+        <div class="metric"><span class="k">lexical</span> <span class="v">${it.lexical!=null ? it.lexical.toFixed(3) : '—'}</span></div>
+        <div class="metric"><span class="k">ASF</span> <span class="v">${it.asf!=null ? it.asf.toFixed(3) : '—'}</span></div>
+        <div class="metric"><span class="k">rerank</span> <span class="v">${it.rerank!=null ? it.rerank.toFixed(2) : '—'}</span></div>
         <div class="metric"><span class="k">z</span> <span class="v">${(it.z_score??0).toFixed(2)}</span></div>
-        <div class="metric"><span class="k">rank</span> <span class="v">#${it.global_rank}</span></div>
       </div>
+      ${scoreBarsHtml(it)}
       <div class="segments">${segs}</div>
       ${topExcerpt}
     </div>
