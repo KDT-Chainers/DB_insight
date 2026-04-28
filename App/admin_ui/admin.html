@@ -151,9 +151,9 @@
     <label><input type="checkbox" id="d-music"> music (음원)</label>
     <label>상위 N <input type="number" id="topn" value="30" min="5" max="2000" step="5"></label>
     <label>세그먼트 <input type="number" id="topseg" value="5" min="1" max="20" step="1"></label>
-    <label><input type="checkbox" id="use-lex" checked> Lexical 채널</label>
-    <label><input type="checkbox" id="use-asf" checked> ASF 채널</label>
-    <label title="BGE-reranker-v2-m3 cross-encoder 로 상위 K 재순위. doc_page 에서 신뢰도-관련성 정합 개선."><input type="checkbox" id="use-rerank" checked> Reranker</label>
+    <label title="권장: doc_page / movie / music. image 는 짧은 캡션으로 -14pp 손해 (config.LEXICAL_DOMAINS)"><input type="checkbox" id="use-lex" checked> Lexical 채널</label>
+    <label title="USE_ASF_DEFAULT=False — LOO R@1 -20pp, E2E hit_rate -10pp. 키워드 매칭 강한 쿼리에만 ON 권장"><input type="checkbox" id="use-asf"> ASF 채널</label>
+    <label title="BGE-reranker-v2-m3 cross-encoder. doc_page 에서만 신뢰도-적합성 정합 개선. image/movie/music 효과 낮음"><input type="checkbox" id="use-rerank" checked> Reranker</label>
     <label>rerank K <input type="number" id="rerank-k" value="50" min="5" max="200" step="5"></label>
   </div>
   <div id="stats"></div>
@@ -466,6 +466,29 @@ async function renderResults(query, items){
       const matches = d.matches || [];
       el.innerHTML = highlight(text.slice(0, 600), matches);
       el.removeAttribute('data-load-text');
+      // doc_page: 첫 매칭이 발견된 줄 번호 계산 → page 뱃지에 "· L<n>" 부착
+      if (dom === 'doc_page' && matches.length){
+        const sorted = [...matches].filter(Boolean).sort((a,b) => b.length - a.length);
+        const lines = text.split(/\r?\n/);
+        let lineNo = -1;
+        outer: for (const m of sorted){
+          for (let i = 0; i < lines.length; i++){
+            if (lines[i].includes(m)){ lineNo = i + 1; break outer; }
+          }
+        }
+        if (lineNo > 0){
+          const card = el.closest('.card');
+          if (card){
+            for (const b of card.querySelectorAll('.badge')){
+              const t = b.textContent.trim();
+              if (t.startsWith('page ')){
+                b.textContent = `${t} · L${lineNo}`;
+                break;
+              }
+            }
+          }
+        }
+      }
     }catch(_){ el.remove(); }
   }
 
@@ -571,10 +594,13 @@ function avCard(it){
       <div class="path">${escapeHtml(it.source_path || it.id)}</div>
       <div class="metrics">
         <div class="metric"><span class="k">신뢰도</span> <span class="v ${confCls}">${(conf*100).toFixed(1)}%</span></div>
-        <div class="metric"><span class="k">score</span> <span class="v">${(it.dense??0).toFixed(3)}</span></div>
+        <div class="metric"><span class="k">dense</span> <span class="v">${(it.dense??0).toFixed(3)}</span></div>
+        <div class="metric"><span class="k">lexical</span> <span class="v">${it.lexical!=null ? it.lexical.toFixed(3) : '—'}</span></div>
+        <div class="metric"><span class="k">ASF</span> <span class="v">${it.asf!=null ? it.asf.toFixed(3) : '—'}</span></div>
+        <div class="metric"><span class="k">rerank</span> <span class="v">${it.rerank!=null ? it.rerank.toFixed(2) : '—'}</span></div>
         <div class="metric"><span class="k">z</span> <span class="v">${(it.z_score??0).toFixed(2)}</span></div>
-        <div class="metric"><span class="k">rank</span> <span class="v">#${it.global_rank}</span></div>
       </div>
+      ${scoreBarsHtml(it)}
       <div class="segments">${segs}</div>
       ${topExcerpt}
     </div>
