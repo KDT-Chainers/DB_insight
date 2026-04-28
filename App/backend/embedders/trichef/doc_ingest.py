@@ -38,7 +38,7 @@ STRUCT_EXT = {".csv", ".tsv", ".json", ".html", ".htm", ".xml"}
 # 우선순위: env SOFFICE_PATH → PATH (shutil.which) → 플랫폼별 기본 경로
 SOFFICE_CANDIDATES = [
     # 앱 번들 커스텀 설치 경로 (최우선 — 앱 폴더에 설치되어 앱과 함께 삭제됨)
-    r"C:\Honey\DB_insight\Data\LibreOffice\program\soffice.exe",
+    r"C:\Program Files\DB_insight\Data\LibreOffice\program\soffice.exe",
     # Windows 기본 설치 경로
     r"C:\Program Files\LibreOffice\program\soffice.exe",
     r"C:\Program Files (x86)\LibreOffice\program\soffice.exe",

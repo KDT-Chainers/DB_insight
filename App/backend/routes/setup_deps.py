@@ -18,11 +18,12 @@ from flask import Blueprint, jsonify
 setup_deps_bp = Blueprint("setup_deps", __name__, url_prefix="/api/setup")
 
 # ── 커스텀 설치 경로 (앱 폴더 안 → 앱 삭제 시 함께 제거) ──────────────
-_LO_INSTALL_DIR  = r"C:\Honey\DB_insight\Data\LibreOffice"
-_LO_CUSTOM_EXE   = r"C:\Honey\DB_insight\Data\LibreOffice\program\soffice.exe"
+_APP_ROOT        = r"C:\Program Files\DB_insight"
+_LO_INSTALL_DIR  = _APP_ROOT + r"\Data\LibreOffice"
+_LO_CUSTOM_EXE   = _APP_ROOT + r"\Data\LibreOffice\program\soffice.exe"
 
-# 로컬에 번들된 MSI (최우선 사용)
-_LO_MSI_LOCAL = r"C:\Honey\DB_insight\LibreOffice_26.2.2_Win_x86-64.msi"
+# 로컬에 번들된 MSI (최우선 사용) — 앱 루트에 위치
+_LO_MSI_LOCAL = _APP_ROOT + r"\LibreOffice_26.2.2_Win_x86-64.msi"
 
 # LibreOffice 경로 후보 — 커스텀 경로를 맨 앞에
 _LO_PATHS = [

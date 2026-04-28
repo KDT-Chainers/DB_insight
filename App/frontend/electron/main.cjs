@@ -61,8 +61,8 @@ async function startBackend() {
 }
 
 function _startPythonBackend() {
-  // 로그 파일 경로 (C:\Honey\DB_insight\backend.log)
-  const logDir  = 'C:\\Honey\\DB_insight'
+  // 로그 파일 경로 (C:\Program Files\DB_insight\backend.log)
+  const logDir  = 'C:\\Program Files\\DB_insight'
   const logPath = path.join(logDir, 'backend.log')
   let logStream
   try {
@@ -72,9 +72,9 @@ function _startPythonBackend() {
 
   // 백엔드 소스 경로 후보
   const candidates = [
-    path.resolve(__dirname, '..', '..', 'backend'),          // 개발 모드
-    'C:\\Honey\\DB_insight\\App\\backend',                   // 배포 고정 경로
-    path.join(process.resourcesPath, '..', '..', 'backend'), // 리소스 상대
+    path.resolve(__dirname, '..', '..', 'backend'),                // 개발 모드
+    'C:\\Program Files\\DB_insight\\App\\backend',               // 배포 고정 경로
+    path.join(process.resourcesPath, '..', '..', 'backend'),     // 리소스 상대
   ]
   const cwd = candidates.find(d => {
     try { return fs.existsSync(path.join(d, 'app.py')) } catch { return false }
@@ -280,8 +280,8 @@ ipcMain.handle('select-folder', async () => {
 
 // LibreOffice MSI 설치 — Electron(GUI 프로세스)에서 직접 실행해야 UAC 팝업이 정상 작동
 ipcMain.handle('install-libreoffice', async () => {
-  const msiPath    = 'C:\\Honey\\DB_insight\\LibreOffice_26.2.2_Win_x86-64.msi'
-  const installDir = 'C:\\Honey\\DB_insight\\Data\\LibreOffice\\'
+  const msiPath    = 'C:\\Program Files\\DB_insight\\LibreOffice_26.2.2_Win_x86-64.msi'
+  const installDir = 'C:\\Program Files\\DB_insight\\Data\\LibreOffice\\'
 
   // MSI 파일 존재 확인
   if (!fs.existsSync(msiPath)) {
@@ -317,9 +317,9 @@ ipcMain.on('window-close', () => BrowserWindow.getFocusedWindow()?.close())
 // ---------------------------------------------------------------------------
 
 app.whenReady().then(async () => {
-  // ── 진단 로그 (항상 기록, C:\Honey\DB_insight\startup.log) ──
+  // ── 진단 로그 (항상 기록, C:\Program Files\DB_insight\startup.log) ──
   try {
-    const diagDir  = 'C:\\Honey\\DB_insight'
+    const diagDir  = 'C:\\Program Files\\DB_insight'
     const diagPath = require('path').join(diagDir, 'startup.log')
     require('fs').mkdirSync(diagDir, { recursive: true })
     require('fs').writeFileSync(diagPath,

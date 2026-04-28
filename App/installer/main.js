@@ -4,14 +4,22 @@ const path = require('path')
 const fs   = require('fs')
 
 // ── 경로 상수 ─────────────────────────────────────────────────────────
+// 앱 설치 기준 폴더: C:\Program Files\DB_insight
+const APP_ROOT = 'C:\\Program Files\\DB_insight'
+
 const PATHS = {
-  msi:         'C:\\Honey\\DB_insight\\LibreOffice_26.2.2_Win_x86-64.msi',
-  installDir:  'C:\\Honey\\DB_insight\\Data\\LibreOffice\\',
-  soffice:     'C:\\Honey\\DB_insight\\Data\\LibreOffice\\program\\soffice.exe',
+  // LibreOffice MSI: 인스톨러 exe 옆에 있거나, 앱 루트에 있으면 사용
+  get msi() {
+    const beside = path.join(path.dirname(process.execPath), 'LibreOffice_26.2.2_Win_x86-64.msi')
+    const atRoot = path.join(APP_ROOT, 'LibreOffice_26.2.2_Win_x86-64.msi')
+    return fs.existsSync(beside) ? beside : atRoot
+  },
+  installDir:  APP_ROOT + '\\Data\\LibreOffice\\',
+  soffice:     APP_ROOT + '\\Data\\LibreOffice\\program\\soffice.exe',
   sofficeFallback: 'C:\\Program Files\\LibreOffice\\program\\soffice.exe',
-  requirements:'C:\\Honey\\DB_insight\\App\\backend\\requirements.txt',
-  mainApp:     'C:\\Honey\\DB_insight\\App\\frontend\\out\\DB_insight 0.1.0.exe',
-  backendDir:  'C:\\Honey\\DB_insight\\App\\backend',
+  requirements: APP_ROOT + '\\App\\backend\\requirements.txt',
+  mainApp:      APP_ROOT + '\\App\\frontend\\out\\DB_insight 0.1.0.exe',
+  backendDir:   APP_ROOT + '\\App\\backend',
 }
 
 // ── 상태 확인 ─────────────────────────────────────────────────────────
