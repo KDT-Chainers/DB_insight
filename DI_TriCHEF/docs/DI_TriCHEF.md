@@ -1,9 +1,10 @@
 # DI TRI-CHEF Doc / Img 파이프라인 상세 설명서
 
-> 버전: v1-5 (2026-04-25 20:50) · 갱신: 2026-04-25 · 브랜치 `feature/trichef-port`
+> 버전: v1-6 (2026-04-27) · 갱신: 2026-04-27 · 브랜치 `feature/trichef-port`
 > 대상 도메인: `doc_page` (PDF/HWP/Office/TXT/CSV/HTML → 페이지 이미지), `image` (원본 이미지)
 > **최신 변경**: 확장자 SSOT (Q1, 1049099) + 평가 라이브러리 통합 (Q3, 73c8bf0) + hybrid θ K-clamp (bdf80af)
 > **v1-2 추가**: MIRACL-ko 외부 검증 (BGE-M3 Im축 nDCG@10=69.9, 평가 인프라 레퍼런스)
+> **v1-6 추가**: MIRACL-ko 자체 재현 nDCG@10=77.82 (ANN→정확 FAISS IndexFlatIP, +7.92pp) · Admin UI 이모지 제거 · 파이프라인 섹션 collapsible 기능 추가
 
 ---
 
@@ -194,7 +195,8 @@ caption_triple fusion (자동 수행)
 - **Im** 은 Qwen2-VL caption_triple(L1≤20字, L2 5–10키, L3 30–60字) 가중 융합 (w=0.15/0.25/0.60)
   - 실제 수행: `App/backend/services/trichef/unified_engine.py:108-132` (엔진 로드 시 자동 실행)
   - 캡션 가중치 계산 후 L2 정규화 → `cache_img_Im.npy` (N, 1024) 로 저장
-  - **외부 검증**: MIRACL-ko 한국어 검색 벤치마크(213 쿼리, 1.5M 문단)에서 BGE-M3 dense **nDCG@10=69.9** 달성. BM25(37.1) 대비 +32.8%p, mE5-large-v2(66.5) 대비 +3.4%p. 한국어 다국어 텍스트 검색의 기준으로 입증됨.
+  - **외부 검증**: MIRACL-ko 한국어 검색 벤치마크(213 쿼리, 1.5M 문단)에서 BGE-M3 dense **nDCG@10=69.9** 달성(공식 리포트, ANN 기반). BM25(37.1) 대비 +32.8%p, mE5-large-v2(66.5) 대비 +3.4%p. 한국어 다국어 텍스트 검색의 기준으로 입증됨.
+  - **자체 재현 (v1-6)**: ANN 대신 **정확 FAISS IndexFlatIP** 사용 시 **nDCG@10=77.82**, R@100=95.46, MRR=76.56 달성 (공식 대비 +7.92pp). 공식 수치와의 차이는 ANN 근사 오차에 기인함.
 - **Z** 는 DINOv2-Large (1024d) CLS 토큰으로 캡션 편향·노이즈 배제, 순수 시각 근접성 보존 (Gram-Schmidt 직교화 후)
 
 ### 4.2 Gram-Schmidt 직교화 (현재)
@@ -537,6 +539,8 @@ App/
   - 신뢰도 / dense / lexical / asf / rrf / z 메트릭
   - 원문 발췌 + 매칭 토큰 `<mark>` 하이라이트
 - 호출: `location.origin + /api/admin/*` → CORS 불필요
+- **v1-6 변경**: 모든 이모지 제거 완료 (admin.html 전체 텍스트 이모지 삭제)
+- **v1-6 추가**: 파이프라인 섹션 collapsible 기능 — 섹션 헤더 클릭으로 접기/펼치기 가능
 
 ---
 
@@ -766,4 +770,4 @@ $$
 
 ---
 
-_작성: 2026-04-23 · 파이프라인 v1-2 기준 · 갱신: 2026-04-25 19:30 (v1-5, 9커밋 반영)_
+_작성: 2026-04-23 · 파이프라인 v1-2 기준 · 갱신: 2026-04-27 (v1-6, MIRACL-ko 자체 재현 +7.92pp · Admin UI 이모지 제거 · collapsible 파이프라인 섹션)_

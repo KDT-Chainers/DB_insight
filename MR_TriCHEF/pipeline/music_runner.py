@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import Callable, Iterator
 
 import numpy as np
+import torch
 
 from . import cache, registry
 from .frame_sampler import extract_audio, probe_duration
@@ -126,103 +127,130 @@ def run_music_incremental(
     reg      = registry.load(reg_path)
 
     files = iter_music_files()
-    log(f"[music] 대상 {len(files)}개 (소스: {MUSIC_RAW_DIR})")
     if not files:
+        log("[music] 처리할 파일 없음")
         return
 
-    for idx, aud in enumerate(files, 1):
-        t0 = time.time()
+    # SHA 사전 스캔 — 신규/변경 파일만 추출
+    file_info: list[tuple[Path, str, str, bool]] = []
+    for aud in files:
         rel = str(aud.relative_to(MUSIC_RAW_DIR)).replace("\\", "/")
-        log(f"\n[music {idx}/{len(files)}] {rel}")
-
         sha = registry.sha256(aud)
-        if reg.get(rel, {}).get("sha") == sha:
-            log("  ⏩ 이미 인덱싱됨 — skip")
+        is_new = reg.get(rel, {}).get("sha") != sha
+        file_info.append((aud, rel, sha, is_new))
+
+    new_count = sum(1 for *_, is_new in file_info if is_new)
+    log(f"[music] 전체 {len(file_info)}개 (신규/변경 {new_count}개, skip {len(file_info)-new_count}개)")
+
+    if new_count == 0:
+        for _, rel, _, _ in file_info:
             yield FileResult(rel_path=rel, status="skipped", reason="sha match")
-            continue
+        return
 
-        tmp = Path(tempfile.mkdtemp(prefix="mmtri_music_"))
-        try:
-            log("  · ffmpeg 오디오 표준화 (16kHz mono)")
-            wav = extract_audio(aud, tmp / "audio.wav")
-            dur = probe_duration(aud)
+    # 신규 파일이 있을 때만 모델 1회 로드 (RTX 4070: GPU ~3.5GB, Whisper CPU)
+    log(f"\n[music] 모델 1회 로드 시작 (47개 파일 내내 재로드 없음)")
+    log("  · Whisper large-v3 (CPU int8)")
+    stt = WhisperSTT()
+    log("  · BGE-M3 (CUDA fp16, batch=64)")
+    bge = BGEM3Encoder()
+    log("  · SigLIP2 text-encoder (CUDA fp16)")
+    sig = SigLIP2Encoder()
+    log("  [모델 로드 완료]\n")
 
-            log("  · Whisper STT 로드 → transcribe")
-            stt = WhisperSTT()
-            stt_segs = stt.transcribe(wav, language=None)
-            # [항목7] stt_status 명시 — 빈 transcript를 성공으로 숨기지 않음
-            stt_status = "ok" if any(s["text"].strip() for s in stt_segs) else "no_speech"
-            log(f"    → {len(stt_segs)} segments (stt_status={stt_status})")
-            stt.unload(); del stt; gc.collect()
+    try:
+        for idx, (aud, rel, sha, is_new) in enumerate(file_info, 1):
+            if not is_new:
+                log(f"[music {idx}/{len(file_info)}] {rel} — skip")
+                yield FileResult(rel_path=rel, status="skipped", reason="sha match")
+                continue
 
-            # [항목2] original_transcript: 파일명 stem을 원본 전사 대리값으로 사용.
-            # 향후 ID3/VorbisComment 태그에서 가사·아티스트·제목을 추출하면 교체.
-            original_transcript = aud.stem.replace("_", " ").replace("-", " ")
+            t0 = time.time()
+            log(f"\n[music {idx}/{len(file_info)}] {rel}")
+            tmp = Path(tempfile.mkdtemp(prefix="mmtri_music_"))
+            try:
+                log("  · ffmpeg 오디오 표준화 (16kHz mono)")
+                wav = extract_audio(aud, tmp / "audio.wav")
+                dur = probe_duration(aud)
 
-            windows = _sliding_windows(stt_segs, duration=dur,
-                                       original_transcript=original_transcript)
-            log(f"  · 30s 윈도우 {len(windows)}개 구성 (mixed 텍스트)")
+                log("  · Whisper STT → transcribe")
+                stt_segs = stt.transcribe(wav, language=None)
+                # [항목7] stt_status 명시 — 빈 transcript를 성공으로 숨기지 않음
+                stt_status = "ok" if any(s["text"].strip() for s in stt_segs) else "no_speech"
+                log(f"    → {len(stt_segs)} segments (stt_status={stt_status})")
 
-            # [항목1+2] mixed text 사용 — STT 없는 BGM도 파일명으로 Im 임베딩 생성
-            win_texts = [w["text"] for w in windows]
+                # [항목2] original_transcript: 파일명 stem을 원본 전사 대리값으로 사용.
+                # 향후 ID3/VorbisComment 태그에서 가사·아티스트·제목을 추출하면 교체.
+                original_transcript = aud.stem.replace("_", " ").replace("-", " ")
 
-            log("  · BGE-M3 로드 → Im 임베딩 (STT 언어 의미, 1024d)")
-            bge = BGEM3Encoder()
-            Im = bge.embed(win_texts, batch=16)    # (N, 1024)
-            bge.unload(); del bge; gc.collect()
+                windows = _sliding_windows(stt_segs, duration=dur,
+                                           original_transcript=original_transcript)
+                log(f"  · 30s 윈도우 {len(windows)}개 구성 (mixed 텍스트)")
 
-            log("  · SigLIP2 text-encoder 로드 → Re 임베딩 (1152d, Movie 와 동일 공간)")
-            sig = SigLIP2Encoder()
-            Re = sig.embed_texts(win_texts)        # (N, 1152)
-            sig.unload(); del sig; gc.collect()
+                # [항목1+2] mixed text 사용 — STT 없는 BGM도 파일명으로 Im 임베딩 생성
+                win_texts = [w["text"] for w in windows]
 
-            Z  = np.zeros((Im.shape[0], Z_DIM_MUSIC), dtype=np.float32)
+                log("  · BGE-M3 Im 임베딩 (batch=64, 1024d)")
+                Im = bge.embed(win_texts, batch=64)    # (N, 1024)
 
-            ids = [rel] * len(windows)
-            seg_meta = [
-                {
-                    "file":                rel,
-                    "file_path":           rel,   # replace_by_file 키
-                    "file_name":           aud.name,
-                    "window_idx":          w["window_idx"],
-                    "t_start":             w["t_start"],
-                    "t_end":               w["t_end"],
-                    # [항목1] 3필드 분리
-                    "stt_text":            w["stt_transcript"],
-                    "original_transcript": w["original_transcript"],
-                    "text":                w["text"],          # mixed (검색용)
-                    # [항목7] stt_status — no_speech 명시
-                    "stt_status":          stt_status,
-                }
-                for w in windows
-            ]
-            cache.replace_by_file(
-                cache_dir=MUSIC_CACHE_DIR,
-                file_keys=[rel],
-                arrays={"Re": Re, "Im": Im, "Z": Z},
-                new_ids=ids,
-                new_segs=seg_meta,
-                npy_prefix="cache_music",
-                ids_file="music_ids.json",
-                segs_file="segments.json",
-            )
+                log("  · SigLIP2 Re 임베딩 (1152d)")
+                Re = sig.embed_texts(win_texts)        # (N, 1152)
 
-            # [항목7] registry에 stt_status 기록
-            reg[rel] = {"sha": sha, "windows": len(windows), "duration": dur,
-                        "stt_status": stt_status}
-            registry.save(reg_path, reg)
+                Z  = np.zeros((Im.shape[0], Z_DIM_MUSIC), dtype=np.float32)
 
-            el = round(time.time() - t0, 1)
-            log(f"  ✅ done — windows={len(windows)} duration={dur:.1f}s elapsed={el}s")
-            yield FileResult(
-                rel_path=rel, status="done",
-                windows=len(windows), duration=dur, elapsed=el,
-            )
+                ids = [rel] * len(windows)
+                seg_meta = [
+                    {
+                        "file":                rel,
+                        "file_path":           rel,   # replace_by_file 키
+                        "file_name":           aud.name,
+                        "window_idx":          w["window_idx"],
+                        "t_start":             w["t_start"],
+                        "t_end":               w["t_end"],
+                        # [항목1] 3필드 분리
+                        "stt_text":            w["stt_transcript"],
+                        "original_transcript": w["original_transcript"],
+                        "text":                w["text"],          # mixed (검색용)
+                        # [항목7] stt_status — no_speech 명시
+                        "stt_status":          stt_status,
+                    }
+                    for w in windows
+                ]
+                cache.replace_by_file(
+                    cache_dir=MUSIC_CACHE_DIR,
+                    file_keys=[rel],
+                    arrays={"Re": Re, "Im": Im, "Z": Z},
+                    new_ids=ids,
+                    new_segs=seg_meta,
+                    npy_prefix="cache_music",
+                    ids_file="music_ids.json",
+                    segs_file="segments.json",
+                )
 
-        except Exception as e:
-            import traceback
-            tb = traceback.format_exc()
-            log(f"  ❌ 오류: {e}\n{tb[:800]}")
-            yield FileResult(rel_path=rel, status="error", reason=str(e)[:300])
-        finally:
-            shutil.rmtree(tmp, ignore_errors=True)
+                # [항목7] registry에 stt_status 기록
+                reg[rel] = {"sha": sha, "windows": len(windows), "duration": dur,
+                            "stt_status": stt_status}
+                registry.save(reg_path, reg)
+
+                el = round(time.time() - t0, 1)
+                log(f"  ✅ done — windows={len(windows)} duration={dur:.1f}s elapsed={el}s")
+                yield FileResult(
+                    rel_path=rel, status="done",
+                    windows=len(windows), duration=dur, elapsed=el,
+                )
+
+            except Exception as e:
+                import traceback
+                tb = traceback.format_exc()
+                log(f"  ❌ 오류: {e}\n{tb[:800]}")
+                yield FileResult(rel_path=rel, status="error", reason=str(e)[:300])
+            finally:
+                shutil.rmtree(tmp, ignore_errors=True)
+
+    finally:
+        log("\n[music] 모델 언로드 (전체 처리 완료)")
+        stt.unload(); del stt
+        bge.unload(); del bge
+        sig.unload(); del sig
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()

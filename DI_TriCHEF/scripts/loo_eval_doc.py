@@ -40,11 +40,13 @@ from services.trichef.unified_engine import TriChefEngine  # noqa: E402
 
 
 N_SAMPLES = 150
-SEED = 20260425
+SEED = 2026  # 논문 §V-E 재현성 (Reproducibility checklist: "Seed=2026 in all scripts")
 QUERY_CHARS = 100
 TOPK = 10
 
-ALPHAS = [0.20, 0.35, 0.50, 0.65, 1.00]
+# α=0.20 전후 해상도 향상(0.25 추가) + 0.65→1.00 catastrophic collapse 곡선 보강(0.80 추가).
+# α<0.20 은 본문-쿼리 circular self-retrieval bias 로 평가 부적합 (script 상단 주석 참조).
+ALPHAS = [0.20, 0.25, 0.35, 0.50, 0.65, 0.80, 1.00]
 CONFIGS = [
     ("dense",        {"use_lexical": False, "use_asf": False}),
     ("dense+sparse", {"use_lexical": True,  "use_asf": False}),
