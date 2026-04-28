@@ -21,11 +21,11 @@ from .paths import MODEL_WHISPER, WHISPER_ADAPTER_PATH
 
 class WhisperSTT:
     def __init__(self, model_size: str = MODEL_WHISPER,
-                 device: str = "cpu", compute_type: str = "int8",
+                 device: str = "cuda", compute_type: str = "float16",
                  adapter_path: str = WHISPER_ADAPTER_PATH):
         # NOTE: CUDA + int8 on faster-whisper triggers STATUS_STACK_BUFFER_OVERRUN
-        # (0xC0000409) on unload on some Windows setups. CPU + int8 은 안정적.
-        # 속도 희생 (~2-3x 느림) 대신 크래시 방지.
+        # on unload (Windows). CUDA + float16 은 안정적이며 CPU int8 대비 5~10x 빠름.
+        # 1~2시간 long-form audio batch 처리에 권장.
         from faster_whisper import WhisperModel
         # [항목5] adapter_path 우선 사용 (로컬 파인튜닝 체크포인트)
         model_id = adapter_path if adapter_path else model_size
