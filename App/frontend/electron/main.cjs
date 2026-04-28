@@ -107,6 +107,7 @@ function _startPythonBackend() {
         stdio: ['ignore', logStream, logStream],
         detached: false,
         shell: true,              // PATH 기반 해석을 위해 shell 사용
+        windowsHide: true,        // CMD 창 숨김
         env: { ...process.env },  // 현재 환경변수 전달
       })
       backendProcess.on('error', (err) => {
@@ -181,21 +182,29 @@ body{background:#070d1f;color:#dfe4fe;font-family:'Segoe UI',sans-serif;
   background:linear-gradient(135deg,#85adff,#ac8aff);
   display:flex;align-items:center;justify-content:center;font-size:16px}
 .name{font-size:19px;font-weight:900;letter-spacing:-.5px;color:#85adff}
-.status{font-size:11px;color:#a5aac2;letter-spacing:.15em;text-transform:uppercase;margin-bottom:18px}
+.status{font-size:11px;color:#a5aac2;letter-spacing:.15em;text-transform:uppercase;margin-bottom:18px;text-align:center}
 .dots span{animation:blink 1.2s infinite;color:#85adff}
 .dots span:nth-child(2){animation-delay:.2s}
 .dots span:nth-child(3){animation-delay:.4s}
 @keyframes blink{0%,80%,100%{opacity:.2}40%{opacity:1}}
-.bar-wrap{width:150px;height:2px;background:rgba(255,255,255,.08);border-radius:2px;overflow:hidden}
+.bar-wrap{width:200px;height:3px;background:rgba(255,255,255,.08);border-radius:2px;overflow:hidden;margin-bottom:8px}
 .bar{height:100%;width:40%;background:linear-gradient(90deg,#85adff,#ac8aff);
   animation:slide 1.4s ease-in-out infinite}
 @keyframes slide{0%{transform:translateX(-100%)}100%{transform:translateX(350%)}}
+#lo-bar{height:100%;width:0%;background:linear-gradient(90deg,#85adff,#ac8aff);
+  border-radius:2px;transition:width .4s ease;display:none}
+#lo-detail{font-size:9px;color:#6b7194;margin-top:4px;text-align:center;max-width:260px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:none}
 .ver{position:fixed;bottom:12px;font-size:9px;color:rgba(165,170,194,.3);letter-spacing:.1em}
 </style></head><body>
 <div class="glow"></div>
 <div class="logo"><div class="icon">⬡</div><span class="name">DB_insight</span></div>
-<p class="status">앱 실행 중입니다 <span class="dots"><span>.</span><span>.</span><span>.</span></span></p>
-<div class="bar-wrap"><div class="bar"></div></div>
+<p id="splash-status" class="status">앱 실행 중입니다 <span class="dots"><span>.</span><span>.</span><span>.</span></span></p>
+<div class="bar-wrap">
+  <div class="bar" id="boot-bar"></div>
+  <div id="lo-bar"></div>
+</div>
+<p id="lo-detail"></p>
 <span class="ver">v0.1.0</span>
 </body></html>`
 
@@ -267,6 +276,32 @@ ipcMain.handle('select-folder', async () => {
   })
   if (canceled || filePaths.length === 0) return null
   return filePaths[0]
+})
+
+// LibreOffice MSI 설치 — Electron(GUI 프로세스)에서 직접 실행해야 UAC 팝업이 정상 작동
+ipcMain.handle('install-libreoffice', async () => {
+  const msiPath    = 'C:\\Honey\\DB_insight\\LibreOffice_26.2.2_Win_x86-64.msi'
+  const installDir = 'C:\\Honey\\DB_insight\\Data\\LibreOffice\\'
+
+  // MSI 파일 존재 확인
+  if (!fs.existsSync(msiPath)) {
+    return { success: false, error: 'MSI 파일을 찾을 수 없습니다: ' + msiPath }
+  }
+
+  return new Promise((resolve) => {
+    // /passive : UAC 팝업 + 진행 창 표시, 사용자 입력 불필요
+    const proc = spawn(
+      'msiexec',
+      ['/i', msiPath, '/passive', '/norestart', `INSTALLDIR=${installDir}`],
+      { shell: true, windowsHide: false }
+    )
+    proc.on('close', (code) => {
+      resolve({ success: code === 0 || code === 3010, code })
+    })
+    proc.on('error', (err) => {
+      resolve({ success: false, error: err.message })
+    })
+  })
 })
 
 ipcMain.on('window-minimize', () => BrowserWindow.getFocusedWindow()?.minimize())

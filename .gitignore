@@ -13,6 +13,11 @@ App/frontend/release/
 App/frontend/builder-debug.yml
 App/frontend/builder-effective-config.yaml
 
+# 인스톨러 빌드 결과물
+App/installer/node_modules/
+App/installer/out/
+App/installer/dist/
+
 # ============================================================
 # Python / Flask
 # ============================================================
@@ -100,6 +105,15 @@ vocab.json
 *.db
 *.sqlite
 *.sqlite3
+
+# ============================================================
+# 대용량 설치 파일
+# ============================================================
+*.msi
+*.exe
+*.iso
+*.dmg
+*.pkg
 
 # ============================================================
 # Environment variables
@@ -192,3 +206,4 @@ publication/paper/fig*_ko.pdf
 publication/paper/fig*_ko.png
 
 .claude/
+node_modules

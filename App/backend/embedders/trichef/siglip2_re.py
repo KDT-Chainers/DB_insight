@@ -69,6 +69,9 @@ def embed_images(paths: list[Path]) -> np.ndarray:
             with Image.open(p) as _img:
                 batch.append(_img.convert("RGB"))
         inp = _proc(images=batch, return_tensors="pt").to(_DEVICE)
+        # 모델 dtype(fp16/fp32)에 맞춰 픽셀값 캐스팅 (int8 혼용 방지)
+        mdtype = next(_model.parameters()).dtype
+        inp = {k: v.to(mdtype) if v.is_floating_point() else v for k, v in inp.items()}
         vec = _model.get_image_features(**inp)
         if not isinstance(vec, torch.Tensor):
             vec = vec.pooler_output

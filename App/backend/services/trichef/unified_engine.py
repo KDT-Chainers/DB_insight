@@ -81,6 +81,37 @@ class TriChefEngine:
                 self._cache["music"] = self._build_av_entry(mudir, "music")
         logger.info(f"[engine] 캐시 로드 완료: {list(self._cache.keys())}")
 
+        # 캘리브레이션 파일이 없는 도메인은 self-calibration 자동 실행.
+        # 이렇게 하면 최초 임베딩 이후 abs_threshold 가 실제 점수 범위에 맞춰진다.
+        self._auto_calibrate_missing()
+
+    def _auto_calibrate_missing(self) -> None:
+        """캘리브레이션이 없는 도메인에 대해 self-score 기반 자동 보정 실행."""
+        calib_data = calibration._load_all()
+        for domain, d in self._cache.items():
+            if domain in ("movie", "music"):
+                continue  # AV 도메인은 별도 파이프라인
+            if domain in calib_data:
+                thr = calib_data[domain].get("abs_threshold", 0.5)
+                if thr < 0.45:  # 이미 유효한 캘리브레이션이 있음
+                    continue
+            # 아직 캘리브레이션 없음 → self-pair 분포로 추정
+            Re = d["Re"]
+            Im = d["Im"]
+            Z  = d["Z"]
+            if Re.shape[0] < 2:
+                continue
+            try:
+                Im_perp, Z_perp = tri_gs.orthogonalize(Re, Im, Z)
+                result = calibration.calibrate_domain(domain, Re, Im_perp, Z_perp)
+                logger.info(
+                    f"[engine] auto-calibrate {domain}: "
+                    f"mu={result['mu_null']:.4f} sigma={result['sigma_null']:.4f} "
+                    f"thr={result['abs_threshold']:.4f}"
+                )
+            except Exception as e:
+                logger.warning(f"[engine] auto-calibrate {domain} 실패: {e}")
+
     def _build_entry(self, dir: Path, re_fn: str, im_fn: str, z_fn: str,
                      ids_fn: str, sparse_fn: str, domain_label: str) -> dict:
         Re = np.load(dir / re_fn)
@@ -291,6 +322,26 @@ class TriChefEngine:
             ))
             if len(out) >= topk:
                 break
+
+        # ── fallback: threshold 를 통과한 결과가 없을 때 상위 K개를 저신뢰도로 반환 ──
+        # 캘리브레이션이 아직 실제 점수 범위에 맞지 않는 경우(새로 임베딩 직후 등)에도
+        # 검색 결과가 완전히 비어 빈 화면이 뜨지 않도록 한다.
+        if not out:
+            logger.info(
+                f"[engine:{domain}] threshold({abs_thr:.4f}) 통과 결과 없음 — "
+                f"fallback: top-{topk} raw dense score 반환 (low_confidence=True)"
+            )
+            for i in combined_order[:topk]:
+                s = float(dense_scores[i])
+                # confidence: 임시로 dense 점수를 0~1 로 clamp, 0.35 캡
+                conf = min(float(np.clip(s, 0.0, 1.0)), 0.35)
+                meta = {
+                    "domain": domain, "dense": s,
+                    "low_confidence": True, "fallback": True,
+                }
+                out.append(TriChefResult(
+                    id=d["ids"][i], score=s, confidence=conf, metadata=meta,
+                ))
         return out
 
     def search_av(self, query: str, domain: str, topk: int = 10,

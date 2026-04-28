@@ -10,8 +10,20 @@ const TYPE_META = {
   video: { icon: 'movie',       color: 'text-[#ac8aff]',   label: '동영상', grad: 'from-[#4c1d95] to-[#5b21b6]' },
   image: { icon: 'image',       color: 'text-emerald-400', label: '이미지', grad: 'from-[#064e3b] to-[#065f46]' },
   audio: { icon: 'volume_up',   color: 'text-amber-400',   label: '음성',   grad: 'from-[#78350f] to-[#92400e]' },
+  movie: { icon: 'movie',       color: 'text-[#ac8aff]',   label: '동영상', grad: 'from-[#4c1d95] to-[#5b21b6]' },
+  music: { icon: 'volume_up',   color: 'text-amber-400',   label: '음성',   grad: 'from-[#78350f] to-[#92400e]' },
 }
-const getTypeMeta = (t) => TYPE_META[t] ?? { icon: 'insert_drive_file', color: 'text-on-surface-variant', label: t ?? '파일', grad: 'from-[#1c253e] to-[#263354]' }
+const getTypeMeta = (t) =>
+  TYPE_META[t] ?? { icon: 'insert_drive_file', color: 'text-on-surface-variant', label: t ?? '파일', grad: 'from-[#1c253e] to-[#263354]' }
+
+// ── 유틸 ─────────────────────────────────────────────────
+function fmtTime(sec) {
+  if (!sec && sec !== 0) return '0:00'
+  const s = Math.floor(sec)
+  const m = Math.floor(s / 60)
+  const ss = String(s % 60).padStart(2, '0')
+  return `${m}:${ss}`
+}
 
 // ── STT 훅 ───────────────────────────────────────────────
 function useSpeechRecognition({ onFinal }) {
@@ -51,7 +63,14 @@ async function searchFiles(query, topK = 20) {
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   const data = await res.json()
   if (data.error) throw new Error(data.error)
-  return data.results ?? []
+  const results = data.results ?? []
+  // confidence 정규화: confidence 없으면 similarity 사용
+  return results.map(r => ({
+    ...r,
+    confidence: r.confidence ?? r.similarity ?? 0,
+    similarity:  r.similarity  ?? r.confidence ?? 0,
+    segments:    r.segments    ?? [],
+  }))
 }
 
 async function openFile(filePath) {
@@ -68,15 +87,25 @@ async function openFolder(filePath) {
   })
 }
 
+// ── AV 플레이어 스트림 URL 생성 ──────────────────────────
+function avStreamUrl(result) {
+  const domain = result.trichef_domain ?? (result.file_type === 'video' ? 'movie' : 'music')
+  return `${API_BASE}/api/admin/file?domain=${domain}&id=${encodeURIComponent(result.file_path)}`
+}
+
 // ── 결과 카드 ────────────────────────────────────────────
 function ResultCard({ result, onClick }) {
-  const meta    = getTypeMeta(result.file_type)
-  const simPct  = Math.round(result.similarity * 100)
+  const meta     = getTypeMeta(result.file_type)
+  const confPct  = Math.round((result.confidence ?? result.similarity ?? 0) * 100)
+  const isAV     = result.file_type === 'video' || result.file_type === 'audio'
   const hasPreview = (result.file_type === 'image' || result.file_type === 'doc') && result.preview_url
   const [imgError, setImgError] = useState(false)
 
+  // 세그먼트 상위 3개 미리보기
+  const topSegs = (result.segments ?? []).slice(0, 3)
+
   return (
-    <div className="flex-none w-[400px] snap-start">
+    <div className="flex-none w-[420px] snap-start">
       <div
         onClick={onClick}
         className="bg-surface-container-high rounded-[1.5rem] p-1 h-full shadow-[0_20px_50px_rgba(0,0,0,0.3)] hover:shadow-primary/10 transition-all group/card border border-outline-variant/5 cursor-pointer hover:border-primary/20"
@@ -85,7 +114,7 @@ function ResultCard({ result, onClick }) {
         <div className={`relative rounded-[1.4rem] overflow-hidden aspect-video border border-outline-variant/10 flex items-center justify-center
           ${hasPreview && !imgError ? 'bg-black' : `bg-gradient-to-br ${meta.grad}`}`}>
 
-          {/* 실제 이미지 미리보기 (이미지/문서 페이지) */}
+          {/* 이미지/문서 미리보기 */}
           {hasPreview && !imgError ? (
             <>
               <img
@@ -94,8 +123,25 @@ function ResultCard({ result, onClick }) {
                 className="w-full h-full object-contain"
                 onError={() => setImgError(true)}
               />
-              {/* 오버레이 그라데이션 */}
               <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent pointer-events-none" />
+            </>
+          ) : isAV ? (
+            /* AV 카드 — 파형/필름 아이콘 + 세그먼트 칩 미리보기 */
+            <>
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+                <span className="material-symbols-outlined text-white/10 text-[72px]" style={{ fontVariationSettings: '"FILL" 1' }}>{meta.icon}</span>
+                {/* 상위 세그먼트 타임 칩 */}
+                {topSegs.length > 0 && (
+                  <div className="flex flex-wrap gap-1 justify-center px-4">
+                    {topSegs.map((s, i) => (
+                      <span key={i} className="px-2 py-0.5 rounded-full bg-white/10 text-white/60 text-[10px] font-mono border border-white/10">
+                        {fmtTime(s.start ?? s.start_sec ?? 0)}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 to-transparent" />
             </>
           ) : (
             <>
@@ -109,25 +155,50 @@ function ResultCard({ result, onClick }) {
             <span className={`material-symbols-outlined ${meta.color}`}>{meta.icon}</span>
           </div>
 
-          {/* 파일명 + 유사도 (하단) */}
+          {/* 파일명 + 신뢰도 (하단) */}
           <div className="absolute bottom-4 left-4 right-4 flex justify-between items-end">
             <div className="space-y-1 min-w-0 flex-1 mr-3">
               <p className={`text-xs font-bold tracking-widest uppercase ${meta.color}`}>{meta.label}</p>
               <p className="text-lg font-bold text-on-surface truncate drop-shadow-md">{result.file_name}</p>
             </div>
             <div className="text-right shrink-0">
-              <div className="text-2xl font-black text-primary">{simPct}%</div>
-              <div className="text-[10px] text-on-surface-variant font-medium">유사도</div>
+              <div className="text-2xl font-black text-primary">{confPct}%</div>
+              <div className="text-[10px] text-on-surface-variant font-medium">신뢰도</div>
             </div>
           </div>
         </div>
 
-        {/* 스니펫 */}
+        {/* 스니펫 / 세그먼트 */}
         <div className="p-5 space-y-3">
-          <p className="text-[10px] font-bold text-primary tracking-widest uppercase">일치 내용</p>
-          <p className="text-sm text-on-surface-variant leading-relaxed line-clamp-3">
-            {result.snippet || '(미리보기 없음)'}
-          </p>
+          {isAV && topSegs.length > 0 ? (
+            /* AV: 최고 매칭 세그먼트 텍스트 */
+            <>
+              <p className="text-[10px] font-bold text-amber-400 tracking-widest uppercase flex items-center gap-1">
+                <span className="material-symbols-outlined text-xs">timer</span>
+                최고 매칭 구간
+              </p>
+              <div className="space-y-1.5">
+                {topSegs.map((s, i) => (
+                  <div key={i} className="flex gap-2 items-start">
+                    <span className="text-[10px] font-mono text-on-surface-variant/50 shrink-0 mt-0.5">
+                      {fmtTime(s.start ?? s.start_sec ?? 0)}
+                    </span>
+                    <p className="text-xs text-on-surface-variant/80 leading-relaxed line-clamp-2 flex-1">
+                      {s.text || s.caption || '(텍스트 없음)'}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            /* 이미지/문서: 스니펫 */
+            <>
+              <p className="text-[10px] font-bold text-primary tracking-widest uppercase">일치 내용</p>
+              <p className="text-sm text-on-surface-variant leading-relaxed line-clamp-3">
+                {result.snippet || '(미리보기 없음)'}
+              </p>
+            </>
+          )}
           <div className="pt-3 border-t border-outline-variant/10 flex justify-between items-center">
             <span className="text-[10px] text-on-surface-variant/40 font-mono truncate max-w-[200px]">{result.file_path}</span>
             <span className="text-xs font-bold text-primary flex items-center gap-1 group-hover/card:translate-x-1 transition-transform shrink-0">
@@ -140,50 +211,105 @@ function ResultCard({ result, onClick }) {
   )
 }
 
-// ── 동영상 상세: BLIP / STT 탭 뷰 ──────────────────────
-function VideoDetailContent({ fileDetail, meta }) {
-  const [activeTab, setActiveTab] = useState('stt')
-  const chunks = fileDetail?.chunks ?? []
-  const blipChunks = chunks.filter(c => c.chunk_source === 'blip')
-  const sttChunks  = chunks.filter(c => c.chunk_source !== 'blip')
+// ── AV 상세: 플레이어 + 세그먼트 타임라인 ────────────────
+function AVDetailContent({ result }) {
+  const isVideo   = result.file_type === 'video'
+  const playerRef = useRef(null)
+  const streamUrl = avStreamUrl(result)
+  const segments  = result.segments ?? []
 
-  const blipText = blipChunks.map(c => c.chunk_text).join(' ')
-  const sttText  = sttChunks.map(c => c.chunk_text).join(' ')
+  const seekTo = (startSec) => {
+    const p = playerRef.current
+    if (!p) return
+    p.currentTime = startSec
+    p.play().catch(() => {})
+  }
 
   return (
     <div className="flex-1 flex flex-col">
-      {/* 탭 버튼 */}
-      <div className="flex gap-1 px-8 py-3 border-b border-outline-variant/10">
-        {[
-          { id: 'stt',  label: '음성 텍스트 (STT)',  icon: 'mic',    count: sttChunks.length  },
-          { id: 'blip', label: '프레임 캡션 (BLIP)', icon: 'image',  count: blipChunks.length },
-        ].map(t => (
-          <button
-            key={t.id}
-            onClick={() => setActiveTab(t.id)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all
-              ${activeTab === t.id ? 'bg-primary/15 text-primary border border-primary/20' : 'text-on-surface-variant hover:bg-white/5'}`}
-          >
-            <span className="material-symbols-outlined text-sm">{t.icon}</span>
-            {t.label}
-            <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[9px] ${activeTab === t.id ? 'bg-primary/20 text-primary' : 'bg-white/10 text-on-surface-variant'}`}>
-              {t.count}
-            </span>
-          </button>
-        ))}
+      {/* 플레이어 */}
+      <div className="px-8 pt-6 pb-4">
+        <div className="rounded-xl overflow-hidden bg-black/60 border border-outline-variant/10">
+          {isVideo ? (
+            <video
+              ref={playerRef}
+              src={streamUrl}
+              controls
+              preload="metadata"
+              className="w-full max-h-[280px] object-contain"
+              onError={() => {}}
+            />
+          ) : (
+            <div className="flex flex-col items-center justify-center p-6 gap-3">
+              <span className="material-symbols-outlined text-amber-400 text-4xl" style={{ fontVariationSettings: '"FILL" 1' }}>volume_up</span>
+              <audio
+                ref={playerRef}
+                src={streamUrl}
+                controls
+                preload="metadata"
+                className="w-full"
+                onError={() => {}}
+              />
+            </div>
+          )}
+        </div>
       </div>
-      {/* 콘텐츠 */}
-      <div className="flex-1 px-8 py-6 overflow-y-auto max-h-[420px]">
-        {activeTab === 'stt' ? (
-          sttText
-            ? <p className="text-on-surface-variant/90 leading-relaxed text-sm whitespace-pre-wrap">{sttText}</p>
-            : <p className="text-on-surface-variant/30 text-sm">(음성 텍스트 없음)</p>
-        ) : (
-          blipText
-            ? <p className="text-on-surface-variant/90 leading-relaxed text-sm whitespace-pre-wrap">{blipText}</p>
-            : <p className="text-on-surface-variant/30 text-sm">(프레임 캡션 없음)</p>
-        )}
-      </div>
+
+      {/* 세그먼트 타임라인 */}
+      {segments.length > 0 && (
+        <div className="px-8 pb-4 flex-1 overflow-y-auto">
+          <p className="text-[10px] font-bold text-on-surface-variant/50 uppercase tracking-widest mb-3 flex items-center gap-1">
+            <span className="material-symbols-outlined text-xs">timeline</span>
+            매칭 구간 ({segments.length}개)
+          </p>
+          <div className="space-y-2">
+            {segments.map((seg, i) => {
+              const t0   = seg.start ?? seg.start_sec ?? 0
+              const t1   = seg.end   ?? seg.end_sec   ?? 0
+              const sc   = seg.score ?? 0
+              const text = seg.text || seg.caption || ''
+              const pct  = Math.round(sc * 100)
+              return (
+                <button
+                  key={i}
+                  onClick={() => seekTo(t0)}
+                  className="w-full text-left p-3 rounded-xl bg-surface-container-highest/60 hover:bg-primary/10 border border-outline-variant/10 hover:border-primary/20 transition-all group/seg"
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className="material-symbols-outlined text-xs text-primary group-hover/seg:scale-110 transition-transform">play_circle</span>
+                      <span className="font-mono text-[11px] text-primary font-bold">{fmtTime(t0)}</span>
+                      <span className="text-[10px] text-on-surface-variant/40">→</span>
+                      <span className="font-mono text-[11px] text-on-surface-variant/60">{fmtTime(t1)}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      {/* 점수 바 */}
+                      <div className="w-16 h-1 bg-surface-container-highest rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-amber-500 to-primary rounded-full"
+                          style={{ width: `${Math.min(pct * 2, 100)}%` }}
+                        />
+                      </div>
+                      <span className="text-[10px] text-on-surface-variant/60 font-mono tabular-nums">{sc.toFixed(3)}</span>
+                    </div>
+                  </div>
+                  {text && (
+                    <p className="text-xs text-on-surface-variant/70 leading-relaxed line-clamp-2 pl-5">
+                      {text}
+                    </p>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {segments.length === 0 && (
+        <div className="flex-1 flex items-center justify-center text-on-surface-variant/30 text-sm px-8">
+          세그먼트 정보 없음
+        </div>
+      )}
     </div>
   )
 }
@@ -198,7 +324,7 @@ export default function MainSearch() {
   const [query, setQuery] = useState('')
   const [inputValue, setInputValue] = useState('')
   const [selectedFile, setSelectedFile] = useState(null)
-  const [fileDetail, setFileDetail] = useState(null)   // 상세 전체 콘텐츠
+  const [fileDetail, setFileDetail] = useState(null)
   const [detailLoading, setDetailLoading] = useState(false)
 
   // 검색 결과
@@ -309,7 +435,6 @@ export default function MainSearch() {
     setInputValue(q)
 
     if (view === 'home') {
-      // 검색창 fly 애니메이션
       const rect = formRef.current?.getBoundingClientRect()
       if (rect) {
         setFlyStyle({ position: 'fixed', top: rect.top, left: rect.left, width: rect.width, transition: 'none', zIndex: 9998 })
@@ -349,12 +474,16 @@ export default function MainSearch() {
     setView('detail')
     window.history.pushState({ view: 'detail' }, '')
     requestAnimationFrame(() => requestAnimationFrame(() => setDetailVisible(true)))
-    // 전체 콘텐츠 비동기 fetch
-    setDetailLoading(true)
-    fetch(`${API_BASE}/api/files/detail?path=${encodeURIComponent(file.file_path)}`)
-      .then(r => r.json())
-      .then(d => { setFileDetail(d); setDetailLoading(false) })
-      .catch(() => setDetailLoading(false))
+
+    // AV 타입은 fileDetail fetch 불필요 (segments 이미 포함)
+    const isAV = file.file_type === 'video' || file.file_type === 'audio'
+    if (!isAV) {
+      setDetailLoading(true)
+      fetch(`${API_BASE}/api/files/detail?path=${encodeURIComponent(file.file_path)}`)
+        .then(r => r.json())
+        .then(d => { setFileDetail(d); setDetailLoading(false) })
+        .catch(() => setDetailLoading(false))
+    }
   }
 
   const handleBackToResults = () => { setDetailVisible(false); setTimeout(() => setView('results'), 320) }
@@ -606,14 +735,14 @@ export default function MainSearch() {
                     <span className="material-symbols-outlined text-sm">analytics</span>검색 요약
                   </h3>
                   <p className="text-on-surface leading-relaxed mb-6">
-                    <span className="text-primary font-bold">"{query}"</span>에 대해 벡터 유사도 기준으로 정렬된 결과입니다.
+                    <span className="text-primary font-bold">"{query}"</span>에 대해 TRI-CHEF 엔진이 신뢰도 기준으로 정렬한 결과입니다.
                   </p>
                   <div className="grid grid-cols-4 gap-4">
                     {[
                       ['총 결과', `${results.length}건`],
-                      ['최고 유사도', `${Math.round((results[0]?.similarity ?? 0) * 100)}%`],
-                      ['문서', `${results.filter(r => r.file_type === 'doc').length}건`],
-                      ['미디어', `${results.filter(r => r.file_type !== 'doc').length}건`],
+                      ['최고 신뢰도', `${Math.round((results[0]?.confidence ?? 0) * 100)}%`],
+                      ['문서·이미지', `${results.filter(r => r.file_type === 'doc' || r.file_type === 'image').length}건`],
+                      ['영상·음성', `${results.filter(r => r.file_type === 'video' || r.file_type === 'audio').length}건`],
                     ].map(([label, val]) => (
                       <div key={label} className="p-4 rounded-2xl bg-slate-900/40 border border-outline-variant/5">
                         <p className="text-[10px] text-slate-500 uppercase tracking-widest mb-1">{label}</p>
@@ -630,8 +759,10 @@ export default function MainSearch() {
 
       {/* ════ DETAIL VIEW ════ */}
       {view === 'detail' && selectedFile && (() => {
-        const meta   = getTypeMeta(selectedFile.file_type)
-        const simPct = Math.round(selectedFile.similarity * 100)
+        const meta    = getTypeMeta(selectedFile.file_type)
+        const confPct = Math.round((selectedFile.confidence ?? selectedFile.similarity ?? 0) * 100)
+        const isAV    = selectedFile.file_type === 'video' || selectedFile.file_type === 'audio'
+
         return (
           <main className={`${ml} min-h-screen relative transition-[margin] duration-300`}
             style={{ backgroundImage: 'radial-gradient(rgba(133,173,255,0.05) 1px, transparent 1px)', backgroundSize: '32px 32px',
@@ -643,7 +774,7 @@ export default function MainSearch() {
               <div className="flex items-center gap-3 min-w-0 flex-1 mr-4">
                 <span className={`material-symbols-outlined ${meta.color} shrink-0`}>{meta.icon}</span>
                 <span className="font-manrope text-sm tracking-wide text-[#dfe4fe] font-bold truncate">{selectedFile.file_name}</span>
-                <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-bold border border-primary/20 shrink-0">{simPct}%</span>
+                <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-bold border border-primary/20 shrink-0">{confPct}%</span>
                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border shrink-0 ${meta.color} bg-white/5 border-white/10`}>{meta.label}</span>
               </div>
               <div className="flex items-center gap-3 shrink-0">
@@ -668,7 +799,9 @@ export default function MainSearch() {
                   <div className="bg-surface-container-low rounded-xl glass-panel glow-primary min-h-[400px] flex flex-col"
                     style={{ border: '1px solid rgba(65,71,91,0.15)' }}>
                     <div className="flex items-center justify-between px-8 pt-7 pb-5 border-b border-outline-variant/10">
-                      <span className="text-[10px] font-bold tracking-[0.2em] text-primary uppercase">추출된 콘텐츠 스트림</span>
+                      <span className="text-[10px] font-bold tracking-[0.2em] text-primary uppercase">
+                        {isAV ? '미디어 플레이어 · 세그먼트 타임라인' : '추출된 콘텐츠 스트림'}
+                      </span>
                       <div className="flex gap-2 items-center">
                         {detailLoading && <span className="material-symbols-outlined text-primary text-sm animate-spin">progress_activity</span>}
                         <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
@@ -676,9 +809,9 @@ export default function MainSearch() {
                       </div>
                     </div>
 
-                    {/* 동영상: BLIP + STT 탭 */}
-                    {selectedFile.file_type === 'video' && fileDetail ? (
-                      <VideoDetailContent fileDetail={fileDetail} meta={meta} />
+                    {/* AV: 플레이어 + 세그먼트 타임라인 */}
+                    {isAV ? (
+                      <AVDetailContent result={selectedFile} />
                     ) : (selectedFile.file_type === 'image' || selectedFile.file_type === 'doc') && selectedFile.preview_url ? (
                       /* 이미지/문서: 실제 미리보기 */
                       <div className="flex-1 flex flex-col items-center justify-center px-8 py-6 gap-4 overflow-hidden">
@@ -721,21 +854,45 @@ export default function MainSearch() {
                 {/* 메타데이터 패널 */}
                 <div className="col-span-4 space-y-5">
 
-                  {/* 유사도 카드 */}
+                  {/* 신뢰도 카드 */}
                   <div className="bg-surface-container-high rounded-xl p-6 border border-outline-variant/10 relative overflow-hidden group">
                     <div className="absolute -right-4 -top-4 w-24 h-24 bg-primary/10 blur-3xl group-hover:bg-primary/20 transition-all" />
-                    <h4 className="text-[10px] font-bold tracking-[0.15em] text-primary mb-4 uppercase">유사도 분석</h4>
+                    <h4 className="text-[10px] font-bold tracking-[0.15em] text-primary mb-4 uppercase">신뢰도 분석</h4>
                     <div className="space-y-3">
                       <div className="flex items-center gap-3">
                         <div className="flex-1 h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
                           <div className="h-full bg-gradient-to-r from-primary to-secondary shadow-[0_0_8px_rgba(133,173,255,0.5)] transition-all duration-700"
-                            style={{ width: `${simPct}%` }} />
+                            style={{ width: `${confPct}%` }} />
                         </div>
-                        <span className="text-sm font-bold text-on-surface tabular-nums">{simPct}%</span>
+                        <span className="text-sm font-bold text-on-surface tabular-nums">{confPct}%</span>
                       </div>
-                      <p className="text-xs text-on-surface-variant/60">코사인 유사도 기준 상위 매칭</p>
+                      <p className="text-xs text-on-surface-variant/60">
+                        {isAV ? 'BGE-M3 세그먼트 집계 + Calibration' : 'TRI-CHEF Hermitian 유사도 · Calibration'}
+                      </p>
                     </div>
                   </div>
+
+                  {/* AV: 세그먼트 요약 */}
+                  {isAV && selectedFile.segments?.length > 0 && (
+                    <div className="bg-surface-container-low rounded-xl p-5 border border-outline-variant/5">
+                      <h4 className="text-[10px] font-bold tracking-[0.15em] text-amber-400 mb-3 uppercase">매칭 세그먼트</h4>
+                      <div className="space-y-2">
+                        {selectedFile.segments.slice(0, 5).map((s, i) => {
+                          const t0 = s.start ?? s.start_sec ?? 0
+                          const sc = s.score ?? 0
+                          return (
+                            <div key={i} className="flex items-center gap-2">
+                              <span className="font-mono text-[10px] text-amber-400/80 shrink-0">{fmtTime(t0)}</span>
+                              <div className="flex-1 h-1 bg-surface-container-highest rounded-full overflow-hidden">
+                                <div className="h-full bg-amber-500/60 rounded-full" style={{ width: `${Math.min(sc * 200, 100)}%` }} />
+                              </div>
+                              <span className="text-[10px] text-on-surface-variant/50 font-mono shrink-0">{sc.toFixed(2)}</span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
 
                   {/* 파일 메타데이터 */}
                   <div className="bg-surface-container-low rounded-xl p-6 border border-outline-variant/5">
@@ -744,8 +901,11 @@ export default function MainSearch() {
                       {[
                         ['파일명', selectedFile.file_name],
                         ['유형',   meta.label],
-                        ['유사도', `${simPct}%`],
-                        ['청크 수', fileDetail ? `${fileDetail.chunks?.length ?? '-'}개` : '-'],
+                        ['신뢰도', `${confPct}%`],
+                        ...(isAV
+                          ? [['세그먼트', `${selectedFile.segments?.length ?? 0}개`]]
+                          : [['청크 수', fileDetail ? `${fileDetail.chunks?.length ?? '-'}개` : '-']]
+                        ),
                         ['경로',   selectedFile.file_path],
                       ].map(([k, v]) => (
                         <div key={k} className="flex justify-between items-start py-2 border-b border-outline-variant/10 last:border-0 gap-2">

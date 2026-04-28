@@ -49,6 +49,20 @@ def _get_engine() -> TriChefEngine:
     return _engine
 
 
+def reload_engine() -> None:
+    """임베딩 완료 후 검색 엔진 캐시 재로드 (npy 파일 변경 반영)."""
+    global _engine
+    with _engine_lock:
+        if _engine is not None:
+            try:
+                _engine.reload()
+            except Exception as e:
+                logger.warning(f"[reload_engine] reload 실패, 재생성: {e}")
+                _engine = TriChefEngine()
+        else:
+            _engine = TriChefEngine()
+
+
 @bp.post("/search")
 def search():
     body = request.get_json(force=True)

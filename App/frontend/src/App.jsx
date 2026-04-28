@@ -15,33 +15,30 @@ import MainSearch from "./pages/MainSearch";
 import MainAI from "./pages/MainAI";
 import Settings from "./pages/Settings";
 import DataIndexing from "./pages/DataIndexing";
-import TriChefSearch from "./pages/TriChefSearch";
 
 function AuthGate() {
   const [loading, setLoading] = useState(true);
   const [initialized, setInitialized] = useState(null);
-  const [error, setError] = useState("");
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     let active = true;
+    let timer = null;
 
     const checkStatus = async () => {
       try {
         const response = await fetch(`${API_BASE}/api/auth/status`);
         const data = await response.json();
-        if (!response.ok) {
-          throw new Error(data?.error || "Failed to fetch status");
-        }
+        if (!response.ok) throw new Error(data?.error || "Failed");
         if (active) {
           setInitialized(Boolean(data?.initialized));
+          setLoading(false);
         }
       } catch {
+        // 백엔드 아직 기동 중 — 1.5초 후 재시도 (최대 60회 = 90초)
         if (active) {
-          setError("서버에 연결할 수 없습니다");
-        }
-      } finally {
-        if (active) {
-          setLoading(false);
+          setRetryCount(c => c + 1);
+          timer = setTimeout(checkStatus, 1500);
         }
       }
     };
@@ -50,17 +47,22 @@ function AuthGate() {
 
     return () => {
       active = false;
+      if (timer) clearTimeout(timer);
     };
   }, []);
 
   if (loading) {
-    return <div />;
-  }
-
-  if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4 bg-void">
-        <p className="text-red-400 text-sm text-center">{error}</p>
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-[#070d1f]">
+        <div className="w-10 h-10 bg-gradient-to-br from-primary to-secondary rounded-xl flex items-center justify-center animate-pulse">
+          <span className="material-symbols-outlined text-white text-xl" style={{ fontVariationSettings: '"FILL" 1' }}>dataset</span>
+        </div>
+        <p className="text-on-surface-variant text-sm">
+          {retryCount < 3 ? '서버에 연결하는 중...' : `백엔드 준비 중... (${retryCount})`}
+        </p>
+        <div className="w-32 h-0.5 bg-surface-container-high rounded-full overflow-hidden">
+          <div className="h-full bg-gradient-to-r from-primary to-secondary animate-[slide_1.4s_ease-in-out_infinite] rounded-full" />
+        </div>
       </div>
     );
   }
@@ -107,7 +109,6 @@ function ScaledApp() {
         <Route path="/ai/results/:id" element={<Navigate to="/ai" replace />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/data" element={<DataIndexing />} />
-        <Route path="/trichef" element={<TriChefSearch />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </SidebarProvider>
