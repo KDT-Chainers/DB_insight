@@ -4,8 +4,9 @@ pii_filter_helpers.py
 PII 탐지 후처리·정책용 상수.
 
 목적:
-  1) 전화번호·이메일은 이 프로젝트에서 「민감 PII」로 취급하지 않는다.
+  1) 전화번호·이메일·IBAN 은 「민감 PII」로 취급하지 않는다.
      → 업로드 모달, 마스킹, PRS 노출, 임베딩 키워드 보강에서 제외.
+     신용·체크카드 번호(CREDIT_CARD)는 민감 PII로 취급한다.
   2) 계좌번호(KR_BANK_ACCOUNT) 오탐을 줄이기 위해
      은행명 또는 계좌 관련 키워드가 주변 문맥에 있을 때만 인정한다.
   3) 동일 문자열이 청크 안에서 과도하게 반복되면(표·푸터 등) 무시한다.
@@ -22,6 +23,112 @@ import config
 
 logger = logging.getLogger(__name__)
 
+# ── 카드 번호 보조 패턴 (Luhn 미검증) ─────────────────────────────────────────
+# Presidio 기본 CreditCardRecognizer 는 Luhn 통과 번호만 인식한다.
+# 목업·디자인 샘플·일부 OCR 결과는 체크섬이 맞지 않아 누락되므로 동일 유형으로 보완한다.
+#
+# 구분 표기:
+#   - 일반(Visa/MC 등): 16자리 4-4-4-4
+#   - 아멕스: 15자리 4-6-5 (예 3782 822463 10005)
+
+_RELAXED_CC_GROUPED_RE = re.compile(
+    r"(?<!\d)(?:"
+    r"\d{4}[-\s]\d{4}[-\s]\d{4}[-\s]\d{4}|"   # 16자리
+    r"\d{4}[-\s]\d{6}[-\s]\d{5}"              # Amex 15자리
+    r")(?!\d)"
+)
+_RELAXED_CC_CONTIG_RE = re.compile(
+    r"(?<!\d)(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14}|3[47][0-9]{13}|6(?:011|5[0-9]{2})[0-9]{12})(?!\d)"
+)
+
+
+def looks_like_credit_card_layout(text: str) -> bool:
+    """
+    카드 번호로 보이는 형태면 True (체크섬은 검사하지 않음).
+    계좌번호 패턴과 겹칠 때 카드 우선으로 두기 위해 사용한다.
+    """
+    if not text or not str(text).strip():
+        return False
+    s = re.sub(r"\s+", " ", str(text).strip())
+    if _RELAXED_CC_GROUPED_RE.fullmatch(s):
+        return True
+    digits = re.sub(r"\D", "", s)
+    if 13 <= len(digits) <= 19 and bool(_RELAXED_CC_CONTIG_RE.fullmatch(digits)):
+        return True
+    return False
+
+
+# 카드 번호 OCR 실패 보완 — 브랜드·카드 표면 문구 (PAN 전체가 안 잡혀도 신호로 사용)
+_PAYMENT_BRAND_SNIPPETS: Tuple[str, ...] = (
+    "american express",
+    "americanexpress",
+    "amex",
+    "아멕스",
+    "mastercard",
+    "master card",
+    "visa",
+    "discover",
+    "jcb",
+    "unionpay",
+    "diners club",
+    "마스터카드",
+    "비자카드",
+    "신용카드",
+    "체크카드",
+    "우리카드",
+    "신한카드",
+    "삼성카드",
+    "현대카드",
+    "롯데카드",
+    "국민카드",
+    "kb국민",
+    "nh카드",
+    "하나카드",
+)
+_CARD_FACE_KW: Tuple[str, ...] = (
+    "valid thru",
+    "valid from",
+    "month/year",
+    "good thru",
+    "expires end",
+    "member since",
+    "cvv",
+    "cvc",
+)
+
+
+def payment_card_imagery_likely(text: str, *, is_image_chunk: bool = False) -> bool:
+    """
+    카드 번호가 로고·문양에 가려져 PAN 전체가 OCR 되지 않아도,
+    카드 브랜드·카드 앞면 표기가 보이면 결제카드 이미지로 간주한다.
+
+    - 이미지 업로드: 브랜드/카드면 문구 중 하나라도 있으면 True (숫자 없어도 허용).
+    - 비이미지: 브랜드 또는 카드면 문구 + 숫자 조각이 함께 있을 때만 True.
+    """
+    if not text or not str(text).strip():
+        return False
+    tl = str(text).lower()
+    digit_count = sum(1 for c in text if c.isdigit())
+    brand_hit = any(s in tl for s in _PAYMENT_BRAND_SNIPPETS)
+    face_hit = any(k in tl for k in _CARD_FACE_KW)
+
+    if is_image_chunk:
+        if brand_hit or face_hit:
+            return True
+        # 브랜드 OCR 실패 시 숫자만 상당히 많이 찍힌 경우(번호 일부만 노출)
+        if digit_count >= 8:
+            return True
+        if digit_count >= 4 and re.search(r"\d{4}", text):
+            return True
+        return False
+
+    if brand_hit and digit_count >= 8:
+        return True
+    if (brand_hit or face_hit) and digit_count >= 4 and re.search(r"\d{4}", text):
+        return True
+    return False
+
+
 # ── 정책: 민감 PII로 취급하는 유형만 (브레이크 모달·마스킹·PRS·임베딩 보강) ──
 POLICY_PROTECTED_PII_TYPES: FrozenSet[str] = frozenset({
     "KR_RRN",
@@ -29,6 +136,7 @@ POLICY_PROTECTED_PII_TYPES: FrozenSet[str] = frozenset({
     "KR_DRIVER_LICENSE",
     "KR_BANK_ACCOUNT",
     "KR_BRN",
+    "CREDIT_CARD",
 })
 
 # 정책에서 완전히 제외 (탐지되어도 PII로 간주하지 않음)
@@ -36,7 +144,6 @@ POLICY_IGNORED_PII_TYPES: FrozenSet[str] = frozenset({
     "KR_PHONE",
     "PHONE_NUMBER",
     "EMAIL_ADDRESS",
-    "CREDIT_CARD",
     "IBAN_CODE",
 })
 
@@ -157,6 +264,7 @@ def sensitivity_from_protected_types(pii_types: List[str]) -> float:
         "KR_DRIVER_LICENSE": 0.8,
         "KR_BANK_ACCOUNT": 0.85,
         "KR_BRN": 0.6,
+        "CREDIT_CARD": 0.88,
     }
     protected = filter_to_protected_pii_types(pii_types)
     if not protected:

@@ -5,8 +5,9 @@ pii_detector.py
 2차: 애매한 경우 Qwen 분류기로 재검증
 
 정책(이 프로젝트):
-  - 민감 PII로 취급: 주민·여권·운전면허·계좌·사업자만 (security.pii_filter_helpers 참고)
-  - 전화·이메일·카드·IBAN 은 탐지 대상에서 제외(오탐·비대상)
+  - 민감 PII로 취급: 주민·여권·운전면허·계좌·사업자·신용카드 (security.pii_filter_helpers 참고)
+  - 전화·이메일·IBAN 은 정책 비보호(탐지는 선택적)
+  - 카드: Presidio CREDIT_CARD(Luhn) + 체크섬 불일치·목업용 보조 패턴
   - 계좌번호는 은행명 또는 계좌 키워드 문맥 + 반복 제거 후처리로 오탐 억제
 
 출력: List[PIIFinding]  (위치, 유형, 신뢰도, 원문)
@@ -15,15 +16,18 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from presidio_analyzer import AnalyzerEngine
 from presidio_analyzer.nlp_engine import NlpEngineProvider
 
 from security.korean_recognizers import ALL_KOREAN_RECOGNIZERS
 from security.pii_filter_helpers import (
+    _RELAXED_CC_CONTIG_RE,
+    _RELAXED_CC_GROUPED_RE,  # 16자리 4×4 + Amex 15자리 4-6-5
     bank_account_has_required_context,
     log_pii_debug,
+    looks_like_credit_card_layout,
     should_drop_repeated_match,
 )
 
@@ -74,13 +78,14 @@ class PIIDetector:
         results = detector.scan_chunks(["청크1 텍스트", "청크2 텍스트"])
     """
 
-    # Presidio + 커스텀 Recognizer — 민감 PII만 (전화·이메일·카드·IBAN 제외)
+    # Presidio + 커스텀 Recognizer — 민감 PII (전화·이메일·IBAN 제외)
     DEFAULT_ENTITIES = [
         "KR_RRN",
         "KR_PASSPORT",
         "KR_DRIVER_LICENSE",
         "KR_BANK_ACCOUNT",
         "KR_BRN",
+        "CREDIT_CARD",
     ]
 
     def __init__(self, qwen_classifier=None, llm_score_threshold: float = 0.5) -> None:
@@ -166,6 +171,12 @@ class PIIDetector:
 
                 # ── 계좌: 반복(푸터·표) + 문맥(은행명/계좌 키워드) 강제 ─────────
                 if et == "KR_BANK_ACCOUNT":
+                    if looks_like_credit_card_layout(span_text):
+                        log_pii_debug(
+                            "DROP", et, span_text, chunk_text, r.start, r.end,
+                            reason="credit_card_layout_not_bank",
+                        )
+                        continue
                     if should_drop_repeated_match(chunk_text, span_text):
                         log_pii_debug(
                             "DROP", et, span_text, chunk_text, r.start, r.end,
@@ -208,9 +219,66 @@ class PIIDetector:
                 )
                 chunk_result.findings.append(finding)
 
+            self._supplement_relaxed_credit_cards(chunk_text, idx, chunk_result.findings)
+
             results.append(chunk_result)
 
         return results
+
+    def _supplement_relaxed_credit_cards(
+        self,
+        chunk_text: str,
+        chunk_index: int,
+        findings: List[PIIFinding],
+    ) -> None:
+        """
+        Presidio 기본 카드 Recognizer 가 Luhn 실패로 놓친 번호(목업·샘플·OCR) 보완.
+        """
+        occupied: List[Tuple[int, int]] = [
+            (f.start, f.end) for f in findings if f.entity_type == "CREDIT_CARD"
+        ]
+
+        def overlaps(s: int, e: int) -> bool:
+            for s0, e0 in occupied:
+                if s < e0 and e > s0:
+                    return True
+            return False
+
+        for pattern, score in (
+            (_RELAXED_CC_GROUPED_RE, 0.88),
+            (_RELAXED_CC_CONTIG_RE, 0.78),
+        ):
+            for m in pattern.finditer(chunk_text):
+                start, end = m.span()
+                span_text = chunk_text[start:end]
+                if overlaps(start, end):
+                    continue
+                if should_drop_repeated_match(chunk_text, span_text):
+                    log_pii_debug(
+                        "DROP", "CREDIT_CARD", span_text, chunk_text, start, end,
+                        reason="repeated_in_chunk",
+                    )
+                    continue
+
+                finding = PIIFinding(
+                    entity_type="CREDIT_CARD",
+                    text=span_text,
+                    start=start,
+                    end=end,
+                    score=score,
+                    chunk_index=chunk_index,
+                )
+                if self._qwen and score < self._llm_threshold:
+                    finding = self._verify_with_qwen(finding, chunk_text)
+                    if finding is None:
+                        continue
+
+                log_pii_debug(
+                    "KEEP", "CREDIT_CARD", span_text, chunk_text, start, end,
+                    reason="relaxed_card_no_luhn",
+                )
+                findings.append(finding)
+                occupied.append((start, end))
 
     def _verify_with_qwen(
         self,

@@ -76,6 +76,7 @@ _PII_EXPOSURE_WEIGHTS: Dict[str, float] = {
     "KR_DRIVER_LICENSE": 0.80,
     "KR_BANK_ACCOUNT":   0.85,
     "KR_BRN":            0.60,
+    "CREDIT_CARD":       0.88,
     # 전화번호는 비민감 정책: PRS 노출 위험도에서 제외 수준으로 낮춤
     "KR_PHONE":          0.00,
     "PERSON":            0.40,

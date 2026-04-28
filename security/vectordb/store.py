@@ -70,6 +70,7 @@ _PII_KR_MAP = {
     "KR_DRIVER_LICENSE": "운전면허 면허증",
     "KR_BANK_ACCOUNT":   "계좌번호 통장 은행",
     "KR_BRN":            "사업자번호 사업자등록증",
+    "CREDIT_CARD":       "카드번호 신용카드 체크카드 결제",
 }
 
 
@@ -551,23 +552,33 @@ class VectorStore:
         """
         from security.pii_filter_helpers import (
             filter_to_protected_pii_types,
+            payment_card_imagery_likely,
             sensitivity_from_protected_types,
         )
 
+        def _protected_types_for_hit(row: Dict[str, Any]) -> List[str]:
+            pts = list(
+                filter_to_protected_pii_types(row.get("pii_types") or [])
+            )
+            txt = row.get("text") or ""
+            if payment_card_imagery_likely(
+                txt,
+                is_image_chunk=bool(row.get("is_image")),
+            ):
+                if "CREDIT_CARD" not in pts:
+                    pts.append("CREDIT_CARD")
+            return pts
+
         pii_types: List[str] = []
         for r in results:
-            for t in filter_to_protected_pii_types(r.get("pii_types") or []):
+            for t in _protected_types_for_hit(r):
                 if t not in pii_types:
                     pii_types.append(t)
 
-        contains_pii = any(
-            bool(filter_to_protected_pii_types(r.get("pii_types") or []))
-            for r in results
-        )
+        contains_pii = any(bool(_protected_types_for_hit(r)) for r in results)
 
         protected_hits = sum(
-            1 for r in results
-            if filter_to_protected_pii_types(r.get("pii_types") or [])
+            1 for r in results if _protected_types_for_hit(r)
         )
         pii_chunk_ratio = round(
             protected_hits / max(len(results), 1),
@@ -580,7 +591,7 @@ class VectorStore:
         # 검색 결과별 민감도는 보호 대상 PII만 반영해 재계산
         max_score = 0.0
         for r in results:
-            pts = filter_to_protected_pii_types(r.get("pii_types") or [])
+            pts = _protected_types_for_hit(r)
             max_score = max(max_score, sensitivity_from_protected_types(pts))
         sensitivity_score = max_score
         if bulk_request:

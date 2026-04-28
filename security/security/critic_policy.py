@@ -68,6 +68,7 @@ HIGH_RISK_PII_TYPES = frozenset({
     "KR_PASSPORT",       # 여권번호
     "KR_BANK_ACCOUNT",   # 계좌번호
     "KR_DRIVER_LICENSE", # 운전면허번호
+    "CREDIT_CARD",       # 신용·체크카드 번호
 })
 
 # regenerate_with_constraints 를 실제로 발동할 최소 고위험 PII 탐지 건수.

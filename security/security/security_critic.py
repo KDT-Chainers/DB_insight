@@ -119,6 +119,15 @@ class SecurityCritic:
         # 전화번호 패턴(010/02/지역번호)은 제외하고 계좌번호만 탐지
         (r"(?<!\d)(?!(?:01[0-9]|02|0[3-9]\d)[-\s])\d{3,4}[-\s]\d{2,4}[-\s]\d{4,6}(?:[-\s]\d{1,3})?(?!\d)", "KR_BANK_ACCOUNT"),
         (r"(?<!\d)\d{3}-\d{2}-\d{5}(?!\d)",                                  "KR_BRN"),
+        # Visa/Master/Amex/Discover 등 일반 카드번호 형식 (출력 직접 노출 탐지)
+        (
+            r"(?<!\d)(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14}|3[47][0-9]{13}|"
+            r"6(?:011|5[0-9]{2})[0-9]{12})(?!\d)",
+            "CREDIT_CARD",
+        ),
+        (r"(?<!\d)(?:\d{4}[-\s]){3}\d{4}(?!\d)", "CREDIT_CARD"),
+        # American Express 15자리 (일반적으로 4-6-5 로 인쇄)
+        (r"(?<!\d)\d{4}[-\s]\d{6}[-\s]\d{5}(?!\d)", "CREDIT_CARD"),
     ]
 
     # ── Prompt Injection / 우회 탐지 패턴 ────────────────────────────────────
@@ -189,7 +198,7 @@ class SecurityCritic:
             is_high_risk = len(high_risk_found) >= REGENERATE_MIN_PII_TYPES
 
             if is_high_risk:
-                # 고위험 PII (주민번호/여권/계좌) → 조건부 재생성
+                # 고위험 PII (주민번호·여권·계좌·카드 등) → 조건부 재생성
                 logger.warning("[Critic] 출력 내 고위험 PII 탐지: %s", types_str)
                 return CriticDecision(
                     decision=REGENERATE_WITH_CONSTRAINTS,
@@ -227,7 +236,7 @@ class SecurityCritic:
         # 전화·이메일 등 정책 비보호 유형만 있으면 비민감으로 간주 (구 DB 호환)
         _non_sensitive_meta = frozenset({
             "KR_PHONE", "PHONE_NUMBER", "EMAIL_ADDRESS", "EMAIL",
-            "CREDIT_CARD", "IBAN_CODE",
+            "IBAN_CODE",
         })
         if contains_pii and pii_types and set(pii_types).issubset(_non_sensitive_meta):
             return CriticDecision(

@@ -84,7 +84,7 @@ security/
 │   └── response_agent.py        # (deprecated: LLM 답변 제거됨)
 │
 ├── security/
-│   ├── korean_recognizers.py    # 한국형 PII Recognizer 6종
+│   ├── korean_recognizers.py    # 한국형 PII Recognizer (주민·여권·면허·계좌·사업자)
 │   ├── pii_detector.py          # Presidio 기반 PII 탐지 엔진
 │   ├── qwen_classifier.py       # Qwen 보안 분류 + 쿼리 재작성
 │   ├── policy.py                # 검색/업로드 보안 정책
@@ -194,9 +194,11 @@ python main.py
 | 주민등록번호 | `KR_RRN` | 정규식 + 13자리 체크섬 검증 |
 | 여권번호 | `KR_PASSPORT` | 정규식 (알파벳1 + 숫자8) |
 | 운전면허번호 | `KR_DRIVER_LICENSE` | 정규식 (지역-연도-번호-검증) |
-| 계좌번호 | `KR_BANK_ACCOUNT` | 정규식 + 문맥(계좌/통장) 가중치 |
+| 계좌번호 | `KR_BANK_ACCOUNT` | 정규식 + 문맥(은행명/계좌 키워드) + 반복 제거 |
 | 사업자등록번호 | `KR_BRN` | 정규식 + 10자리 체크섬 검증 |
-| 전화번호 | `KR_PHONE` | 정규식 (010/02/지역/대표번호) |
+| 신용·체크카드 번호 | `CREDIT_CARD` | Presidio(Luhn) + **보조 패턴**(Luhn 불일치·목업·OCR) + Amex **4-6-5**(15자리) |
+
+> 전화·이메일은 Recognizer에 넣지 않으며 정책상 비보호입니다. (`pii_filter_helpers.py` 참고)
 
 ---
 
@@ -286,12 +288,25 @@ Gradio UI의 **📋 감사 로그** 탭에서 확인 가능.
   - `KR_DRIVER_LICENSE` (운전면허번호)
   - `KR_BANK_ACCOUNT` (계좌번호)
   - `KR_BRN` (사업자등록번호)
+  - `CREDIT_CARD` (신용·체크카드 번호)
 
 - **비보호 정책(민감 처리 제외):**
-  - `KR_PHONE`, `PHONE_NUMBER`, `EMAIL_ADDRESS` (및 카드/IBAN)
-  - 브레이크 모달/마스킹/민감 분류/critic 판단에서 제외
+  - `KR_PHONE`, `PHONE_NUMBER`, `EMAIL_ADDRESS`, `IBAN_CODE`
+  - 위 유형만 브레이크 모달/마스킹/PRS 노출/임베딩 키워드 보강에서 제외합니다. **`CREDIT_CARD`는 보호 대상**입니다(아래 카드 보강 참고).
 
-> 참고: 위 정책은 `security/pii_filter_helpers.py`의 상수로 강제됩니다.
+> 참고: 상수는 `security/pii_filter_helpers.py` (`POLICY_PROTECTED_PII_TYPES` / `POLICY_IGNORED_PII_TYPES`)에서 관리합니다.
+
+#### 카드 번호 탐지 보강 (최근 반영)
+
+- **Presidio `CREDIT_CARD`**: Luhn 통과 번호 위주. 목업·샘플 번호(체크섬 불일치)는 기본 Recognizer만으로는 누락될 수 있음.
+- **보조 패턴** (`pii_detector.py` + `pii_filter_helpers.py`):  
+  - 16자리 **4-4-4-4** 구분, **연속 BIN**(Visa/MC/Amex/Discover 등), **Amex 15자리 4-6-5** — Luhn 없이 `CREDIT_CARD` 후보로 보강.
+- **계좌 vs 카드**: `4×4`·카드 형태 문자열은 `KR_BANK_ACCOUNT`로 오탐되지 않도록 걸러냄 (`looks_like_credit_card_layout`).
+- **카드 이미지·로고 가림 OCR**: PAN이 거의 안 나와도, OCR에 **브랜드/카드면 문구**(예: `American Express`, `VALID THRU`, 국내 카드사명 등)가 있으면 **이미지 업로드** 시 `CREDIT_CARD`로 메타 보강 (`payment_card_imagery_likely` → `agents/upload_security.py`).  
+  검색 시에도 동일 휴리스틱으로 `feature_map`을 보강해 PRS가 과도하게 NORMAL에 머물지 않도록 함 (`vectordb/store.py` `build_feature_map`).
+- **Security Critic**: 출력 텍스트에 위 카드 패턴(일반 + Amex 4-6-5) 반영 (`security/security_critic.py`). 고위험 유형에 `CREDIT_CARD` 포함 (`security/critic_policy.py`).
+
+> PRS는 이미지 픽셀을 읽지 않습니다. 숫자·문구는 반드시 추출 단계(OCR 등)에서 문자열로 들어온 뒤, 위 규칙이 `feature_map`·점수에 반영됩니다.
 
 ### 5) 계좌번호 오탐(False Positive) 완화
 
@@ -328,3 +343,16 @@ python -c "import config; print(config.SUMMARY_TOP_K, config.MAP_REDUCE_THRESHOL
 - `MAP_REDUCE_THRESHOLD=999`  (필요할 때만 낮춰 활성화)
 - `QUERY_REWRITE_ENABLED=0`
 - `PIIDEBUG=0` (평시), 문제 분석 시만 `1`
+
+### 9) 관련 파일 빠른 참고 (카드·PII)
+
+| 역할 | 경로 |
+|------|------|
+| 보호/무시 상수, 카드 형태·이미지 휴리스틱 | `security/pii_filter_helpers.py` |
+| Presidio 스캔 + 보조 카드 탐지 | `security/pii_detector.py` |
+| 업로드 시 카드 이미지 보강 | `agents/upload_security.py` |
+| 검색 `feature_map` 보강 | `vectordb/store.py` (`build_feature_map`) |
+| PRS 가중치 | `security/privacy_risk_score.py` |
+| 출력 스캔·고위험 유형 | `security/security_critic.py`, `security/critic_policy.py` |
+| 임베딩 prefix 키워드 | `vectordb/store.py` (`_PII_KR_MAP`) |
+| 문서 메타 민감도 | `vectordb/meta_extractor.py` |
