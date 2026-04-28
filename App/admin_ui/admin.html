@@ -215,32 +215,44 @@ document.getElementById('pipe-toggle-btn').addEventListener('click', () => {
 let AVAILABLE_DOMAINS = new Set();
 
 // ── 도메인별 파이프라인 단계 정의 (실제 구현 기반) ──
+//   교차검증 근거: config.py LEXICAL_DOMAINS/ASF_DOMAINS (image 제외),
+//   unified_engine L1/L2/L3 fusion (image-only), trichef_admin default_rerank
+//   (doc_page=ON, image=OFF), MR_TriCHEF Z=DINOv2 keyframe / zeros if STT-only.
 const PIPELINES = {
   doc_page: {
     label: 'doc_page',
     name: 'DI-TriCHEF · Document',
-    steps: ['PDF/HWP/Office', 'Page Render (dpi=110)', 'Qwen2-VL Caption (L1/L2/L3)',
-            '3-axis Embed (Re=SigLIP2 / Im=BGE-M3 / Z=DINOv2)', 'Hermitian Score',
-            'RRF (Dense+Lex+ASF)', 'Calibration τ', 'BGE Reranker'],
+    steps: ['PDF/HWP/Office', 'Page Render (dpi=110)',
+            'Caption: Qwen2-VL (KO) | Legacy BLIP L1+L2+L3',
+            '3-axis Embed (Re=SigLIP2 / Im=BGE-M3 / Z=DINOv2)',
+            'Hermitian Score', 'RRF (Dense+Lex+ASF)',
+            'Calibration τ', 'BGE Reranker (default ON)'],
   },
   image: {
     label: 'image',
     name: 'DI-TriCHEF · Image',
-    steps: ['Raw Image', 'Qwen2-VL Caption', '3-axis Embed (Re/Im/Z)',
-            'Hermitian Score', 'RRF (Dense+Lex+ASF)', 'Calibration τ (μ+3σ)'],
+    steps: ['Raw Image',
+            'Caption: Qwen2-VL (KO) | Legacy BLIP L1/L2/L3 fusion (0.15/0.25/0.60)',
+            '3-axis Embed (Re=SigLIP2 / Im=BGE-M3 / Z=DINOv2)',
+            'Hermitian Score',
+            'Dense-only (Lex/ASF excluded for image)',
+            'Calibration τ (μ+3σ)',
+            'BGE Reranker (optional, default OFF)'],
   },
   movie: {
     label: 'movie',
     name: 'MR-TriCHEF · Movie',
-    steps: ['Video', 'Frame Sampling (fps=0.5 + scene>0.2)',
-            'Whisper-large-v3 STT', 'Segment Align (temporal overlap)',
-            '2-axis Embed (Re/Im, Z=0)', 'File-level Aggregation',
-            'Calibration τ'],
+    steps: ['Video',
+            'Adaptive Frame Sampling (baseline 2s, scene>0.2 → 0.5–5s)',
+            'Whisper-large-v3 STT', 'Segment Align (keyframe ∪ STT)',
+            '3-axis Embed (Re=SigLIP2 / Im=BGE-M3 / Z=DINOv2 keyframe, zeros if STT-only)',
+            'File-level Aggregation', 'Calibration τ'],
   },
   music: {
     label: 'music',
     name: 'MR-TriCHEF · Music',
-    steps: ['Audio', '30s Sliding Window (15s hop)', 'Whisper STT',
+    steps: ['Audio', '30s Sliding Window (15s hop, 50% overlap)',
+            'Whisper-large-v3 STT',
             '2-axis Embed (Re=SigLIP2-text / Im=BGE-M3, Z=0)',
             'File-level Aggregation', 'Calibration τ'],
   },
