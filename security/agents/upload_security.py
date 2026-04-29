@@ -11,7 +11,7 @@ ABC 권한: [A] 신뢰불가 입력(업로드 파일) 처리
   2. 텍스트 추출 (PDF / HWPX / 이미지)
   3. 이미지 파일: 영구 복사 + OCR bbox 캡처
   4. 청킹
-  5. PII 탐지 (정규식 + Qwen 재검증)
+  5. PII 탐지 (Presidio + 한국형 Recognizer + 정책/휴리스틱; 업로드 단계 Qwen 미사용)
   6. 이미지 PII → 이미지 bbox 좌표 매핑
   7. 탐지 결과 반환 (임베딩 결정은 Orchestrator 가 함)
 """

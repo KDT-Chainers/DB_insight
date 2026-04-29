@@ -10,7 +10,7 @@ ABC 원칙:
   실제 권한 행사:
     - 파일 검사   → UploadSecurityAgent  (A)
     - DB 검색     → RetrievalAgent        (B)
-    - 응답 생성   → ResponseAgent         (C)
+    - 요약·출력   → SummaryAgent + SummaryGuard (C; 범용 LLM Q&A/ResponseAgent 없음)
     - 보안 분류   → QwenClassifier        (A, 단독)
     - 정책 판단   → SecurityPolicy
     - Grounding   → GroundingGate
