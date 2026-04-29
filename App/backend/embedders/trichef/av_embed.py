@@ -22,8 +22,13 @@ from pathlib import Path
 from typing import Callable
 
 import numpy as np
+import torch
 
 logger = logging.getLogger(__name__)
+
+# 긴 영상에서 VRAM 과부하를 방지하기 위한 최대 프레임 수.
+# 0.5fps 기준 약 10분 분량 → 농구 1쿼터 풀커버 가능.
+_MAX_MOVIE_FRAMES = 300
 
 # ── Windows symlink 권한 오류 방지 (WinError 1314) ──────────────────────────
 # HuggingFace Hub 가 캐시 디렉토리에 snapshot symlink 를 생성할 때
@@ -182,6 +187,13 @@ def embed_movie_file(file_path: str, progress_cb: Callable | None = None) -> dic
             return {"status": "error", "reason": "ffmpeg 프레임 추출 실패 (ffmpeg 설치 필요)"}
         wav = extract_audio(src, tmp / "audio.wav")
         dur = probe_duration(src)
+
+        # 매우 긴 영상: 최대 _MAX_MOVIE_FRAMES 개로 균등 샘플링 (VRAM 과부하 방지)
+        if len(frames) > _MAX_MOVIE_FRAMES:
+            step = len(frames) / _MAX_MOVIE_FRAMES
+            frames = [frames[round(i * step)] for i in range(_MAX_MOVIE_FRAMES)]
+            logger.info(f"[movie] {src.name}: 프레임 {len(frames)}개 → {_MAX_MOVIE_FRAMES}개로 균등 샘플링 (OOM 방지)")
+
         frame_paths = [f.path for f in frames]
         logger.info(f"[movie] {src.name}: {len(frames)} frames, dur={dur:.1f}s")
 
@@ -189,19 +201,28 @@ def embed_movie_file(file_path: str, progress_cb: Callable | None = None) -> dic
         if _cb(1):
             return {"status": "skipped", "reason": "사용자 중단"}
         sig = SigLIP2Encoder()
-        Re = sig.embed_images(frame_paths, batch=8)
-        sig.unload(); del sig; gc.collect()
+        Re = sig.embed_images(frame_paths, batch=4)   # batch 축소: 8 → 4
+        sig.unload(); del sig
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
         dino = DINOv2Encoder()
-        Z = dino.embed_images(frame_paths, batch=8)
-        dino.unload(); del dino; gc.collect()
+        Z = dino.embed_images(frame_paths, batch=4)   # batch 축소: 8 → 4
+        dino.unload(); del dino
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
         # ── Step 3: Whisper STT ────────────────────────────────────
         if _cb(2):
             return {"status": "skipped", "reason": "사용자 중단"}
         stt_m = WhisperSTT()
         stt_segs = stt_m.transcribe(wav, language=None)
-        stt_m.unload(); del stt_m; gc.collect()
+        stt_m.unload(); del stt_m
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
         logger.info(f"[movie] {src.name}: {len(stt_segs)} STT segments")
 
         # ── Step 4: BGE-M3 Im (1024d) ─────────────────────────────
@@ -211,8 +232,11 @@ def embed_movie_file(file_path: str, progress_cb: Callable | None = None) -> dic
         frame_stt = _align_stt_to_frames(stt_segs, frame_times)
 
         bge = BGEM3Encoder()
-        Im = bge.embed([t if t else " " for t in frame_stt], batch=16)
-        bge.unload(); del bge; gc.collect()
+        Im = bge.embed([t if t else " " for t in frame_stt], batch=8)  # batch 축소: 16 → 8
+        bge.unload(); del bge
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
         # ── Step 5: 캐시 저장 ─────────────────────────────────────
         if _cb(4):
