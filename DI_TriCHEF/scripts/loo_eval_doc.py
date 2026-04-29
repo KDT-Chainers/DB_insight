@@ -59,7 +59,13 @@ def _load_corpus() -> tuple[list[str], list[str]]:
     bodies = json.loads((doc_dir / "_body_texts.json").read_text(encoding="utf-8"))
     ids_raw = json.loads((doc_dir / "doc_page_ids.json").read_text(encoding="utf-8"))
     ids = ids_raw["ids"] if isinstance(ids_raw, dict) else ids_raw
-    assert len(bodies) == len(ids), f"body/ids mismatch: {len(bodies)} vs {len(ids)}"
+    # body/ids 길이 불일치 시 (신규 페이지가 body_texts에 누락된 경우)
+    # 공통 prefix 만 사용. LOO 평가는 첫 N개에 대해 self-retrieval 측정.
+    if len(bodies) != len(ids):
+        n = min(len(bodies), len(ids))
+        print(f"[loo_eval] body/ids mismatch: {len(bodies)} vs {len(ids)} -- truncating to {n}")
+        bodies = bodies[:n]
+        ids = ids[:n]
     return bodies, ids
 
 
