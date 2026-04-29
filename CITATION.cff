@@ -1,0 +1,55 @@
+cff-version: 1.2.0
+title: "Tri-CHEF: Complex-Hermitian Embedding Fusion for Korean Multimodal Retrieval"
+message: "If you use this software, please cite it as below."
+type: software
+authors:
+  - family-names: "SONG"
+    given-names: "Young-Sang"
+    email: "sjowun@gmail.com"
+  - family-names: "LEE"
+    given-names: "Hwon"
+  - family-names: "JANG"
+    given-names: "Ju Yeon"
+  - family-names: "HWANG"
+    given-names: "Young Jin"
+  - family-names: "LEE"
+    given-names: "Tae Yoon"
+  - family-names: "GIM"
+    given-names: "Jeong Hye"
+repository-code: "https://github.com/KDT-Chainers/DB_insight"
+url: "https://github.com/KDT-Chainers/DB_insight"
+abstract: >-
+  Tri-CHEF is a Korean multimodal retrieval system that runs on a single
+  consumer GPU. It assigns three pretrained encoders (SigLIP2, BGE-M3,
+  DINOv2) to three orthogonal axes of a complex-valued embedding, then
+  combines them with a Hermitian-style modulus rather than a weighted sum.
+  Per-domain absolute thresholds are fit from random non-matching
+  query-document pairs and protected against drift during incremental
+  ingestion.
+keywords:
+  - "multimodal retrieval"
+  - "complex embeddings"
+  - "Hermitian-style scoring"
+  - "Korean NLP"
+  - "cross-modal calibration"
+  - "reciprocal rank fusion"
+license: Apache-2.0
+preferred-citation:
+  type: article
+  title: "Tri-CHEF: Complex-Hermitian Embedding Fusion for Korean Multimodal Retrieval"
+  authors:
+    - family-names: "SONG"
+      given-names: "Young-Sang"
+    - family-names: "LEE"
+      given-names: "Hwon"
+    - family-names: "JANG"
+      given-names: "Ju Yeon"
+    - family-names: "HWANG"
+      given-names: "Young Jin"
+    - family-names: "LEE"
+      given-names: "Tae Yoon"
+    - family-names: "GIM"
+      given-names: "Jeong Hye"
+  year: 2026
+  journal: "arXiv preprint"
+  notes: "arXiv ID will be added after submission"
