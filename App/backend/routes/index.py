@@ -4,10 +4,13 @@ import uuid
 
 from flask import Blueprint, jsonify, request
 
-from embedders import video, audio
 from embedders.trichef.incremental_runner import (
     embed_image_file, embed_doc_file,
     IMAGE_EMBED_EXTS, DOC_EMBED_EXTS,
+)
+from embedders.trichef.av_embed import (
+    embed_movie_file, embed_music_file,
+    MOVIE_EXTS, MUSIC_EXTS,
 )
 
 index_bp = Blueprint("index", __name__, url_prefix="/api/index")
@@ -17,21 +20,21 @@ index_bp = Blueprint("index", __name__, url_prefix="/api/index")
 # ---------------------------------------------------------------------------
 
 EXT_TYPE_MAP: dict[str, str] = {}
-# video / audio: 기존 embedder 그대로
-for _ext in video.SUPPORTED_EXTENSIONS:
+# video / audio: MR_TriCHEF TRI-CHEF 파이프라인
+for _ext in MOVIE_EXTS:
     EXT_TYPE_MAP[_ext] = "video"
-for _ext in audio.SUPPORTED_EXTENSIONS:
+for _ext in MUSIC_EXTS:
     EXT_TYPE_MAP[_ext] = "audio"
-# image / doc: TRI-CHEF 지원 확장자로만 제한 (legacy image.py / doc.py 목록 사용 안 함)
+# image / doc: DI_TriCHEF TRI-CHEF 단일 파일 함수
 for _ext in IMAGE_EMBED_EXTS:
     EXT_TYPE_MAP[_ext] = "image"
 for _ext in DOC_EMBED_EXTS:
     EXT_TYPE_MAP[_ext] = "doc"
 
-# 활성 임베더 — image/doc 은 TRI-CHEF 단일 파일 함수 사용
+# 활성 임베더 — 전 타입 TRI-CHEF 파이프라인 사용
 EMBEDDERS = {
-    "video": video.embed,
-    "audio": audio.embed,
+    "video": embed_movie_file,
+    "audio": embed_music_file,
     "image": embed_image_file,
     "doc":   embed_doc_file,
 }
@@ -237,15 +240,11 @@ def _run_job(job_id: str, file_paths: list[str], results: list[dict]) -> None:
                         return _is_stopped(_job_id)  # True 이면 중단 신호
                     return _cb
 
-                # progress_cb 지원 타입: video(4단계), image/doc(3단계)
-                kwargs = (
-                    {"progress_cb": _make_cb(i, job_id)}
-                    if file_type in {"video", "image", "doc"}
-                    else {}
-                )
+                # progress_cb: 전 타입 지원 (video=5단계, audio=4단계, image/doc=3단계)
+                kwargs = {"progress_cb": _make_cb(i, job_id)}
                 result = embedder(path, **kwargs)
-                # TRI-CHEF 임베딩 후 검색 엔진 캐시 재로드
-                if file_type in {"image", "doc"} and result.get("status") == "done":
+                # TRI-CHEF 임베딩 후 검색 엔진 캐시 재로드 (전 타입 공통)
+                if result.get("status") == "done":
                     try:
                         from routes.trichef import reload_engine
                         reload_engine()

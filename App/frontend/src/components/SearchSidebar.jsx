@@ -24,7 +24,7 @@ export default function SearchSidebar() {
             </div>
             <div className="text-left">
               <h1 className="text-xl font-black text-[#dfe4fe] leading-none">DB_insight</h1>
-              <p className="text-[0.65rem] uppercase tracking-widest text-on-surface-variant mt-1">로컬 인텔리전스</p>
+              <p className="text-base uppercase tracking-widest text-on-surface-variant mt-1">로컬 인텔리전스</p>
             </div>
           </button>
           <button
@@ -45,8 +45,8 @@ export default function SearchSidebar() {
                 : 'bg-surface-container-high border-outline-variant/15 hover:bg-surface-container-highest text-on-surface'
             }`}
           >
-            <span className="material-symbols-outlined text-sm">settings</span>
-            <span className="font-manrope uppercase tracking-[0.05em] text-[0.7rem]">설정</span>
+            <span className="material-symbols-outlined text-lg">settings</span>
+            <span className="font-manrope uppercase tracking-[0.05em] text-lg">설정</span>
           </button>
           <button
             onClick={() => navigate('/data')}
@@ -56,15 +56,15 @@ export default function SearchSidebar() {
                 : 'bg-surface-container-high border-outline-variant/15 hover:bg-surface-container-highest text-on-surface'
             }`}
           >
-            <span className="material-symbols-outlined text-sm">database</span>
-            <span className="font-manrope uppercase tracking-[0.05em] text-[0.7rem]">데이터</span>
+            <span className="material-symbols-outlined text-lg">database</span>
+            <span className="font-manrope uppercase tracking-[0.05em] text-lg">데이터</span>
           </button>
         </div>
 
         {/* Nav items */}
         <div className="flex-1 overflow-y-auto space-y-1">
           <div className="px-4 py-2">
-            <p className="font-manrope uppercase tracking-[0.05em] text-[0.75rem] text-primary mb-4">검색 기록</p>
+            <p className="font-manrope uppercase tracking-[0.05em] text-base text-primary mb-4">검색 기록</p>
           </div>
           <button
             onClick={() => navigate('/search')}
@@ -73,19 +73,19 @@ export default function SearchSidebar() {
             }`}
           >
             <span className="material-symbols-outlined">history</span>
-            <span className="font-manrope uppercase tracking-[0.05em] text-[0.75rem]">검색 기록</span>
+            <span className="font-manrope uppercase tracking-[0.05em] text-base">검색 기록</span>
           </button>
           <button className="w-full flex items-center gap-3 text-[#a5aac2] px-4 py-3 hover:bg-[#1c253e]/50 hover:text-[#dfe4fe] transition-all active:translate-x-1 duration-200">
             <span className="material-symbols-outlined">search_check</span>
-            <span className="font-manrope uppercase tracking-[0.05em] text-[0.75rem]">최근 검색어</span>
+            <span className="font-manrope uppercase tracking-[0.05em] text-base">최근 검색어</span>
           </button>
 
           {/* Recent queries */}
           <div className="mt-8 px-4 space-y-4">
-            <p className="font-manrope uppercase tracking-[0.05em] text-[0.7rem] text-on-surface-variant/60">최근</p>
+            <p className="font-manrope uppercase tracking-[0.05em] text-lg text-on-surface-variant/60">최근</p>
             <div className="space-y-3">
               {['프로젝트 알파 문서...', '매출 차트 Q3 2023', '회의록 암호화'].map((item, i) => (
-                <div key={i} className="text-[0.8rem] text-on-surface-variant hover:text-on-surface cursor-pointer transition-colors truncate">
+                <div key={i} className="text-base text-on-surface-variant hover:text-on-surface cursor-pointer transition-colors truncate">
                   {item}
                 </div>
               ))}
@@ -99,8 +99,8 @@ export default function SearchSidebar() {
             <span className="material-symbols-outlined text-primary text-xl">account_circle</span>
           </div>
           <div className="overflow-hidden">
-            <p className="text-sm font-bold text-on-surface truncate">관리자</p>
-            <p className="text-[0.65rem] text-on-surface-variant">심층 분석 접근 권한</p>
+            <p className="text-base font-bold text-on-surface truncate">관리자</p>
+            <p className="text-base text-on-surface-variant">심층 분석 접근 권한</p>
           </div>
         </div>
       </aside>

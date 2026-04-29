@@ -141,7 +141,7 @@ export default function MainAI() {
           ))}
           <div className="portal-text absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-2">
             <span className="material-symbols-outlined text-[#a5aac2] text-4xl" style={{ fontVariationSettings: '"FILL" 1' }}>database</span>
-            <span className="font-manrope uppercase tracking-[0.25em] text-xs text-[#a5aac2]">검색 모드</span>
+            <span className="font-manrope uppercase tracking-[0.25em] text-base text-[#a5aac2]">검색 모드</span>
           </div>
         </div>
       )}
@@ -204,7 +204,7 @@ export default function MainAI() {
                   ref={btnRef}
                   onClick={handleGoToSearch}
                   disabled={searchTransitioning}
-                  className="px-8 py-3 rounded-full flex items-center gap-3 text-sm font-bold tracking-widest uppercase text-violet-200/50 hover:text-violet-200 transition-all duration-300 group disabled:pointer-events-none"
+                  className="px-8 py-3 rounded-full flex items-center gap-3 text-lg font-bold tracking-widest uppercase text-violet-200/50 hover:text-violet-200 transition-all duration-300 group disabled:pointer-events-none"
                   style={{ background: 'rgba(10,5,25,0.6)', border: '1px solid rgba(109,40,217,0.25)' }}
                   onMouseEnter={e => e.currentTarget.style.boxShadow = '0 0 20px rgba(139,92,246,0.2)'}
                   onMouseLeave={e => e.currentTarget.style.boxShadow = 'none'}
@@ -229,7 +229,7 @@ export default function MainAI() {
                   >
                     <span className="material-symbols-outlined text-violet-600 mb-4 block group-hover:text-violet-400 transition-colors">{card.icon}</span>
                     <h3 className="text-on-surface font-bold mb-1">{card.title}</h3>
-                    <p className="text-violet-200/30 text-xs uppercase tracking-tighter">{card.sub}</p>
+                    <p className="text-violet-200/30 text-base uppercase tracking-tighter">{card.sub}</p>
                   </div>
                 ))}
               </div>
@@ -256,7 +256,7 @@ export default function MainAI() {
             <div className="relative group flex items-center">
               <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-violet-400/50">search</span>
               <input
-                className="w-full bg-white/5 border-none rounded-full pl-10 pr-4 py-1.5 text-sm focus:ring-1 focus:ring-violet-500/50 transition-all outline-none"
+                className="w-full bg-white/5 border-none rounded-full pl-10 pr-4 py-1.5 text-lg focus:ring-1 focus:ring-violet-500/50 transition-all outline-none"
                 placeholder="신경망 검색..."
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
@@ -266,17 +266,17 @@ export default function MainAI() {
 
           <nav className="hidden md:flex gap-6 items-center shrink-0">
             <button className={`text-sm transition-colors ${view === 'results' ? 'text-violet-300 border-b-2 border-violet-500 pb-1' : 'text-slate-400 hover:text-slate-200'}`}>모델</button>
-            <button className="text-slate-400 hover:text-slate-200 transition-colors text-sm">데이터셋</button>
-            <button className="text-slate-400 hover:text-slate-200 transition-colors text-sm">신경망 로그</button>
+            <button className="text-slate-400 hover:text-slate-200 transition-colors text-lg">데이터셋</button>
+            <button className="text-slate-400 hover:text-slate-200 transition-colors text-lg">신경망 로그</button>
           </nav>
 
           <div className="flex items-center gap-3 shrink-0">
             {view === 'detail' && (
               <button
                 onClick={handleBackToResults}
-                className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-surface-container-high border border-outline-variant/20 text-xs font-bold text-on-surface-variant hover:text-secondary hover:border-secondary/30 transition-all"
+                className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-surface-container-high border border-outline-variant/20 text-base font-bold text-on-surface-variant hover:text-secondary hover:border-secondary/30 transition-all"
               >
-                <span className="material-symbols-outlined text-sm">arrow_back</span>
+                <span className="material-symbols-outlined text-lg">arrow_back</span>
                 결과로
               </button>
             )}
@@ -302,10 +302,10 @@ export default function MainAI() {
             <div className="mb-12 relative">
               <div className="absolute -top-20 -left-20 w-96 h-96 bg-secondary/10 blur-[100px] rounded-full"></div>
               <div className="relative z-10">
-                <span className="text-secondary text-xs font-bold tracking-[0.3em] uppercase mb-4 block">정제된 인텔리전스 출력</span>
+                <span className="text-secondary text-base font-bold tracking-[0.3em] uppercase mb-4 block">정제된 인텔리전스 출력</span>
                 <h1 className="text-5xl font-extrabold tracking-tighter text-on-surface mb-4">신경망 검색 결과</h1>
                 <div className="flex items-center gap-4 text-on-surface-variant">
-                  <span className="flex items-center gap-2 px-3 py-1 bg-surface-container-high rounded-full border border-outline-variant/20 text-sm">
+                  <span className="flex items-center gap-2 px-3 py-1 bg-surface-container-high rounded-full border border-outline-variant/20 text-lg">
                     <span className="w-1.5 h-1.5 rounded-full bg-secondary"></span>342개 매칭 발견
                   </span>
                   <span className="text-sm">124ms에 처리 완료</span>
@@ -320,15 +320,15 @@ export default function MainAI() {
                   <span className="material-symbols-outlined text-secondary opacity-50 text-4xl" style={{ fontVariationSettings: '"FILL" 1' }}>auto_awesome</span>
                 </div>
                 <div className="relative z-10">
-                  <h3 className="text-secondary text-xs font-black tracking-widest uppercase mb-6">AI 맥락 합성</h3>
+                  <h3 className="text-secondary text-base font-black tracking-widest uppercase mb-6">AI 맥락 합성</h3>
                   <p className="text-2xl font-light text-on-surface leading-relaxed mb-8">
                     최근 <span className="text-secondary font-medium">신경망 로그</span>와{' '}
                     <span className="text-secondary font-medium">처리 노드</span> 정제를 바탕으로, 시스템은 선택된 데이터셋과
                     현재 "예측 분석 4단계" 진행 방향 간의 강한 상관관계를 식별했습니다.
                   </p>
                   <div className="flex gap-3">
-                    <button className="bg-secondary text-on-secondary px-6 py-2.5 rounded-full font-bold text-sm tracking-tight active:scale-95 transition-all">합성 확장</button>
-                    <button className="bg-surface-container-highest text-on-surface px-6 py-2.5 rounded-full font-bold text-sm tracking-tight border border-outline-variant/30 hover:bg-surface-bright transition-all">로직 감사</button>
+                    <button className="bg-secondary text-on-secondary px-6 py-2.5 rounded-full font-bold text-lg tracking-tight active:scale-95 transition-all">합성 확장</button>
+                    <button className="bg-surface-container-highest text-on-surface px-6 py-2.5 rounded-full font-bold text-lg tracking-tight border border-outline-variant/30 hover:bg-surface-bright transition-all">로직 감사</button>
                   </div>
                 </div>
               </div>
@@ -336,11 +336,11 @@ export default function MainAI() {
               {/* 모델 통계 */}
               <div className="col-span-12 lg:col-span-4 bg-surface-container-high rounded-xl p-6 border border-outline-variant/10 flex flex-col justify-between">
                 <div>
-                  <h4 className="text-on-surface-variant text-[10px] font-black tracking-[0.2em] uppercase mb-6">모델 무결성</h4>
+                  <h4 className="text-on-surface-variant text-lg font-black tracking-[0.2em] uppercase mb-6">모델 무결성</h4>
                   <div className="space-y-6">
                     {[['일관성 수준', '98.4%', 'w-[98%]'], ['지연 변화', '-12ms', 'w-[75%]']].map(([label, val, w]) => (
                       <div key={label}>
-                        <div className="flex justify-between text-xs mb-2">
+                        <div className="flex justify-between text-base mb-2">
                           <span className="text-on-surface/80">{label}</span>
                           <span className="text-secondary">{val}</span>
                         </div>
@@ -358,7 +358,7 @@ export default function MainAI() {
                     </div>
                     <div>
                       <p className="text-xs font-bold text-on-surface">Obsidian-v4.2</p>
-                      <p className="text-[10px] text-on-surface-variant">최신 업데이트</p>
+                      <p className="text-sm text-on-surface-variant">최신 업데이트</p>
                     </div>
                   </div>
                 </div>
@@ -374,13 +374,13 @@ export default function MainAI() {
                     <div className="h-48 relative">
                       <img src={r.img} alt={r.title} className="w-full h-full object-cover grayscale opacity-50 group-hover:grayscale-0 group-hover:opacity-80 transition-all duration-700" />
                       <div className="absolute inset-0 bg-gradient-to-t from-surface-container-low to-transparent"></div>
-                      <span className="absolute top-4 left-4 bg-secondary/20 backdrop-blur-md border border-secondary/40 text-secondary text-[10px] font-bold px-2 py-1 rounded">{r.tag}</span>
+                      <span className="absolute top-4 left-4 bg-secondary/20 backdrop-blur-md border border-secondary/40 text-secondary text-lg font-bold px-2 py-1 rounded">{r.tag}</span>
                     </div>
                     <div className="p-6">
                       <h3 className="text-lg font-bold text-on-surface mb-2 group-hover:text-secondary transition-colors">{r.title}</h3>
                       <p className="text-sm text-on-surface-variant line-clamp-2 mb-4 leading-relaxed">{r.desc}</p>
                       <div className="flex justify-between items-center">
-                        <span className="text-[10px] font-bold text-outline uppercase tracking-widest">수정: {r.modified}</span>
+                        <span className="text-sm font-bold text-outline uppercase tracking-widest">수정: {r.modified}</span>
                         <span className="material-symbols-outlined text-on-surface-variant group-hover:translate-x-1 transition-transform">arrow_forward</span>
                       </div>
                     </div>
@@ -394,14 +394,14 @@ export default function MainAI() {
                   <p className="text-xs text-on-surface-variant font-medium">1 / 34 페이지</p>
                   <div className="flex gap-2">
                     {[1, 2, 3].map((n) => (
-                      <button key={n} className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm ${n === 2 ? 'bg-secondary text-on-secondary font-bold' : 'bg-surface-container text-on-surface-variant hover:text-secondary border border-outline-variant/10'}`}>{n}</button>
+                      <button key={n} className={`w-8 h-8 rounded-lg flex items-center justify-center text-lg ${n === 2 ? 'bg-secondary text-on-secondary font-bold' : 'bg-surface-container text-on-surface-variant hover:text-secondary border border-outline-variant/10'}`}>{n}</button>
                     ))}
                     <span className="text-on-surface-variant px-1">...</span>
-                    <button className="w-8 h-8 rounded-lg bg-surface-container flex items-center justify-center text-on-surface-variant hover:text-secondary border border-outline-variant/10 text-sm">34</button>
+                    <button className="w-8 h-8 rounded-lg bg-surface-container flex items-center justify-center text-on-surface-variant hover:text-secondary border border-outline-variant/10 text-lg">34</button>
                   </div>
                 </div>
-                <button className="flex items-center gap-2 px-4 py-2 text-xs font-bold uppercase tracking-widest text-on-surface-variant hover:text-secondary transition-all">
-                  목록 내보내기<span className="material-symbols-outlined text-sm">download</span>
+                <button className="flex items-center gap-2 px-4 py-2 text-base font-bold uppercase tracking-widest text-on-surface-variant hover:text-secondary transition-all">
+                  목록 내보내기<span className="material-symbols-outlined text-lg">download</span>
                 </button>
               </div>
             </div>
@@ -431,11 +431,11 @@ export default function MainAI() {
             {/* 브레드크럼 */}
             <div className="mb-8 flex justify-between items-end">
               <div>
-                <nav className="flex items-center gap-2 text-on-surface-variant text-xs uppercase tracking-widest mb-4">
+                <nav className="flex items-center gap-2 text-on-surface-variant text-base uppercase tracking-widest mb-4">
                   <button onClick={handleBackToResults} className="hover:text-secondary cursor-pointer">데이터셋</button>
-                  <span className="material-symbols-outlined text-[14px]">chevron_right</span>
+                  <span className="material-symbols-outlined text-lg">chevron_right</span>
                   <span className="hover:text-secondary cursor-pointer">신경망 자산</span>
-                  <span className="material-symbols-outlined text-[14px]">chevron_right</span>
+                  <span className="material-symbols-outlined text-lg">chevron_right</span>
                   <span className="text-secondary">{selectedResult.title}</span>
                 </nav>
                 <h1 className="text-4xl font-extrabold tracking-tighter text-on-surface mb-2">파일 상세 - AI 모드</h1>
@@ -444,10 +444,10 @@ export default function MainAI() {
                 </p>
               </div>
               <div className="flex gap-4">
-                <button className="flex items-center gap-2 px-6 py-3 bg-surface-container-high border border-outline-variant rounded-full font-bold text-sm text-on-surface hover:bg-surface-container-highest transition-all">
+                <button className="flex items-center gap-2 px-6 py-3 bg-surface-container-high border border-outline-variant rounded-full font-bold text-lg text-on-surface hover:bg-surface-container-highest transition-all">
                   <span className="material-symbols-outlined text-[18px]">download</span>추출
                 </button>
-                <button className="flex items-center gap-2 px-8 py-3 bg-gradient-to-r from-secondary to-primary rounded-full font-extrabold text-sm text-on-primary active:scale-95 transition-all shadow-[0_0_20px_rgba(172,138,255,0.4)]">
+                <button className="flex items-center gap-2 px-8 py-3 bg-gradient-to-r from-secondary to-primary rounded-full font-extrabold text-lg text-on-primary active:scale-95 transition-all shadow-[0_0_20px_rgba(172,138,255,0.4)]">
                   <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: '"FILL" 1' }}>bolt</span>재처리
                 </button>
               </div>
@@ -461,7 +461,7 @@ export default function MainAI() {
                   <div className="relative bg-surface rounded-[1.4rem] p-8 min-h-[400px] flex flex-col">
                     <div className="flex justify-between items-start mb-12">
                       <div>
-                        <span className="text-[10px] uppercase tracking-[0.2em] text-secondary mb-1 block">신경망 지형도</span>
+                        <span className="text-sm uppercase tracking-[0.2em] text-secondary mb-1 block">신경망 지형도</span>
                         <h3 className="text-xl font-bold">지연 히트맵</h3>
                       </div>
                       <div className="flex gap-2">
@@ -484,7 +484,7 @@ export default function MainAI() {
                       <div className="flex gap-8">
                         {[['안정성', '99.98%', ''], ['엔트로피', '낮음', 'text-secondary'], ['사이클', '4.2k', '']].map(([label, val, cls]) => (
                           <div key={label}>
-                            <p className="text-[10px] uppercase tracking-widest text-on-surface-variant mb-1">{label}</p>
+                            <p className="text-sm uppercase tracking-widest text-on-surface-variant mb-1">{label}</p>
                             <p className={`text-xl font-bold ${cls}`}>{val}</p>
                           </div>
                         ))}
@@ -502,7 +502,7 @@ export default function MainAI() {
                     <h3 className="text-lg font-bold flex items-center gap-2">
                       <span className="material-symbols-outlined text-secondary">database</span>신경망 메타데이터 추출
                     </h3>
-                    <button className="text-secondary text-xs uppercase tracking-widest hover:underline">JSON 내보내기</button>
+                    <button className="text-secondary text-base uppercase tracking-widest hover:underline">JSON 내보내기</button>
                   </div>
                   <div className="space-y-4">
                     {[
@@ -514,7 +514,7 @@ export default function MainAI() {
                       <div key={label} className="grid grid-cols-4 gap-4 p-4 rounded-xl hover:bg-surface-container-high transition-all border-b border-outline-variant/10 last:border-0">
                         <span className="text-xs uppercase tracking-widest text-on-surface-variant">{label}</span>
                         <span className="text-xs font-medium text-on-surface col-span-2 font-mono">{val}</span>
-                        <span className={`text-right text-[10px] font-bold ${cls}`}>{status}</span>
+                        <span className={`text-right text-lg font-bold ${cls}`}>{status}</span>
                       </div>
                     ))}
                   </div>
@@ -531,17 +531,17 @@ export default function MainAI() {
                     </div>
                     <div>
                       <h4 className="font-bold text-on-surface">신경망 요약</h4>
-                      <p className="text-[10px] text-secondary uppercase tracking-widest">AI 생성 인사이트</p>
+                      <p className="text-sm text-secondary uppercase tracking-widest">AI 생성 인사이트</p>
                     </div>
                   </div>
                   <p className="text-sm leading-relaxed text-on-surface-variant mb-6 italic">
                     "DB_insight 객체는 '예측 물류' 클러스터와 높은 상관관계를 가진 다층 벡터 임베딩을 포함합니다."
                   </p>
                   <div className="p-4 rounded-xl bg-surface-container-lowest/50 border border-outline-variant/20">
-                    <h5 className="text-[10px] uppercase tracking-widest text-secondary mb-3">권장 프로토콜</h5>
+                    <h5 className="text-sm uppercase tracking-widest text-secondary mb-3">권장 프로토콜</h5>
                     {['벡터 양자화', '레이어 정규화'].map((item) => (
                       <div key={item} className="flex items-center gap-3 mb-2">
-                        <span className="material-symbols-outlined text-primary text-sm">check_circle</span>
+                        <span className="material-symbols-outlined text-primary text-lg">check_circle</span>
                         <span className="text-xs text-on-surface">{item}</span>
                       </div>
                     ))}
@@ -558,14 +558,14 @@ export default function MainAI() {
                     <div key={item.label} className={`flex items-center justify-between mb-4 ${item.dim ? 'opacity-50' : ''}`}>
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-lg bg-surface-container-highest flex items-center justify-center">
-                          <span className="material-symbols-outlined text-sm">{item.icon}</span>
+                          <span className="material-symbols-outlined text-lg">{item.icon}</span>
                         </div>
                         <span className="text-sm">{item.label}</span>
                       </div>
-                      <span className="text-[10px] px-2 py-1 rounded bg-secondary/10 text-secondary border border-secondary/20 font-bold uppercase tracking-widest">{item.badge}</span>
+                      <span className="text-sm px-2 py-1 rounded bg-secondary/10 text-secondary border border-secondary/20 font-bold uppercase tracking-widest">{item.badge}</span>
                     </div>
                   ))}
-                  <button className="w-full mt-6 py-3 border border-outline-variant/20 rounded-xl text-xs uppercase tracking-widest hover:border-secondary hover:text-secondary transition-all">
+                  <button className="w-full mt-6 py-3 border border-outline-variant/20 rounded-xl text-base uppercase tracking-widest hover:border-secondary hover:text-secondary transition-all">
                     접근 권한 관리
                   </button>
                 </div>
@@ -581,7 +581,7 @@ export default function MainAI() {
                       <div key={i} className={`relative ${i === 1 ? 'opacity-70' : i === 2 ? 'opacity-50' : ''}`}>
                         <div className={`absolute -left-[27px] top-1 w-2 h-2 rounded-full ${item.active ? 'bg-secondary' : 'bg-outline-variant'}`} style={item.active ? { boxShadow: '0 0 15px rgba(172,138,255,0.4)' } : {}}></div>
                         <p className="text-xs font-bold text-on-surface">{item.title}</p>
-                        <p className="text-[10px] text-on-surface-variant">{item.time}</p>
+                        <p className="text-sm text-on-surface-variant">{item.time}</p>
                       </div>
                     ))}
                   </div>

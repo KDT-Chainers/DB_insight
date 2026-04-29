@@ -64,7 +64,7 @@ function DepsStep({ onDone }) {
     return (
       <div className="flex flex-col items-center justify-center flex-1 gap-4">
         <span className="material-symbols-outlined text-primary text-4xl animate-spin">progress_activity</span>
-        <p className="text-on-surface-variant text-sm">의존성 확인 중...</p>
+        <p className="text-on-surface-variant text-lg">의존성 확인 중...</p>
       </div>
     )
   }
@@ -111,7 +111,7 @@ function DepsStep({ onDone }) {
             <p className="text-xs text-on-surface-variant">오피스 · 한글 문서 변환 엔진 (약 400 MB)</p>
           </div>
           {!installing && !error && (
-            <span className="px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 text-[10px] font-bold border border-amber-500/20 shrink-0">
+            <span className="px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 text-lg font-bold border border-amber-500/20 shrink-0">
               미설치
             </span>
           )}
@@ -134,14 +134,14 @@ function DepsStep({ onDone }) {
       </div>
 
       {/* 설명 */}
-      <div className="space-y-2 text-xs text-on-surface-variant/70">
+      <div className="space-y-2 text-base text-on-surface-variant/70">
         {[
           'winget(Windows 내장) 또는 공식 MSI를 통해 자동 설치됩니다.',
           '관리자 권한이 필요할 수 있습니다.',
           '.pdf · 이미지 파일은 LibreOffice 없이도 정상 동작합니다.',
         ].map((t, i) => (
           <div key={i} className="flex items-start gap-2">
-            <span className="material-symbols-outlined text-xs text-primary/60 mt-0.5 shrink-0">info</span>
+            <span className="material-symbols-outlined text-base text-primary/60 mt-0.5 shrink-0">info</span>
             <span>{t}</span>
           </div>
         ))}
@@ -152,7 +152,7 @@ function DepsStep({ onDone }) {
         <button
           onClick={skip}
           disabled={installing}
-          className="flex-1 py-3 rounded-full border border-outline-variant/30 text-on-surface-variant text-sm font-bold hover:bg-white/5 transition-all disabled:opacity-40"
+          className="flex-1 py-3 rounded-full border border-outline-variant/30 text-on-surface-variant text-lg font-bold hover:bg-white/5 transition-all disabled:opacity-40"
         >
           나중에 설치
         </button>
@@ -163,12 +163,12 @@ function DepsStep({ onDone }) {
         >
           {installing ? (
             <>
-              <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
+              <span className="material-symbols-outlined text-lg animate-spin">progress_activity</span>
               설치 중... {progress}%
             </>
           ) : (
             <>
-              <span className="material-symbols-outlined text-sm">download</span>
+              <span className="material-symbols-outlined text-lg">download</span>
               자동 설치
             </>
           )}
@@ -251,10 +251,10 @@ export default function InitialSetup() {
           </div>
           <div className="relative z-10 flex items-center gap-4">
             <div className="flex -space-x-3">
-              <div className="w-8 h-8 rounded-full border-2 border-surface-container bg-surface-variant flex items-center justify-center text-[10px] font-bold">AI</div>
-              <div className="w-8 h-8 rounded-full border-2 border-surface-container bg-surface-variant flex items-center justify-center text-[10px] font-bold">DB</div>
+              <div className="w-8 h-8 rounded-full border-2 border-surface-container bg-surface-variant flex items-center justify-center text-lg font-bold">AI</div>
+              <div className="w-8 h-8 rounded-full border-2 border-surface-container bg-surface-variant flex items-center justify-center text-lg font-bold">DB</div>
             </div>
-            <span className="text-[10px] uppercase tracking-widest text-on-surface-variant font-semibold">코어 v2.4 활성화</span>
+            <span className="text-sm uppercase tracking-widest text-on-surface-variant font-semibold">코어 v2.4 활성화</span>
           </div>
         </section>
 
@@ -267,11 +267,11 @@ export default function InitialSetup() {
                 {['마스터 키', '의존성'].map((label, i) => (
                   <div key={i} className="flex items-center gap-1.5">
                     <div className={`h-1 w-12 rounded-full transition-all duration-500 ${i <= stepIndex ? 'kinetic-gradient' : 'bg-surface-container-highest'}`} />
-                    <span className={`text-[9px] uppercase tracking-widest font-bold transition-colors ${i === stepIndex ? 'text-primary' : 'text-on-surface-variant/30'}`}>{label}</span>
+                    <span className={`text-xs uppercase tracking-widest font-bold transition-colors ${i === stepIndex ? 'text-primary' : 'text-on-surface-variant/30'}`}>{label}</span>
                   </div>
                 ))}
               </div>
-              <span className="text-[10px] uppercase tracking-widest text-primary font-bold">초기 설정</span>
+              <span className="text-sm uppercase tracking-widest text-primary font-bold">초기 설정</span>
             </div>
 
             {/* ── STEP 1: 비밀번호 ── */}
@@ -279,12 +279,12 @@ export default function InitialSetup() {
               <form onSubmit={handleSubmit} className="space-y-8 flex-1">
                 <div>
                   <h2 className="text-3xl font-bold mb-2">마스터 키 생성</h2>
-                  <p className="text-on-surface-variant text-sm">마스터 키는 모든 로컬 데이터 저장소를 암호화합니다.</p>
+                  <p className="text-on-surface-variant text-lg">마스터 키는 모든 로컬 데이터 저장소를 암호화합니다.</p>
                 </div>
-                {error && <p className="text-red-400 text-sm text-center">{error}</p>}
+                {error && <p className="text-red-400 text-lg text-center">{error}</p>}
                 <div className="space-y-6">
                   <div className="group">
-                    <label className="block text-[10px] uppercase tracking-widest font-bold text-on-surface-variant mb-2 group-focus-within:text-primary transition-colors">마스터 비밀번호</label>
+                    <label className="block text-lg uppercase tracking-widest font-bold text-on-surface-variant mb-2 group-focus-within:text-primary transition-colors">마스터 비밀번호</label>
                     <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••••••"
                       className="w-full bg-transparent border-b border-outline-variant focus:border-primary focus:ring-0 px-0 py-3 text-xl transition-all placeholder:text-outline-variant/30 outline-none" />
                   </div>
@@ -295,8 +295,8 @@ export default function InitialSetup() {
                       { label: '고유한 문구', met: password.length > 0 },
                       { label: '사전 단어 미포함', met: false },
                     ].map(item => (
-                      <div key={item.label} className="flex items-center gap-2 text-xs text-on-surface-variant">
-                        <span className="material-symbols-outlined text-sm" style={item.met ? { fontVariationSettings: '"FILL" 1', color: '#85adff' } : {}}>
+                      <div key={item.label} className="flex items-center gap-2 text-base text-on-surface-variant">
+                        <span className="material-symbols-outlined text-lg" style={item.met ? { fontVariationSettings: '"FILL" 1', color: '#85adff' } : {}}>
                           {item.met ? 'check_circle' : 'circle'}
                         </span>
                         <span>{item.label}</span>
@@ -304,7 +304,7 @@ export default function InitialSetup() {
                     ))}
                   </div>
                   <div className="group">
-                    <label className="block text-[10px] uppercase tracking-widest font-bold text-on-surface-variant mb-2 group-focus-within:text-primary transition-colors">비밀번호 확인</label>
+                    <label className="block text-lg uppercase tracking-widest font-bold text-on-surface-variant mb-2 group-focus-within:text-primary transition-colors">비밀번호 확인</label>
                     <input type="password" value={confirm} onChange={e => setConfirm(e.target.value)} placeholder="••••••••••••"
                       className="w-full bg-transparent border-b border-outline-variant focus:border-primary focus:ring-0 px-0 py-3 text-xl transition-all placeholder:text-outline-variant/30 outline-none" />
                   </div>
@@ -323,10 +323,10 @@ export default function InitialSetup() {
 
             <div className="mt-auto pt-8 border-t border-outline-variant/10 flex items-center justify-between">
               <div className="flex items-center gap-2 opacity-60">
-                <span className="material-symbols-outlined text-sm">lock</span>
-                <span className="text-[10px] uppercase tracking-tighter">제로 지식 저장소</span>
+                <span className="material-symbols-outlined text-lg">lock</span>
+                <span className="text-sm uppercase tracking-tighter">제로 지식 저장소</span>
               </div>
-              <button onClick={() => navigate('/')} className="text-[10px] uppercase tracking-tighter hover:text-primary transition-colors font-bold">
+              <button onClick={() => navigate('/')} className="text-sm uppercase tracking-tighter hover:text-primary transition-colors font-bold">
                 로그인으로 돌아가기
               </button>
             </div>

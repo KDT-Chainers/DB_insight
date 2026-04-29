@@ -3,23 +3,37 @@ const { spawn, spawnSync } = require('child_process')
 const path = require('path')
 const fs   = require('fs')
 
-// ── 경로 상수 ─────────────────────────────────────────────────────────
-// 앱 설치 기준 폴더: C:\Program Files\DB_insight
-const APP_ROOT = 'C:\\Program Files\\DB_insight'
+// ── 앱 루트 동적 탐색 ──────────────────────────────────────────────────
+// 우선순위:
+//   1) C:\Program Files\DB_insight  (배포 머신 고정 경로)
+//   2) 인스톨러 exe 기준 3단계 상위 폴더 (개발/임시 경로 지원)
+//      예: App\installer\release\DB_insight_Setup.exe → DB_insight\
+function findAppRoot() {
+  const fixed = 'C:\\Program Files\\DB_insight'
+  if (fs.existsSync(path.join(fixed, 'App', 'backend', 'requirements.txt'))) return fixed
+
+  // process.execPath: 실행 중인 exe 의 절대 경로
+  const fromExe = path.resolve(path.dirname(process.execPath), '..', '..', '..')
+  if (fs.existsSync(path.join(fromExe, 'App', 'backend', 'requirements.txt'))) return fromExe
+
+  return fixed  // fallback (배포 경로)
+}
+
+const APP_ROOT = findAppRoot()
 
 const PATHS = {
-  // LibreOffice MSI: 인스톨러 exe 옆에 있거나, 앱 루트에 있으면 사용
+  // LibreOffice MSI: exe 옆 → 앱 루트 순으로 탐색
   get msi() {
     const beside = path.join(path.dirname(process.execPath), 'LibreOffice_26.2.2_Win_x86-64.msi')
     const atRoot = path.join(APP_ROOT, 'LibreOffice_26.2.2_Win_x86-64.msi')
     return fs.existsSync(beside) ? beside : atRoot
   },
-  installDir:  APP_ROOT + '\\Data\\LibreOffice\\',
-  soffice:     APP_ROOT + '\\Data\\LibreOffice\\program\\soffice.exe',
+  installDir:   path.join(APP_ROOT, 'Data', 'LibreOffice') + '\\',
+  soffice:      path.join(APP_ROOT, 'Data', 'LibreOffice', 'program', 'soffice.exe'),
   sofficeFallback: 'C:\\Program Files\\LibreOffice\\program\\soffice.exe',
-  requirements: APP_ROOT + '\\App\\backend\\requirements.txt',
-  mainApp:      APP_ROOT + '\\App\\frontend\\out\\DB_insight 0.1.0.exe',
-  backendDir:   APP_ROOT + '\\App\\backend',
+  requirements: path.join(APP_ROOT, 'App', 'backend', 'requirements.txt'),
+  mainApp:      path.join(APP_ROOT, 'App', 'frontend', 'out', 'DB_insight 0.1.0.exe'),
+  backendDir:   path.join(APP_ROOT, 'App', 'backend'),
 }
 
 // ── 상태 확인 ─────────────────────────────────────────────────────────

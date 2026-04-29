@@ -22,7 +22,7 @@
       "artifactName": "DB_insight_Setup.exe"
     },
     "directories": {
-      "output": "out"
+      "output": "dist2"
     },
     "files": ["main.js", "preload.js", "index.html"]
   }

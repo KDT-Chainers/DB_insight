@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useScale } from '../context/ScaleContext'
 import { API_BASE } from '../api'
 import WindowControls from '../components/WindowControls'
+import PageSidebar from '../components/PageSidebar'
 
 export default function Settings() {
   const navigate = useNavigate()
@@ -46,48 +47,26 @@ export default function Settings() {
   return (
     <div className="bg-surface text-on-surface flex h-screen overflow-hidden">
 
-      {/* ── Sidebar (DataIndexing과 동일 스타일) ── */}
-      <aside className="w-64 shrink-0 h-screen bg-[#070d1f]/60 backdrop-blur-xl flex flex-col pt-12 pb-4 border-r border-[#41475b]/15 shadow-[20px_0_40px_rgba(133,173,255,0.05)] z-50">
-        <div className="px-4 mb-8 flex items-center gap-3">
-          <div className="w-8 h-8 bg-gradient-to-br from-primary to-secondary rounded-lg flex items-center justify-center shrink-0">
-            <span className="material-symbols-outlined text-on-primary-fixed text-lg" style={{ fontVariationSettings: '"FILL" 1' }}>dataset</span>
-          </div>
-          <div>
-            <h1 className="text-xl font-black text-[#dfe4fe] leading-none">DB_insight</h1>
-            <p className="text-[0.65rem] uppercase tracking-widest text-[#a5aac2] mt-1">시스템 설정</p>
-          </div>
-        </div>
-
-        <nav className="flex-1 px-3 space-y-1">
-          {[
-            { icon: 'database', label: '워크스페이스', onClick: () => navigate('/search') },
-            { icon: 'account_tree', label: '인덱싱', onClick: () => navigate('/data') },
-            { icon: 'tune', label: '설정', active: true },
-          ].map(item => (
-            <button
-              key={item.label}
-              onClick={item.onClick}
-              className={`w-full flex items-center gap-3 rounded-xl px-4 py-2.5 text-[0.75rem] font-manrope uppercase tracking-widest transition-all
-                ${item.active
-                  ? 'text-primary bg-[#1c253e]'
-                  : 'text-[#a5aac2] hover:bg-[#1c253e]/50 hover:text-[#dfe4fe]'}`}
-            >
-              <span className="material-symbols-outlined text-base">{item.icon}</span>
-              {item.label}
-            </button>
-          ))}
-        </nav>
-
-        <div className="px-4 mt-auto pt-4 border-t border-outline-variant/10 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-surface-container-highest flex items-center justify-center shrink-0">
-            <span className="material-symbols-outlined text-primary">account_circle</span>
-          </div>
-          <div className="overflow-hidden">
-            <p className="text-sm font-bold text-on-surface truncate">관리자</p>
-            <p className="text-[0.65rem] text-on-surface-variant">심층 분석 접근 권한</p>
-          </div>
-        </div>
-      </aside>
+      {/* ── Sidebar ── */}
+      <PageSidebar subtitle="시스템 설정">
+        {[
+          { icon: 'database',      label: '워크스페이스', onClick: () => navigate('/search') },
+          { icon: 'account_tree',  label: '인덱싱',       onClick: () => navigate('/data')   },
+          { icon: 'tune',          label: '설정',         active: true },
+        ].map(item => (
+          <button
+            key={item.label}
+            onClick={item.onClick}
+            className={`w-full flex items-center gap-3 rounded-xl px-4 py-2.5 text-base font-manrope uppercase tracking-widest transition-all
+              ${item.active
+                ? 'text-primary bg-[#1c253e]'
+                : 'text-[#a5aac2] hover:bg-[#1c253e]/50 hover:text-[#dfe4fe]'}`}
+          >
+            <span className="material-symbols-outlined text-base">{item.icon}</span>
+            {item.label}
+          </button>
+        ))}
+      </PageSidebar>
 
       {/* ── Main ── */}
       <main className="flex-1 flex flex-col overflow-hidden bg-surface-dim relative">
@@ -113,7 +92,7 @@ export default function Settings() {
               {/* 보안 */}
               <section className="glass-panel p-6 rounded-xl border border-outline-variant/15">
                 <div className="flex items-center gap-2 mb-5">
-                  <span className="text-[0.7rem] font-manrope uppercase tracking-[0.2em] text-primary font-bold">보안 프로토콜</span>
+                  <span className="text-sm font-manrope uppercase tracking-[0.2em] text-primary font-bold">보안 프로토콜</span>
                   <div className="h-px flex-grow bg-outline-variant/20" />
                 </div>
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -123,7 +102,7 @@ export default function Settings() {
                   </div>
                   <button
                     onClick={openModal}
-                    className="shrink-0 bg-gradient-to-tr from-primary to-secondary text-on-primary font-bold py-2.5 px-6 rounded-full text-sm shadow-lg shadow-primary/20 hover:scale-105 active:scale-95 transition-all duration-200 whitespace-nowrap"
+                    className="shrink-0 bg-gradient-to-tr from-primary to-secondary text-on-primary font-bold py-2.5 px-6 rounded-full text-lg shadow-lg shadow-primary/20 hover:scale-105 active:scale-95 transition-all duration-200 whitespace-nowrap"
                   >
                     비밀번호 변경
                   </button>
@@ -133,7 +112,7 @@ export default function Settings() {
               {/* 환경설정 */}
               <section className="glass-panel p-6 rounded-xl border border-outline-variant/15">
                 <div className="flex items-center gap-2 mb-5">
-                  <span className="text-[0.7rem] font-manrope uppercase tracking-[0.2em] text-primary font-bold">환경 설정</span>
+                  <span className="text-sm font-manrope uppercase tracking-[0.2em] text-primary font-bold">환경 설정</span>
                   <div className="h-px flex-grow bg-outline-variant/20" />
                 </div>
                 <div className="space-y-6">
@@ -145,7 +124,7 @@ export default function Settings() {
                       <div className="flex items-center gap-1.5">
                         {[0.7, 0.8, 0.9, 1.0].map(v => (
                           <button key={v} onClick={() => setScale(v)}
-                            className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all
+                            className={`px-2.5 py-1 rounded-lg text-lg font-bold transition-all
                               ${Math.abs(scale - v) < 0.01
                                 ? 'bg-primary/20 text-primary border border-primary/30'
                                 : 'bg-surface-container-high text-on-surface-variant hover:text-on-surface border border-outline-variant/20'}`}>
@@ -155,7 +134,7 @@ export default function Settings() {
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className="text-[10px] text-on-surface-variant/50 w-8">{Math.round(MIN_SCALE * 100)}%</span>
+                      <span className="text-sm text-on-surface-variant/50 w-8">{Math.round(MIN_SCALE * 100)}%</span>
                       <input type="range" min={MIN_SCALE} max={MAX_SCALE} step={STEP} value={scale}
                         onChange={e => setScale(parseFloat(e.target.value))}
                         className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer bg-surface-container-highest
@@ -164,10 +143,10 @@ export default function Settings() {
                           [&::-webkit-slider-thumb]:shadow-[0_0_8px_rgba(133,173,255,0.5)] [&::-webkit-slider-thumb]:cursor-pointer"
                         style={{ background: `linear-gradient(to right, var(--md-sys-color-primary) 0%, var(--md-sys-color-primary) ${((scale - MIN_SCALE) / (MAX_SCALE - MIN_SCALE)) * 100}%, rgba(255,255,255,0.1) ${((scale - MIN_SCALE) / (MAX_SCALE - MIN_SCALE)) * 100}%, rgba(255,255,255,0.1) 100%)` }}
                       />
-                      <span className="text-[10px] text-on-surface-variant/50 w-8 text-right">{Math.round(MAX_SCALE * 100)}%</span>
+                      <span className="text-sm text-on-surface-variant/50 w-8 text-right">{Math.round(MAX_SCALE * 100)}%</span>
                       <span className="text-xs font-bold text-primary w-9 text-right">{Math.round(scale * 100)}%</span>
                     </div>
-                    <p className="mt-2 text-xs text-on-surface-variant/50">앱 전체 UI 크기를 조절합니다. 즉시 적용됩니다.</p>
+                    <p className="mt-2 text-base text-on-surface-variant/50">앱 전체 UI 크기를 조절합니다. 즉시 적용됩니다.</p>
                   </div>
 
                   {/* 토글들 */}
@@ -195,7 +174,7 @@ export default function Settings() {
               <section className="glass-panel p-6 rounded-xl border border-red-500/20 bg-red-500/5 relative overflow-hidden">
                 <div className="absolute -right-16 -bottom-16 w-48 h-48 bg-red-500/10 blur-[60px] rounded-full" />
                 <div className="flex items-center gap-2 mb-5">
-                  <span className="text-[0.7rem] font-manrope uppercase tracking-[0.2em] text-red-400 font-bold">위험 구역</span>
+                  <span className="text-sm font-manrope uppercase tracking-[0.2em] text-red-400 font-bold">위험 구역</span>
                   <div className="h-px flex-grow bg-red-500/20" />
                 </div>
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 relative z-10">
@@ -203,7 +182,7 @@ export default function Settings() {
                     <h3 className="text-base font-semibold text-red-400 mb-1">공장 초기화 및 데이터 삭제</h3>
                     <p className="text-sm text-on-surface-variant">모든 인덱스, 로컬 파일, 설정을 영구적으로 삭제합니다.</p>
                   </div>
-                  <button className="shrink-0 border border-red-500/40 text-red-400 font-bold py-2.5 px-6 rounded-full text-sm hover:bg-red-500 hover:text-white transition-all duration-200 active:scale-95 whitespace-nowrap">
+                  <button className="shrink-0 border border-red-500/40 text-red-400 font-bold py-2.5 px-6 rounded-full text-lg hover:bg-red-500 hover:text-white transition-all duration-200 active:scale-95 whitespace-nowrap">
                     앱 및 데이터 삭제
                   </button>
                 </div>
@@ -237,20 +216,20 @@ export default function Settings() {
                   { label: '새 비밀번호 확인', value: confirmPw, onChange: e => setConfirmPw(e.target.value), placeholder: '새 비밀번호 다시 입력' },
                 ].map(f => (
                   <div key={f.label} className="flex flex-col gap-1.5">
-                    <label className="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold">{f.label}</label>
+                    <label className="text-sm uppercase tracking-widest text-on-surface-variant font-bold">{f.label}</label>
                     <input type="password" value={f.value} onChange={f.onChange} required disabled={loading}
                       placeholder={f.placeholder}
-                      className="bg-surface-container-high border border-outline-variant/30 rounded-xl px-4 py-2.5 text-sm text-on-surface focus:outline-none focus:border-primary/60 transition-colors disabled:opacity-50" />
+                      className="bg-surface-container-high border border-outline-variant/30 rounded-xl px-4 py-2.5 text-lg text-on-surface focus:outline-none focus:border-primary/60 transition-colors disabled:opacity-50" />
                   </div>
                 ))}
                 {modalError && <p className="text-xs text-red-400 font-medium">{modalError}</p>}
                 <div className="flex gap-3 pt-1">
                   <button type="button" onClick={closeModal} disabled={loading}
-                    className="flex-1 py-2.5 rounded-full border border-outline-variant/30 text-sm font-bold text-on-surface-variant hover:text-on-surface transition-all disabled:opacity-50">
+                    className="flex-1 py-2.5 rounded-full border border-outline-variant/30 text-lg font-bold text-on-surface-variant hover:text-on-surface transition-all disabled:opacity-50">
                     취소
                   </button>
                   <button type="submit" disabled={loading}
-                    className="flex-1 py-2.5 rounded-full bg-gradient-to-tr from-primary to-secondary text-on-primary text-sm font-bold hover:brightness-110 active:scale-95 transition-all disabled:opacity-50">
+                    className="flex-1 py-2.5 rounded-full bg-gradient-to-tr from-primary to-secondary text-on-primary text-lg font-bold hover:brightness-110 active:scale-95 transition-all disabled:opacity-50">
                     {loading ? '변경 중...' : '변경'}
                   </button>
                 </div>

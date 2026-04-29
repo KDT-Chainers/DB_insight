@@ -65,7 +65,7 @@ export default function LandingLogin() {
         {/* Brand header */}
         <div className="absolute top-12 flex flex-col items-center">
           <h1 className="text-3xl font-black tracking-tighter text-blue-100 font-headline">DB_insight</h1>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-primary mt-2">로컬 인텔리전스 프로토콜</p>
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-primary mt-2">로컬 인텔리전스 프로토콜</p>
         </div>
 
         {/* Login card */}
@@ -78,7 +78,7 @@ export default function LandingLogin() {
               </div>
             </div>
             <div className="absolute bottom-0 right-0 bg-primary text-on-primary-fixed w-7 h-7 rounded-full flex items-center justify-center shadow-lg border-2 border-surface-container-highest">
-              <span className="material-symbols-outlined text-sm font-bold" style={{ fontVariationSettings: '"FILL" 1' }}>verified</span>
+              <span className="material-symbols-outlined text-lg font-bold" style={{ fontVariationSettings: '"FILL" 1' }}>verified</span>
             </div>
           </div>
 
@@ -89,9 +89,9 @@ export default function LandingLogin() {
 
           {/* Form */}
           <form onSubmit={handleLogin} className="w-full space-y-6">
-            {error && <p className="text-red-400 text-sm text-center">{error}</p>}
+            {error && <p className="text-red-400 text-lg text-center">{error}</p>}
             <div className="relative group">
-              <label className="text-[10px] uppercase font-bold tracking-widest text-primary mb-2 block ml-1">접근 토큰</label>
+              <label className="text-sm uppercase font-bold tracking-widest text-primary mb-2 block ml-1">접근 토큰</label>
               <div className="relative">
                 <span className="material-symbols-outlined absolute left-0 top-1/2 -translate-y-1/2 text-on-surface-variant group-focus-within:text-primary transition-colors">key</span>
                 <input
@@ -131,13 +131,13 @@ export default function LandingLogin() {
         <div className="mt-12 flex items-center gap-4">
           <div className="glass-panel px-4 py-2 rounded-full border border-white/5 flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-primary animate-pulse"></div>
-            <span className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+            <span className="text-sm font-bold uppercase tracking-widest text-on-surface-variant">
               노드 상태: <span className="text-primary">정상</span>
             </span>
           </div>
           <div className="glass-panel px-4 py-2 rounded-full border border-white/5 flex items-center gap-2">
-            <span className="material-symbols-outlined text-xs text-secondary" style={{ fontVariationSettings: '"FILL" 1' }}>verified_user</span>
-            <span className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">암호화됨</span>
+            <span className="material-symbols-outlined text-base text-secondary" style={{ fontVariationSettings: '"FILL" 1' }}>verified_user</span>
+            <span className="text-sm font-bold uppercase tracking-widest text-on-surface-variant">암호화됨</span>
           </div>
         </div>
       </main>
@@ -146,11 +146,11 @@ export default function LandingLogin() {
       <div className="fixed right-6 top-1/2 -translate-y-1/2 flex flex-col gap-8 opacity-20 hover:opacity-50 transition-opacity">
         <div className="flex flex-col items-center gap-1">
           <div className="w-[1px] h-12 bg-outline-variant"></div>
-          <span className="text-[10px] font-mono text-primary">04ms</span>
+          <span className="text-sm font-mono text-primary">04ms</span>
         </div>
         <div className="flex flex-col items-center gap-1">
           <div className="w-[1px] h-12 bg-outline-variant"></div>
-          <span className="text-[10px] font-mono text-primary">99.9%</span>
+          <span className="text-sm font-mono text-primary">99.9%</span>
         </div>
       </div>
 
@@ -158,11 +158,11 @@ export default function LandingLogin() {
       <div className="fixed bottom-0 left-0 p-8">
         <div className="flex items-center gap-4">
           <div className="w-8 h-8 rounded-lg bg-surface-container-highest border border-white/5 flex items-center justify-center">
-            <span className="material-symbols-outlined text-sm text-primary">terminal</span>
+            <span className="material-symbols-outlined text-lg text-primary">terminal</span>
           </div>
           <div className="hidden md:block">
-            <p className="text-[8px] font-bold text-outline uppercase tracking-widest">활성 시퀀스</p>
-            <p className="text-[10px] font-mono text-on-surface-variant">LOG_AUTH_INIT_PRIME</p>
+            <p className="text-xs font-bold text-outline uppercase tracking-widest">활성 시퀀스</p>
+            <p className="text-sm font-mono text-on-surface-variant">LOG_AUTH_INIT_PRIME</p>
           </div>
         </div>
       </div>

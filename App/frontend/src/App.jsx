@@ -57,7 +57,7 @@ function AuthGate() {
         <div className="w-10 h-10 bg-gradient-to-br from-primary to-secondary rounded-xl flex items-center justify-center animate-pulse">
           <span className="material-symbols-outlined text-white text-xl" style={{ fontVariationSettings: '"FILL" 1' }}>dataset</span>
         </div>
-        <p className="text-on-surface-variant text-sm">
+        <p className="text-on-surface-variant text-lg">
           {retryCount < 3 ? '서버에 연결하는 중...' : `백엔드 준비 중... (${retryCount})`}
         </p>
         <div className="w-32 h-0.5 bg-surface-container-high rounded-full overflow-hidden">

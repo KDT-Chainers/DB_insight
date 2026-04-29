@@ -134,7 +134,7 @@ function ResultCard({ result, onClick }) {
                 {topSegs.length > 0 && (
                   <div className="flex flex-wrap gap-1 justify-center px-4">
                     {topSegs.map((s, i) => (
-                      <span key={i} className="px-2 py-0.5 rounded-full bg-white/10 text-white/60 text-[10px] font-mono border border-white/10">
+                      <span key={i} className="px-2 py-0.5 rounded-full bg-white/10 text-white/60 text-lg font-mono border border-white/10">
                         {fmtTime(s.start ?? s.start_sec ?? 0)}
                       </span>
                     ))}
@@ -163,7 +163,7 @@ function ResultCard({ result, onClick }) {
             </div>
             <div className="text-right shrink-0">
               <div className="text-2xl font-black text-primary">{confPct}%</div>
-              <div className="text-[10px] text-on-surface-variant font-medium">신뢰도</div>
+              <div className="text-sm text-on-surface-variant font-medium">신뢰도</div>
             </div>
           </div>
         </div>
@@ -173,14 +173,14 @@ function ResultCard({ result, onClick }) {
           {isAV && topSegs.length > 0 ? (
             /* AV: 최고 매칭 세그먼트 텍스트 */
             <>
-              <p className="text-[10px] font-bold text-amber-400 tracking-widest uppercase flex items-center gap-1">
-                <span className="material-symbols-outlined text-xs">timer</span>
+              <p className="text-sm font-bold text-amber-400 tracking-widest uppercase flex items-center gap-1">
+                <span className="material-symbols-outlined text-base">timer</span>
                 최고 매칭 구간
               </p>
               <div className="space-y-1.5">
                 {topSegs.map((s, i) => (
                   <div key={i} className="flex gap-2 items-start">
-                    <span className="text-[10px] font-mono text-on-surface-variant/50 shrink-0 mt-0.5">
+                    <span className="text-sm font-mono text-on-surface-variant/50 shrink-0 mt-0.5">
                       {fmtTime(s.start ?? s.start_sec ?? 0)}
                     </span>
                     <p className="text-xs text-on-surface-variant/80 leading-relaxed line-clamp-2 flex-1">
@@ -193,16 +193,16 @@ function ResultCard({ result, onClick }) {
           ) : (
             /* 이미지/문서: 스니펫 */
             <>
-              <p className="text-[10px] font-bold text-primary tracking-widest uppercase">일치 내용</p>
+              <p className="text-sm font-bold text-primary tracking-widest uppercase">일치 내용</p>
               <p className="text-sm text-on-surface-variant leading-relaxed line-clamp-3">
                 {result.snippet || '(미리보기 없음)'}
               </p>
             </>
           )}
           <div className="pt-3 border-t border-outline-variant/10 flex justify-between items-center">
-            <span className="text-[10px] text-on-surface-variant/40 font-mono truncate max-w-[200px]">{result.file_path}</span>
+            <span className="text-sm text-on-surface-variant/40 font-mono truncate max-w-[200px]">{result.file_path}</span>
             <span className="text-xs font-bold text-primary flex items-center gap-1 group-hover/card:translate-x-1 transition-transform shrink-0">
-              열기 <span className="material-symbols-outlined text-sm">arrow_forward</span>
+              열기 <span className="material-symbols-outlined text-lg">arrow_forward</span>
             </span>
           </div>
         </div>
@@ -258,8 +258,8 @@ function AVDetailContent({ result }) {
       {/* 세그먼트 타임라인 */}
       {segments.length > 0 && (
         <div className="px-8 pb-4 flex-1 overflow-y-auto">
-          <p className="text-[10px] font-bold text-on-surface-variant/50 uppercase tracking-widest mb-3 flex items-center gap-1">
-            <span className="material-symbols-outlined text-xs">timeline</span>
+          <p className="text-sm font-bold text-on-surface-variant/50 uppercase tracking-widest mb-3 flex items-center gap-1">
+            <span className="material-symbols-outlined text-base">timeline</span>
             매칭 구간 ({segments.length}개)
           </p>
           <div className="space-y-2">
@@ -277,10 +277,10 @@ function AVDetailContent({ result }) {
                 >
                   <div className="flex items-center justify-between mb-1.5">
                     <div className="flex items-center gap-2">
-                      <span className="material-symbols-outlined text-xs text-primary group-hover/seg:scale-110 transition-transform">play_circle</span>
-                      <span className="font-mono text-[11px] text-primary font-bold">{fmtTime(t0)}</span>
-                      <span className="text-[10px] text-on-surface-variant/40">→</span>
-                      <span className="font-mono text-[11px] text-on-surface-variant/60">{fmtTime(t1)}</span>
+                      <span className="material-symbols-outlined text-base text-primary group-hover/seg:scale-110 transition-transform">play_circle</span>
+                      <span className="font-mono text-lg text-primary font-bold">{fmtTime(t0)}</span>
+                      <span className="text-sm text-on-surface-variant/40">→</span>
+                      <span className="font-mono text-lg text-on-surface-variant/60">{fmtTime(t1)}</span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       {/* 점수 바 */}
@@ -290,7 +290,7 @@ function AVDetailContent({ result }) {
                           style={{ width: `${Math.min(pct * 2, 100)}%` }}
                         />
                       </div>
-                      <span className="text-[10px] text-on-surface-variant/60 font-mono tabular-nums">{sc.toFixed(3)}</span>
+                      <span className="text-sm text-on-surface-variant/60 font-mono tabular-nums">{sc.toFixed(3)}</span>
                     </div>
                   </div>
                   {text && (
@@ -306,7 +306,7 @@ function AVDetailContent({ result }) {
       )}
 
       {segments.length === 0 && (
-        <div className="flex-1 flex items-center justify-center text-on-surface-variant/30 text-sm px-8">
+        <div className="flex-1 flex items-center justify-center text-on-surface-variant/30 text-lg px-8">
           세그먼트 정보 없음
         </div>
       )}
@@ -468,7 +468,7 @@ export default function MainSearch() {
           ))}
           <div className="portal-text absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-2">
             <span className="material-symbols-outlined text-[#a5aac2] text-4xl" style={{ fontVariationSettings: '"FILL" 1' }}>psychology</span>
-            <span className="font-manrope uppercase tracking-[0.25em] text-xs text-[#a5aac2]">AI 모드</span>
+            <span className="font-manrope uppercase tracking-[0.25em] text-base text-[#a5aac2]">AI 모드</span>
           </div>
         </div>
       )}
@@ -531,7 +531,7 @@ export default function MainSearch() {
 
               <div className="mt-10 flex justify-center" style={homeExiting ? { visibility: 'hidden' } : {}}>
                 <button ref={btnRef} onClick={handleGoToAI} disabled={aiTransitioning}
-                  className="px-8 py-3 rounded-full bg-surface-container-high border border-outline-variant/20 flex items-center gap-3 text-sm font-bold tracking-widest uppercase text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest transition-all duration-300 group glow-primary disabled:pointer-events-none">
+                  className="px-8 py-3 rounded-full bg-surface-container-high border border-outline-variant/20 flex items-center gap-3 text-lg font-bold tracking-widest uppercase text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest transition-all duration-300 group glow-primary disabled:pointer-events-none">
                   <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
                   AI 모드로 전환
                   <span className="material-symbols-outlined text-lg group-hover:translate-x-1 transition-transform">arrow_forward</span>
@@ -543,7 +543,7 @@ export default function MainSearch() {
                 <div style={{ ...flyStyle }}>
                   <div className="glass-effect rounded-full p-2 border border-primary/40 shadow-[0_0_30px_rgba(133,173,255,0.15)] flex items-center gap-3 px-4 py-3">
                     <span className="material-symbols-outlined text-primary">search</span>
-                    <span className="flex-1 text-on-surface font-manrope text-sm truncate">{inputValue}</span>
+                    <span className="flex-1 text-on-surface font-manrope text-lg truncate">{inputValue}</span>
                   </div>
                 </div>
               )}
@@ -557,7 +557,7 @@ export default function MainSearch() {
                   <div key={card.title} className="glass-effect p-6 rounded-xl border border-outline-variant/15 hover:border-primary/20 transition-all group cursor-pointer">
                     <span className={`material-symbols-outlined ${card.color} mb-4 block`}>{card.icon}</span>
                     <h3 className="text-on-surface font-bold mb-1">{card.title}</h3>
-                    <p className="text-on-surface-variant text-xs uppercase tracking-tighter">{card.sub}</p>
+                    <p className="text-on-surface-variant text-base uppercase tracking-tighter">{card.sub}</p>
                   </div>
                 ))}
               </div>
@@ -580,10 +580,10 @@ export default function MainSearch() {
           <form onSubmit={handleSearch} className="flex-1">
             <div className={`flex items-center rounded-full border px-4 py-2 gap-3 transition-all
               ${listening ? 'bg-red-500/5 border-red-400/50 shadow-[0_0_15px_rgba(248,113,113,0.15)]' : 'bg-surface-container-high border-outline-variant/20 focus-within:border-primary/50'}`}>
-              <span className={`material-symbols-outlined text-sm ${listening ? 'text-red-400' : 'text-primary'}`}>{listening ? 'mic' : 'search'}</span>
+              <span className={`material-symbols-outlined text-lg ${listening ? 'text-red-400' : 'text-primary'}`}>{listening ? 'mic' : 'search'}</span>
               <div className="flex-1 relative">
                 <input
-                  className="bg-transparent border-none focus:ring-0 w-full text-on-surface placeholder-on-surface-variant text-sm outline-none"
+                  className="bg-transparent border-none focus:ring-0 w-full text-on-surface placeholder-on-surface-variant text-lg outline-none"
                   placeholder={listening ? '' : '인텔리전스에 질문하세요...'}
                   value={listening ? '' : inputValue}
                   onChange={(e) => !listening && setInputValue(e.target.value)}
@@ -591,7 +591,7 @@ export default function MainSearch() {
                 />
                 {listening && (
                   <div className="absolute inset-0 flex items-center gap-2 pointer-events-none">
-                    <span className="text-red-400 text-sm truncate">{interim || '듣는 중...'}</span>
+                    <span className="text-red-400 text-lg truncate">{interim || '듣는 중...'}</span>
                     <div className="flex items-center gap-[2px] shrink-0">
                       {[0,0.1,0.2,0.1,0].map((d,i) => (
                         <div key={i} className="w-[2px] bg-red-400 rounded-full animate-bounce"
@@ -603,15 +603,15 @@ export default function MainSearch() {
               </div>
               <button type="button" onClick={toggleMic}
                 className={`shrink-0 transition-all duration-200 ${listening ? 'text-red-400 animate-pulse' : 'text-on-surface-variant hover:text-primary'}`}>
-                <span className="material-symbols-outlined text-sm" style={listening ? { fontVariationSettings: '"FILL" 1' } : {}}>mic</span>
+                <span className="material-symbols-outlined text-lg" style={listening ? { fontVariationSettings: '"FILL" 1' } : {}}>mic</span>
               </button>
             </div>
           </form>
 
           {view === 'detail' && (
             <button onClick={handleBackToResults}
-              className="flex items-center gap-2 px-4 py-2 rounded-full bg-surface-container-high border border-outline-variant/20 text-xs font-bold text-on-surface-variant hover:text-primary hover:border-primary/30 transition-all shrink-0">
-              <span className="material-symbols-outlined text-sm">arrow_back</span>결과로
+              className="flex items-center gap-2 px-4 py-2 rounded-full bg-surface-container-high border border-outline-variant/20 text-base font-bold text-on-surface-variant hover:text-primary hover:border-primary/30 transition-all shrink-0">
+              <span className="material-symbols-outlined text-lg">arrow_back</span>결과로
             </button>
           )}
         </header>
@@ -626,20 +626,20 @@ export default function MainSearch() {
             {/* 헤더 */}
             <div className="flex justify-between items-end mb-10">
               <div className="space-y-2">
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-primary/10 text-primary uppercase tracking-widest border border-primary/20">현재 쿼리</span>
+                <span className="px-2 py-0.5 rounded text-lg font-bold bg-primary/10 text-primary uppercase tracking-widest border border-primary/20">현재 쿼리</span>
                 <h1 className="text-4xl font-extrabold tracking-tighter text-on-surface">{query}</h1>
                 {searching
                   ? <p className="text-on-surface-variant flex items-center gap-2">
-                      <span className="material-symbols-outlined text-primary text-sm animate-spin">progress_activity</span>검색 중...
+                      <span className="material-symbols-outlined text-primary text-lg animate-spin">progress_activity</span>검색 중...
                     </p>
                   : searchError
-                    ? <p className="text-red-400 text-sm">{searchError}</p>
+                    ? <p className="text-red-400 text-lg">{searchError}</p>
                     : <p className="text-on-surface-variant">로컬 보관소에서 <span className="text-primary font-bold">{results.length}건</span>을 찾았습니다.</p>
                 }
               </div>
               <div className="flex gap-3">
-                <button className="px-4 py-2 rounded-full glass-panel border border-outline-variant/20 text-xs font-bold hover:bg-primary/5 transition-all flex items-center gap-2">
-                  <span className="material-symbols-outlined text-sm">filter_list</span>관련도
+                <button className="px-4 py-2 rounded-full glass-panel border border-outline-variant/20 text-base font-bold hover:bg-primary/5 transition-all flex items-center gap-2">
+                  <span className="material-symbols-outlined text-lg">filter_list</span>관련도
                 </button>
               </div>
             </div>
@@ -676,7 +676,7 @@ export default function MainSearch() {
                 <div className="absolute -right-20 -top-20 w-64 h-64 bg-primary/10 rounded-full blur-[80px]" />
                 <div className="relative z-10">
                   <h3 className="text-sm font-bold text-primary mb-4 flex items-center gap-2 uppercase tracking-widest">
-                    <span className="material-symbols-outlined text-sm">analytics</span>검색 요약
+                    <span className="material-symbols-outlined text-lg">analytics</span>검색 요약
                   </h3>
                   <p className="text-on-surface leading-relaxed mb-6">
                     <span className="text-primary font-bold">"{query}"</span>에 대해 TRI-CHEF 엔진이 신뢰도 기준으로 정렬한 결과입니다.
@@ -689,7 +689,7 @@ export default function MainSearch() {
                       ['영상·음성', `${results.filter(r => r.file_type === 'video' || r.file_type === 'audio').length}건`],
                     ].map(([label, val]) => (
                       <div key={label} className="p-4 rounded-2xl bg-slate-900/40 border border-outline-variant/5">
-                        <p className="text-[10px] text-slate-500 uppercase tracking-widest mb-1">{label}</p>
+                        <p className="text-sm text-slate-500 uppercase tracking-widest mb-1">{label}</p>
                         <p className="text-xl font-bold text-on-surface">{val}</p>
                       </div>
                     ))}
@@ -717,19 +717,19 @@ export default function MainSearch() {
             <div className={`fixed top-[88px] ${leftEdge} right-0 z-30 bg-[#070d1f]/60 backdrop-blur-xl flex items-center justify-between px-8 py-3 border-b border-outline-variant/10 transition-[left] duration-300`}>
               <div className="flex items-center gap-3 min-w-0 flex-1 mr-4">
                 <span className={`material-symbols-outlined ${meta.color} shrink-0`}>{meta.icon}</span>
-                <span className="font-manrope text-sm tracking-wide text-[#dfe4fe] font-bold truncate">{selectedFile.file_name}</span>
-                <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-bold border border-primary/20 shrink-0">{confPct}%</span>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border shrink-0 ${meta.color} bg-white/5 border-white/10`}>{meta.label}</span>
+                <span className="font-manrope text-lg tracking-wide text-[#dfe4fe] font-bold truncate">{selectedFile.file_name}</span>
+                <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-lg font-bold border border-primary/20 shrink-0">{confPct}%</span>
+                <span className={`px-2 py-0.5 rounded-full text-lg font-bold border shrink-0 ${meta.color} bg-white/5 border-white/10`}>{meta.label}</span>
               </div>
               <div className="flex items-center gap-3 shrink-0">
                 <button
                   onClick={() => openFolder(selectedFile.file_path)}
-                  className="px-5 py-2 text-xs font-bold uppercase tracking-widest text-primary bg-surface-container-high border border-outline-variant/15 rounded-full hover:bg-surface-variant transition-colors active:scale-95">
+                  className="px-5 py-2 text-base font-bold uppercase tracking-widest text-primary bg-surface-container-high border border-outline-variant/15 rounded-full hover:bg-surface-variant transition-colors active:scale-95">
                   경로 열기
                 </button>
                 <button
                   onClick={() => openFile(selectedFile.file_path)}
-                  className="px-5 py-2 text-xs font-bold uppercase tracking-widest text-on-primary bg-primary rounded-full hover:brightness-110 transition-all active:scale-95">
+                  className="px-5 py-2 text-base font-bold uppercase tracking-widest text-on-primary bg-primary rounded-full hover:brightness-110 transition-all active:scale-95">
                   파일 열기
                 </button>
               </div>
@@ -743,11 +743,11 @@ export default function MainSearch() {
                   <div className="bg-surface-container-low rounded-xl glass-panel glow-primary min-h-[400px] flex flex-col"
                     style={{ border: '1px solid rgba(65,71,91,0.15)' }}>
                     <div className="flex items-center justify-between px-8 pt-7 pb-5 border-b border-outline-variant/10">
-                      <span className="text-[10px] font-bold tracking-[0.2em] text-primary uppercase">
+                      <span className="text-sm font-bold tracking-[0.2em] text-primary uppercase">
                         {isAV ? '미디어 플레이어 · 세그먼트 타임라인' : '추출된 콘텐츠 스트림'}
                       </span>
                       <div className="flex gap-2 items-center">
-                        {detailLoading && <span className="material-symbols-outlined text-primary text-sm animate-spin">progress_activity</span>}
+                        {detailLoading && <span className="material-symbols-outlined text-primary text-lg animate-spin">progress_activity</span>}
                         <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
                         <span className="h-2 w-2 rounded-full bg-secondary/50" />
                       </div>
@@ -768,7 +768,7 @@ export default function MainSearch() {
                           />
                         </div>
                         {selectedFile.snippet && (
-                          <p className="w-full text-sm text-on-surface-variant/70 leading-relaxed line-clamp-3 text-center">
+                          <p className="w-full text-lg text-on-surface-variant/70 leading-relaxed line-clamp-3 text-center">
                             {selectedFile.snippet}
                           </p>
                         )}
@@ -777,13 +777,13 @@ export default function MainSearch() {
                       <div className="flex-1 px-8 py-6">
                         {detailLoading ? (
                           <div className="flex items-center gap-2 text-on-surface-variant/40">
-                            <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span>
+                            <span className="material-symbols-outlined animate-spin text-lg">progress_activity</span>
                             <span className="text-sm">콘텐츠 불러오는 중...</span>
                           </div>
                         ) : fileDetail?.full_text ? (
-                          <p className="text-on-surface-variant/90 leading-relaxed text-sm whitespace-pre-wrap">{fileDetail.full_text}</p>
+                          <p className="text-on-surface-variant/90 leading-relaxed text-lg whitespace-pre-wrap">{fileDetail.full_text}</p>
                         ) : selectedFile.snippet ? (
-                          <p className="text-on-surface-variant/90 leading-relaxed text-sm whitespace-pre-wrap">{selectedFile.snippet}</p>
+                          <p className="text-on-surface-variant/90 leading-relaxed text-lg whitespace-pre-wrap">{selectedFile.snippet}</p>
                         ) : (
                           <div className="flex flex-col items-center justify-center h-48 gap-3 text-on-surface-variant/30">
                             <span className={`material-symbols-outlined text-5xl ${meta.color}/30`} style={{ fontVariationSettings: '"FILL" 1' }}>{meta.icon}</span>
@@ -801,7 +801,7 @@ export default function MainSearch() {
                   {/* 신뢰도 카드 */}
                   <div className="bg-surface-container-high rounded-xl p-6 border border-outline-variant/10 relative overflow-hidden group">
                     <div className="absolute -right-4 -top-4 w-24 h-24 bg-primary/10 blur-3xl group-hover:bg-primary/20 transition-all" />
-                    <h4 className="text-[10px] font-bold tracking-[0.15em] text-primary mb-4 uppercase">신뢰도 분석</h4>
+                    <h4 className="text-sm font-bold tracking-[0.15em] text-primary mb-4 uppercase">신뢰도 분석</h4>
                     <div className="space-y-3">
                       <div className="flex items-center gap-3">
                         <div className="flex-1 h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
@@ -819,18 +819,18 @@ export default function MainSearch() {
                   {/* AV: 세그먼트 요약 */}
                   {isAV && selectedFile.segments?.length > 0 && (
                     <div className="bg-surface-container-low rounded-xl p-5 border border-outline-variant/5">
-                      <h4 className="text-[10px] font-bold tracking-[0.15em] text-amber-400 mb-3 uppercase">매칭 세그먼트</h4>
+                      <h4 className="text-sm font-bold tracking-[0.15em] text-amber-400 mb-3 uppercase">매칭 세그먼트</h4>
                       <div className="space-y-2">
                         {selectedFile.segments.slice(0, 5).map((s, i) => {
                           const t0 = s.start ?? s.start_sec ?? 0
                           const sc = s.score ?? 0
                           return (
                             <div key={i} className="flex items-center gap-2">
-                              <span className="font-mono text-[10px] text-amber-400/80 shrink-0">{fmtTime(t0)}</span>
+                              <span className="font-mono text-lg text-amber-400/80 shrink-0">{fmtTime(t0)}</span>
                               <div className="flex-1 h-1 bg-surface-container-highest rounded-full overflow-hidden">
                                 <div className="h-full bg-amber-500/60 rounded-full" style={{ width: `${Math.min(sc * 200, 100)}%` }} />
                               </div>
-                              <span className="text-[10px] text-on-surface-variant/50 font-mono shrink-0">{sc.toFixed(2)}</span>
+                              <span className="text-sm text-on-surface-variant/50 font-mono shrink-0">{sc.toFixed(2)}</span>
                             </div>
                           )
                         })}
@@ -840,7 +840,7 @@ export default function MainSearch() {
 
                   {/* 파일 메타데이터 */}
                   <div className="bg-surface-container-low rounded-xl p-6 border border-outline-variant/5">
-                    <h4 className="text-[10px] font-bold tracking-[0.15em] text-secondary mb-4 uppercase">파일 정보</h4>
+                    <h4 className="text-sm font-bold tracking-[0.15em] text-secondary mb-4 uppercase">파일 정보</h4>
                     <div className="space-y-0">
                       {[
                         ['파일명', selectedFile.file_name],
@@ -869,7 +869,7 @@ export default function MainSearch() {
                         <span className={`material-symbols-outlined ${meta.color}`}>{meta.icon}</span>
                         <span className="text-sm font-semibold text-on-surface">기본 앱으로 열기</span>
                       </div>
-                      <span className="material-symbols-outlined text-xs text-on-surface-variant">open_in_new</span>
+                      <span className="material-symbols-outlined text-base text-on-surface-variant">open_in_new</span>
                     </button>
                     <button
                       onClick={() => openFolder(selectedFile.file_path)}
@@ -878,7 +878,7 @@ export default function MainSearch() {
                         <span className="material-symbols-outlined text-on-surface-variant group-hover:text-primary">folder_open</span>
                         <span className="text-sm font-semibold">탐색기에서 보기</span>
                       </div>
-                      <span className="material-symbols-outlined text-xs text-on-surface-variant">chevron_right</span>
+                      <span className="material-symbols-outlined text-base text-on-surface-variant">chevron_right</span>
                     </button>
                   </div>
                 </div>

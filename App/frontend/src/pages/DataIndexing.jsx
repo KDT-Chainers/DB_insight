@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { useState, useCallback, useRef, useEffect } from 'react'
 import WindowControls from '../components/WindowControls'
+import PageSidebar from '../components/PageSidebar'
 import { API_BASE as API } from '../api'
 const TYPE_ICON  = { doc: 'description', video: 'movie', image: 'image', audio: 'volume_up' }
 const TYPE_LABEL = { doc: '문서', video: '동영상', image: '이미지', audio: '음성' }
@@ -57,7 +58,7 @@ function FileRow({ item, depth, checked, onToggle, jobResult }) {
       statusIcon = (
         <div className="flex items-center gap-1.5 shrink-0">
           {step != null && (
-            <span className="text-[10px] text-primary/60 font-bold tabular-nums">{step}/{total}</span>
+            <span className="text-sm text-primary/60 font-bold tabular-nums">{step}/{total}</span>
           )}
           <span className="material-symbols-outlined text-primary text-base animate-spin">progress_activity</span>
         </div>
@@ -83,8 +84,8 @@ function FileRow({ item, depth, checked, onToggle, jobResult }) {
         className="w-3.5 h-3.5 rounded border-outline-variant bg-transparent text-primary focus:ring-0 focus:ring-offset-0 shrink-0 cursor-pointer"
       />
       <span className="material-symbols-outlined text-on-surface-variant text-[16px] shrink-0">{icon}</span>
-      <span className="text-sm text-on-surface flex-1 truncate">{item.name}</span>
-      <span className="text-xs text-on-surface-variant/30 shrink-0 group-hover:text-on-surface-variant/60">{sizeKB} KB</span>
+      <span className="text-base text-on-surface flex-1 truncate">{item.name}</span>
+      <span className="text-sm text-on-surface-variant/30 shrink-0 group-hover:text-on-surface-variant/60">{sizeKB} KB</span>
       {statusIcon}
     </div>
   )
@@ -187,12 +188,12 @@ function FolderRow({ item, depth, checkedPaths, onToggle, onSetMany, jobResultMa
             className="material-symbols-outlined text-[#85adff] text-[16px] shrink-0"
             style={{ fontVariationSettings: `"FILL" ${open ? 1 : 0}` }}
           >folder</span>
-          <span className="text-sm text-on-surface flex-1 truncate font-medium">{item.name}</span>
+          <span className="text-base text-on-surface flex-1 truncate font-medium">{item.name}</span>
         </span>
 
         {/* 자식 수 배지 */}
         {children !== null && (
-          <span className="shrink-0 text-[10px] text-on-surface-variant/30 group-hover:text-on-surface-variant/60">
+          <span className="shrink-0 text-lg text-on-surface-variant/30 group-hover:text-on-surface-variant/60">
             {children.length}
           </span>
         )}
@@ -203,7 +204,7 @@ function FolderRow({ item, depth, checkedPaths, onToggle, onSetMany, jobResultMa
         <>
           {children.length === 0 && (
             <div
-              className="py-1 text-xs text-on-surface-variant/30 italic"
+              className="py-1 text-base text-on-surface-variant/30 italic"
               style={{ paddingLeft: `${10 + (depth + 1) * INDENT + 22}px` }}
             >
               비어 있음
@@ -324,18 +325,18 @@ function IndexingModal({ rootPath, selectedCount, jobStatus, jobId, onClose, onS
       cols: 'grid-cols-4',
     },
     video: {
-      label: '동영상 처리 단계',
-      steps: ['BLIP 캡셔닝', 'Whisper STT', 'e5-large 임베딩', '벡터DB 저장'],
-      icons: ['movie_filter', 'mic', 'hub', 'database'],
+      label: '동영상 처리 단계 (TRI-CHEF)',
+      steps: ['프레임 추출', 'SigLIP2 Re + DINOv2 Z', 'Whisper STT', 'BGE-M3 Im', '벡터DB 저장'],
+      icons: ['movie_filter', 'visibility', 'mic', 'hub', 'database'],
       color: 'blue',
-      cols: 'grid-cols-4',
+      cols: 'grid-cols-5',
     },
     audio: {
-      label: '음성 처리 단계',
-      steps: ['Whisper STT', 'BGE-M3 임베딩', '벡터DB 저장'],
-      icons: ['mic', 'hub', 'database'],
+      label: '음성 처리 단계 (TRI-CHEF)',
+      steps: ['오디오 표준화', 'Whisper STT', 'BGE-M3 Im + SigLIP2 Re', '벡터DB 저장'],
+      icons: ['graphic_eq', 'mic', 'hub', 'database'],
       color: 'amber',
-      cols: 'grid-cols-3',
+      cols: 'grid-cols-4',
     },
   }
 
@@ -375,14 +376,14 @@ function IndexingModal({ rootPath, selectedCount, jobStatus, jobId, onClose, onS
           <div className="flex items-center gap-2">
             {isRunning && (
               <button onClick={handleStop} disabled={isStopping}
-                className="flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 text-xs font-bold transition-all disabled:opacity-40">
-                <span className="material-symbols-outlined text-sm">stop</span>
+                className="flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 text-base font-bold transition-all disabled:opacity-40">
+                <span className="material-symbols-outlined text-lg">stop</span>
                 {isStopping ? '중단 중...' : '중단'}
               </button>
             )}
             <button onClick={onClose}
               className="w-8 h-8 rounded-full bg-white/8 hover:bg-white/15 flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-all">
-              <span className="material-symbols-outlined text-sm">close</span>
+              <span className="material-symbols-outlined text-lg">close</span>
             </button>
           </div>
         </div>
@@ -410,7 +411,7 @@ function IndexingModal({ rootPath, selectedCount, jobStatus, jobId, onClose, onS
                   : 'bg-gradient-to-r from-[#85adff] to-[#ac8aff]'
                 }`} style={{ width: `${progress}%` }} />
               </div>
-              <p className="text-[11px] text-center text-on-surface-variant/50 tabular-nums">
+              <p className="text-sm text-center text-on-surface-variant/50 tabular-nums">
                 {processed} / {total} 파일
               </p>
             </div>
@@ -424,7 +425,7 @@ function IndexingModal({ rootPath, selectedCount, jobStatus, jobId, onClose, onS
               ].map(s => (
                 <div key={s.label} className={`${s.bg} rounded-xl p-2 flex flex-col items-center`}>
                   <span className={`text-xl font-black ${s.color} tabular-nums`}>{s.val}</span>
-                  <span className="text-[9px] text-on-surface-variant/40 mt-0.5">{s.label}</span>
+                  <span className="text-sm text-on-surface-variant/40 mt-0.5">{s.label}</span>
                 </div>
               ))}
             </div>
@@ -432,8 +433,8 @@ function IndexingModal({ rootPath, selectedCount, jobStatus, jobId, onClose, onS
             {/* 현재 처리 중 파일명 */}
             {runningResult && (
               <div className="w-full bg-[#85adff]/5 border border-[#85adff]/15 rounded-xl p-3">
-                <p className="text-[9px] text-[#85adff]/60 uppercase tracking-widest font-bold mb-1">현재 처리 중</p>
-                <p className="text-xs font-semibold text-[#dfe4fe] truncate">
+                <p className="text-sm text-[#85adff]/60 uppercase tracking-widest font-bold mb-1">현재 처리 중</p>
+                <p className="text-sm font-semibold text-[#dfe4fe] truncate">
                   {runningResult.path.split('\\').pop() || runningResult.path.split('/').pop()}
                 </p>
               </div>
@@ -456,7 +457,7 @@ function IndexingModal({ rootPath, selectedCount, jobStatus, jobId, onClose, onS
               const pingBorder      = clr === 'emerald' ? 'border-emerald-400/30' : clr === 'amber' ? 'border-amber-400/30' : 'border-[#85adff]/30'
               return (
                 <div className="shrink-0 px-6 pt-6 pb-5 border-b border-white/5">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/40 mb-4">
+                  <p className="text-sm font-bold uppercase tracking-widest text-on-surface-variant/40 mb-4">
                     {pipeline.label}
                   </p>
                   <div className={`grid gap-3 ${pipeline.cols}`}>
@@ -475,7 +476,7 @@ function IndexingModal({ rootPath, selectedCount, jobStatus, jobId, onClose, onS
                                 : 'bg-white/3 border-white/5'
                           }`}>
                           {/* 번호 / 아이콘 */}
-                          <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-black border-2 transition-all ${
+                          <div className={`w-9 h-9 rounded-full flex items-center justify-center text-lg font-black border-2 transition-all ${
                             isActive
                               ? `${chipActiveBg} text-[#070d1f] scale-110`
                               : isPast
@@ -483,13 +484,13 @@ function IndexingModal({ rootPath, selectedCount, jobStatus, jobId, onClose, onS
                                 : 'bg-white/5 border-white/10 text-on-surface-variant/30'
                           }`}>
                             {isPast
-                              ? <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: '"FILL" 1' }}>check</span>
+                              ? <span className="material-symbols-outlined text-lg" style={{ fontVariationSettings: '"FILL" 1' }}>check</span>
                               : isActive
-                                ? <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
-                                : <span className="material-symbols-outlined text-sm opacity-40">{STEP_ICONS[idx]}</span>
+                                ? <span className="material-symbols-outlined text-lg animate-spin">progress_activity</span>
+                                : <span className="material-symbols-outlined text-lg opacity-40">{STEP_ICONS[idx]}</span>
                             }
                           </div>
-                          <span className={`text-[10px] font-bold text-center leading-tight ${
+                          <span className={`text-sm font-bold text-center leading-tight ${
                             isActive ? chipColor : isPast ? 'text-emerald-400' : 'text-on-surface-variant/25'
                           }`}>{label}</span>
                           {/* 활성 펄스 */}
@@ -507,7 +508,7 @@ function IndexingModal({ rootPath, selectedCount, jobStatus, jobId, onClose, onS
             {/* 파일 전체 목록 */}
             <div className="flex-1 overflow-y-auto min-h-0">
               <div className="px-4 pt-4 pb-2 sticky top-0 bg-[#080e22]/95 backdrop-blur-sm z-10 border-b border-white/5">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/40">파일 목록</p>
+                <p className="text-sm font-bold uppercase tracking-widest text-on-surface-variant/40">파일 목록</p>
               </div>
               <div className="divide-y divide-white/4 px-2 pb-4">
                 {allResults.map((r, i) => {
@@ -528,12 +529,12 @@ function IndexingModal({ rootPath, selectedCount, jobStatus, jobId, onClose, onS
                       }`}>
                       <span className={`material-symbols-outlined text-base shrink-0 ${color}`}>{icon}</span>
                       <div className="flex-1 min-w-0">
-                        <p className={`text-xs font-semibold truncate ${isCurrently ? 'text-[#dfe4fe]' : 'text-on-surface/70'}`}>{fname}</p>
+                        <p className={`text-sm font-semibold truncate ${isCurrently ? 'text-[#dfe4fe]' : 'text-on-surface/70'}`}>{fname}</p>
                         {isCurrently && r.step_detail && (
-                          <p className="text-[10px] text-[#85adff]/70 mt-0.5">[{r.step}/{r.step_total ?? pipeline.steps.length}] {r.step_detail}</p>
+                          <p className="text-sm text-[#85adff]/70 mt-0.5">[{r.step}/{r.step_total ?? pipeline.steps.length}] {r.step_detail}</p>
                         )}
                         {r.status === 'error' && r.reason && (
-                          <p className="text-[10px] text-red-400/70 mt-0.5 truncate">{r.reason}</p>
+                          <p className="text-sm text-red-400/70 mt-0.5 truncate">{r.reason}</p>
                         )}
                       </div>
                       {/* 상태 아이콘 */}
@@ -600,14 +601,14 @@ function DataSourcesTab() {
   if (loading) return (
     <div className="flex items-center justify-center py-32 gap-2">
       <span className="material-symbols-outlined text-primary animate-spin">progress_activity</span>
-      <span className="text-sm text-on-surface-variant">불러오는 중...</span>
+      <span className="text-base text-on-surface-variant">불러오는 중...</span>
     </div>
   )
-  if (error) return <p className="text-red-400 text-sm p-8">{error}</p>
+  if (error) return <p className="text-red-400 text-lg p-8">{error}</p>
   if (files.length === 0) return (
     <div className="flex flex-col items-center gap-3 py-24">
       <span className="material-symbols-outlined text-on-surface-variant/20 text-5xl">database</span>
-      <p className="text-sm text-on-surface-variant/40">아직 인덱싱된 파일이 없습니다.</p>
+      <p className="text-base text-on-surface-variant/40">아직 인덱싱된 파일이 없습니다.</p>
     </div>
   )
 
@@ -631,10 +632,10 @@ function DataSourcesTab() {
             <div key={t} className="glass-panel rounded-xl p-4 border border-outline-variant/10">
               <div className="flex items-center gap-2 mb-3">
                 <span className={`material-symbols-outlined text-base ${color}`}>{icon}</span>
-                <span className="text-xs font-bold text-on-surface-variant uppercase tracking-widest">{label}</span>
+                <span className="text-sm font-bold text-on-surface-variant uppercase tracking-widest">{label}</span>
               </div>
               <p className="text-2xl font-black text-on-surface">{list.length}<span className="text-xs font-normal text-on-surface-variant ml-1">개</span></p>
-              <p className="text-[10px] text-on-surface-variant/40 mt-1">
+              <p className="text-sm text-on-surface-variant/40 mt-1">
                 {list.reduce((s, f) => s + (f.chunk_count || 0), 0)} 청크
               </p>
             </div>
@@ -645,12 +646,12 @@ function DataSourcesTab() {
       {/* 파일 목록 */}
       <div className="glass-panel rounded-xl border border-outline-variant/10 overflow-hidden">
         <div className="px-4 py-3 border-b border-outline-variant/10 flex items-center justify-between">
-          <h3 className="text-sm font-bold text-on-surface">전체 파일 <span className="text-on-surface-variant font-normal">({files.length})</span></h3>
+          <h3 className="text-base font-bold text-on-surface">전체 파일 <span className="text-on-surface-variant font-normal">({files.length})</span></h3>
           <button
             onClick={loadFiles}
-            className="flex items-center gap-1 text-[10px] text-on-surface-variant/50 hover:text-primary transition-colors"
+            className="flex items-center gap-1 text-lg text-on-surface-variant/50 hover:text-primary transition-colors"
           >
-            <span className="material-symbols-outlined text-sm">refresh</span>
+            <span className="material-symbols-outlined text-lg">refresh</span>
             새로고침
           </button>
         </div>
@@ -671,14 +672,14 @@ function DataSourcesTab() {
               >
                 <span className={`material-symbols-outlined text-base shrink-0 ${color}`}>{icon}</span>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-on-surface truncate">{f.file_name}</p>
-                  <p className="text-[10px] text-on-surface-variant/40 font-mono truncate">{f.file_path}</p>
+                  <p className="text-base font-semibold text-on-surface truncate">{f.file_name}</p>
+                  <p className="text-sm text-on-surface-variant/40 font-mono truncate">{f.file_path}</p>
                 </div>
 
-                <span className="text-[10px] text-on-surface-variant/30 shrink-0">{sizeKB}</span>
-                <span className="text-[10px] text-primary/60 shrink-0">{f.chunk_count} 청크</span>
+                <span className="text-sm text-on-surface-variant/30 shrink-0">{sizeKB}</span>
+                <span className="text-sm text-primary/60 shrink-0">{f.chunk_count} 청크</span>
                 {!f.exists && (
-                  <span className="material-symbols-outlined text-red-400 text-sm shrink-0" title="파일 없음">
+                  <span className="material-symbols-outlined text-red-400 text-lg shrink-0" title="파일 없음">
                     error
                   </span>
                 )}
@@ -691,16 +692,16 @@ function DataSourcesTab() {
                 ) : isConfirming ? (
                   /* 인라인 확인 */
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <span className="text-[10px] text-red-400/80 font-bold">삭제?</span>
+                    <span className="text-sm text-red-400/80 font-bold">삭제?</span>
                     <button
                       onClick={() => handleDeleteConfirm(f.file_path)}
-                      className="px-2 py-0.5 rounded-full bg-red-500 hover:bg-red-600 text-white text-[10px] font-bold transition-colors"
+                      className="px-2 py-0.5 rounded-full bg-red-500 hover:bg-red-600 text-white text-lg font-bold transition-colors"
                     >
                       확인
                     </button>
                     <button
                       onClick={() => setConfirming(null)}
-                      className="px-2 py-0.5 rounded-full bg-white/10 hover:bg-white/20 text-on-surface-variant text-[10px] font-bold transition-colors"
+                      className="px-2 py-0.5 rounded-full bg-white/10 hover:bg-white/20 text-on-surface-variant text-lg font-bold transition-colors"
                     >
                       취소
                     </button>
@@ -740,10 +741,10 @@ function VectorStoreTab() {
   if (loading) return (
     <div className="flex items-center justify-center py-32 gap-2">
       <span className="material-symbols-outlined text-primary animate-spin">progress_activity</span>
-      <span className="text-sm text-on-surface-variant">불러오는 중...</span>
+      <span className="text-base text-on-surface-variant">불러오는 중...</span>
     </div>
   )
-  if (error) return <p className="text-red-400 text-sm p-8">{error}</p>
+  if (error) return <p className="text-red-400 text-lg p-8">{error}</p>
 
   const byType = stats?.by_type ?? {}
 
@@ -751,15 +752,15 @@ function VectorStoreTab() {
     <div className="space-y-6">
       {/* 총합 */}
       <div className="glass-panel rounded-xl p-6 border border-primary/20 bg-primary/5">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-primary mb-2">총 벡터 데이터</p>
+        <p className="text-sm font-bold uppercase tracking-widest text-primary mb-2">총 벡터 데이터</p>
         <div className="flex items-end gap-6">
           <div>
             <p className="text-4xl font-black text-on-surface">{stats?.total_chunks?.toLocaleString()}</p>
-            <p className="text-xs text-on-surface-variant mt-1">총 청크 (벡터)</p>
+            <p className="text-sm text-on-surface-variant mt-1">총 청크 (벡터)</p>
           </div>
           <div>
             <p className="text-2xl font-black text-on-surface">{stats?.total_files}</p>
-            <p className="text-xs text-on-surface-variant mt-1">총 파일</p>
+            <p className="text-sm text-on-surface-variant mt-1">총 파일</p>
           </div>
         </div>
       </div>
@@ -767,10 +768,10 @@ function VectorStoreTab() {
       {/* 타입별 컬렉션 */}
       <div className="grid grid-cols-2 gap-4">
         {[
-          { key: 'video', db: 'embedded_DB/Movie',   dim: '1024d',            model: 'e5-large (BLIP+STT)',   col: 'files_video',        engine: 'ChromaDB' },
+          { key: 'video', db: 'embedded_DB/Movie',   dim: '3200d (Re+Im+Z)',  model: 'TRI-CHEF 3-axis',       col: 'cache_movie.npy',    engine: 'TRI-CHEF' },
           { key: 'doc',   db: 'embedded_DB/trichef', dim: '3200d (Re+Im+Z)',  model: 'TRI-CHEF 3-axis',       col: 'trichef_doc_page',   engine: 'TRI-CHEF' },
           { key: 'image', db: 'embedded_DB/trichef', dim: '3200d (Re+Im+Z)',  model: 'TRI-CHEF 3-axis',       col: 'trichef_image',      engine: 'TRI-CHEF' },
-          { key: 'audio', db: 'embedded_DB/Rec',     dim: '768d',             model: 'ko-sroberta',           col: 'files_audio',        engine: 'ChromaDB' },
+          { key: 'audio', db: 'embedded_DB/Rec',     dim: '3200d (Re+Im+Z₀)', model: 'TRI-CHEF 2-axis+zero',  col: 'cache_music.npy',    engine: 'TRI-CHEF' },
         ].map(({ key, db, dim, model, col, engine }) => {
           const t     = byType[key] ?? { file_count: 0, chunk_count: 0 }
           const icon  = TYPE_ICON[key]  ?? 'insert_drive_file'
@@ -783,9 +784,9 @@ function VectorStoreTab() {
                   <span className={`material-symbols-outlined ${color}`}>{icon}</span>
                   <span className="font-bold text-on-surface">{label}</span>
                 </div>
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${color} bg-white/5 border-white/10`}>{dim}</span>
+                <span className={`text-sm font-bold px-2 py-0.5 rounded-full border ${color} bg-white/5 border-white/10`}>{dim}</span>
               </div>
-              <div className="space-y-2 text-xs">
+              <div className="space-y-2 text-base">
                 <div className="flex justify-between">
                   <span className="text-on-surface-variant">파일 수</span>
                   <span className="font-bold text-on-surface">{t.file_count}개</span>
@@ -796,19 +797,19 @@ function VectorStoreTab() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-on-surface-variant">임베딩 모델</span>
-                  <span className="font-mono text-on-surface-variant/60 text-right max-w-[55%] text-[10px] leading-snug">{model}</span>
+                  <span className="font-mono text-on-surface-variant/60 text-right max-w-[55%] text-lg leading-snug">{model}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-on-surface-variant">컬렉션</span>
-                  <span className="font-mono text-on-surface-variant/60 text-[10px]">{col}</span>
+                  <span className="font-mono text-on-surface-variant/60 text-lg">{col}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-on-surface-variant">엔진</span>
-                  <span className={`font-bold text-[10px] ${engine === 'TRI-CHEF' ? 'text-emerald-400' : 'text-[#85adff]'}`}>{engine}</span>
+                  <span className={`font-bold text-lg ${engine === 'TRI-CHEF' ? 'text-emerald-400' : 'text-[#85adff]'}`}>{engine}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-on-surface-variant">경로</span>
-                  <span className="font-mono text-on-surface-variant/50 text-[10px]">{db}</span>
+                  <span className="font-mono text-on-surface-variant/50 text-lg">{db}</span>
                 </div>
               </div>
               {/* 채움 비율 바 */}
@@ -821,14 +822,15 @@ function VectorStoreTab() {
         })}
       </div>
 
-      {/* ChromaDB 정보 */}
+      {/* 벡터 엔진 정보 */}
       <div className="glass-panel rounded-xl p-5 border border-outline-variant/10">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-secondary mb-3">ChromaDB 정보</p>
-        <div className="grid grid-cols-3 gap-4 text-xs">
+        <p className="text-sm font-bold uppercase tracking-widest text-secondary mb-3">벡터 엔진 정보</p>
+        <div className="grid grid-cols-2 gap-4 text-base">
           {[
-            ['엔진', 'ChromaDB (PersistentClient)'],
-            ['유사도 메트릭', 'Cosine Similarity'],
-            ['인덱스', 'HNSW'],
+            ['문서 / 이미지 엔진', 'TRI-CHEF (ChromaDB)'],
+            ['동영상 / 음성 엔진', 'TRI-CHEF (NPY 캐시)'],
+            ['문서/이미지 유사도', 'Hermitian Score √(Re²+0.16Im²+0.04Z²)'],
+            ['동영상/음성 유사도', 'Cosine (Re·Im·Z 3축 가중 합산)'],
           ].map(([k, v]) => (
             <div key={k} className="space-y-1">
               <p className="text-on-surface-variant">{k}</p>
@@ -942,57 +944,39 @@ export default function DataIndexing() {
     <div className="bg-surface text-on-surface flex h-screen overflow-hidden">
 
       {/* Sidebar */}
-      <aside className="w-64 shrink-0 h-screen bg-[#070d1f]/60 backdrop-blur-xl flex flex-col pt-12 pb-4 border-r border-[#41475b]/15 shadow-[20px_0_40px_rgba(133,173,255,0.05)] z-50">
-        <div className="px-4 mb-8 flex items-center gap-3">
-          <div className="w-8 h-8 bg-gradient-to-br from-primary to-secondary rounded-lg flex items-center justify-center shrink-0">
-            <span className="material-symbols-outlined text-on-primary-fixed text-lg" style={{ fontVariationSettings: '"FILL" 1' }}>dataset</span>
-          </div>
-          <div>
-            <h1 className="text-xl font-black text-[#dfe4fe] leading-none">DB_insight</h1>
-            <p className="text-[0.65rem] uppercase tracking-widest text-[#a5aac2] mt-1">데이터 인덱싱</p>
-          </div>
-        </div>
-
-        <nav className="flex-1 px-3 space-y-1">
-          {[
-            { icon: 'database',      label: '워크스페이스', onClick: () => navigate('/search') },
-            { icon: 'hub',           label: '데이터 소스',  tab: 'sources'  },
-            { icon: 'account_tree',  label: '인덱싱',       tab: 'indexing' },
-            { icon: 'memory',        label: '벡터 저장소',  tab: 'store'    },
-          ].map(item => (
-            <button
-              key={item.label}
-              onClick={item.onClick ?? (() => setTab(item.tab))}
-              className={`w-full flex items-center gap-3 rounded-xl px-4 py-2.5 text-[0.75rem] font-manrope uppercase tracking-widest transition-all
-                ${item.tab === tab
-                  ? 'text-primary bg-[#1c253e]'
-                  : 'text-[#a5aac2] hover:bg-[#1c253e]/50 hover:text-[#dfe4fe]'}`}
-            >
-              <span className="material-symbols-outlined text-base">{item.icon}</span>
-              {item.label}
-            </button>
-          ))}
-        </nav>
-
-        {selectedCount > 0 && (
+      <PageSidebar
+        subtitle="데이터 인덱싱"
+        footerExtra={selectedCount > 0 && (
           <div className="mx-3 mb-3 p-3 rounded-xl bg-primary/10 border border-primary/20">
-            <p className="text-[10px] text-primary font-bold uppercase tracking-widest mb-1">선택됨</p>
-            <p className="text-xl font-black text-primary leading-none">{selectedCount}<span className="text-xs ml-1 font-normal">개 파일</span></p>
+            <p className="text-base text-primary font-bold uppercase tracking-widest mb-1">선택됨</p>
+            <p className="text-xl font-black text-primary leading-none">{selectedCount}<span className="text-sm ml-1 font-normal">개 파일</span></p>
           </div>
         )}
-
-        <div className="px-4 mt-auto pt-4 border-t border-outline-variant/10 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-surface-container-highest flex items-center justify-center shrink-0">
-            <span className="material-symbols-outlined text-primary">account_circle</span>
-          </div>
-          <div className="overflow-hidden">
-            <p className="text-sm font-bold text-on-surface truncate">관리자</p>
-            <button onClick={() => navigate('/settings')} className="text-[0.65rem] text-on-surface-variant hover:text-primary transition-colors">
-              설정 →
-            </button>
-          </div>
-        </div>
-      </aside>
+        footerSub={
+          <button onClick={() => navigate('/settings')} className="text-base text-on-surface-variant hover:text-primary transition-colors">
+            설정 →
+          </button>
+        }
+      >
+        {[
+          { icon: 'database',      label: '워크스페이스', onClick: () => navigate('/search') },
+          { icon: 'hub',           label: '데이터 소스',  tab: 'sources'  },
+          { icon: 'account_tree',  label: '인덱싱',       tab: 'indexing' },
+          { icon: 'memory',        label: '벡터 저장소',  tab: 'store'    },
+        ].map(item => (
+          <button
+            key={item.label}
+            onClick={item.onClick ?? (() => setTab(item.tab))}
+            className={`w-full flex items-center gap-3 rounded-xl px-4 py-2.5 text-base font-manrope uppercase tracking-widest transition-all
+              ${item.tab === tab
+                ? 'text-primary bg-[#1c253e]'
+                : 'text-[#a5aac2] hover:bg-[#1c253e]/50 hover:text-[#dfe4fe]'}`}
+          >
+            <span className="material-symbols-outlined text-base">{item.icon}</span>
+            {item.label}
+          </button>
+        ))}
+      </PageSidebar>
 
       {/* Main */}
       <main className="flex-1 flex flex-col overflow-hidden bg-surface-dim relative">
@@ -1013,7 +997,7 @@ export default function DataIndexing() {
           {/* 탭: 데이터 소스 */}
           {tab === 'sources' && (
             <div className="flex-1 overflow-y-auto min-h-0">
-              <h2 className="text-lg font-black text-on-surface mb-4">데이터 소스</h2>
+              <h2 className="text-2xl font-black text-on-surface mb-5">데이터 소스</h2>
               <DataSourcesTab />
             </div>
           )}
@@ -1021,7 +1005,7 @@ export default function DataIndexing() {
           {/* 탭: 벡터 저장소 */}
           {tab === 'store' && (
             <div className="flex-1 overflow-y-auto min-h-0">
-              <h2 className="text-lg font-black text-on-surface mb-4">벡터 저장소</h2>
+              <h2 className="text-2xl font-black text-on-surface mb-5">벡터 저장소</h2>
               <VectorStoreTab />
             </div>
           )}
@@ -1034,7 +1018,7 @@ export default function DataIndexing() {
             <button
               onClick={handleSelectFolder}
               disabled={loading || indexing}
-              className="shrink-0 px-4 py-2 rounded-full bg-surface-container-high border border-outline-variant/40 hover:bg-surface-container-highest transition-all text-sm font-semibold flex items-center gap-2 disabled:opacity-50"
+              className="shrink-0 px-4 py-2 rounded-full bg-surface-container-high border border-outline-variant/40 hover:bg-surface-container-highest transition-all text-lg font-semibold flex items-center gap-2 disabled:opacity-50"
             >
               <span className="material-symbols-outlined text-base">folder_shared</span>
               {loading ? '스캔 중...' : '폴더 선택'}
@@ -1043,7 +1027,7 @@ export default function DataIndexing() {
               {rootPath || '폴더를 선택하세요'}
             </span>
             {rootItems.length > 0 && (
-              <span className="shrink-0 px-2.5 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-bold">
+              <span className="shrink-0 px-2.5 py-0.5 rounded-full bg-primary/10 text-primary text-base font-bold">
                 {rootItems.length}개
               </span>
             )}
@@ -1056,12 +1040,12 @@ export default function DataIndexing() {
               {jobStatus && (
                 <button
                   onClick={() => setModalVisible(true)}
-                  className={`flex items-center gap-1.5 text-xs font-bold uppercase px-2.5 py-0.5 rounded-full transition-all hover:brightness-125
+                  className={`flex items-center gap-1.5 text-base font-bold uppercase px-2.5 py-0.5 rounded-full transition-all hover:brightness-125
                     ${jobStatus.status === 'done' ? 'bg-emerald-500/15 text-emerald-400'
                     : jobStatus.status === 'error' ? 'bg-red-500/15 text-red-400'
                     : 'bg-primary/10 text-primary'}`}
                 >
-                  {jobStatus.status === 'running' && <span className="material-symbols-outlined text-xs animate-spin">progress_activity</span>}
+                  {jobStatus.status === 'running' && <span className="material-symbols-outlined text-base animate-spin">progress_activity</span>}
                   {jobStatus.status === 'done' ? '완료' : jobStatus.status === 'error' ? '오류' : '처리 중'}
                 </button>
               )}
@@ -1071,20 +1055,20 @@ export default function DataIndexing() {
               {loading && (
                 <div className="flex items-center justify-center gap-2 py-12">
                   <span className="material-symbols-outlined text-primary animate-spin">progress_activity</span>
-                  <span className="text-sm text-on-surface-variant">스캔 중...</span>
+                  <span className="text-base text-on-surface-variant">스캔 중...</span>
                 </div>
               )}
               {!loading && loadError && (
                 <div className="flex flex-col items-center gap-2 py-12">
                   <span className="material-symbols-outlined text-red-400 text-3xl">wifi_off</span>
                   <p className="text-sm text-red-400">{loadError}</p>
-                  <p className="text-xs text-on-surface-variant/40">Flask 백엔드가 실행 중인지 확인하세요</p>
+                  <p className="text-sm text-on-surface-variant/40">Flask 백엔드가 실행 중인지 확인하세요</p>
                 </div>
               )}
               {!loading && !loadError && rootItems.length === 0 && (
                 <div className="flex flex-col items-center gap-3 py-16">
                   <span className="material-symbols-outlined text-on-surface-variant/20 text-5xl">folder_open</span>
-                  <p className="text-sm text-on-surface-variant/30">
+                  <p className="text-base text-on-surface-variant/30">
                     {rootPath ? '이 폴더는 비어 있습니다.' : '폴더를 선택하면 파일 목록이 표시됩니다.'}
                   </p>
                 </div>
@@ -1125,11 +1109,11 @@ export default function DataIndexing() {
                     className={`material-symbols-outlined text-primary ${indexing ? 'animate-spin' : 'animate-pulse'}`}
                     style={{ fontVariationSettings: '"FILL" 1' }}
                   >{indexing ? 'progress_activity' : 'rocket_launch'}</span>
-                  <span className="text-on-surface font-black tracking-widest text-sm uppercase">
+                  <span className="text-on-surface font-black tracking-widest text-lg uppercase">
                     {indexing ? '인덱싱 중...' : '인덱싱 시작'}
                   </span>
                 </span>
-                <span className="pl-5 text-secondary text-xs font-bold uppercase tracking-widest">
+                <span className="pl-5 text-secondary text-base font-bold uppercase tracking-widest">
                   {selectedCount > 0 ? `${selectedCount}개 선택됨` : '파일 미선택'}
                 </span>
               </div>

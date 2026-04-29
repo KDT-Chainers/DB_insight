@@ -61,8 +61,8 @@ async function startBackend() {
 }
 
 function _startPythonBackend() {
-  // 로그 파일 경로 (C:\Program Files\DB_insight\backend.log)
-  const logDir  = 'C:\\Program Files\\DB_insight'
+  // 로그: app.getPath('userData') — 항상 쓰기 가능 (C:\Users\...\AppData\Roaming\DB_insight)
+  const logDir  = app.getPath('userData')
   const logPath = path.join(logDir, 'backend.log')
   let logStream
   try {
@@ -71,10 +71,15 @@ function _startPythonBackend() {
   } catch (_) { logStream = 'ignore' }
 
   // 백엔드 소스 경로 후보
+  // app.getPath('exe') = 실행된 exe의 실제 경로 (portable 포함)
+  const exeDir = path.dirname(app.getPath('exe'))
   const candidates = [
+    path.join(exeDir, '..', '..', 'backend'),                     // portable: out/ → App/backend
+    path.join(exeDir, '..', '..', '..', 'backend'),               // win-unpacked: out/win-unpacked/ → App/backend
     path.resolve(__dirname, '..', '..', 'backend'),                // 개발 모드
-    'C:\\Program Files\\DB_insight\\App\\backend',               // 배포 고정 경로
-    path.join(process.resourcesPath, '..', '..', 'backend'),     // 리소스 상대
+    'C:\\Honey\\DB_insight\\App\\backend',                         // 로컬 개발 고정 경로
+    'C:\\Program Files\\DB_insight\\App\\backend',                 // 배포 고정 경로
+    path.join(exeDir, 'backend'),                                  // exe 옆 backend/
   ]
   const cwd = candidates.find(d => {
     try { return fs.existsSync(path.join(d, 'app.py')) } catch { return false }
@@ -317,13 +322,16 @@ ipcMain.on('window-close', () => BrowserWindow.getFocusedWindow()?.close())
 // ---------------------------------------------------------------------------
 
 app.whenReady().then(async () => {
-  // ── 진단 로그 (항상 기록, C:\Program Files\DB_insight\startup.log) ──
+  // ── 진단 로그 (userData/startup.log — 항상 쓰기 가능) ──
   try {
-    const diagDir  = 'C:\\Program Files\\DB_insight'
-    const diagPath = require('path').join(diagDir, 'startup.log')
-    require('fs').mkdirSync(diagDir, { recursive: true })
-    require('fs').writeFileSync(diagPath,
+    const diagDir  = app.getPath('userData')
+    const diagPath = path.join(diagDir, 'startup.log')
+    fs.mkdirSync(diagDir, { recursive: true })
+    fs.writeFileSync(diagPath,
       `isPackaged=${app.isPackaged} isDev=${isDev}\n` +
+      `exe=${app.getPath('exe')}\n` +
+      `exeDir=${path.dirname(app.getPath('exe'))}\n` +
+      `userData=${app.getPath('userData')}\n` +
       `__dirname=${__dirname}\n` +
       `resourcesPath=${process.resourcesPath}\n` +
       `argv=${process.argv.join(' ')}\n` +

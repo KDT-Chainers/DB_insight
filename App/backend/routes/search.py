@@ -45,14 +45,24 @@ def search():
         elif file_type == "doc":
             results = _search_trichef(query, ["doc_page"], top_k)
         elif file_type == "video":
-            results = _search_legacy_video(query, top_k)
+            # TRI-CHEF AV 우선 → 캐시 없으면 구형 ChromaDB fallback
+            results = _search_trichef_av(query, ["movie"], top_k)
+            if not results:
+                results = _search_legacy_video(query, top_k)
         elif file_type == "audio":
-            results = _search_legacy_audio(query, top_k)
+            # TRI-CHEF AV 우선 → 캐시 없으면 구형 ChromaDB fallback
+            results = _search_trichef_av(query, ["music"], top_k)
+            if not results:
+                results = _search_legacy_audio(query, top_k)
         else:
-            # 전체 검색: 이미지·문서(TRI-CHEF) + 영상·음원(구형 ChromaDB)
-            img_doc  = _search_trichef(query, ["image", "doc_page"], top_k)
-            video    = _search_legacy_video(query, top_k)
-            audio    = _search_legacy_audio(query, top_k)
+            # 전체 검색: 이미지·문서·영상·음원 모두 TRI-CHEF
+            img_doc = _search_trichef(query, ["image", "doc_page"], top_k)
+            video   = _search_trichef_av(query, ["movie"], top_k)
+            if not video:
+                video = _search_legacy_video(query, top_k)
+            audio   = _search_trichef_av(query, ["music"], top_k)
+            if not audio:
+                audio = _search_legacy_audio(query, top_k)
             combined = img_doc + video + audio
             combined.sort(key=lambda r: r.get("confidence", 0), reverse=True)
             results = combined[:top_k]
