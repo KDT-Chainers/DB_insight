@@ -110,6 +110,36 @@
   .score-bar .fill.asf{background:linear-gradient(90deg,#8b5cf6,#a78bfa)}
   .score-bar .fill.rerank{background:linear-gradient(90deg,#ea580c,#fb923c)}
   .score-bar .vv{min-width:36px;text-align:right;color:#cbd5e1;font-family:Consolas,monospace}
+
+  /* 문서 위치 표시 (페이지·줄) */
+  .doc-location{font-size:11px;color:#7dd3fc;background:#0c1829;border:1px solid #1e3a5f;border-radius:4px;padding:4px 10px;font-family:Consolas,monospace;letter-spacing:0.02em}
+  .doc-location.loading{color:var(--muted);font-style:italic}
+
+  /* 핵심 3지표 (신뢰도 / 정확도 / 정밀도) */
+  .key-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:2px}
+  .key-metric{background:#0b1220;border-radius:6px;padding:7px 6px;text-align:center;border:1px solid var(--border)}
+  .key-metric .km-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em}
+  .key-metric .km-value{font-size:15px;font-weight:700;margin-top:2px}
+  .km-conf{color:var(--ok)}
+  .km-acc{color:#60a5fa}
+  .km-prec{color:#a78bfa}
+
+  /* 상위N 프리셋 버튼 */
+  .topn-presets{display:flex;gap:4px;align-items:center}
+  .topn-preset{padding:3px 9px;font-size:11px;background:var(--panel);border:1px solid var(--border);border-radius:4px;cursor:pointer;color:var(--muted);line-height:1.4}
+  .topn-preset:hover,.topn-preset.active{background:var(--accent2);color:#fff;border-color:var(--accent2)}
+
+  /* AV 구간 목록 (mm:ss ~ mm:ss) */
+  .seg-range-list{display:flex;flex-direction:column;gap:3px;margin-top:4px}
+  .seg-range-item{display:flex;align-items:center;gap:8px;padding:5px 8px;background:#0b1220;border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:11px;overflow:hidden}
+  .seg-range-item:hover{border-color:var(--accent);background:#0f2040}
+  .seg-time{color:#7dd3fc;font-family:Consolas,monospace;font-weight:600;white-space:nowrap;min-width:118px}
+  .seg-score{color:var(--ok);font-family:Consolas,monospace;white-space:nowrap}
+  .seg-text-preview{color:#94a3b8;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+  /* 미리 재생 버튼 */
+  .preplay-btn{font-size:11px;padding:5px 14px;background:var(--accent);color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:600;margin-top:4px}
+  .preplay-btn:hover{background:#047857}
 </style>
 </head>
 <body>
@@ -141,20 +171,28 @@
     <div id="pipe-rows" style="display:none"></div>
   </div>
   <div class="search-box">
-    <input id="q" type="text" placeholder="검색어를 입력하세요 (예: 고양이, 복지정책, 반도체)" autofocus />
+    <input id="q" type="text" placeholder="검색어를 입력하세요 (예: 고양이, 복지정책, 반도체)" autofocus autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" name="trichef-q-nohist" />
     <button id="go">검색 실행</button>
   </div>
   <div class="options">
-    <label><input type="checkbox" id="d-doc_page" checked> doc_page (문서 페이지)</label>
-    <label><input type="checkbox" id="d-image" checked> image (이미지)</label>
+    <label><input type="checkbox" id="d-doc_page"> doc_page (문서 페이지)</label>
+    <label><input type="checkbox" id="d-image"> image (이미지)</label>
     <label><input type="checkbox" id="d-movie"> movie (영상)</label>
     <label><input type="checkbox" id="d-music"> music (음원)</label>
     <label>상위 N <input type="number" id="topn" value="30" min="5" max="2000" step="5"></label>
+    <div class="topn-presets">
+      <button class="topn-preset" data-n="10">10</button>
+      <button class="topn-preset active" data-n="30">30</button>
+      <button class="topn-preset" data-n="50">50</button>
+      <button class="topn-preset" data-n="100">100</button>
+      <button class="topn-preset" data-n="200">200</button>
+    </div>
     <label>세그먼트 <input type="number" id="topseg" value="5" min="1" max="20" step="1"></label>
-    <label title="권장: doc_page / movie / music. image 는 짧은 캡션으로 -14pp 손해 (config.LEXICAL_DOMAINS)"><input type="checkbox" id="use-lex" checked> Lexical 채널</label>
+    <label title="권장: doc_page / movie / music. image 는 짧은 캡션으로 -14pp 손해 (config.LEXICAL_DOMAINS)"><input type="checkbox" id="use-lex"> Lexical 채널</label>
     <label title="USE_ASF_DEFAULT=False — LOO R@1 -20pp, E2E hit_rate -10pp. 키워드 매칭 강한 쿼리에만 ON 권장"><input type="checkbox" id="use-asf"> ASF 채널</label>
-    <label title="BGE-reranker-v2-m3 cross-encoder. doc_page 에서만 신뢰도-적합성 정합 개선. image/movie/music 효과 낮음"><input type="checkbox" id="use-rerank" checked> Reranker</label>
+    <label title="BGE-reranker-v2-m3 cross-encoder. doc_page 에서만 신뢰도-적합성 정합 개선. image/movie/music 효과 낮음"><input type="checkbox" id="use-rerank"> Reranker</label>
     <label>rerank K <input type="number" id="rerank-k" value="50" min="5" max="200" step="5"></label>
+    <label title="LangGraph 12-node routing (HI/HN margin τ 기반 동적 분기). 전 도메인 적용"><input type="checkbox" id="use-lg"> LangGraph</label>
   </div>
   <div id="stats"></div>
   <div id="output"></div>
@@ -202,6 +240,34 @@ connRetry.addEventListener('click', () => {
 });
 
 loadDomains();
+
+// ── 도메인별 파이프라인 기본 옵션 (확정된 활성화 매트릭스 기반) ──
+//   • lex: LEXICAL_DOMAINS = {doc_page, movie, music}  (image 제외)
+//   • asf: USE_ASF_DEFAULT=False → 전 도메인 기본 OFF (opt-in)
+//   • rerank: BGE Reranker — Movie/Rec 만 통합 (DI 측 미통합)
+//   • lg(LangGraph rewrite): MR 측 (Movie/Rec) 만 통합 (DI 측 미통합)
+const DOMAIN_PIPELINE_DEFAULTS = {
+  doc_page: { lex: true,  asf: false, rerank: false, lg: false },
+  image:    { lex: false, asf: false, rerank: false, lg: false },
+  movie:    { lex: true,  asf: false, rerank: true,  lg: true  },
+  music:    { lex: true,  asf: false, rerank: true,  lg: true  },
+};
+
+function syncPipelineOptions(){
+  const checked = ['doc_page','image','movie','music'].filter(d => {
+    const el = document.getElementById(`d-${d}`);
+    return el && !el.disabled && el.checked;
+  });
+  const setCb = (id, val) => { const el = document.getElementById(id); if (el) el.checked = val; };
+  setCb('use-lex',    checked.some(d => DOMAIN_PIPELINE_DEFAULTS[d]?.lex));
+  setCb('use-asf',    checked.some(d => DOMAIN_PIPELINE_DEFAULTS[d]?.asf));
+  setCb('use-rerank', checked.some(d => DOMAIN_PIPELINE_DEFAULTS[d]?.rerank));
+  setCb('use-lg',     checked.some(d => DOMAIN_PIPELINE_DEFAULTS[d]?.lg));
+}
+
+for (const dom of ['doc_page','image','movie','music']){
+  document.getElementById(`d-${dom}`)?.addEventListener('change', syncPipelineOptions);
+}
 
 // 파이프라인 섹션 접기/펼치기
 document.getElementById('pipe-toggle-btn').addEventListener('click', () => {
@@ -466,27 +532,26 @@ async function renderResults(query, items){
       const matches = d.matches || [];
       el.innerHTML = highlight(text.slice(0, 600), matches);
       el.removeAttribute('data-load-text');
-      // doc_page: 첫 매칭이 발견된 줄 번호 계산 → page 뱃지에 "· L<n>" 부착
-      if (dom === 'doc_page' && matches.length){
-        const sorted = [...matches].filter(Boolean).sort((a,b) => b.length - a.length);
-        const lines = text.split(/\r?\n/);
+      // doc_page: 페이지 및 첫 매칭 줄 번호 계산 → doc-location 패널에 표시
+      if (dom === 'doc_page'){
+        const cardEl = el.closest('.card');
+        const locEl = cardEl?.querySelector('[data-doc-loc]');
         let lineNo = -1;
-        outer: for (const m of sorted){
-          for (let i = 0; i < lines.length; i++){
-            if (lines[i].includes(m)){ lineNo = i + 1; break outer; }
-          }
-        }
-        if (lineNo > 0){
-          const card = el.closest('.card');
-          if (card){
-            for (const b of card.querySelectorAll('.badge')){
-              const t = b.textContent.trim();
-              if (t.startsWith('page ')){
-                b.textContent = `${t} · L${lineNo}`;
-                break;
-              }
+        if (matches.length){
+          const sorted = [...matches].filter(Boolean).sort((a,b) => b.length - a.length);
+          const lines = text.split(/\r?\n/);
+          outer: for (const m of sorted){
+            for (let i = 0; i < lines.length; i++){
+              if (lines[i].includes(m)){ lineNo = i + 1; break outer; }
             }
           }
+        }
+        if (locEl){
+          const pageNum = d.page ?? '?';
+          locEl.textContent = lineNo > 0
+            ? `페이지 ${pageNum} · 줄 ${lineNo}번째`
+            : `페이지 ${pageNum}`;
+          locEl.classList.remove('loading');
         }
       }
     }catch(_){ el.remove(); }
@@ -530,7 +595,13 @@ function card(it){
     : `<div class="thumb"><div class="no-img">${it.domain}</div></div>`;
   const pageStr = it.page ? ` · p${it.page}` : '';
   const conf = it.confidence ?? 0;
-  const confCls = conf >= 0.8 ? 'hi' : conf >= 0.3 ? '' : 'lo';
+  const confPct = (conf * 100).toFixed(1);
+  // 유사도 = dense (의미 벡터 유사도), 정확도 = rerank(sigmoid) 또는 z-score 정규화
+  const _sigm = x => 1 / (1 + Math.exp(-x));
+  const sim = (clamp01(it.dense) ?? 0).toFixed(3);
+  const acc = it.rerank != null
+    ? _sigm(it.rerank)
+    : Math.max(0, Math.min(1, ((it.z_score ?? 0) + 3) / 6));
   const fname = it.filename || it.id;
   const srcPath = it.source_path || '';
   const pathLink = srcPath ? `<div class="path">${escapeHtml(srcPath)}${pageStr}</div>` : '';
@@ -543,17 +614,14 @@ function card(it){
         <span class="badge domain-${it.domain}">${it.domain}</span>
         ${it.page ? `<span class="badge">page ${it.page}</span>` : ''}
       </div>
+      ${it.domain === 'doc_page' ? `<div class="doc-location loading" data-doc-loc>위치 확인 중…</div>` : ''}
       <div class="title">${escapeHtml(fname)}</div>
       ${pathLink}
-      <div class="metrics">
-        <div class="metric"><span class="k">신뢰도</span> <span class="v ${confCls}">${(conf*100).toFixed(1)}%</span></div>
-        <div class="metric"><span class="k">dense</span> <span class="v">${(it.dense??0).toFixed(3)}</span></div>
-        <div class="metric"><span class="k">lexical</span> <span class="v">${(it.lexical??0).toFixed(3)}</span></div>
-        <div class="metric"><span class="k">ASF</span> <span class="v">${(it.asf??0).toFixed(3)}</span></div>
-        <div class="metric"><span class="k">rerank</span> <span class="v">${it.rerank!=null ? it.rerank.toFixed(2) : '—'}</span></div>
-        <div class="metric"><span class="k">z</span> <span class="v">${(it.z_score??0).toFixed(2)}</span></div>
+      <div class="key-metrics">
+        <div class="key-metric"><div class="km-label">신뢰도</div><div class="km-value km-conf">${confPct}%</div></div>
+        <div class="key-metric"><div class="km-label">정확도</div><div class="km-value km-acc">${acc.toFixed(3)}</div></div>
+        <div class="key-metric"><div class="km-label">유사도</div><div class="km-value km-prec">${sim}</div></div>
       </div>
-      ${scoreBarsHtml(it)}
       <div class="excerpt" data-load-text data-id="${escapeHtml(it.id)}" data-domain="${it.domain}">로딩 중…</div>
     </div>
   </div>`;
@@ -562,47 +630,56 @@ function card(it){
 function avCard(it){
   const isVideo = it.domain === 'movie';
   const url = `${API_BASE}/api/admin/file?domain=${it.domain}&id=${encodeURIComponent(it.id)}`;
-  const player = isVideo
-    ? `<video src="${url}" controls preload="metadata"></video>`
-    : `<audio src="${url}" controls preload="metadata"></audio>`;
+  const pid = `player-${it.global_rank}`;
+  const mediaEl = isVideo
+    ? `<video id="${pid}" src="${url}" controls preload="metadata" style="max-height:200px;width:100%;display:block;background:#000;outline:none"></video>`
+    : `<audio id="${pid}" src="${url}" controls preload="metadata" style="width:100%;display:block;outline:none"></audio>`;
+
   const conf = it.confidence ?? 0;
-  const confCls = conf >= 0.8 ? 'hi' : conf >= 0.3 ? '' : 'lo';
-  const segs = (it.segments || []).slice(0, 20).map(s => {
+  const confPct = (conf * 100).toFixed(1);
+  const _sigm = x => 1 / (1 + Math.exp(-x));
+  const sim = (clamp01(it.dense) ?? 0).toFixed(3);
+  const acc = it.rerank != null
+    ? _sigm(it.rerank)
+    : Math.max(0, Math.min(1, ((it.z_score ?? 0) + 3) / 6));
+
+  const segs = it.segments || [];
+  const topSeg = segs[0];
+  const topStart = topSeg ? (topSeg.start_sec ?? topSeg.start ?? 0) : null;
+
+  const preplayBtn = topStart != null
+    ? `<button class="preplay-btn" data-pid="${pid}" data-t="${topStart}">상위 구간 재생 ▶</button>`
+    : '';
+
+  const segRows = segs.slice(0, 10).map(s => {
     const t0 = s.start_sec ?? s.start ?? 0;
     const t1 = s.end_sec ?? s.end ?? 0;
     const sc = s.score ?? 0;
-    const tip = (s.text || s.stt_text || s.caption || '').slice(0, 300);
-    return `<button class="seg-btn" data-t="${t0}"
-              title="${escapeHtml(tip)}">
-              ${fmtTime(t0)}-${fmtTime(t1)} · s=${sc.toFixed(3)}
-            </button>`;
+    const preview = (s.text || s.stt_text || s.caption || '').slice(0, 80);
+    return `<div class="seg-range-item" data-pid="${pid}" data-t="${t0}">
+      <span class="seg-time">${fmtTime(t0)} ~ ${fmtTime(t1)}</span>
+      <span class="seg-score">s=${sc.toFixed(3)}</span>
+      <span class="seg-text-preview">${escapeHtml(preview)}</span>
+    </div>`;
   }).join('');
-  const topText = (it.segments && it.segments[0] &&
-                   (it.segments[0].text || it.segments[0].stt_text || it.segments[0].caption)) || '';
-  const topExcerpt = topText
-    ? `<div class="seg-text">${escapeHtml(topText.slice(0, 400))}</div>`
-    : '';
+
   return `<div class="card av-card">
     <div class="rank">#${it.global_rank}</div>
-    <div class="av-player">${player}</div>
+    <div class="av-player">${mediaEl}</div>
     <div class="body">
       <div class="badges">
         <span class="badge domain-${it.domain}">${it.domain}</span>
-        <span class="badge">세그 ${it.segments ? it.segments.length : 0}</span>
+        <span class="badge">세그 ${segs.length}</span>
       </div>
       <div class="title">${escapeHtml(it.filename || it.id)}</div>
       <div class="path">${escapeHtml(it.source_path || it.id)}</div>
-      <div class="metrics">
-        <div class="metric"><span class="k">신뢰도</span> <span class="v ${confCls}">${(conf*100).toFixed(1)}%</span></div>
-        <div class="metric"><span class="k">dense</span> <span class="v">${(it.dense??0).toFixed(3)}</span></div>
-        <div class="metric"><span class="k">lexical</span> <span class="v">${it.lexical!=null ? it.lexical.toFixed(3) : '—'}</span></div>
-        <div class="metric"><span class="k">ASF</span> <span class="v">${it.asf!=null ? it.asf.toFixed(3) : '—'}</span></div>
-        <div class="metric"><span class="k">rerank</span> <span class="v">${it.rerank!=null ? it.rerank.toFixed(2) : '—'}</span></div>
-        <div class="metric"><span class="k">z</span> <span class="v">${(it.z_score??0).toFixed(2)}</span></div>
+      <div class="key-metrics">
+        <div class="key-metric"><div class="km-label">신뢰도</div><div class="km-value km-conf">${confPct}%</div></div>
+        <div class="key-metric"><div class="km-label">정확도</div><div class="km-value km-acc">${acc.toFixed(3)}</div></div>
+        <div class="key-metric"><div class="km-label">유사도</div><div class="km-value km-prec">${sim}</div></div>
       </div>
-      ${scoreBarsHtml(it)}
-      <div class="segments">${segs}</div>
-      ${topExcerpt}
+      ${preplayBtn}
+      <div class="seg-range-list">${segRows}</div>
     </div>
   </div>`;
 }
@@ -613,16 +690,39 @@ function fmtTime(sec){
   return `${String(m).padStart(2,'0')}:${String(r).padStart(2,'0')}`;
 }
 
-// 세그먼트 버튼 클릭 → 해당 카드의 오디오/비디오 플레이어 seek
+// 통합 클릭 핸들러: 상위N 프리셋 / 미리 재생 / 구간 행 / 기존 seg-btn
 document.addEventListener('click', ev => {
-  const btn = ev.target.closest('.seg-btn');
-  if (!btn) return;
-  const card = btn.closest('.card');
-  if (!card) return;
-  const p = card.querySelector('audio, video');
-  if (!p) return;
-  const t = parseFloat(btn.dataset.t) || 0;
-  try { p.currentTime = t; p.play(); } catch(_){}
+  // 상위N 프리셋
+  const preset = ev.target.closest('.topn-preset');
+  if (preset){
+    const n = parseInt(preset.dataset.n);
+    document.getElementById('topn').value = n;
+    document.querySelectorAll('.topn-preset').forEach(b => b.classList.toggle('active', b === preset));
+    return;
+  }
+  // 미리 재생 버튼 (상위 구간 재생 ▶)
+  const preBtn = ev.target.closest('.preplay-btn');
+  if (preBtn){
+    const p = document.getElementById(preBtn.dataset.pid);
+    if (p){ try { p.currentTime = parseFloat(preBtn.dataset.t)||0; p.play(); } catch(_){} }
+    return;
+  }
+  // 구간 행 클릭 (mm:ss ~ mm:ss)
+  const segItem = ev.target.closest('.seg-range-item');
+  if (segItem){
+    const p = document.getElementById(segItem.dataset.pid);
+    if (p){ try { p.currentTime = parseFloat(segItem.dataset.t)||0; p.play(); } catch(_){} }
+    return;
+  }
+  // 기존 seg-btn (하위 호환)
+  const segBtn = ev.target.closest('.seg-btn');
+  if (segBtn){
+    const cardEl = segBtn.closest('.card');
+    if (!cardEl) return;
+    const p = cardEl.querySelector('audio, video');
+    if (!p) return;
+    try { p.currentTime = parseFloat(segBtn.dataset.t)||0; p.play(); } catch(_){}
+  }
 });
 
 function highlight(text, matches){
