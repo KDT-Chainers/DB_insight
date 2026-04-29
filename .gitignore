@@ -88,16 +88,14 @@ weight_buckets.json
 .cache/
 models/
 model_cache/
+Data/models/
 
-# faster-whisper 모델 (로컬 다운로드 시)
+# faster-whisper / HF 모델 바이너리
+# ⚠️  config.json, tokenizer.json 등 전역 제외 금지 — 소스 파일과 충돌 위험.
+#     HF 캐시는 .cache/ / models/ / Data/models/ 로 이미 커버됨.
 *.pt
 *.bin
 *.safetensors
-tokenizer.json
-config.json
-special_tokens_map.json
-tokenizer_config.json
-vocab.json
 
 # ============================================================
 # Database
