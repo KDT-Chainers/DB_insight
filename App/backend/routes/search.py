@@ -134,7 +134,11 @@ def _search_trichef(query: str, domains: list[str], top_k: int) -> list[dict]:
                 snippet     = ""
                 preview_url = f"/api/trichef/file?domain=doc_page&path={rid}"
 
-            conf = round(hit.confidence, 4)
+            conf     = round(hit.confidence, 4)
+            hit_meta = hit.metadata
+            dense_v  = round(float(hit_meta.get("dense", 0.0)), 4)
+            lex_v    = round(float(hit_meta["lexical"]), 4) if "lexical" in hit_meta else None
+            asf_v    = round(float(hit_meta["asf"]), 4) if "asf" in hit_meta else None
             results.append({
                 "file_path":      orig_path,
                 "file_name":      file_name,
@@ -146,6 +150,11 @@ def _search_trichef(query: str, domains: list[str], top_k: int) -> list[dict]:
                 "segments":       [],
                 "trichef_id":     rid,
                 "trichef_domain": domain,
+                # 점수 상세 (UI 메트릭 표시용)
+                "dense":          dense_v,
+                "lexical":        lex_v,
+                "asf":            asf_v,
+                "z_score":        None,        # image/doc: engine 내부 계산, 미노출
             })
 
     results.sort(key=lambda r: r["confidence"], reverse=True)
@@ -210,7 +219,8 @@ def _search_trichef_av(query: str, domains: list[str], top_k: int) -> list[dict]
             av_domain = domain  # "movie" | "music"
             preview_url = None
 
-            conf = round(r.confidence, 4)
+            conf    = round(r.confidence, 4)
+            av_meta = r.metadata
             results.append({
                 "file_path":      r.file_path,
                 "file_name":      r.file_name,
@@ -221,6 +231,11 @@ def _search_trichef_av(query: str, domains: list[str], top_k: int) -> list[dict]
                 "preview_url":    preview_url,
                 "segments":       r.segments,
                 "trichef_domain": av_domain,
+                # 점수 상세 (UI 메트릭 표시용)
+                "dense":          round(float(av_meta.get("dense_agg", 0.0)), 4),
+                "z_score":        round(float(av_meta.get("z_dense",   0.0)), 4),
+                "asf":            round(float(av_meta.get("asf_agg",   0.0)), 4),
+                "lexical":        None,
             })
 
     results.sort(key=lambda x: -x["confidence"])

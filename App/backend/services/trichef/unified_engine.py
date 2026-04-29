@@ -227,8 +227,18 @@ class TriChefEngine:
             ids  = ids[:N]
             segs = segs[:N]
 
+        # ASF 자산 로드 (MR_TriCHEF search.py vocab_{kind}.json / {kind}_token_sets.json)
+        av_vocab    = auto_vocab.load_vocab(cache_dir / f"vocab_{prefix}.json") \
+                      if (cache_dir / f"vocab_{prefix}.json").exists() else {}
+        av_asf_sets = asf_filter.load_token_sets(cache_dir / f"{prefix}_token_sets.json") \
+                      if (cache_dir / f"{prefix}_token_sets.json").exists() else []
+        if av_asf_sets and len(av_asf_sets) != N:
+            logger.warning(f"[engine:{kind}] asf_sets({len(av_asf_sets)}) != Re({N}); "
+                           f"AV ASF 비활성화 (build_asf_assets 재실행 필요)")
+            av_asf_sets = []
+
         return {"Re": Re, "Im": Im, "Z": Z, "ids": ids, "segments": segs,
-                "sparse": None, "vocab": {}, "asf_sets": []}
+                "sparse": None, "vocab": av_vocab, "asf_sets": av_asf_sets}
 
     def _embed_query(self, query: str) -> tuple[np.ndarray, np.ndarray]:
         variants = qwen_expand.expand(query)
@@ -290,15 +300,21 @@ class TriChefEngine:
             if asf_s.any():
                 rankings.append(np.argsort(-asf_s)[:pool])
 
-        if len(rankings) > 1:
-            rrf = _rrf_merge(rankings, n=len(dense_scores))
-            combined_order = np.argsort(-rrf)
-        else:
-            combined_order = dense_order
+        # ── Weighted min-max fusion (DI_TriCHEF §8.1) ─────────────────────
+        # 비활성 채널(max==0) 가중치는 dense 로 자동 이전.
+        # RRF 는 §8.2 기준 "참고용"으로만 보존 (정렬 기준 아님).
+        fused_scores = _weighted_minmax_fusion(dense_scores, sparse_scores, asf_s)
+        combined_order = np.argsort(-fused_scores)
+        # RRF 참고값 (메타 제공용)
+        rrf_scores = _rrf_merge(rankings, n=len(dense_scores))
 
         cal = calibration.get_thresholds(domain)
         abs_thr = cal["abs_threshold"]
         mu, sig = cal["mu_null"], cal["sigma_null"]
+        # ── Image abs_threshold 런타임 보강 (DI_TriCHEF §6.3) ──────────────
+        # σ 과소추정으로 false positive 가 늘어날 때 3σ 방어선 적용.
+        if domain == "image":
+            abs_thr = max(abs_thr, mu + 3.0 * max(sig, 1e-9))
         out: list[TriChefResult] = []
         for i in combined_order[: topk * 3]:
             s = float(dense_scores[i])
@@ -312,7 +328,11 @@ class TriChefEngine:
             weak_evidence = (s < abs_thr * 1.1) and (sparse_s is None or sparse_s < 0.05)
             if weak_evidence:
                 conf = min(conf, 0.40)
-            meta = {"domain": domain, "dense": s, "low_confidence": weak_evidence}
+            meta = {
+                "domain": domain, "dense": s, "low_confidence": weak_evidence,
+                "fused": round(float(fused_scores[i]), 4),
+                "rrf":   round(float(rrf_scores[i]), 4),
+            }
             if sparse_scores is not None:
                 meta["lexical"] = float(sparse_scores[i])
             if asf_s is not None:
@@ -346,7 +366,12 @@ class TriChefEngine:
 
     def search_av(self, query: str, domain: str, topk: int = 10,
                   top_segments: int = 5) -> list[TriChefAVResult]:
-        """Movie/Music 검색 — 파일 단위 집계 + 상위 세그먼트 타임라인 반환."""
+        """Movie/Music 검색 — MR_TriCHEF search.py 방식으로 정렬.
+
+        집계: 파일 내 top-3 세그먼트 dense 평균 → z-score → ASF 가중 합산.
+        최종: final = α·z_dense + γ·asf  (α=0.75, γ=0.25)
+        Confidence: sigmoid(final / 2.0)  — MR_TriCHEF WEIGHTS 기준.
+        """
         if domain not in self._cache:
             logger.warning(f"[engine] AV 도메인 {domain} 캐시 없음")
             return []
@@ -364,55 +389,88 @@ class TriChefEngine:
         abs_thr = cal["abs_threshold"]
         mu, sig = cal["mu_null"], cal["sigma_null"]
 
-        file_best: dict[str, dict] = {}
-        segs_list: dict[str, list] = {}
+        # ASF 세그먼트 점수 (MR_TriCHEF search.py _aggregate 방식)
+        asf_seg: np.ndarray | None = None
+        if d.get("asf_sets") and d.get("vocab") and len(d["asf_sets"]) == len(d["ids"]):
+            try:
+                asf_seg = asf_filter.asf_scores(query, d["asf_sets"], d["vocab"])
+            except Exception as _ae:
+                logger.debug(f"[engine:{domain}] ASF 스코어링 실패: {_ae}")
 
-        for i, (seg_id, meta) in enumerate(zip(d["ids"], d["segments"])):
-            s = float(seg_scores[i])
-            if s < abs_thr * 0.5:
+        # 파일별 세그먼트 인덱스 수집 (abs_thr*0.5 선제 필터)
+        file_idx: dict[str, list[int]] = {}
+        for i, meta in enumerate(d["segments"]):
+            if float(seg_scores[i]) < abs_thr * 0.5:
                 continue
-            fp = meta.get("file_path", seg_id)
-            if fp not in file_best or s > file_best[fp]["score"]:
-                file_best[fp] = {
-                    "score": s, "file_name": meta.get("file_name", ""),
-                    "domain": domain,
-                }
-            seg_text = meta.get("stt_text", "") or meta.get("caption", "")
-            segs_list.setdefault(fp, []).append({
-                "start":   meta.get("start_sec", 0.0),
-                "end":     meta.get("end_sec", 0.0),
-                "score":   round(s, 4),
-                "text":    meta.get("stt_text", ""),
-                "caption": meta.get("caption", ""),
-                "type":    meta.get("type", "stt"),
-                # [항목4] 질의-원문 overlap 최대 구간 preview (질의 복붙 아님)
-                "preview": snippet.extract_best_snippet(seg_text, query),
-            })
+            fp = meta.get("file_path", d["ids"][i])
+            file_idx.setdefault(fp, []).append(i)
+
+        # MR_TriCHEF WEIGHTS: (α dense, β lexical=0, γ asf)
+        _ALPHA, _GAMMA = 0.75, 0.25
 
         out: list[TriChefAVResult] = []
-        for fp, best in file_best.items():
-            s = best["score"]
-            if s < abs_thr:
+        for fp, idxs in file_idx.items():
+            # ── 파일 내 top-3 dense 평균 (MR_TriCHEF _aggregate) ──────────
+            d_ranked = sorted(
+                [(i, float(seg_scores[i])) for i in idxs],
+                key=lambda x: -x[1],
+            )[:3]
+            dense_agg = float(np.mean([s for _, s in d_ranked])) if d_ranked else 0.0
+            if dense_agg < abs_thr:
                 continue
-            z    = (s - mu) / max(sig, 1e-9)
-            conf = 0.5 * (1 + math.erf(z / (2 ** 0.5)))
-            top_segs = sorted(segs_list.get(fp, []), key=lambda x: -x["score"])[:top_segments]
-            # [항목3] low_confidence 이중 조건: 점수 약 AND STT/caption 텍스트 전혀 없음 (BGM/무음)
+
+            # ── ASF 파일 내 max ────────────────────────────────────────────
+            asf_agg = 0.0
+            if asf_seg is not None:
+                asf_agg = float(max(float(asf_seg[i]) for i in idxs))
+
+            # ── final = α·z_dense + γ·asf ─────────────────────────────────
+            z_dense = (dense_agg - mu) / max(sig, 1e-9)
+            final   = _ALPHA * z_dense + _GAMMA * asf_agg
+
+            # ── confidence = sigmoid(final/2) ─────────────────────────────
+            conf = 1.0 / (1.0 + math.exp(-final / 2.0))
+
+            # 상위 세그먼트 메타 빌드
+            seg_list: list[dict] = []
+            for (i, s) in d_ranked[:top_segments]:
+                meta = d["segments"][i]
+                seg_text = meta.get("stt_text", "") or meta.get("caption", "")
+                seg_list.append({
+                    "start":   meta.get("start_sec", 0.0),
+                    "end":     meta.get("end_sec", 0.0),
+                    "score":   round(s, 4),
+                    "text":    meta.get("stt_text", ""),
+                    "caption": meta.get("caption", ""),
+                    "type":    meta.get("type", "stt"),
+                    "preview": snippet.extract_best_snippet(seg_text, query),
+                })
+
+            # [항목3] low_confidence: 점수 약 AND 텍스트 전혀 없음 (BGM/무음)
             no_text = not any(
                 (seg.get("text", "").strip() or seg.get("caption", "").strip())
-                for seg in top_segs
+                for seg in seg_list
             )
-            weak_evidence = (s < abs_thr * 1.1) and no_text
+            weak_evidence = (dense_agg < abs_thr * 1.1) and no_text
             if weak_evidence:
                 conf = min(conf, 0.40)
+
+            best_meta  = d["segments"][d_ranked[0][0]] if d_ranked else {}
+            file_name  = best_meta.get("file_name", Path(fp).name)
+
             out.append(TriChefAVResult(
                 file_path=fp,
-                file_name=best["file_name"],
+                file_name=file_name,
                 domain=domain,
-                score=round(s, 4),
+                score=round(final, 4),
                 confidence=round(conf, 4),
-                segments=top_segs,
-                metadata={"low_confidence": weak_evidence},
+                segments=seg_list,
+                metadata={
+                    "low_confidence": weak_evidence,
+                    "dense_agg": round(dense_agg, 4),
+                    "z_dense":   round(z_dense, 4),
+                    "asf_agg":   round(asf_agg, 4),
+                },
             ))
             if len(out) >= topk * 3:
                 break
@@ -430,6 +488,41 @@ def _load_sparse(path: Path):
     if path.exists():
         return sp.load_npz(path)
     return None
+
+
+def _weighted_minmax_fusion(
+    dense: np.ndarray,
+    lex: np.ndarray | None,
+    asf: np.ndarray | None,
+    w_dense: float = 0.60,
+    w_lex: float   = 0.25,
+    w_asf: float   = 0.15,
+) -> np.ndarray:
+    """가중 min-max 융합 (DI_TriCHEF §8.1).
+
+    각 채널을 per-query min-max 정규화 후 가중 합산.
+    비활성 채널(max==0 또는 None) 가중치는 dense 로 자동 이전.
+    """
+    eps = 1e-9
+
+    def _norm(x: np.ndarray) -> np.ndarray:
+        mn, mx = float(x.min()), float(x.max())
+        return (x - mn) / (mx - mn + eps)
+
+    w_d = w_dense
+    result = w_d * _norm(dense)
+
+    if lex is not None and float(lex.max()) > 0:
+        result = result + w_lex * _norm(lex)
+    else:
+        result = result + w_lex * _norm(dense)   # dense 로 이전
+
+    if asf is not None and float(asf.max()) > 0:
+        result = result + w_asf * _norm(asf)
+    else:
+        result = result + w_asf * _norm(dense)   # dense 로 이전
+
+    return result
 
 
 def _rrf_merge(rankings: list[np.ndarray], n: int, k: int = 60) -> np.ndarray:

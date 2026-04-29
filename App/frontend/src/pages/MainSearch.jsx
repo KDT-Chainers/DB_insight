@@ -93,118 +93,217 @@ function avStreamUrl(result) {
   return `${API_BASE}/api/admin/file?domain=${domain}&id=${encodeURIComponent(result.file_path)}`
 }
 
-// ── 결과 카드 ────────────────────────────────────────────
-function ResultCard({ result, onClick }) {
-  const meta     = getTypeMeta(result.file_type)
-  const confPct  = Math.round((result.confidence ?? result.similarity ?? 0) * 100)
-  const isAV     = result.file_type === 'video' || result.file_type === 'audio'
+// ── 점수 바 (admin.html scoreBarsHtml 대응) ─────────────
+function ScoreBar({ label, value, colorClass }) {
+  const pct = value != null ? Math.min(Math.max(value * 100, 0), 100) : null
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="w-10 shrink-0 text-[10px] text-on-surface-variant/50 font-mono">{label}</span>
+      <div className="flex-1 h-[5px] bg-surface-container-highest rounded-full border border-outline-variant/15 overflow-hidden">
+        {pct != null && (
+          <div className={`h-full ${colorClass} rounded-full`} style={{ width: `${pct}%` }} />
+        )}
+      </div>
+      <span className="w-8 shrink-0 text-right text-[10px] text-on-surface-variant/70 font-mono">
+        {value != null ? value.toFixed(2) : '—'}
+      </span>
+    </div>
+  )
+}
+
+// ── 결과 카드 (admin.html card / avCard 구조 대응) ────────
+function ResultCard({ result, rank, onClick }) {
+  const meta       = getTypeMeta(result.file_type)
+  const conf       = result.confidence ?? result.similarity ?? 0
+  const confPct    = Math.round(conf * 100)
+  const isAV       = result.file_type === 'video' || result.file_type === 'audio'
   const hasPreview = (result.file_type === 'image' || result.file_type === 'doc') && result.preview_url
   const [imgError, setImgError] = useState(false)
+  const playerRef  = useRef(null)
 
-  // 세그먼트 상위 3개 미리보기
-  const topSegs = (result.segments ?? []).slice(0, 3)
+  // 점수 필드
+  const dense   = result.dense   ?? null
+  const lexical = result.lexical ?? null
+  const asf     = result.asf     ?? null
+  const zScore  = result.z_score ?? null
+  const rerank  = result.rerank  ?? null
+
+  // 신뢰도 색상
+  const confCls = conf >= 0.8 ? 'text-emerald-400' : conf >= 0.3 ? 'text-primary' : 'text-red-400'
+
+  // AV 스트림 URL
+  const streamUrl = isAV ? avStreamUrl(result) : null
+
+  // 세그먼트
+  const segments = result.segments ?? []
+  const topSegs  = segments.slice(0, 5)
+  const topText  = topSegs[0]
+    ? (topSegs[0].preview || topSegs[0].text || topSegs[0].caption || '')
+    : ''
+
+  const seekTo = (t) => {
+    const p = playerRef.current
+    if (!p) return
+    p.currentTime = t
+    p.play().catch(() => {})
+  }
+
+  // rerank: logit → sigmoid
+  const rerankPct = rerank != null ? 1 / (1 + Math.exp(-rerank)) : null
 
   return (
     <div className="flex-none w-[420px] snap-start">
       <div
-        onClick={onClick}
-        className="bg-surface-container-high rounded-[1.5rem] p-1 h-full shadow-[0_20px_50px_rgba(0,0,0,0.3)] hover:shadow-primary/10 transition-all group/card border border-outline-variant/5 cursor-pointer hover:border-primary/20"
+        onClick={isAV ? undefined : onClick}
+        className={`bg-surface-container-high rounded-[1.5rem] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.3)] border border-outline-variant/5 relative transition-all
+          ${isAV ? '' : 'cursor-pointer hover:border-primary/20 hover:shadow-primary/10'}`}
       >
-        {/* 썸네일 영역 */}
-        <div className={`relative rounded-[1.4rem] overflow-hidden aspect-video border border-outline-variant/10 flex items-center justify-center
-          ${hasPreview && !imgError ? 'bg-black' : `bg-gradient-to-br ${meta.grad}`}`}>
+        {/* 랭크 배지 */}
+        <div className="absolute top-2 left-2 z-20 px-1.5 py-0.5 rounded bg-black/70 text-white text-[10px] font-bold leading-none">
+          #{rank}
+        </div>
 
-          {/* 이미지/문서 미리보기 */}
-          {hasPreview && !imgError ? (
-            <>
+        {/* ── AV: 인라인 플레이어 ── */}
+        {isAV && (
+          <div className="w-full bg-black/80" onClick={e => e.stopPropagation()}>
+            {result.file_type === 'video' ? (
+              <video
+                ref={playerRef}
+                src={streamUrl}
+                controls
+                preload="metadata"
+                className="w-full max-h-[200px] object-contain"
+                onError={() => {}}
+              />
+            ) : (
+              <div className="flex flex-col items-center justify-center px-4 pt-8 pb-4 gap-3">
+                <span className="material-symbols-outlined text-amber-400 text-4xl" style={{ fontVariationSettings: '"FILL" 1' }}>volume_up</span>
+                <audio
+                  ref={playerRef}
+                  src={streamUrl}
+                  controls
+                  preload="metadata"
+                  className="w-full"
+                  onError={() => {}}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── 이미지·문서: 썸네일 ── */}
+        {!isAV && (
+          <div className={`relative h-[180px] flex items-center justify-center overflow-hidden
+            ${hasPreview && !imgError ? 'bg-black' : `bg-gradient-to-br ${meta.grad}`}`}>
+            {hasPreview && !imgError ? (
               <img
                 src={`${API_BASE}${result.preview_url}`}
                 alt={result.file_name}
                 className="w-full h-full object-contain"
                 onError={() => setImgError(true)}
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent pointer-events-none" />
-            </>
-          ) : isAV ? (
-            /* AV 카드 — 파형/필름 아이콘 + 세그먼트 칩 미리보기 */
-            <>
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
-                <span className="material-symbols-outlined text-white/10 text-[72px]" style={{ fontVariationSettings: '"FILL" 1' }}>{meta.icon}</span>
-                {/* 상위 세그먼트 타임 칩 */}
-                {topSegs.length > 0 && (
-                  <div className="flex flex-wrap gap-1 justify-center px-4">
-                    {topSegs.map((s, i) => (
-                      <span key={i} className="px-2 py-0.5 rounded-full bg-white/10 text-white/60 text-lg font-mono border border-white/10">
-                        {fmtTime(s.start ?? s.start_sec ?? 0)}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 to-transparent" />
-            </>
-          ) : (
-            <>
-              <span className="material-symbols-outlined text-white/20 text-[80px]" style={{ fontVariationSettings: '"FILL" 1' }}>{meta.icon}</span>
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 to-transparent" />
-            </>
-          )}
-
-          {/* 타입 배지 */}
-          <div className="absolute top-4 left-4 p-2 glass-panel rounded-xl">
-            <span className={`material-symbols-outlined ${meta.color}`}>{meta.icon}</span>
+            ) : (
+              <span className="material-symbols-outlined text-white/20 text-[64px]" style={{ fontVariationSettings: '"FILL" 1' }}>{meta.icon}</span>
+            )}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent pointer-events-none" />
           </div>
+        )}
 
-          {/* 파일명 + 신뢰도 (하단) */}
-          <div className="absolute bottom-4 left-4 right-4 flex justify-between items-end">
-            <div className="space-y-1 min-w-0 flex-1 mr-3">
-              <p className={`text-xs font-bold tracking-widest uppercase ${meta.color}`}>{meta.label}</p>
-              <p className="text-lg font-bold text-on-surface truncate drop-shadow-md">{result.file_name}</p>
-            </div>
-            <div className="text-right shrink-0">
-              <div className="text-2xl font-black text-primary">{confPct}%</div>
-              <div className="text-sm text-on-surface-variant font-medium">신뢰도</div>
-            </div>
-          </div>
-        </div>
+        {/* ── 바디 ── */}
+        <div className="p-4 space-y-3">
 
-        {/* 스니펫 / 세그먼트 */}
-        <div className="p-5 space-y-3">
-          {isAV && topSegs.length > 0 ? (
-            /* AV: 최고 매칭 세그먼트 텍스트 */
-            <>
-              <p className="text-sm font-bold text-amber-400 tracking-widest uppercase flex items-center gap-1">
-                <span className="material-symbols-outlined text-base">timer</span>
-                최고 매칭 구간
-              </p>
-              <div className="space-y-1.5">
-                {topSegs.map((s, i) => (
-                  <div key={i} className="flex gap-2 items-start">
-                    <span className="text-sm font-mono text-on-surface-variant/50 shrink-0 mt-0.5">
-                      {fmtTime(s.start ?? s.start_sec ?? 0)}
-                    </span>
-                    <p className="text-xs text-on-surface-variant/80 leading-relaxed line-clamp-2 flex-1">
-                      {s.text || s.caption || '(텍스트 없음)'}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </>
-          ) : (
-            /* 이미지/문서: 스니펫 */
-            <>
-              <p className="text-sm font-bold text-primary tracking-widest uppercase">일치 내용</p>
-              <p className="text-sm text-on-surface-variant leading-relaxed line-clamp-3">
-                {result.snippet || '(미리보기 없음)'}
-              </p>
-            </>
-          )}
-          <div className="pt-3 border-t border-outline-variant/10 flex justify-between items-center">
-            <span className="text-sm text-on-surface-variant/40 font-mono truncate max-w-[200px]">{result.file_path}</span>
-            <span className="text-xs font-bold text-primary flex items-center gap-1 group-hover/card:translate-x-1 transition-transform shrink-0">
-              열기 <span className="material-symbols-outlined text-lg">arrow_forward</span>
+          {/* 배지 */}
+          <div className="flex flex-wrap gap-1.5">
+            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${meta.color} bg-white/5 border-white/10`}>
+              {meta.label}
             </span>
+            {isAV && (
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase border text-on-surface-variant/70 bg-white/5 border-white/10">
+                세그 {segments.length}
+              </span>
+            )}
           </div>
+
+          {/* 파일명 */}
+          <div className="text-sm font-bold text-on-surface truncate" title={result.file_name}>
+            {result.file_name}
+          </div>
+
+          {/* 경로 */}
+          <div className="text-[10px] font-mono text-on-surface-variant/40 truncate" title={result.file_path}>
+            {result.file_path}
+          </div>
+
+          {/* 메트릭 그리드 (6칸 2열) */}
+          <div className="grid grid-cols-3 gap-1">
+            {[
+              ['신뢰도', `${confPct}%`,                    confCls],
+              ['dense',   dense   != null ? dense.toFixed(3)   : '—', 'text-on-surface'],
+              ['lexical', lexical != null ? lexical.toFixed(3) : '—', 'text-on-surface'],
+              ['ASF',     asf     != null ? asf.toFixed(3)     : '—', 'text-on-surface'],
+              ['rerank',  rerank  != null ? rerank.toFixed(2)  : '—', 'text-on-surface'],
+              ['z',       zScore  != null ? zScore.toFixed(2)  : '—', 'text-on-surface'],
+            ].map(([k, v, cls]) => (
+              <div key={k} className="bg-surface-container-highest/40 rounded-lg px-2 py-1.5">
+                <div className="text-[9px] text-on-surface-variant/40 uppercase tracking-wider mb-0.5">{k}</div>
+                <div className={`text-xs font-bold font-mono ${cls}`}>{v}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* 점수 바 */}
+          <div className="space-y-1">
+            <ScoreBar label="dense"  value={dense}      colorClass="bg-gradient-to-r from-emerald-600 to-emerald-400" />
+            <ScoreBar label="lex"    value={lexical}    colorClass="bg-gradient-to-r from-blue-600 to-blue-400" />
+            <ScoreBar label="asf"    value={asf}        colorClass="bg-gradient-to-r from-violet-600 to-violet-400" />
+            <ScoreBar label="rerank" value={rerankPct}  colorClass="bg-gradient-to-r from-orange-600 to-orange-400" />
+          </div>
+
+          {/* AV: 세그먼트 버튼 + 최상위 발췌 */}
+          {isAV ? (
+            <>
+              {topSegs.length > 0 && (
+                <div className="flex flex-wrap gap-1" onClick={e => e.stopPropagation()}>
+                  {topSegs.map((s, i) => {
+                    const t0 = s.start ?? s.start_sec ?? 0
+                    const t1 = s.end   ?? s.end_sec   ?? 0
+                    const sc = s.score ?? 0
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => seekTo(t0)}
+                        title={s.text || s.caption || ''}
+                        className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-surface-container-highest border border-outline-variant/20 hover:border-primary/40 hover:bg-primary/10 text-on-surface-variant hover:text-primary transition-all"
+                      >
+                        {fmtTime(t0)}-{fmtTime(t1)} · {sc.toFixed(3)}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+              {topText && (
+                <p className="text-[11px] text-on-surface-variant/70 leading-relaxed line-clamp-2">
+                  {topText}
+                </p>
+              )}
+            </>
+          ) : (
+            /* 이미지·문서: 스니펫 발췌 */
+            result.snippet ? (
+              <p className="text-[11px] text-on-surface-variant/70 leading-relaxed line-clamp-2">
+                {result.snippet}
+              </p>
+            ) : null
+          )}
+
+          {/* 하단 액션 (이미지·문서) */}
+          {!isAV && (
+            <div className="pt-2 border-t border-outline-variant/10 flex justify-end">
+              <span className="text-xs font-bold text-primary flex items-center gap-1">
+                열기 <span className="material-symbols-outlined text-base">arrow_forward</span>
+              </span>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -665,7 +764,7 @@ export default function MainSearch() {
             {!searching && results.length > 0 && (
               <div className="flex gap-6 overflow-x-auto no-scrollbar pb-12 snap-x snap-mandatory">
                 {results.map((r, i) => (
-                  <ResultCard key={r.file_path + i} result={r} onClick={() => handleSelectFile(r)} />
+                  <ResultCard key={r.file_path + i} result={r} rank={i + 1} onClick={() => handleSelectFile(r)} />
                 ))}
               </div>
             )}

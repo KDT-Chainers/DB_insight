@@ -21,10 +21,10 @@ export default function TriChefSearch() {
       const r = await fetch(`${API_BASE}/api/trichef/search`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query, topk: 10, domains: ["image", "doc_page"] }),
+        body: JSON.stringify({ query, topk: 10, domains: ["image", "doc_page", "movie", "music"] }),
       });
       const j = await r.json();
-      if (!r.ok) throw new Error(j.error || "검???�패");
+      if (!r.ok) throw new Error(j.error || "검색 실패");
       setResults(j.top);
       setStats(j.stats);
     } catch (e) {
@@ -35,7 +35,7 @@ export default function TriChefSearch() {
   }
 
   async function runReindex() {
-    if (!confirm("?�체 ?�임베딩???�작?�니?? ?�간???�래 걸릴 ???�습?�다. 계속?�시겠습?�까?")) return;
+    if (!confirm("전체 재임베딩을 시작합니다. 시간이 오래 걸릴 수 있습니다. 계속하시겠습니까?")) return;
     setLoading(true);
     setError("");
     try {
@@ -45,9 +45,9 @@ export default function TriChefSearch() {
         body: JSON.stringify({ scope: "all" }),
       });
       const j = await r.json();
-      alert("?�임베딩 ?�료: " + JSON.stringify(j, null, 2));
+      alert("재임베딩 완료: " + JSON.stringify(j, null, 2));
     } catch (e) {
-      setError("?�임베딩 ?�패: " + e.message);
+      setError("재임베딩 실패: " + e.message);
     } finally {
       setLoading(false);
     }
@@ -60,12 +60,12 @@ export default function TriChefSearch() {
         className={`transition-all duration-300 min-h-screen bg-void pt-8 ${open ? "pl-64" : "pl-0"}`}
       >
         <div className="p-6 max-w-5xl mx-auto">
-          {/* ?�더 */}
+          {/* ?�더 */}
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h1 className="text-2xl font-black text-[#dfe4fe]">TRI-CHEF ?�합 검??/h1>
+              <h1 className="text-2xl font-black text-[#dfe4fe]">TRI-CHEF ?�합 검??/h1>
               <p className="text-xs text-on-surface-variant mt-1">
-                3�?복소??벡터 검??· SigLIP2 + e5-large + DINOv2
+                3�?복소??벡터 검??· SigLIP2 + e5-large + DINOv2
               </p>
             </div>
             <button
@@ -73,17 +73,17 @@ export default function TriChefSearch() {
               disabled={loading}
               className="px-4 py-2 text-base rounded-xl border border-outline-variant/30 text-on-surface-variant hover:text-primary hover:border-primary/40 disabled:opacity-40 transition-all"
             >
-              ?�임베딩
+              ?�임베딩
             </button>
           </div>
 
-          {/* 검???�력 */}
+          {/* 검???�력 */}
           <div className="flex gap-2 mb-6">
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && runSearch()}
-              placeholder="?�연?�로 검?��?(?? ?��????�몰, 매출 차트)"
+              placeholder="?�연?�로 검?��?(?? ?��????�몰, 매출 차트)"
               className="flex-1 px-4 py-3 bg-surface-container-high border border-outline-variant/20 rounded-xl text-on-surface placeholder-on-surface-variant/50 focus:outline-none focus:border-primary/50 transition-colors"
             />
             <button
@@ -91,18 +91,18 @@ export default function TriChefSearch() {
               disabled={loading || !query.trim()}
               className="px-6 py-3 bg-primary text-on-primary rounded-xl disabled:opacity-40 hover:bg-primary/90 transition-colors font-bold"
             >
-              {loading ? "검??중�? : "검??}
+              {loading ? "검??중�? : "검??}
             </button>
           </div>
 
-          {/* ?�류 */}
+          {/* ?�류 */}
           {error && (
             <div className="mb-4 px-4 py-3 bg-error/10 border border-error/20 rounded-xl text-error text-lg">
               {error}
             </div>
           )}
 
-          {/* ?�계 */}
+          {/* ?�계 */}
           {stats && (
             <div className="mb-5 flex flex-wrap gap-4 text-base text-on-surface-variant">
               {Object.entries(stats.per_domain).map(([d, s]) => (
@@ -112,7 +112,7 @@ export default function TriChefSearch() {
                     <span className="ml-2 text-error">{s.error}</span>
                   ) : (
                     <span className="ml-2">
-                      {s.count}�?· μ={s.mu_null} · ?={s.sigma_null} · thr={s.abs_threshold}
+                      {s.count}�?· μ={s.mu_null} · ?={s.sigma_null} · thr={s.abs_threshold}
                     </span>
                   )}
                 </div>
@@ -123,7 +123,7 @@ export default function TriChefSearch() {
           {/* 결과 그리??*/}
           {results !== null && results.length === 0 && (
             <div className="text-center py-16 text-on-surface-variant">
-              ?�계�??�상??결과가 ?�습?�다.
+              ?�계�??�상??결과가 ?�습?�다.
             </div>
           )}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">

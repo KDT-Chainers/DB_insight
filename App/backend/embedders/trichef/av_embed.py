@@ -243,6 +243,15 @@ def embed_movie_file(file_path: str, progress_cb: Callable | None = None) -> dic
         reg[rel] = {"sha": sha, "frames": len(frames), "duration": dur}
         mr_registry.save(reg_path, reg)
 
+        # ── ASF 자산 재빌드 (segments.json → vocab_movie.json + movie_token_sets.json) ──
+        # unified_engine.search_av() 의 ASF 채널이 활성화되려면 이 파일이 필요.
+        try:
+            from pipeline.build_asf_assets import build_for as _build_asf
+            _build_asf(MOVIE_CACHE_DIR, "movie")
+            logger.info(f"[movie] ASF 자산 재빌드 완료")
+        except Exception as _asf_e:
+            logger.warning(f"[movie] ASF 재빌드 실패 (검색에 ASF 채널 비활성): {_asf_e}")
+
         elapsed = round(time.time() - t0, 1)
         logger.info(f"[movie] {src.name}: done in {elapsed}s")
         return {"status": "done", "frames": len(frames), "segs": len(stt_segs)}
@@ -373,6 +382,14 @@ def embed_music_file(file_path: str, progress_cb: Callable | None = None) -> dic
         reg[rel] = {"sha": sha, "windows": len(windows),
                     "duration": dur, "stt_status": stt_status}
         mr_registry.save(reg_path, reg)
+
+        # ── ASF 자산 재빌드 (segments.json → vocab_music.json + music_token_sets.json) ──
+        try:
+            from pipeline.build_asf_assets import build_for as _build_asf
+            _build_asf(MUSIC_CACHE_DIR, "music")
+            logger.info(f"[music] ASF 자산 재빌드 완료")
+        except Exception as _asf_e:
+            logger.warning(f"[music] ASF 재빌드 실패 (검색에 ASF 채널 비활성): {_asf_e}")
 
         elapsed = round(time.time() - t0, 1)
         logger.info(f"[music] {src.name}: done in {elapsed}s")
