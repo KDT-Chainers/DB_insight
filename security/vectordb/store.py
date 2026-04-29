@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import sqlite3
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -540,6 +541,67 @@ class VectorStore:
                 "SELECT DISTINCT COALESCE(file_name, doc_name) FROM chunks WHERE COALESCE(file_name, doc_name) != ''"
             ).fetchall()
         return [r[0] for r in rows if r[0]]
+
+    def get_doc_pii_signal(self, doc_name_hint: str) -> Dict[str, Any]:
+        """
+        특정 문서 힌트에 대응하는 문서 전체의 PII 신호를 반환한다.
+        검색 상위 청크에 PII가 직접 안 잡혀도 PRS/정책 승격에 쓰기 위한 보강용 API.
+        """
+        from security.pii_filter_helpers import filter_to_protected_pii_types
+
+        hint = str(doc_name_hint or "").strip().lower()
+        if not hint:
+            return {"contains_pii": False, "pii_types": [], "pii_chunk_ratio": 0.0, "matched_chunks": 0}
+
+        hint_norm = re.sub(r"[^0-9a-z가-힣]", "", hint)
+        if not hint_norm:
+            return {"contains_pii": False, "pii_types": [], "pii_chunk_ratio": 0.0, "matched_chunks": 0}
+
+        with sqlite3.connect(self._meta_db) as conn:
+            rows = conn.execute(
+                "SELECT doc_name, file_name, source_path, has_pii, pii_types FROM chunks"
+            ).fetchall()
+
+        matched = []
+        for row in rows:
+            candidate = " ".join([
+                str(row[0] or ""),
+                str(row[1] or ""),
+                str(row[2] or ""),
+            ]).lower()
+            cand_norm = re.sub(r"[^0-9a-z가-힣]", "", candidate)
+            if hint_norm and hint_norm in cand_norm:
+                matched.append(row)
+
+        if not matched:
+            return {"contains_pii": False, "pii_types": [], "pii_chunk_ratio": 0.0, "matched_chunks": 0}
+
+        pii_types: List[str] = []
+        protected_hits = 0
+        for row in matched:
+            has_pii = bool(row[3])
+            types_raw = []
+            if row[4]:
+                try:
+                    parsed = json.loads(row[4])
+                    if isinstance(parsed, list):
+                        types_raw = [str(x) for x in parsed]
+                except Exception:
+                    types_raw = []
+            protected = filter_to_protected_pii_types(types_raw)
+            if has_pii or protected:
+                protected_hits += 1
+            for t in protected:
+                if t not in pii_types:
+                    pii_types.append(t)
+
+        ratio = round(protected_hits / max(len(matched), 1), 4)
+        return {
+            "contains_pii": bool(protected_hits > 0),
+            "pii_types": pii_types,
+            "pii_chunk_ratio": ratio,
+            "matched_chunks": len(matched),
+        }
 
     def list_indexed_documents(self) -> List[Dict[str, Any]]:
         """

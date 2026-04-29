@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 import config
+from harness.safe_llm_call import safe_llm_call
 
 logger = logging.getLogger(__name__)
 
@@ -35,12 +36,14 @@ class SummaryAgent:
         [요약 규칙 - 반드시 준수]
         1. 참고 문서의 내용을 바탕으로 사용자 요청에 맞는 답변을 작성하라.
         2. 줄거리·스토리 요청이면 등장인물, 사건 흐름, 결말을 포함해 서술하라.
-        3. 주민등록번호, 여권번호, 계좌번호 등 개인정보는 절대 그대로 출력하지 말고
-           "[개인정보 포함]" 으로만 표시하라.
-        4. 반드시 한국어(Korean)로만 작성하라. 영어·중국어·일본어 등 다른 언어는 절대 사용 금지.
+        3. 아래 개인정보는 절대 원문/부분값 그대로 출력하지 말 것:
+           - 주민등록번호, 계좌번호, 여권번호, 운전면허번호, 사업자등록번호, 카드번호
+        4. 개인정보는 반드시 일반화된 표현으로 축약할 것
+           (예: "[개인정보 포함]", "[민감정보 생략]").
+        5. 원문을 그대로 복사/붙여넣기 하지 말고 핵심만 재구성하라.
+        6. 반드시 한국어(Korean)로만 작성하라. 영어·중국어·일본어 등 다른 언어는 절대 사용 금지.
            참고 문서가 외국어로 되어 있어도 출력은 반드시 한국어로 번역하여 작성하라.
-        5. 최대 10문장 이내로 작성하라.
-        6. 원문을 그대로 붙여넣지 말고 반드시 재구성하라.
+        7. 최대 3~5줄 이내로 간결하게 작성하라.
     """)
 
     def __init__(self) -> None:
@@ -243,15 +246,22 @@ class SummaryAgent:
             "아래는 동일 문서의 여러 구간에 대한 개별 요약이다.\n"
             "이를 하나의 자연스러운 전체 요약으로 통합하라.\n"
             "줄거리·스토리 요청이면 사건 순서와 흐름이 드러나도록 서술하라.\n"
-            "개인정보(주민번호·여권·계좌 등)는 '[개인정보 포함]'으로만 표시하라.\n"
+            "주민번호/계좌/여권/운전면허/사업자등록/카드번호는 절대 직접 출력하지 말고 "
+            "'[개인정보 포함]'으로만 표시하라.\n"
+            "원문 문장을 그대로 복사하지 말고 핵심만 재구성하라.\n"
             "반드시 한국어(Korean)로만 작성하라. 영어·중국어·일본어 등 다른 언어는 절대 사용 금지.\n"
-            "최대 15문장으로 작성하라.\n\n"
+            "최대 3~5줄로 작성하라.\n\n"
             f"[사용자 요청]\n{user_query}\n\n"
             f"[구간별 요약]\n{combined}\n\n"
             "[최종 요약 (한국어)]\n"
         )
         try:
-            final = self._call_qwen_raw(reduce_prompt)
+            final = safe_llm_call(
+                lambda: self._call_qwen_raw(reduce_prompt),
+                timeout_sec=float(self._timeout),
+                max_retries=1,
+                call_name="summary_reduce_call",
+            )
         except Exception as exc:
             logger.warning("[SummaryAgent] reduce 실패 → 구간 요약 이어붙임: %s", exc)
             final = "\n\n".join(mini_summaries)
@@ -288,25 +298,14 @@ class SummaryAgent:
         return resp.json().get("response", "").strip()
 
     def _call_qwen(self, user_query: str, context: str, extra_constraint: str = "") -> str:
-        import httpx
-
-        prompt = self._build_prompt(user_query, context, extra_constraint)
-        payload = {
-            "model": self._model,
-            "prompt": prompt,
-            "stream": False,
-            "options": {
-                "temperature": 0.4,
-                "num_predict": 512,   # 줄거리·요약에 충분한 길이
-            },
-        }
-        resp = httpx.post(
-            f"{self._ollama_url}/api/generate",
-            json=payload,
-            timeout=httpx.Timeout(self._timeout, connect=min(3.0, float(self._timeout))),
+        return safe_llm_call(
+            lambda: self._call_qwen_raw(
+                self._build_prompt(user_query, context, extra_constraint)
+            ),
+            timeout_sec=float(self._timeout),
+            max_retries=1,
+            call_name="summary_map_call",
         )
-        resp.raise_for_status()
-        return resp.json().get("response", "").strip()
 
     def _run_fallback(self, context: str, source_count: int, regenerated: bool = False) -> SummaryResult:
         lines = self._extractive_fallback(context)
@@ -387,5 +386,8 @@ class SummaryAgent:
         out = []
         for line in lines:
             out.append(line if line.startswith(("-", "•", "*")) else f"- {line}")
+        # 프롬프트 제약(3~5줄)을 출력 포맷 단계에서도 한 번 더 강제
+        if len(out) > 5:
+            out = out[:5]
         return "\n".join(out)
 

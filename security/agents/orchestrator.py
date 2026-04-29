@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import logging
 import re
+import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -42,6 +43,7 @@ from agents.summary import SummaryAgent, SummaryResult
 from security.pii_filter_helpers import sensitivity_from_protected_types
 from security.privacy_risk_score import classify_by_prs
 from security.qwen_classifier import QwenClassifier
+from security.summary_guard import SummaryGuard
 from vectordb.store import VectorStore
 
 logger = logging.getLogger(__name__)
@@ -90,6 +92,7 @@ class Orchestrator:
         self._audit           = audit
         self._grounding_gate  = grounding_gate
         self._summary_agent    = SummaryAgent()
+        self._summary_guard    = SummaryGuard(self._summary_agent)
         # 최근 업로드 문서 식별자(source_path/file_name)를 기억해
         # 요약 질의 시 과거 문서와의 혼입을 줄인다.
         self._recent_upload_keys: List[str] = self._store.get_recent_upload_keys()
@@ -297,8 +300,13 @@ class Orchestrator:
         Returns:
             QueryResponse
         """
+        req_id = uuid.uuid4().hex[:8]
         # ── Step 1: Query Rewrite (USE_QWEN=1 + Ollama 사용 가능할 때만)
         is_summary = Orchestrator.is_summary_request(user_query)
+        logger.info(
+            "[OBS][%s] query_start summary=%s full_view=%s q=%r",
+            req_id, is_summary, full_view, user_query[:120],
+        )
         # 요약 질의이고 문서명 힌트가 있으면 해당 문서에 집중 검색한다.
         doc_hint = Orchestrator._extract_doc_hint(user_query, self._store.list_doc_names()) if is_summary else ""
         rewritten_query = user_query
@@ -316,6 +324,7 @@ class Orchestrator:
                 logger.info("Query rewrite: '%s' → '%s'", user_query, rewritten_query)
 
         # ── Step 2: 원문 검색 ─────────────────────────────────────────────────
+        summary_doc_contains_pii = False
         retrieval_top_k = config.SUMMARY_TOP_K if is_summary else config.TOP_K
         if doc_hint:
             # 문서명 힌트가 있으면 해당 문서 한정 검색 → 다른 문서와 섞이지 않음
@@ -334,12 +343,100 @@ class Orchestrator:
                 feature_map = retrieval_result.feature_map
                 chunks      = retrieval_result.chunks
         else:
-            retrieval_result = self._retrieval_agent.retrieve(
-                rewritten_query,
-                top_k=retrieval_top_k,
+            # 요약 질의는 최신 업로드 문서 우선 한정 검색을 먼저 시도한다.
+            # (전역 top-k에서 최신 문서가 밀려 누락되어 문서 혼입이 생기는 문제 완화)
+            recent_doc_chunks: List[Dict[str, Any]] = []
+            if is_summary and self._recent_upload_keys:
+                recent_doc_chunks = self._search_recent_upload_docs(
+                    rewritten_query,
+                    top_k=retrieval_top_k,
+                )
+
+            if recent_doc_chunks:
+                chunks = recent_doc_chunks
+                feature_map = self._store.build_feature_map(chunks, rewritten_query)
+                logger.info(
+                    "[Orchestrator] 요약 최근문서 우선 검색 적용: %d청크",
+                    len(chunks),
+                )
+            else:
+                retrieval_result = self._retrieval_agent.retrieve(
+                    rewritten_query,
+                    top_k=retrieval_top_k,
+                )
+                feature_map = retrieval_result.feature_map
+                chunks      = retrieval_result.chunks
+
+        # ── Step 2b: 요약 질의 문서명 하드 필터 ────────────────────────────────
+        hard_doc_token = self._extract_hard_doc_token(user_query) if is_summary else ""
+        if hard_doc_token:
+            pre_filter_chunks = chunks
+            pre_filter_fm = feature_map
+            before = len(chunks)
+            chunks = self._hard_filter_chunks_by_doc_token(chunks, hard_doc_token)
+            # 하드 필터가 과도해 빈 결과가 되면 기존 검색 결과로 롤백
+            if not chunks:
+                logger.warning(
+                    "[Orchestrator] 하드 필터 결과 0청크(token=%r) → 필터 전 결과로 복원",
+                    hard_doc_token,
+                )
+                chunks = pre_filter_chunks
+                feature_map = pre_filter_fm
+            logger.info(
+                "[Orchestrator] 문서 하드 필터 적용(token=%r): %d -> %d청크",
+                hard_doc_token, before, len(chunks),
             )
-            feature_map = retrieval_result.feature_map
-            chunks      = retrieval_result.chunks
+            feature_map = self._store.build_feature_map(chunks, rewritten_query)
+        logger.debug("[DEBUG] chunks after hard filter: %d", len(chunks))
+        logger.debug("[DEBUG] feature_map contains_pii: %s", feature_map.get("contains_pii"))
+        logger.info(
+            "[OBS][%s] retrieval chunks=%d contains_pii=%s pii_types=%s ratio=%.4f sens=%.4f bulk=%s",
+            req_id,
+            len(chunks),
+            feature_map.get("contains_pii"),
+            feature_map.get("pii_types"),
+            float(feature_map.get("pii_chunk_ratio", 0.0) or 0.0),
+            float(feature_map.get("sensitivity_score", 0.0) or 0.0),
+            feature_map.get("bulk_request"),
+        )
+
+        # 요약 + 문서명 지정 질의는 문서 전체 PII 신호를 feature_map에 보강한다.
+        # (상위 검색 청크에 PII가 직접 안 잡혀 PRS가 과소평가되는 문제 완화)
+        if is_summary:
+            doc_key = hard_doc_token or doc_hint
+            if doc_key:
+                doc_sig = self._store.get_doc_pii_signal(doc_key)
+                if doc_sig.get("contains_pii"):
+                    summary_doc_contains_pii = True
+                    merged_types: List[str] = list(feature_map.get("pii_types") or [])
+                    for t in doc_sig.get("pii_types") or []:
+                        if t not in merged_types:
+                            merged_types.append(t)
+                    feature_map["contains_pii"] = True
+                    feature_map["pii_types"] = merged_types
+                    feature_map["pii_chunk_ratio"] = max(
+                        float(feature_map.get("pii_chunk_ratio", 0.0)),
+                        float(doc_sig.get("pii_chunk_ratio", 0.0)),
+                    )
+                    feature_map["sensitivity_score"] = max(
+                        float(feature_map.get("sensitivity_score", 0.0)),
+                        float(sensitivity_from_protected_types(merged_types)),
+                    )
+                logger.debug("[DEBUG] doc pii signal(%r): %s", doc_key, doc_sig)
+
+        # 요약 질의에서 "전체"는 요약 범위 지시일 수 있으므로 bulk 오탐을 완화한다.
+        # 실제 유출 의도 키워드(출력/원문/dump/export 등)가 없으면 bulk_request를 해제.
+        if is_summary and feature_map.get("bulk_request"):
+            ql = (user_query or "").lower()
+            has_summary_intent = any(k in ql for k in (
+                "요약", "정리", "줄거리", "핵심", "3줄", "세줄", "한줄", "summary", "plot",
+            ))
+            has_exfil_intent = any(k in ql for k in (
+                "출력", "보여줘", "원문", "전부", "모두", "dump", "export", "all records", "raw data",
+            ))
+            if has_summary_intent and not has_exfil_intent:
+                feature_map["bulk_request"] = False
+                logger.info("[Orchestrator] summary bulk 오탐 완화: bulk_request=False")
 
         # ── Step 3: 보안 분류 (Qwen 또는 PRS 규칙 기반)
         if config.USE_QWEN and self._qwen is not None and self._qwen.is_available():
@@ -353,6 +450,17 @@ class Orchestrator:
         label  = classification.label
         reason = classification.reason
 
+        # 요약 질의에서 "개인정보"를 직접 언급하면 최소 SENSITIVE로 승격.
+        # (지시형 질의 + 짧은 텍스트에서 PRS가 NORMAL로 떨어지는 케이스 보완)
+        if is_summary and "개인정보" in (user_query or "") and label == "NORMAL":
+            label = "SENSITIVE"
+            reason = "요약 요청에 개인정보 확인 의도가 포함되어 SENSITIVE로 처리합니다."
+        # 요약 대상 문서 자체에 보호 PII 신호가 있으면 최소 SENSITIVE를 보장한다.
+        if is_summary and summary_doc_contains_pii and label == "NORMAL":
+            label = "SENSITIVE"
+            reason = "요약 대상 문서에서 보호 개인정보가 감지되어 SENSITIVE로 처리합니다."
+        logger.info("[OBS][%s] classify label=%s reason=%r", req_id, label, reason)
+
         # ── Step 4: 정책 판단 ─────────────────────────────────────────────────
         decision         = self._policy.evaluate(label, feature_map)
         effective_action = self._policy_action(decision, full_view)
@@ -361,6 +469,7 @@ class Orchestrator:
 
         # ── Step 5: DANGEROUS 차단 ───────────────────────────────────────────
         if not decision.allow:
+            logger.warning("[OBS][%s] early_return policy_blocked", req_id)
             self._audit.log_query(
                 query_text=user_query, label=label,
                 action=effective_action, blocked=True, retrieved_ids=chunk_ids,
@@ -389,7 +498,10 @@ class Orchestrator:
                 answer="", label=label, action=effective_action,
                 blocked=True, masked_preview=False, reason=reason,
                 retrieved_chunk_ids=chunk_ids, retrieved_chunks=path_only_chunks,
-                summary=None,
+                summary=SummaryResult(
+                    text="",
+                    error="policy_blocked: 보안 정책에 의해 요약이 차단되었습니다.",
+                ) if is_summary else None,
             )
 
         # ── Step 5b: GroundingGate ────────────────────────────────────────────
@@ -406,6 +518,7 @@ class Orchestrator:
 
         # GroundingGate 미통과 → 빈 결과 반환 (소스 카드 없음)
         if not grounded:
+            logger.warning("[OBS][%s] early_return grounding_failed", req_id)
             notice = (
                 "검색은 되었으나 질문과 문서의 연관도(Grounding)가 낮아 소스를 표시하지 않았습니다. "
                 "줄거리·요약은 문서 속 인물·장소·고유명사를 질문에 포함해 다시 검색해 보세요."
@@ -414,7 +527,10 @@ class Orchestrator:
                 answer=notice, label=label, action=effective_action,
                 blocked=False, masked_preview=False, reason=reason,
                 retrieved_chunk_ids=[], retrieved_chunks=[],
-                summary=None,
+                summary=SummaryResult(
+                    text="",
+                    error="grounding_failed: 문서 연관도가 낮아 요약할 수 없습니다.",
+                ) if is_summary else None,
             )
 
         # ── Step 6: 요약 요청 시 SummaryAgent ─────────────────────────────────
@@ -428,12 +544,55 @@ class Orchestrator:
                 summary_input = self._filter_recent_upload_chunks(chunks)
             summary_chunks = self._select_summary_chunks(summary_input)
             display_chunks = summary_chunks or chunks
-            summary_result = self._summary_agent.summarize(user_query, summary_chunks)
+            # Summary → (output re-scan) → SecurityCritic 승인 mandatory 경로
+            summary_result = self._summary_guard.summarize_secure(
+                user_query=user_query,
+                chunks=summary_chunks,
+                feature_map=feature_map,
+            )
             if summary_result.is_ok():
-                answer_txt = summary_result.text
+                answer_txt = self._enforce_summary_line_hint(summary_result.text, user_query)
+                summary_result = SummaryResult(
+                    text=answer_txt,
+                    used_llm=summary_result.used_llm,
+                    regenerated=summary_result.regenerated,
+                    map_reduce_used=summary_result.map_reduce_used,
+                    source_chunk_count=summary_result.source_chunk_count,
+                    error=summary_result.error,
+                )
+
+            # 요약 요청에서 소스 문서에 보호 PII가 있으면 최소 SENSITIVE로 상향
+            # (질문 문구가 일반적이어도 "확인 필요" 흐름을 강제)
+            summary_has_protected_pii = any(
+                bool(c.get("has_pii")) or bool(c.get("pii_types"))
+                for c in display_chunks
+            )
+            if summary_has_protected_pii and label == "NORMAL":
+                label = "SENSITIVE"
+                reason = (
+                    "요약 대상 문서에 보호 개인정보가 포함되어 있어 "
+                    "확인 후 마스킹 미리보기로 표시합니다."
+                )
+                decision = self._policy.evaluate(label, feature_map)
+                effective_action = self._policy_action(decision, full_view)
 
         # ── Step 7: 검색 결과 반환 ───────────────────────────────────────────
         masked_preview = bool(label == "SENSITIVE" and decision.masked_preview and not full_view)
+        if masked_preview:
+            # 민감 요약 경로에서는 PII 태그 청크를 UI에서 기본 마스킹 렌더링한다.
+            patched: List[Dict[str, Any]] = []
+            for c in display_chunks:
+                c2 = dict(c)
+                if bool(c2.get("has_pii")) or bool(c2.get("pii_types")):
+                    c2["display_masked"] = True
+                patched.append(c2)
+            display_chunks = patched
+        logger.debug("[DEBUG] label before return: %s", label)
+        logger.info(
+            "[OBS][%s] query_end label=%s action=%s blocked=%s summary_ok=%s",
+            req_id, label, effective_action, False,
+            bool(summary_result and summary_result.is_ok()),
+        )
         return QueryResponse(
             answer=answer_txt, label=label, action=effective_action,
             blocked=False, masked_preview=masked_preview, reason=reason,
@@ -541,6 +700,119 @@ class Orchestrator:
             )
             return filtered
         return chunks
+
+    def _search_recent_upload_docs(
+        self,
+        query: str,
+        top_k: int,
+    ) -> List[Dict[str, Any]]:
+        """
+        최근 업로드 문서 키(source_path/file_name/doc_name)를 이용해 문서 한정 검색한다.
+        전역 검색 이전에 적용해 문서 혼입을 줄인다.
+        """
+        if not self._recent_upload_keys:
+            return []
+
+        seen_ids: set[int] = set()
+        merged: List[Dict[str, Any]] = []
+        for key in self._recent_upload_keys:
+            hint = str(key or "").strip()
+            if not hint:
+                continue
+            partial = self._store.search_within_doc(query, doc_name_hint=hint, top_k=top_k)
+            for c in partial:
+                cid = int(c.get("id") or 0)
+                if cid and cid not in seen_ids:
+                    seen_ids.add(cid)
+                    merged.append(c)
+            # 최근 업로드 문서 하나만으로 충분한 경우 과도한 혼합 방지
+            if len(merged) >= top_k:
+                break
+
+        if not merged:
+            return []
+        merged.sort(key=lambda x: float(x.get("score") or 0.0), reverse=True)
+        return merged[:top_k]
+
+    @staticmethod
+    def _extract_hard_doc_token(user_query: str) -> str:
+        """
+        요약 질의에서 명시된 문서 토큰을 추출한다.
+        예) "홍길동 문서 3줄 요약해줘" -> "홍길동"
+        """
+        q = (user_query or "").strip()
+        if not q:
+            return ""
+        m = re.search(r"(.{1,80}?)(?:문서|파일)\b", q)
+        if m:
+            head = m.group(1).strip()
+            # 앞부분에서 의미 있는 후보를 추출하되 일반 단어는 제외
+            words = re.findall(r"[0-9A-Za-z가-힣._-]{2,}", head)
+            stop = {"개인정보", "요약", "정리", "핵심", "문서", "파일"}
+            candidates = [w for w in words if w not in stop]
+            if candidates:
+                return candidates[0].strip()
+            if words:
+                return words[0].strip()
+        m2 = re.search(
+            r"([0-9A-Za-z가-힣._-]{2,}\.(?:pdf|hwpx|png|jpg|jpeg|heic|webp))",
+            q,
+            re.IGNORECASE,
+        )
+        if m2:
+            return m2.group(1).strip()
+        return ""
+
+    @staticmethod
+    def _hard_filter_chunks_by_doc_token(
+        chunks: List[Dict[str, Any]],
+        token: str,
+    ) -> List[Dict[str, Any]]:
+        """
+        문서 토큰 기준으로 요약 후보를 강제 필터링한다.
+        1) 메타(file/doc/path) 매칭 우선
+        2) 실패 시 본문 텍스트 매칭으로 폴백
+        """
+        if not chunks or not token:
+            return chunks
+        tok = re.sub(r"[^0-9A-Za-z가-힣]", "", token).lower()
+        if len(tok) < 2:
+            return chunks
+
+        def _norm(v: Any) -> str:
+            return re.sub(r"[^0-9A-Za-z가-힣]", "", str(v or "")).lower()
+
+        meta_hits: List[Dict[str, Any]] = []
+        for c in chunks:
+            blob = " ".join([
+                str(c.get("file_name") or ""),
+                str(c.get("doc_name") or ""),
+                str(c.get("source_path") or ""),
+            ])
+            if tok in _norm(blob):
+                meta_hits.append(c)
+        if meta_hits:
+            return meta_hits
+
+        text_hits = [c for c in chunks if tok in _norm(c.get("text") or "")]
+        return text_hits
+
+    @staticmethod
+    def _enforce_summary_line_hint(text: str, user_query: str) -> str:
+        """
+        사용자 질의의 'N줄 요약' 힌트를 결과에도 강제한다.
+        현재는 2~5줄 범위만 허용하고, 기본 3줄 요청을 우선 지원한다.
+        """
+        if not text or not text.strip():
+            return text
+        m = re.search(r"([2-5])\s*줄", user_query or "")
+        if not m:
+            return text
+        wanted = int(m.group(1))
+        lines = [l for l in str(text).splitlines() if l.strip()]
+        if len(lines) <= wanted:
+            return "\n".join(lines)
+        return "\n".join(lines[:wanted])
 
     # ── 관리자용 인덱스 관리 API ───────────────────────────────────────────────
 

@@ -257,7 +257,7 @@ Gradio UI의 **📋 감사 로그** 탭에서 확인 가능.
 
 기존 설명은 유지하되, 아래는 최근 코드 기준으로 추가된 동작입니다.
 
-### 1) 요약 품질 개선 파이프라인
+### 1) 요약 품질 개선 + 3단 보호 파이프라인
 
 - 요약 질의는 일반 질의보다 넓게 검색합니다: `SUMMARY_TOP_K` (기본 20)
 - 검색 결과는 요약 전 단계에서 문서 혼입을 줄이기 위해 정제됩니다.
@@ -265,6 +265,79 @@ Gradio UI의 **📋 감사 로그** 탭에서 확인 가능.
   - 필요 시 최근 업로드 문서 키를 fallback으로 사용
 - 요약 입력 청크는 페이지/청크 순서로 재정렬되어 줄거리 흐름이 유지됩니다.
 - map-reduce는 옵션 기능이며, 기본값은 사실상 비활성(`MAP_REDUCE_THRESHOLD=999`)입니다.
+- 요약 질의에서 문서명이 명시되면(`홍길동 문서 ...`) **하드 필터**를 우선 적용합니다.
+  - 하드 필터 결과가 0청크면 필터 전 결과로 자동 복원하여 과도 차단을 방지합니다.
+- 최근 업로드 문서 우선 검색(`recent_upload_keys`)을 먼저 시도해 문서 혼입을 줄입니다.
+
+#### Summary 3단 보호 (Defense-in-Depth, 최근 반영)
+
+요약 경로는 이제 반드시 아래 순서를 거칩니다.
+
+```
+Orchestrator
+  -> SummaryGuard
+      -> SummaryAgent (생성)
+      -> Output Re-scan (요약문 재검사)
+      -> SecurityCritic (최종 심사)
+  -> UI
+```
+
+1) **Prompt Constraint (1차 방어)**  
+`SummaryAgent` 프롬프트에 다음 제약을 강제합니다.
+- 주민/계좌/여권/운전면허/사업자/카드 번호 직접 출력 금지
+- 원문 복사 금지, 일반화 표현(`[개인정보 포함]`) 사용
+- 한국어 출력 강제
+- 3~5줄 요약 강제
+
+2) **Output Re-scan (2차 방어)**  
+LLM이 생성한 최종 요약문을 다시 `PIIDetector.scan_chunks()`로 검사합니다.  
+검사 대상은 보호 5종만 사용합니다.
+- `KR_RRN`
+- `KR_PASSPORT`
+- `KR_DRIVER_LICENSE`
+- `KR_BANK_ACCOUNT`
+- `KR_BRN`
+
+> 전화/이메일(`KR_PHONE`, `PHONE_NUMBER`, `EMAIL_ADDRESS`)은 요약 재검사 대상에서 제외합니다.
+
+3) **Critic Mandatory (최종 방어)**  
+요약 결과는 반드시 `SecurityCritic.review()`를 통과해야 UI로 노출됩니다.  
+직접 `Summary -> UI` 경로는 사용하지 않습니다.
+- `approve` → 그대로 출력
+- `approve_masked` → `strip_pii_from_output()` 적용 후 출력
+- `regenerate_with_constraints` → `summarize_with_constraints(...)` 재호출
+- `reject` → 요약 노출 차단
+
+#### 요약 Grounding 보정 (최근 반영)
+
+- 요약 질의는 Grounding에서 코사인 임계값 이전에 다음 조건을 우선 검사합니다.
+  - 문서 토큰(예: `홍길동`)이 검색 청크 메타/본문에 매칭되면 통과
+  - 토큰 매칭이 불안정해도 후보가 단일 문서면 fallback 통과
+- 지시형 질의(“문서 전체 3줄 요약”)에서 고유명사/짧은 질의로 인한 과차단을 줄입니다.
+
+#### 요약 PRS/정책 보정 (최근 반영)
+
+- 요약 질의 + 문서명 지정 시, 상위 청크만 보지 않고 해당 문서 **전체 PII 신호**를 병합합니다.
+  - `VectorStore.get_doc_pii_signal()`로 `contains_pii`/`pii_types`/`pii_chunk_ratio`를 보강
+  - PRS가 과소평가되어 `NORMAL`로 떨어지는 케이스를 완화합니다.
+- 요약 질의에서 `"전체"`는 요약 범위 지시일 수 있어 bulk 오탐을 완화합니다.
+  - 실제 유출 의도 키워드(출력/원문/dump/export 등)가 없으면 `bulk_request=False`로 보정
+- 요약 질의에 `"개인정보"`가 포함되거나 문서 전체 PII 신호가 확인되면 최소 `SENSITIVE`를 보장합니다.
+- `N줄 요약`(2~5줄) 요청은 후처리에서 줄 수를 강제합니다.
+
+#### 운영 안정성 보조 (`safe_llm_call`)
+
+보안 3단 구조를 대체하지 않고, 요약 LLM 호출 안정성만 보강합니다.
+- timeout 초과 감지
+- 최소 retry
+- empty output 방지
+- 호출 로그 통일
+
+적용 파일:
+- `security/summary_guard.py`
+- `harness/safe_llm_call.py`
+- `agents/summary/summary_agent.py`
+- `agents/orchestrator.py`
 
 ### 2) 문서 혼입 방지 (요약 시 다른 파일 섞임 이슈 대응)
 
@@ -352,7 +425,17 @@ python -c "import config; print(config.SUMMARY_TOP_K, config.MAP_REDUCE_THRESHOL
 | Presidio 스캔 + 보조 카드 탐지 | `security/pii_detector.py` |
 | 업로드 시 카드 이미지 보강 | `agents/upload_security.py` |
 | 검색 `feature_map` 보강 | `vectordb/store.py` (`build_feature_map`) |
+| 문서 단위 PII 신호 조회(요약 PRS 보정) | `vectordb/store.py` (`get_doc_pii_signal`) |
 | PRS 가중치 | `security/privacy_risk_score.py` |
 | 출력 스캔·고위험 유형 | `security/security_critic.py`, `security/critic_policy.py` |
 | 임베딩 prefix 키워드 | `vectordb/store.py` (`_PII_KR_MAP`) |
 | 문서 메타 민감도 | `vectordb/meta_extractor.py` |
+
+### 10) 관련 파일 빠른 참고 (Summary Guard)
+
+| 역할 | 경로 |
+|------|------|
+| 요약 생성 로직(프롬프트/map-reduce/fallback) | `agents/summary/summary_agent.py` |
+| 요약 3단 보호 도킹 (재검사 + Critic mandatory) | `security/summary_guard.py` |
+| 요약 LLM 호출 안정화 래퍼 | `harness/safe_llm_call.py` |
+| 요약 경로 진입/응답 연결 | `agents/orchestrator.py` |

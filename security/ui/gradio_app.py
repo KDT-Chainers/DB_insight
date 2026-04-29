@@ -307,6 +307,7 @@ def on_upload_commit(user_choice: str):
 
 def _summary_markdown(user_query: str, resp: Any) -> str:
     """요약 전용 Markdown (요약 요청이 아니면 안내 문구만)."""
+    is_summary_req = Orchestrator.is_summary_request(user_query)
     sm = getattr(resp, "summary", None)
     if sm is not None:
         if sm.is_ok():
@@ -329,14 +330,22 @@ def _summary_markdown(user_query: str, resp: Any) -> str:
             return "\n".join(lines)
         err = getattr(sm, "error", None) or "알 수 없음"
         return f"### 📝 요약\n\n⚠️ 처리 오류: {err}"
-    if Orchestrator.is_summary_request(user_query):
+    if is_summary_req:
         ans = (getattr(resp, "answer", None) or "").strip()
         if ans:
             return (
                 f"### 📝 요약\n\n"
                 f"> 💡 검색된 청크 기반 요약입니다. 문서 전체가 아닌 관련 구절 위주입니다.\n\n{ans}"
             )
-        return "### 📝 요약\n\n_요약 단계까지 도달하지 못했습니다._"
+        # 요약 요청인데 summary 객체가 비어 있으면 UI 메시지를 일관되게 고정한다.
+        # (경로별로 빈 박스/기본문구가 섞이는 현상 방지)
+        action = str(getattr(resp, "action", "") or "").lower()
+        reason = str(getattr(resp, "reason", "") or "").strip()
+        if action == "block":
+            return "### 📝 요약\n\n⚠️ 처리 오류: policy_blocked: 보안 정책에 의해 요약이 차단되었습니다."
+        if reason:
+            return f"### 📝 요약\n\n⚠️ 처리 오류: summary_unavailable: {reason}"
+        return "### 📝 요약\n\n⚠️ 처리 오류: summary_unavailable: 요약 결과를 생성하지 못했습니다."
     return "_요약·줄거리·핵심 정리 등으로 질문하면 이 영역에 요약이 표시됩니다._"
 
 
