@@ -106,16 +106,25 @@ DB_insight
 
 ### Step 1 — Electron 앱 빌드
 
+> **빌드 전 DB_insight 앱이 실행 중이라면 반드시 먼저 종료하세요.**  
+> 앱이 켜진 상태에서 빌드하면 `out/` 폴더가 잠겨 실패합니다.
+
 ```bash
 cd App/frontend
 npm install
-rmdir /s /q out              # 이전 빌드 있을 경우
-npm run dist
+npm run dist        # predist 스크립트가 이전 빌드를 자동 정리 후 빌드
 ```
 
 결과물: `App/frontend/out/DB_insight 0.1.0.exe`
 
 > Flask 백엔드 별도 빌드 불필요. Electron이 실행 시 `python app.py`를 자동 실행한다.
+
+#### 빌드 오류 대처
+
+| 오류 | 원인 | 해결 |
+|---|---|---|
+| `EBUSY: resource busy or locked` | 앱 실행 중 / Windows Defender 스캔 | 앱 종료 후 재시도. 반복 시 `out/` 폴더를 Defender 제외 목록에 추가 |
+| `클라이언트가 필요한 권한을 가지고 있지 않습니다` (심볼릭 링크 오류) | Windows 개발자 모드 비활성화 | **설정 → 개인 정보 및 보안 → 개발자용 → 개발자 모드 ON** 후 재시도 |
 
 ---
 

@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "electron": "electron .",
     "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:3000 && electron .\"",
+    "predist": "node -e \"const fs=require('fs');const {execSync}=require('child_process');try{execSync('rmdir /s /q out\\\\win-unpacked',{shell:true,stdio:'pipe'})}catch(_){}\"",
     "dist": "npm run build && electron-builder"
   },
   "build": {
@@ -19,7 +20,7 @@
     "buildDependenciesFromSource": false,
     "electronDist": "node_modules/electron/dist",
     "directories": {
-      "output": "out6"
+      "output": "out"
     },
     "files": [
       "dist/**/*",
@@ -30,7 +31,8 @@
     "win": {
       "target": "portable",
       "signingHashAlgorithms": null,
-      "sign": null
+      "sign": null,
+      "signAndEditExecutable": false
     }
   },
   "dependencies": {
