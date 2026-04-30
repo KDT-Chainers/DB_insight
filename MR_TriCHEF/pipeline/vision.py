@@ -18,7 +18,10 @@ class SigLIP2Encoder:
     def __init__(self, model_id: str = MODEL_SIGLIP2, device: str = "cuda"):
         from transformers import AutoModel, AutoProcessor
         self.device = device
-        self.model = AutoModel.from_pretrained(model_id, torch_dtype=torch.float16).to(device).eval()
+        # low_cpu_mem_usage=False: 신버전 transformers가 meta 텐서를 쓸 때 .to(device) 실패 방지
+        self.model = AutoModel.from_pretrained(
+            model_id, torch_dtype=torch.float16, low_cpu_mem_usage=False
+        ).to(device).eval()
         self.proc  = AutoProcessor.from_pretrained(model_id)
 
     @torch.inference_mode()
@@ -60,8 +63,9 @@ class DINOv2Encoder:
         from transformers import AutoImageProcessor, AutoModel
         self.device = device
         self.proc  = AutoImageProcessor.from_pretrained(model_id)
+        # low_cpu_mem_usage=False: 신버전 transformers meta 텐서 → .to(device) 충돌 방지
         self.model = AutoModel.from_pretrained(
-            model_id, torch_dtype=torch.float16
+            model_id, torch_dtype=torch.float16, low_cpu_mem_usage=False
         ).to(device).eval()
 
     @torch.inference_mode()

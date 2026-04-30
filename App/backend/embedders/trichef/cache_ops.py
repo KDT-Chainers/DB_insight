@@ -73,10 +73,18 @@ def replace_by_file(
             prev = np.load(npy_path)
             if prev.shape[0] == len(prev_ids):
                 kept = prev[keep_mask]
-            else:
+            elif prev.shape[0] > len(prev_ids):
+                # 부분 쓰기(이전 실패)로 행이 초과됨 → prev_ids 기준으로 잘라낸 뒤 필터
                 log.warning(
-                    f"[replace_by_file] {fname} rows={prev.shape[0]} "
-                    f"!= ids={len(prev_ids)} → keep_mask 적용 불가, prev 유지"
+                    f"[replace_by_file] {fname} rows={prev.shape[0]} > ids={len(prev_ids)}"
+                    f" → 초과 {prev.shape[0] - len(prev_ids)}행 잘라냄 (부분 쓰기 복구)"
+                )
+                kept = prev[:len(prev_ids)][keep_mask]
+            else:
+                # prev 행이 ids보다 적은 이상 상태 → 기존 데이터 전체 유지
+                log.warning(
+                    f"[replace_by_file] {fname} rows={prev.shape[0]} < ids={len(prev_ids)}"
+                    f" → keep_mask 적용 불가, prev 전체 유지"
                 )
                 kept = prev
         else:
@@ -92,7 +100,32 @@ def replace_by_file(
             )
         else:
             merged = np.vstack([kept, new_arr])
-        np.save(npy_path, merged)
+
+        # PermissionError(WinError 32) 방지: 엔진이 메모리맵으로 물고 있을 경우
+        # 임시 파일에 저장 후 교체
+        import tempfile, shutil, os
+        tmp_fd, tmp_path = tempfile.mkstemp(dir=cache_dir, suffix=".npy")
+        try:
+            os.close(tmp_fd)
+            np.save(tmp_path, merged)
+            try:
+                if npy_path.exists():
+                    npy_path.unlink()
+                shutil.move(tmp_path, npy_path)
+            except PermissionError:
+                # 파일이 잠긴 경우 덮어쓰기 재시도
+                import time
+                time.sleep(0.3)
+                if npy_path.exists():
+                    npy_path.unlink(missing_ok=True)
+                shutil.move(tmp_path, npy_path)
+        except Exception:
+            try:
+                Path(tmp_path).unlink(missing_ok=True)
+            except Exception:
+                pass
+            raise
+
         merged_out[fname] = merged
         final_rows = int(merged.shape[0])
 

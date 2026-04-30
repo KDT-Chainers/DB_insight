@@ -68,7 +68,7 @@ def embed_images(paths: list[Path]) -> np.ndarray:
         for p in paths[i:i+_BATCH]:
             with Image.open(p) as _img:
                 batch.append(_img.convert("RGB"))
-        inp = _proc(images=batch, return_tensors="pt").to(_DEVICE)
+        inp = _proc(images=batch, return_tensors="pt", padding=True).to(_DEVICE)
         # 모델 dtype(fp16/fp32)에 맞춰 픽셀값 캐스팅 (int8 혼용 방지)
         mdtype = next(_model.parameters()).dtype
         inp = {k: v.to(mdtype) if v.is_floating_point() else v for k, v in inp.items()}

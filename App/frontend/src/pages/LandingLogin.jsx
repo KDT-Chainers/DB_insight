@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import WindowControls from '../components/WindowControls'
 import { API_BASE } from '../api'
 
@@ -8,6 +8,11 @@ export default function LandingLogin() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [flashing, setFlashing] = useState(false)
+  const inputRef = useRef(null)
+
+  useEffect(() => {
+    inputRef.current?.focus()
+  }, [])
 
   const handleLogin = async (e) => {
     e.preventDefault()
@@ -95,6 +100,7 @@ export default function LandingLogin() {
               <div className="relative">
                 <span className="material-symbols-outlined absolute left-0 top-1/2 -translate-y-1/2 text-on-surface-variant group-focus-within:text-primary transition-colors">key</span>
                 <input
+                  ref={inputRef}
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
