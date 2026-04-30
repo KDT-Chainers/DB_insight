@@ -131,12 +131,27 @@ function _startPythonBackend() {
 }
 
 function killBackend() {
-  if (backendProcess) {
-    try { backendProcess.kill('SIGKILL') } catch (_) {}
+  // shell:true 로 spawn 하면 python.exe 는 cmd.exe 의 자식이므로
+  // /T 플래그로 프로세스 트리 전체를 종료해야 한다.
+  if (backendProcess && backendProcess.pid) {
+    try {
+      execSync(`taskkill /F /T /PID ${backendProcess.pid}`, { shell: true, stdio: 'pipe' })
+    } catch (_) {}
     backendProcess = null
   }
-  // 혹시 남아있을 경우 포트로 한 번 더 정리
-  try { freePort(5001) } catch (_) {}
+  // 혹시 남아있을 경우 포트 점유 프로세스도 강제 종료 (동기)
+  try {
+    const out = execSync(
+      'netstat -ano | findstr LISTENING | findstr :5001',
+      { shell: true, stdio: 'pipe' }
+    ).toString()
+    out.trim().split('\n').forEach(line => {
+      const parts = line.trim().split(/\s+/)
+      if (parts.length >= 5 && parts[1].endsWith(':5001')) {
+        try { execSync(`taskkill /F /PID ${parts[4]}`, { shell: true, stdio: 'pipe' }) } catch (_) {}
+      }
+    })
+  } catch (_) {}
 }
 
 // ---------------------------------------------------------------------------
@@ -351,6 +366,10 @@ app.whenReady().then(async () => {
 app.on('window-all-closed', () => {
   killBackend()
   if (process.platform !== 'darwin') app.quit()
+})
+
+app.on('before-quit', () => {
+  killBackend()
 })
 
 app.on('activate', () => {

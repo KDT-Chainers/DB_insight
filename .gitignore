@@ -9,6 +9,10 @@ App/frontend/build/
 # Electron 빌드 결과물
 App/frontend/out/
 App/frontend/out2/
+App/frontend/out3/
+App/frontend/out4/
+App/frontend/out5/
+App/frontend/out6/
 App/frontend/dist-electron/
 App/frontend/release/
 App/frontend/builder-debug.yml

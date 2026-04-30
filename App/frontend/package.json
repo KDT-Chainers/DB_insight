@@ -19,7 +19,7 @@
     "buildDependenciesFromSource": false,
     "electronDist": "node_modules/electron/dist",
     "directories": {
-      "output": "out"
+      "output": "out6"
     },
     "files": [
       "dist/**/*",

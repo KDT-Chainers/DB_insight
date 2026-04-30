@@ -64,7 +64,15 @@ def search():
             if not audio:
                 audio = _search_legacy_audio(query, top_k)
             combined = img_doc + video + audio
-            combined.sort(key=lambda r: r.get("confidence", 0), reverse=True)
+            # 도메인별 가중치: image/doc는 confidence 그대로,
+            # video/audio는 per-query adaptive confidence이지만
+            # 동일 쿼리에서 이미지·문서가 더 직접적으로 관련될 가능성이 높으므로
+            # 약간 하향 조정해 전체 검색에서 균형 있는 결과를 제공한다.
+            _DOMAIN_W = {"image": 1.0, "doc": 1.0, "video": 0.75, "audio": 0.75}
+            combined.sort(
+                key=lambda r: r.get("confidence", 0) * _DOMAIN_W.get(r.get("file_type", ""), 1.0),
+                reverse=True,
+            )
             results = combined[:top_k]
 
     except Exception as e:

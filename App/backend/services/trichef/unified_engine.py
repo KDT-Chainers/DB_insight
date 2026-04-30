@@ -90,7 +90,8 @@ class TriChefEngine:
         calib_data = calibration._load_all()
         for domain, d in self._cache.items():
             if domain in ("movie", "music"):
-                continue  # AV 도메인은 별도 파이프라인
+                continue  # AV 도메인은 segment-vs-segment 점수와 query-vs-segment 점수 범위가
+                           # 달라 calibrate_domain 사용 불가 — search_av() 에서 별도 처리
             if domain in calib_data:
                 thr = calib_data[domain].get("abs_threshold", 0.5)
                 if thr < 0.45:  # 이미 유효한 캘리브레이션이 있음
@@ -310,17 +311,21 @@ class TriChefEngine:
 
         cal = calibration.get_thresholds(domain)
         abs_thr = cal["abs_threshold"]
-        mu, sig = cal["mu_null"], cal["sigma_null"]
-        # ── Image abs_threshold 런타임 보강 (DI_TriCHEF §6.3) ──────────────
-        # σ 과소추정으로 false positive 가 늘어날 때 3σ 방어선 적용.
-        if domain == "image":
-            abs_thr = max(abs_thr, mu + 3.0 * max(sig, 1e-9))
+
+        # ── Per-query adaptive confidence ──────────────────────────────────
+        # null calibration(same-modal cross-pair)과 text-query cross-modal 점수
+        # 분포가 달라 직접 비교 불가. 대신 이 쿼리에 대한 dense_scores 분포로
+        # confidence 를 정규화 → 모든 도메인이 동일 공식으로 비교 가능해진다.
+        # sigma 하한: q_mu * 0.8 (점수가 몰려 있어도 z-score 폭발 방지).
+        q_mu  = float(np.mean(dense_scores))
+        q_sig = max(float(np.std(dense_scores)), q_mu * 0.8, 1e-6)
+
         out: list[TriChefResult] = []
         for i in combined_order[: topk * 3]:
             s = float(dense_scores[i])
             if s < abs_thr:
                 continue
-            z = (s - mu) / max(sig, 1e-9)
+            z = (s - q_mu) / q_sig
             conf = 0.5 * (1 + math.erf(z / (2 ** 0.5)))
             # [항목3] low_confidence 이중 조건 (PROJECT_PIPELINE_SPEC §9)
             # cosine 점수 약 AND sparse lexical 신호도 없음 → confidence 상한 캡 0.40
@@ -353,8 +358,9 @@ class TriChefEngine:
             )
             for i in combined_order[:topk]:
                 s = float(dense_scores[i])
-                # confidence: 임시로 dense 점수를 0~1 로 clamp, 0.35 캡
-                conf = min(float(np.clip(s, 0.0, 1.0)), 0.35)
+                # per-query adaptive confidence (다른 도메인과 동일 공식)
+                z = (s - q_mu) / q_sig
+                conf = 0.5 * (1 + math.erf(z / (2 ** 0.5)))
                 meta = {
                     "domain": domain, "dense": s,
                     "low_confidence": True, "fallback": True,
@@ -385,9 +391,13 @@ class TriChefEngine:
             d["Re"], d["Im"], d["Z"],
         )[0]   # (N,)
 
-        cal     = calibration.get_thresholds(domain)
-        abs_thr = cal["abs_threshold"]
-        mu, sig = cal["mu_null"], cal["sigma_null"]
+        # AV는 null calibration(segment-vs-segment) 대신
+        # 이 쿼리에 대한 실제 seg_scores 분포로 per-query 캘리브레이션한다.
+        # image/doc 과 동일한 공식 → 전체 검색에서 도메인 간 confidence 비교 가능.
+        # sigma 하한: q_mu * 0.8 (image/doc과 동일, z-score 폭발 방지)
+        q_mu  = float(seg_scores.mean())
+        q_sig = max(float(seg_scores.std()), q_mu * 0.8, 1e-6)
+        abs_thr = q_mu   # 평균 미만 파일은 관련 없음으로 처리
 
         # ASF 세그먼트 점수 (MR_TriCHEF search.py _aggregate 방식)
         asf_seg: np.ndarray | None = None
@@ -397,11 +407,11 @@ class TriChefEngine:
             except Exception as _ae:
                 logger.debug(f"[engine:{domain}] ASF 스코어링 실패: {_ae}")
 
-        # 파일별 세그먼트 인덱스 수집 (abs_thr*0.5 선제 필터)
+        # 파일별 세그먼트 인덱스 수집
+        # AV는 query-vs-segment 점수가 segment-vs-segment null 분포와 달라
+        # abs_thr 기반 하드 필터를 쓰지 않는다 (MR_TriCHEF 원본과 동일).
         file_idx: dict[str, list[int]] = {}
         for i, meta in enumerate(d["segments"]):
-            if float(seg_scores[i]) < abs_thr * 0.5:
-                continue
             fp = meta.get("file_path", d["ids"][i])
             file_idx.setdefault(fp, []).append(i)
 
@@ -416,20 +426,17 @@ class TriChefEngine:
                 key=lambda x: -x[1],
             )[:3]
             dense_agg = float(np.mean([s for _, s in d_ranked])) if d_ranked else 0.0
-            if dense_agg < abs_thr:
-                continue
 
             # ── ASF 파일 내 max ────────────────────────────────────────────
             asf_agg = 0.0
             if asf_seg is not None:
                 asf_agg = float(max(float(asf_seg[i]) for i in idxs))
 
-            # ── final = α·z_dense + γ·asf ─────────────────────────────────
-            z_dense = (dense_agg - mu) / max(sig, 1e-9)
+            # ── per-query z-score → confidence (이미지/문서와 동일한 공식) ──
+            # z > 0: 이 쿼리 대비 평균 이상 관련  z < 0: 평균 이하
+            z_dense = (dense_agg - q_mu) / q_sig
             final   = _ALPHA * z_dense + _GAMMA * asf_agg
-
-            # ── confidence = sigmoid(final/2) ─────────────────────────────
-            conf = 1.0 / (1.0 + math.exp(-final / 2.0))
+            conf    = 0.5 * (1.0 + math.erf(z_dense / (2 ** 0.5)))
 
             # 상위 세그먼트 메타 빌드
             seg_list: list[dict] = []

@@ -63,17 +63,55 @@ def _trichef_indexed_files() -> list[dict]:
 
 
 def _trichef_stats() -> dict[str, dict]:
-    """TRI-CHEF image/doc 파일 수 / 청크 수 통계."""
+    """TRI-CHEF image/doc/video/audio 파일 수 / 청크 수 통계."""
+    from config import PATHS
+    import numpy as np
+
     files = _trichef_indexed_files()
     stats: dict[str, dict] = {
         "image": {"file_count": 0, "chunk_count": 0},
         "doc":   {"file_count": 0, "chunk_count": 0},
+        "video": {"file_count": 0, "chunk_count": 0},
+        "audio": {"file_count": 0, "chunk_count": 0},
     }
     for f in files:
         t = f["file_type"]
         if t in stats:
             stats[t]["file_count"]  += 1
             stats[t]["chunk_count"] += f.get("chunk_count", 1)
+
+    # Movie (TRI-CHEF AV) — npy 캐시에서 직접 집계
+    try:
+        movie_dir = Path(PATHS["TRICHEF_MOVIE_CACHE"])
+        re_npy = movie_dir / "cache_movie_Re.npy"
+        reg_path = movie_dir / "registry.json"
+        if re_npy.exists():
+            arr = np.load(re_npy)
+            chunk_count = int(arr.shape[0])
+            file_count = 0
+            if reg_path.exists():
+                reg = json.loads(reg_path.read_text(encoding="utf-8"))
+                file_count = len(reg)
+            stats["video"] = {"file_count": file_count, "chunk_count": chunk_count}
+    except Exception:
+        pass
+
+    # Music (TRI-CHEF AV) — npy 캐시에서 직접 집계
+    try:
+        music_dir = Path(PATHS["TRICHEF_MUSIC_CACHE"])
+        re_npy = music_dir / "cache_music_Re.npy"
+        reg_path = music_dir / "registry.json"
+        if re_npy.exists():
+            arr = np.load(re_npy)
+            chunk_count = int(arr.shape[0])
+            file_count = 0
+            if reg_path.exists():
+                reg = json.loads(reg_path.read_text(encoding="utf-8"))
+                file_count = len(reg)
+            stats["audio"] = {"file_count": file_count, "chunk_count": chunk_count}
+    except Exception:
+        pass
+
     return stats
 
 
