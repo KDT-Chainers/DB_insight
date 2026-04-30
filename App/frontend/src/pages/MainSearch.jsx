@@ -93,53 +93,37 @@ function avStreamUrl(result) {
   return `${API_BASE}/api/admin/file?domain=${domain}&id=${encodeURIComponent(result.file_path)}`
 }
 
-// ── 점수 바 (admin.html scoreBarsHtml 대응) ─────────────
-function ScoreBar({ label, value, colorClass }) {
-  const pct = value != null ? Math.min(Math.max(value * 100, 0), 100) : null
-  return (
-    <div className="flex items-center gap-1.5">
-      <span className="w-10 shrink-0 text-[10px] text-on-surface-variant/50 font-mono">{label}</span>
-      <div className="flex-1 h-[5px] bg-surface-container-highest rounded-full border border-outline-variant/15 overflow-hidden">
-        {pct != null && (
-          <div className={`h-full ${colorClass} rounded-full`} style={{ width: `${pct}%` }} />
-        )}
-      </div>
-      <span className="w-8 shrink-0 text-right text-[10px] text-on-surface-variant/70 font-mono">
-        {value != null ? value.toFixed(2) : '—'}
-      </span>
-    </div>
-  )
-}
-
 // ── 결과 카드 (admin.html card / avCard 구조 대응) ────────
 function ResultCard({ result, rank, onClick }) {
-  const meta       = getTypeMeta(result.file_type)
-  const conf       = result.confidence ?? result.similarity ?? 0
-  const confPct    = Math.round(conf * 100)
   const isAV       = result.file_type === 'video' || result.file_type === 'audio'
   const hasPreview = (result.file_type === 'image' || result.file_type === 'doc') && result.preview_url
   const [imgError, setImgError] = useState(false)
   const playerRef  = useRef(null)
 
-  // 점수 필드
-  const dense   = result.dense   ?? null
-  const lexical = result.lexical ?? null
-  const asf     = result.asf     ?? null
+  // 점수 계산 (admin.html 동일)
+  const conf    = result.confidence ?? result.similarity ?? 0
+  const confPct = (conf * 100).toFixed(1)
+  const dense   = result.dense ?? null
+  const rerank  = result.rerank ?? null
   const zScore  = result.z_score ?? null
-  const rerank  = result.rerank  ?? null
 
-  // 신뢰도 색상
-  const confCls = conf >= 0.8 ? 'text-emerald-400' : conf >= 0.3 ? 'text-primary' : 'text-red-400'
+  const clamp01 = x => (x == null || isNaN(x)) ? null : Math.max(0, Math.min(1, x))
+  const sigm    = x => 1 / (1 + Math.exp(-x))
+  const sim     = clamp01(dense) != null ? clamp01(dense).toFixed(3) : '—'
+  const acc     = rerank != null
+    ? sigm(rerank).toFixed(3)
+    : Math.max(0, Math.min(1, ((zScore ?? 0) + 3) / 6)).toFixed(3)
 
-  // AV 스트림 URL
-  const streamUrl = isAV ? avStreamUrl(result) : null
+  const streamUrl  = isAV ? avStreamUrl(result) : null
+  const domainLabel = result.trichef_domain ?? result.file_type ?? 'unknown'
+  const segments   = result.segments ?? []
 
-  // 세그먼트
-  const segments = result.segments ?? []
-  const topSegs  = segments.slice(0, 5)
-  const topText  = topSegs[0]
-    ? (topSegs[0].preview || topSegs[0].text || topSegs[0].caption || '')
-    : ''
+  const DOMAIN_CLS = {
+    image:    'bg-[#065f46] text-[#d1fae5] border-[#10b981]',
+    doc_page: 'bg-[#5b21b6] text-[#ede9fe] border-[#8b5cf6]',
+    movie:    'bg-[#7c2d12] text-[#ffedd5] border-[#ea580c]',
+    music:    'bg-[#1e40af] text-[#dbeafe] border-[#3b82f6]',
+  }
 
   const seekTo = (t) => {
     const p = playerRef.current
@@ -148,163 +132,120 @@ function ResultCard({ result, rank, onClick }) {
     p.play().catch(() => {})
   }
 
-  // rerank: logit → sigmoid
-  const rerankPct = rerank != null ? 1 / (1 + Math.exp(-rerank)) : null
-
   return (
-    <div className="flex-none w-[420px] snap-start">
-      <div
-        onClick={isAV ? undefined : onClick}
-        className={`bg-surface-container-high rounded-[1.5rem] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.3)] border border-outline-variant/5 relative transition-all
-          ${isAV ? '' : 'cursor-pointer hover:border-primary/20 hover:shadow-primary/10'}`}
-      >
-        {/* 랭크 배지 */}
-        <div className="absolute top-2 left-2 z-20 px-1.5 py-0.5 rounded bg-black/70 text-white text-[10px] font-bold leading-none">
-          #{rank}
-        </div>
+    <div
+      onClick={isAV ? undefined : onClick}
+      className={`bg-[#1e293b] border border-[#334155] rounded-[10px] overflow-hidden flex flex-col relative transition-transform duration-150
+        ${isAV ? '' : 'cursor-pointer hover:-translate-y-0.5 hover:border-[#059669]'}`}
+    >
+      {/* 랭크 배지 */}
+      <div className="absolute top-2 left-2 z-20 bg-[#059669] text-white min-w-[32px] h-7 px-2 rounded-full flex items-center justify-center font-bold text-xs">
+        #{rank}
+      </div>
 
-        {/* ── AV: 인라인 플레이어 ── */}
-        {isAV && (
-          <div className="w-full bg-black/80" onClick={e => e.stopPropagation()}>
-            {result.file_type === 'video' ? (
-              <video
-                ref={playerRef}
-                src={streamUrl}
-                controls
-                preload="metadata"
-                className="w-full max-h-[200px] object-contain"
-                onError={() => {}}
-              />
-            ) : (
-              <div className="flex flex-col items-center justify-center px-4 pt-8 pb-4 gap-3">
-                <span className="material-symbols-outlined text-amber-400 text-4xl" style={{ fontVariationSettings: '"FILL" 1' }}>volume_up</span>
-                <audio
-                  ref={playerRef}
-                  src={streamUrl}
-                  controls
-                  preload="metadata"
-                  className="w-full"
-                  onError={() => {}}
-                />
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ── 이미지·문서: 썸네일 ── */}
-        {!isAV && (
-          <div className={`relative h-[180px] flex items-center justify-center overflow-hidden
-            ${hasPreview && !imgError ? 'bg-black' : `bg-gradient-to-br ${meta.grad}`}`}>
-            {hasPreview && !imgError ? (
-              <img
-                src={`${API_BASE}${result.preview_url}`}
-                alt={result.file_name}
-                className="w-full h-full object-contain"
-                onError={() => setImgError(true)}
-              />
-            ) : (
-              <span className="material-symbols-outlined text-white/20 text-[64px]" style={{ fontVariationSettings: '"FILL" 1' }}>{meta.icon}</span>
-            )}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent pointer-events-none" />
-          </div>
-        )}
-
-        {/* ── 바디 ── */}
-        <div className="p-4 space-y-3">
-
-          {/* 배지 */}
-          <div className="flex flex-wrap gap-1.5">
-            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${meta.color} bg-white/5 border-white/10`}>
-              {meta.label}
-            </span>
-            {isAV && (
-              <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase border text-on-surface-variant/70 bg-white/5 border-white/10">
-                세그 {segments.length}
-              </span>
-            )}
-          </div>
-
-          {/* 파일명 */}
-          <div className="text-sm font-bold text-on-surface truncate" title={result.file_name}>
-            {result.file_name}
-          </div>
-
-          {/* 경로 */}
-          <div className="text-[10px] font-mono text-on-surface-variant/40 truncate" title={result.file_path}>
-            {result.file_path}
-          </div>
-
-          {/* 메트릭 그리드 (6칸 2열) */}
-          <div className="grid grid-cols-3 gap-1">
-            {[
-              ['신뢰도', `${confPct}%`,                    confCls],
-              ['dense',   dense   != null ? dense.toFixed(3)   : '—', 'text-on-surface'],
-              ['lexical', lexical != null ? lexical.toFixed(3) : '—', 'text-on-surface'],
-              ['ASF',     asf     != null ? asf.toFixed(3)     : '—', 'text-on-surface'],
-              ['rerank',  rerank  != null ? rerank.toFixed(2)  : '—', 'text-on-surface'],
-              ['z',       zScore  != null ? zScore.toFixed(2)  : '—', 'text-on-surface'],
-            ].map(([k, v, cls]) => (
-              <div key={k} className="bg-surface-container-highest/40 rounded-lg px-2 py-1.5">
-                <div className="text-[9px] text-on-surface-variant/40 uppercase tracking-wider mb-0.5">{k}</div>
-                <div className={`text-xs font-bold font-mono ${cls}`}>{v}</div>
-              </div>
-            ))}
-          </div>
-
-          {/* 점수 바 */}
-          <div className="space-y-1">
-            <ScoreBar label="dense"  value={dense}      colorClass="bg-gradient-to-r from-emerald-600 to-emerald-400" />
-            <ScoreBar label="lex"    value={lexical}    colorClass="bg-gradient-to-r from-blue-600 to-blue-400" />
-            <ScoreBar label="asf"    value={asf}        colorClass="bg-gradient-to-r from-violet-600 to-violet-400" />
-            <ScoreBar label="rerank" value={rerankPct}  colorClass="bg-gradient-to-r from-orange-600 to-orange-400" />
-          </div>
-
-          {/* AV: 세그먼트 버튼 + 최상위 발췌 */}
-          {isAV ? (
-            <>
-              {topSegs.length > 0 && (
-                <div className="flex flex-wrap gap-1" onClick={e => e.stopPropagation()}>
-                  {topSegs.map((s, i) => {
-                    const t0 = s.start ?? s.start_sec ?? 0
-                    const t1 = s.end   ?? s.end_sec   ?? 0
-                    const sc = s.score ?? 0
-                    return (
-                      <button
-                        key={i}
-                        onClick={() => seekTo(t0)}
-                        title={s.text || s.caption || ''}
-                        className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-surface-container-highest border border-outline-variant/20 hover:border-primary/40 hover:bg-primary/10 text-on-surface-variant hover:text-primary transition-all"
-                      >
-                        {fmtTime(t0)}-{fmtTime(t1)} · {sc.toFixed(3)}
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-              {topText && (
-                <p className="text-[11px] text-on-surface-variant/70 leading-relaxed line-clamp-2">
-                  {topText}
-                </p>
-              )}
-            </>
+      {/* AV: 플레이어 */}
+      {isAV && (
+        <div className="px-3 py-2 bg-[#0b1220] border-b border-[#334155]" onClick={e => e.stopPropagation()}>
+          {result.file_type === 'video' ? (
+            <video ref={playerRef} src={streamUrl} controls preload="metadata"
+              className="w-full block outline-none bg-black" style={{ maxHeight: '200px' }} />
           ) : (
-            /* 이미지·문서: 스니펫 발췌 */
-            result.snippet ? (
-              <p className="text-[11px] text-on-surface-variant/70 leading-relaxed line-clamp-2">
-                {result.snippet}
-              </p>
-            ) : null
-          )}
-
-          {/* 하단 액션 (이미지·문서) */}
-          {!isAV && (
-            <div className="pt-2 border-t border-outline-variant/10 flex justify-end">
-              <span className="text-xs font-bold text-primary flex items-center gap-1">
-                열기 <span className="material-symbols-outlined text-base">arrow_forward</span>
-              </span>
-            </div>
+            <audio ref={playerRef} src={streamUrl} controls preload="metadata"
+              className="w-full block outline-none" />
           )}
         </div>
+      )}
+
+      {/* 이미지·문서: 썸네일 */}
+      {!isAV && (
+        <div className="relative h-[200px] bg-[#0b1220] flex items-center justify-center overflow-hidden">
+          {hasPreview && !imgError ? (
+            <img
+              src={`${API_BASE}${result.preview_url}`}
+              alt={result.file_name}
+              className="max-w-full max-h-full object-contain cursor-zoom-in"
+              onError={() => setImgError(true)}
+            />
+          ) : (
+            <span className="text-[#64748b] text-xs">{domainLabel}</span>
+          )}
+        </div>
+      )}
+
+      {/* 바디 */}
+      <div className="p-3 flex flex-col gap-2 flex-1 text-[#e2e8f0]">
+
+        {/* 배지 */}
+        <div className="flex gap-1 flex-wrap">
+          <span className={`text-[10px] px-2 py-0.5 rounded-full border ${DOMAIN_CLS[domainLabel] ?? 'bg-[#0b1220] text-[#64748b] border-[#334155]'}`}>
+            {domainLabel}
+          </span>
+          {isAV && (
+            <span className="text-[10px] px-2 py-0.5 rounded-full border border-[#334155] bg-[#0b1220] text-[#64748b]">
+              세그 {segments.length}
+            </span>
+          )}
+        </div>
+
+        {/* 파일명 */}
+        <div className="font-semibold text-[13px] text-[#f1f5f9] break-all">{result.file_name}</div>
+
+        {/* 경로 */}
+        <div className="text-[11px] text-[#64748b] break-all font-mono">{result.file_path}</div>
+
+        {/* 핵심 3지표 */}
+        <div className="grid grid-cols-3 gap-1.5">
+          {[
+            { label: '신뢰도', value: `${confPct}%`, cls: 'text-[#10b981]' },
+            { label: '정확도', value: acc,            cls: 'text-[#60a5fa]' },
+            { label: '유사도', value: sim,            cls: 'text-[#a78bfa]' },
+          ].map(({ label, value, cls }) => (
+            <div key={label} className="bg-[#0b1220] rounded-md p-1.5 text-center border border-[#334155]">
+              <div className="text-[10px] text-[#64748b] uppercase tracking-wide">{label}</div>
+              <div className={`text-[15px] font-bold mt-0.5 ${cls}`}>{value}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* AV: 상위 구간 재생 + 구간 목록 */}
+        {isAV && segments.length > 0 && (() => {
+          const topStart = segments[0]?.start ?? segments[0]?.start_sec ?? null
+          return (
+            <div onClick={e => e.stopPropagation()}>
+              {topStart != null && (
+                <button
+                  onClick={() => seekTo(topStart)}
+                  className="text-[11px] px-3 py-1 bg-[#059669] text-white rounded font-semibold hover:bg-[#047857] mb-1.5"
+                >
+                  상위 구간 재생 ▶
+                </button>
+              )}
+              <div className="flex flex-col gap-[3px]">
+                {segments.slice(0, 10).map((s, i) => {
+                  const t0 = s.start ?? s.start_sec ?? 0
+                  const t1 = s.end   ?? s.end_sec   ?? 0
+                  const sc = s.score ?? 0
+                  const preview = (s.text || s.stt_text || s.caption || '').slice(0, 80)
+                  return (
+                    <button key={i} onClick={() => seekTo(t0)}
+                      className="flex items-center gap-2 px-2 py-1 bg-[#0b1220] border border-[#334155] rounded text-[11px] overflow-hidden hover:border-[#059669] hover:bg-[#0f2040] text-left w-full">
+                      <span className="text-[#7dd3fc] font-mono font-semibold whitespace-nowrap min-w-[112px]">{fmtTime(t0)} ~ {fmtTime(t1)}</span>
+                      <span className="text-[#10b981] font-mono whitespace-nowrap">s={sc.toFixed(3)}</span>
+                      <span className="text-[#94a3b8] flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{preview}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })()}
+
+        {/* 이미지·문서: 스니펫 */}
+        {!isAV && result.snippet && (
+          <div className="text-[12px] text-[#cbd5e1] bg-[#0b1220] px-2 py-2 rounded border border-[#334155] max-h-[120px] overflow-auto whitespace-pre-wrap">
+            {result.snippet}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -762,7 +703,7 @@ export default function MainSearch() {
 
             {/* 결과 카드 */}
             {!searching && results.length > 0 && (
-              <div className="flex gap-6 overflow-x-auto no-scrollbar pb-12 snap-x snap-mandatory">
+              <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
                 {results.map((r, i) => (
                   <ResultCard key={r.file_path + i} result={r} rank={i + 1} onClick={() => handleSelectFile(r)} />
                 ))}
