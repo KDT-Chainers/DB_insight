@@ -76,9 +76,7 @@ function _startPythonBackend() {
   const candidates = [
     path.join(exeDir, '..', '..', 'backend'),                     // portable: out/ → App/backend
     path.join(exeDir, '..', '..', '..', 'backend'),               // win-unpacked: out/win-unpacked/ → App/backend
-    path.resolve(__dirname, '..', '..', 'backend'),                // 개발 모드
-    'C:\\Honey\\DB_insight\\App\\backend',                         // 로컬 개발 고정 경로
-    'C:\\Program Files\\DB_insight\\App\\backend',                 // 배포 고정 경로
+    path.resolve(__dirname, '..', '..', 'backend'),                // 개발 모드 (소스에서 실행 시)
     path.join(exeDir, 'backend'),                                  // exe 옆 backend/
   ]
   const cwd = candidates.find(d => {

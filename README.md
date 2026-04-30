@@ -99,8 +99,34 @@ DB_insight
 
 ### 사전 조건
 
-- Node.js 설치
-- Python 설치 (PATH에 등록)
+- **Node.js 18+** — https://nodejs.org
+- **Python 3.10+** — https://python.org (PATH 등록 필수)
+- **Git** — https://git-scm.com
+
+---
+
+### Step 0 — 저장소 클론 및 Python 패키지 설치
+
+```bash
+git clone <repo-url>
+cd DB_insight
+```
+
+**① PyTorch 설치 (GPU/CPU에 따라 선택)**
+
+```bash
+# GPU (NVIDIA, CUDA 12.4) — RTX 30/40 시리즈 권장
+pip install torch==2.6.0+cu124 torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+
+# CPU only (GPU 없는 경우 — 임베딩 속도 느림)
+pip install torch torchvision torchaudio
+```
+
+**② 나머지 패키지 설치**
+
+```bash
+pip install -r App/backend/requirements.txt
+```
 
 ---
 
