@@ -1,10 +1,29 @@
 # DI TRI-CHEF Doc / Img 파이프라인 상세 설명서
 
-> 버전: v1-6 (2026-04-27) · 갱신: 2026-04-27 · 브랜치 `feature/trichef-port`
+> 버전: v1-6 (2026-04-29 최종) · 갱신: 2026-04-29 · 브랜치 `feature/trichef-port`
 > 대상 도메인: `doc_page` (PDF/HWP/Office/TXT/CSV/HTML → 페이지 이미지), `image` (원본 이미지)
-> **최신 변경**: 확장자 SSOT (Q1, 1049099) + 평가 라이브러리 통합 (Q3, 73c8bf0) + hybrid θ K-clamp (bdf80af)
-> **v1-2 추가**: MIRACL-ko 외부 검증 (BGE-M3 Im축 nDCG@10=69.9, 평가 인프라 레퍼런스)
-> **v1-6 추가**: MIRACL-ko 자체 재현 nDCG@10=77.82 (ANN→정확 FAISS IndexFlatIP, +7.92pp) · Admin UI 이모지 제거 · 파이프라인 섹션 collapsible 기능 추가
+> **논문 v1-6 정합**: 본 파이프라인은 *Tri-CHEF: Complex-Hermitian Embedding Fusion for Korean Multimodal Retrieval* 논문 v1-6 (arXiv 제출본) 의 §IV 기술과 1:1 일치합니다.
+> **최신 변경 (2026-04-29)**:
+> - 캘리브레이션 실측 재현: 24개 NULL_QUERIES × N_corpus 쌍에서 `random_query_null_v2` 방식으로 약 2.3M raw scores 추출 → 논문 Tab II 정확 매치
+> - Fig 4(a) 3D σ-stratified 시각화: 4 도메인 가우시안이 σ_null 축으로 자연스럽게 층화
+> - 한계 명시: 단일 시드(seed=2026) 평가 — 다중 시드 분산 측정은 후속 작업
+
+## 📌 최종 배포 파이프라인 요약 (논문 §IV)
+
+| 항목 | Doc | Img |
+|---|---|---|
+| **Re 축** | SigLIP2-image (1152d) | SigLIP2-image (1152d) |
+| **Im 축** | BGE-M3 (1024d) — 캡션 20% + 본문 80% (`α_IM=0.20`) | BGE-M3 (1024d) — Qwen2-VL 캡션 |
+| **Z 축** | DINOv2 (1024d) | DINOv2 (1024d) |
+| **Hermitian 점수** | 3축: $\sqrt{A^2+(\alpha B)^2+(\beta C)^2}$, $\alpha=\beta=0.4$ | 동일 |
+| **Sparse (lexical)** | ON | OFF (per-domain gating) |
+| **ASF (bigram)** | OFF (default) | OFF |
+| **τ (FAR=0.05/0.20)** | 0.2051 (FAR=0.05) | 0.2012 (FAR=0.20) |
+| **N_corpus 벡터** | 34,661 (443 파일 × pages) | 2,390 (2,391 파일 - 1 skip) |
+| **μ_null** | 0.1693 | 0.1776 |
+| **σ_null** | 0.0218 | 0.0281 |
+| **LangGraph rewrite** | ❌ (MR-TriCHEF 전용) | ❌ |
+| **BGE Reranker** | ❌ (MR-TriCHEF 전용 placeholder) | ❌ |
 
 ---
 
