@@ -1,10 +1,37 @@
 # MR Tri-CHEF — Movie & Music 검색 구현 로직
 
-> **3축 복소수 검색엔진 (Tri-CHEF)** 의 Movie / Music 도메인 확장 구현 문서.  
-> 작성일: 2026-04-23 · 갱신: 2026-04-27 · 브랜치: `feature/trichef-port`
-> **최신 변경**: 확장자 SSOT (Q1, 1049099) + 평가 라이브러리 통합 (Q3, 73c8bf0) + hybrid θ K-clamp (bdf80af)
-> **v1-2 추가**: MIRACL-ko 평가 인프라 + 텍스트 검색 baseline 비교 참조
-> **v1-6 추가** (2026-04-27): MIRACL-ko BGE-M3 Im축 자체 재현 nDCG@10=77.82 + RTX 4070 최적화 + Music stt_status 3필드 분리 + run_index.py cp949 수정
+> **3축 복소수 검색엔진 (Tri-CHEF)** 의 Movie (Mov) / Music (Rec) 도메인 확장 구현 문서.
+> 작성일: 2026-04-23 · 갱신: 2026-04-29 · 브랜치: `feature/trichef-port`
+> **논문 v1-6 정합**: 본 파이프라인은 *Tri-CHEF: Complex-Hermitian Embedding Fusion for Korean Multimodal Retrieval* 논문 v1-6 (arXiv 제출본) 의 §IV 기술과 1:1 일치합니다.
+> **최신 변경 (2026-04-29)**:
+> - 캘리브레이션 실측 재현: 24개 NULL_QUERIES × N_corpus 쌍에서 `random_query_null_v2` 방식으로 약 2.3M raw scores 추출 → 논문 Tab II 정확 매치
+> - Fig 4 → 2-패널 통합: panel (a) 3D σ-stratified 분포, panel (b) 4-도메인 trajectory + Doc/Img endpoints
+> - 한계 명시: 단일 시드(seed=2026) 평가 — 다중 시드 분산 측정은 후속 작업
+
+## 📌 최종 배포 파이프라인 요약 (논문 §IV)
+
+| 항목 | Mov (Movie) | Rec (Music) |
+|---|---|---|
+| **Re 축** | SigLIP2-image (1152d) | **SigLIP2-text** (1152d) — Whisper STT 입력 |
+| **Im 축** | BGE-M3 (1024d) — Whisper STT | BGE-M3 (1024d) — Whisper STT |
+| **Z 축** | **0** (DINOv2 미사용, 짧은 비디오 프레임/스펙트로그램에 부적합) | **0** (시각 스트림 부재) |
+| **Hermitian 점수** | 2축: $\sqrt{A^2+(\alpha B)^2}$, $\alpha=0.4$ | 동일 (2축) |
+| **Sparse (lexical)** | ON | ON |
+| **ASF (bigram)** | OFF (default) | OFF (default) |
+| **Window unit** | 30s 슬라이딩 + 15s hop, 장면 변화 union | 30s 슬라이딩 + 15s hop |
+| **τ (FAR=0.05)** | 0.2274 | 0.7933 |
+| **N_corpus 벡터** | 45,647 (205 mp4 파일에서 윈도우/프레임 추출) | 11,039 (117 음원 파일에서 윈도우 추출) |
+| **μ_null** | 0.1576 | 0.6809 |
+| **σ_null** | 0.0424 | 0.0683 |
+| **LangGraph rewrite** | ✅ rule-based (한/영 키워드 augment + filler 제거) | ✅ 동일 |
+| **BGE Reranker** | ⚠ Phase 2 placeholder (graph node 존재) | ⚠ 동일 |
+
+**주의**: Rec의 Re 축 SigLIP2-text 사용은 audio encoder 부재로 인한 임시 대체. CLAP-style native audio encoder는 후속 작업.
+
+**Mov vs Rec 비대칭** (논문 §III-F):
+- Mov μ_null=0.158 vs Rec μ_null=0.681 → **4.3× 비대칭**
+- 원인: Whisper STT가 인접 음원 윈도우에서 유사한 텍스트를 자주 생성 → cross-encoder cosine 자연 상승
+- 대응: 도메인별 절대 임계값 필수
 
 ---
 
