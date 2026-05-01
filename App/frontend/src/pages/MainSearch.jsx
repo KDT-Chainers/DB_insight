@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import SearchSidebar from '../components/SearchSidebar'
 import { useSidebar } from '../context/SidebarContext'
 import { API_BASE } from '../api'
@@ -57,19 +57,105 @@ function useSpeechRecognition({ onFinal }) {
   return { listening, interim, toggle }
 }
 
-// ── 검색 API ────────────────────────────────────────────
-async function searchFiles(query, topK = 20) {
-  const res = await fetch(`${API_BASE}/api/search?q=${encodeURIComponent(query)}&top_k=${topK}`)
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+// ── 검색 API (admin.html 과 동일 엔드포인트) ─────────────
+function _mapInspectRow(row, domain) {
+  return {
+    file_path:      row.source_path || row.id,
+    file_name:      row.filename || (row.id || '').split('/').pop(),
+    file_type:      domain === 'image' ? 'image' : 'doc',
+    confidence:     row.confidence ?? 0,
+    similarity:     row.confidence ?? 0,
+    dense:          row.dense ?? 0,
+    snippet:        '',
+    preview_url:    `/api/trichef/file?domain=${domain}&path=${encodeURIComponent(row.id)}`,
+    segments:       [],
+    trichef_id:     row.id,
+    trichef_domain: domain,
+  }
+}
+
+async function searchFiles(query, topK = 30) {
+  const inspectOpts = (domain) => ({
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      query, domain, top_n: topK,
+      use_lexical: true, use_asf: true,
+      use_rerank: false,
+    }),
+  })
+  const avInspectOpts = (domain) => ({
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query, domain, top_n: topK, top_segments: 5 }),
+  })
+
+  const [imgRes, docRes, movieRes, musicRes] = await Promise.all([
+    fetch(`${API_BASE}/api/admin/inspect`,    inspectOpts('image')),
+    fetch(`${API_BASE}/api/admin/inspect`,    inspectOpts('doc_page')),
+    fetch(`${API_BASE}/api/admin/inspect_av`, avInspectOpts('movie')),
+    fetch(`${API_BASE}/api/admin/inspect_av`, avInspectOpts('music')),
+  ])
+
+  const results = []
+
+  if (imgRes.ok) {
+    const d = await imgRes.json()
+    results.push(...(d.rows ?? []).map(r => _mapInspectRow(r, 'image')))
+  }
+  if (docRes.ok) {
+    const d = await docRes.json()
+    results.push(...(d.rows ?? []).map(r => _mapInspectRow(r, 'doc_page')))
+  }
+  for (const [res, fileType, avDomain] of [[movieRes, 'video', 'movie'], [musicRes, 'audio', 'music']]) {
+    if (!res.ok) continue
+    const d = await res.json()
+    results.push(...(d.files ?? []).map(r => {
+      const topSeg = r.segments?.[0] ?? {}
+      return {
+        file_path:      r.file_path,
+        file_name:      r.file_name,
+        file_type:      fileType,
+        confidence:     r.confidence ?? 0,
+        similarity:     r.confidence ?? 0,
+        dense:          r.score ?? 0,
+        snippet:        topSeg.preview || topSeg.text || topSeg.caption || '',
+        preview_url:    null,
+        segments:       r.segments ?? [],
+        trichef_domain: avDomain,
+      }
+    }))
+  }
+
+  results.sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0) || (b.dense ?? 0) - (a.dense ?? 0))
+  return results.slice(0, topK)
+}
+
+// ── 이미지 파일 → 이미지 검색 ──────────────────────────
+async function searchByImage(file, topK = 20) {
+  const formData = new FormData()
+  formData.append('image', file)
+  formData.append('domain', 'image')
+  formData.append('topk', String(topK))
+  const res = await fetch(`${API_BASE}/api/trichef/search_by_image`, {
+    method: 'POST',
+    body: formData,
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.error || `HTTP ${res.status}`)
+  }
   const data = await res.json()
-  if (data.error) throw new Error(data.error)
-  const results = data.results ?? []
-  // confidence 정규화: confidence 없으면 similarity 사용
-  return results.map(r => ({
-    ...r,
-    confidence: r.confidence ?? r.similarity ?? 0,
-    similarity:  r.similarity  ?? r.confidence ?? 0,
-    segments:    r.segments    ?? [],
+  return (data.top ?? []).map(r => ({
+    file_path:   r.id,
+    file_name:   (r.id || '').split('/').pop(),
+    file_type:   'image',
+    confidence:  r.confidence ?? 0,
+    similarity:  r.confidence ?? 0,
+    dense:       r.dense ?? 0,
+    snippet:     r.caption ? `캡션: ${r.caption}` : '',
+    preview_url: r.preview_url ?? null,
+    segments:    [],
   }))
 }
 
@@ -354,10 +440,31 @@ function AVDetailContent({ result }) {
   )
 }
 
+// ── 라디얼 메뉴 아이템 ──────────────────────────────────
+const RADIAL_ITEMS = [
+  { icon: 'image_search', label: '이미지 검색', action: 'img_search',    color: 'from-emerald-500 to-teal-500' },
+  { icon: 'audiotrack',   label: 'BGM 검색',    action: 'bgm_search',    color: 'from-pink-500 to-rose-500' },
+  { icon: 'description',  label: '문서',         action: 'filter_doc',    color: 'from-blue-500 to-indigo-500' },
+  { icon: 'movie',        label: '동영상',       action: 'filter_video',  color: 'from-purple-500 to-violet-500' },
+  { icon: 'image',        label: '이미지',       action: 'filter_image',  color: 'from-green-500 to-emerald-500' },
+  { icon: 'volume_up',    label: '음성',         action: 'filter_audio',  color: 'from-amber-500 to-orange-500' },
+]
+
+// 6개를 부채꼴로 배치 (위쪽 반원, ±75° 범위)
+const RADIAL_POSITIONS = (() => {
+  const R = 115
+  const angles = [-75, -45, -15, 15, 45, 75]
+  return angles.map(a => {
+    const rad = (a * Math.PI) / 180
+    return { x: R * Math.sin(rad), y: -R * Math.cos(rad) }
+  })
+})()
+
 // ── 메인 컴포넌트 ────────────────────────────────────────
 export default function MainSearch() {
-  const navigate = useNavigate()
-  const { open } = useSidebar()
+  const navigate  = useNavigate()
+  const location  = useLocation()
+  const { open }  = useSidebar()
 
   // view: 'home' | 'results' | 'detail'
   const [view, setView] = useState('home')
@@ -371,6 +478,28 @@ export default function MainSearch() {
   const [results, setResults] = useState([])
   const [searching, setSearching] = useState(false)
   const [searchError, setSearchError] = useState('')
+  const [topK, setTopK] = useState(30)
+
+  // 라디얼 메뉴
+  const [radialOpen, setRadialOpen] = useState(false)
+  const [typeFilter, setTypeFilter] = useState(null)   // null | 'doc' | 'video' | 'image' | 'audio'
+  const radialRef   = useRef(null)
+  const imgInputRef = useRef(null)
+  const bgmInputRef = useRef(null)
+
+  // 이미지 업로드 모달
+  const [imgModalOpen, setImgModalOpen] = useState(false)
+  const [imgPreview,   setImgPreview]   = useState(null)   // base64 미리보기
+  const [imgFile,      setImgFile]      = useState(null)   // File 객체
+  const [dragOver,     setDragOver]     = useState(false)
+
+  // 이미지 쿼리 상태 (텍스트 쿼리와 분리)
+  const [imgQuery, setImgQuery] = useState(null)   // { file, preview } | null
+
+  // 요약
+  const [summary, setSummary]               = useState(null)
+  const [summaryLoading, setSummaryLoading] = useState(false)
+
 
   // home → results 애니메이션
   const [flyStyle, setFlyStyle] = useState(null)
@@ -400,6 +529,119 @@ export default function MainSearch() {
   const leftEdge  = open ? 'left-64' : 'left-0'
   const sidebarPx = open ? 256 : 0
 
+  // 라디얼 메뉴 외부 클릭 닫기
+  useEffect(() => {
+    if (!radialOpen) return
+    const handleClick = (e) => {
+      if (radialRef.current && !radialRef.current.contains(e.target)) {
+        setRadialOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [radialOpen])
+
+  // 라디얼 메뉴 액션 핸들러
+  const handleRadialAction = (action) => {
+    setRadialOpen(false)
+    if (action === 'img_search') {
+      setImgFile(null)
+      setImgPreview(null)
+      setImgModalOpen(true)
+      return
+    }
+    if (action === 'bgm_search') {
+      bgmInputRef.current?.click()
+      return
+    }
+    const filterMap = {
+      filter_doc:   'doc',
+      filter_video: 'video',
+      filter_image: 'image',
+      filter_audio: 'audio',
+    }
+    const ft = filterMap[action]
+    setTypeFilter(prev => (prev === ft ? null : ft))  // 같은 필터 재클릭 시 해제
+  }
+
+  // 이미지 파일 → 미리보기 세팅 (모달용)
+  const applyImgFile = (file) => {
+    if (!file || !file.type.startsWith('image/')) return
+    setImgFile(file)
+    const reader = new FileReader()
+    reader.onload = (e) => setImgPreview(e.target.result)
+    reader.readAsDataURL(file)
+  }
+
+  // 모달 드래그앤드롭
+  const handleModalDrop = (e) => {
+    e.preventDefault()
+    setDragOver(false)
+    const file = e.dataTransfer.files?.[0]
+    if (file) applyImgFile(file)
+  }
+
+  // hidden input 변경 (모달 내부 클릭 선택)
+  const handleImgFile = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+    applyImgFile(file)
+  }
+
+  // 모달 "검색" 버튼 → 실제 검색 실행
+  const runImgSearch = async () => {
+    if (!imgFile) return
+    setImgModalOpen(false)
+
+    // 텍스트 쿼리 초기화, 이미지 쿼리로 전환
+    setImgQuery({ file: imgFile, preview: imgPreview })
+    setQuery('')
+    setInputValue('')
+    setSearching(true)
+    setSearchError('')
+    setTypeFilter('image')
+
+    // home → results 전환
+    if (view === 'home') {
+      setHomeExiting(true)
+      setTimeout(() => { setView('results'); setHomeExiting(false); setResultsReady(true) }, 320)
+    }
+
+    try {
+      const data = await searchByImage(imgFile, topK)
+      setResults(data)
+      fetch(`${API_BASE}/api/history`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: `[이미지] ${imgFile.name}`, method: 'image_search', result_count: data.length }),
+      }).catch(() => {})
+    } catch (err) {
+      setSearchError(err.message)
+      setResults([])
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  // BGM 파일 선택 핸들러
+  const handleBgmFile = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+    alert(`BGM 검색: ${file.name}\n(백엔드 오디오 쿼리 API 연동 예정)`)
+  }
+
+  // 사이드바 검색 기록 클릭 시 자동 검색 (location.state.query)
+  useEffect(() => {
+    const q = location.state?.query
+    if (q) {
+      window.history.replaceState({}, '')   // state 소비
+      doSearchRef.current?.(q)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state])
+
   // 뒤로가기
   useEffect(() => {
     const handlePopState = () => {
@@ -416,18 +658,25 @@ export default function MainSearch() {
     setSearching(true)
     setSearchError('')
     try {
-      const data = await searchFiles(q)
+      const data = await searchFiles(q, topK)
       setResults(data)
+      // 검색 기록 저장
+      fetch(`${API_BASE}/api/history`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: q, method: 'trichef', result_count: data.length }),
+      }).catch(() => {})
     } catch (e) {
       setSearchError(e.message)
       setResults([])
     } finally {
       setSearching(false)
     }
-  }, [])
+  }, [topK])
 
   const doSearch = (q) => {
     if (!q.trim() || aiTransitioning) return
+    setImgQuery(null)   // 텍스트 검색 시 이미지 쿼리 해제
     setQuery(q)
     setInputValue(q)
 
@@ -468,6 +717,7 @@ export default function MainSearch() {
     setSelectedFile(file)
     setFileDetail(null)
     setDetailVisible(false)
+    setSummary(null)          // 파일 바뀌면 요약 초기화
     setView('detail')
     window.history.pushState({ view: 'detail' }, '')
     requestAnimationFrame(() => requestAnimationFrame(() => setDetailVisible(true)))
@@ -483,6 +733,21 @@ export default function MainSearch() {
     }
   }
 
+  const handleSummarize = async (file) => {
+    if (summaryLoading) return
+    setSummaryLoading(true)
+    setSummary(null)
+    try {
+      const res  = await fetch(`${API_BASE}/api/files/summarize?path=${encodeURIComponent(file.file_path)}`)
+      const data = await res.json()
+      setSummary(data)
+    } catch (e) {
+      setSummary({ error: e.message })
+    } finally {
+      setSummaryLoading(false)
+    }
+  }
+
   const handleBackToResults = () => { setDetailVisible(false); setTimeout(() => setView('results'), 320) }
 
   const handleGoToAI = () => {
@@ -492,9 +757,135 @@ export default function MainSearch() {
     setTimeout(() => navigate('/ai'), 900)
   }
 
+  // 타입 필터 적용된 결과
+  const filteredResults = typeFilter
+    ? results.filter(r => {
+        if (typeFilter === 'video') return r.file_type === 'video' || r.file_type === 'movie'
+        if (typeFilter === 'audio') return r.file_type === 'audio' || r.file_type === 'music'
+        return r.file_type === typeFilter
+      })
+    : results
+
   return (
     <div className={view === 'home' ? 'overflow-hidden h-screen grid-bg relative' : 'min-h-screen relative bg-background text-on-surface'}
       style={view !== 'home' ? { backgroundImage: 'radial-gradient(circle at 2px 2px, rgba(65,71,91,0.15) 1px, transparent 0)', backgroundSize: '32px 32px' } : {}}>
+      {/* 숨김 파일 입력 (이미지·BGM 검색용) */}
+      <input ref={imgInputRef} type="file" accept="image/*" className="hidden" onChange={handleImgFile} />
+      <input ref={bgmInputRef} type="file" accept="audio/*" className="hidden" onChange={handleBgmFile} />
+
+      {/* ── 이미지 업로드 모달 ── */}
+      {imgModalOpen && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center"
+          style={{ background: 'rgba(4,8,20,0.85)', backdropFilter: 'blur(12px)' }}
+          onClick={() => setImgModalOpen(false)}
+        >
+          <div
+            className="relative w-[480px] max-w-[92vw] rounded-2xl border border-outline-variant/20 bg-[#0c1326] shadow-[0_0_80px_rgba(133,173,255,0.12)] flex flex-col overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* 헤더 */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-outline-variant/15">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-white text-base" style={{ fontVariationSettings: '"FILL" 1' }}>image_search</span>
+                </div>
+                <span className="font-bold text-on-surface">이미지 검색</span>
+              </div>
+              <button
+                onClick={() => setImgModalOpen(false)}
+                className="w-7 h-7 rounded-lg flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-all"
+              >
+                <span className="material-symbols-outlined text-lg">close</span>
+              </button>
+            </div>
+
+            {/* 본문 */}
+            <div className="p-6 flex flex-col gap-4">
+              {/* 드래그앤드롭 존 */}
+              <div
+                onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={handleModalDrop}
+                onClick={() => imgInputRef.current?.click()}
+                className={`relative flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed transition-all duration-200 cursor-pointer select-none overflow-hidden
+                  ${dragOver
+                    ? 'border-primary bg-primary/10 scale-[1.01]'
+                    : 'border-outline-variant/30 hover:border-primary/50 hover:bg-primary/5'
+                  }`}
+                style={{ minHeight: imgPreview ? 'auto' : '220px' }}
+              >
+                {imgPreview ? (
+                  /* 미리보기 */
+                  <>
+                    <img
+                      src={imgPreview}
+                      alt="미리보기"
+                      className="max-h-[260px] max-w-full object-contain rounded-lg"
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity bg-black/50 rounded-xl">
+                      <span className="text-white text-sm font-semibold flex items-center gap-2">
+                        <span className="material-symbols-outlined text-lg">swap_horiz</span>
+                        이미지 변경
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  /* 빈 상태 */
+                  <>
+                    <div className={`w-16 h-16 rounded-full flex items-center justify-center transition-all
+                      ${dragOver ? 'bg-primary/20' : 'bg-surface-container-high'}`}>
+                      <span className={`material-symbols-outlined text-4xl transition-colors
+                        ${dragOver ? 'text-primary' : 'text-on-surface-variant/50'}`}
+                        style={{ fontVariationSettings: '"FILL" 0' }}>
+                        upload_file
+                      </span>
+                    </div>
+                    <p className="text-on-surface font-semibold text-sm">
+                      이미지를 업로드하세요
+                    </p>
+                    <p className="text-on-surface-variant text-xs text-center leading-relaxed">
+                      이미지를 끌어다 놓거나<br />
+                      <span className="text-primary underline underline-offset-2">클릭하여 이미지 선택</span>
+                    </p>
+                    <p className="text-on-surface-variant/40 text-[10px]">
+                      JPG · PNG · WEBP · HEIC 지원
+                    </p>
+                  </>
+                )}
+              </div>
+
+              {/* 파일명 표시 */}
+              {imgFile && (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-container-high">
+                  <span className="material-symbols-outlined text-emerald-400 text-base">check_circle</span>
+                  <span className="text-sm text-on-surface truncate flex-1">{imgFile.name}</span>
+                  <button
+                    onClick={() => { setImgFile(null); setImgPreview(null) }}
+                    className="text-on-surface-variant/40 hover:text-red-400 transition-colors shrink-0"
+                  >
+                    <span className="material-symbols-outlined text-base">close</span>
+                  </button>
+                </div>
+              )}
+
+              {/* 검색 버튼 */}
+              <button
+                onClick={runImgSearch}
+                disabled={!imgFile}
+                className={`w-full py-3 rounded-xl font-bold text-sm tracking-wide flex items-center justify-center gap-2 transition-all duration-200
+                  ${imgFile
+                    ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-500 hover:to-teal-500 shadow-[0_4px_20px_rgba(16,185,129,0.25)]'
+                    : 'bg-surface-container-high text-on-surface-variant/40 cursor-not-allowed'
+                  }`}
+              >
+                <span className="material-symbols-outlined text-base" style={{ fontVariationSettings: '"FILL" 1' }}>image_search</span>
+                이미지로 검색
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* AI 포털 전환 오버레이 */}
       {aiTransitioning && (
@@ -537,9 +928,56 @@ export default function MainSearch() {
                 style={homeExiting ? { visibility: 'hidden' } : {}}>
                 <div className={`glass-effect rounded-full p-2 flex items-center gap-4 shadow-[0_0_50px_rgba(133,173,255,0.1)] transition-all duration-300
                   ${listening ? 'border border-red-400/60 shadow-[0_0_30px_rgba(248,113,113,0.2)]' : 'border border-outline-variant/20 hover:border-primary/40'}`}>
-                  <button type="button" className="w-12 h-12 rounded-full bg-gradient-to-r from-primary to-secondary flex items-center justify-center text-on-primary-fixed shadow-lg active:scale-90 transition-transform shrink-0">
-                    <span className="material-symbols-outlined font-bold">add</span>
-                  </button>
+                  {/* ── + 버튼 + 라디얼 메뉴 ── */}
+                  <div ref={radialRef} className="relative shrink-0">
+                    {/* 부채꼴 메뉴 아이템 */}
+                    {RADIAL_ITEMS.map((item, i) => {
+                      const { x, y } = RADIAL_POSITIONS[i]
+                      const isActive = item.action.startsWith('filter_') &&
+                        typeFilter === item.action.replace('filter_', '')
+                      return (
+                        <div
+                          key={item.action}
+                          onClick={() => handleRadialAction(item.action)}
+                          className="absolute z-50 flex flex-col items-center gap-1 cursor-pointer"
+                          style={{
+                            left: '50%',
+                            top:  '50%',
+                            transform: radialOpen
+                              ? `translate(calc(-50% + ${x}px), calc(-50% + ${y}px)) scale(1)`
+                              : `translate(-50%, -50%) scale(0.4)`,
+                            opacity:    radialOpen ? 1 : 0,
+                            pointerEvents: radialOpen ? 'auto' : 'none',
+                            transition: `transform 0.28s cubic-bezier(0.34,1.56,0.64,1) ${i * 30}ms,
+                                         opacity   0.2s ease ${i * 20}ms`,
+                          }}
+                        >
+                          <div className={`w-11 h-11 rounded-full bg-gradient-to-br ${item.color}
+                            flex items-center justify-center shadow-lg
+                            hover:scale-110 active:scale-95 transition-transform duration-150
+                            ${isActive ? 'ring-2 ring-white/70' : ''}`}>
+                            <span className="material-symbols-outlined text-white text-lg">{item.icon}</span>
+                          </div>
+                          <span className="text-[9px] font-bold text-white/90 bg-slate-900/80 px-1.5 py-0.5 rounded-full whitespace-nowrap shadow">
+                            {item.label}
+                          </span>
+                        </div>
+                      )
+                    })}
+                    {/* + 버튼 */}
+                    <button
+                      type="button"
+                      onClick={() => setRadialOpen(o => !o)}
+                      className={`w-12 h-12 rounded-full bg-gradient-to-r from-primary to-secondary flex items-center justify-center text-on-primary-fixed shadow-lg transition-all duration-300
+                        ${radialOpen ? 'rotate-45 scale-110 shadow-primary/40' : 'active:scale-90'}`}
+                    >
+                      <span className="material-symbols-outlined font-bold">add</span>
+                    </button>
+                    {/* 활성 필터 배지 */}
+                    {typeFilter && (
+                      <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-primary border border-surface-container-low" />
+                    )}
+                  </div>
                   <div className="flex-1 relative">
                     <input
                       type="text"
@@ -569,7 +1007,23 @@ export default function MainSearch() {
                 </div>
               </form>
 
-              <div className="mt-10 flex justify-center" style={homeExiting ? { visibility: 'hidden' } : {}}>
+              {/* ── 결과 수 선택 ── */}
+              <div className="mt-4 flex items-center justify-center gap-2 text-xs text-on-surface-variant"
+                style={homeExiting ? { visibility: 'hidden' } : {}}>
+                <span className="opacity-50">결과 수</span>
+                {[10, 20, 30, 50].map(n => (
+                  <button key={n} type="button" onClick={() => setTopK(n)}
+                    className={`px-3 py-1 rounded-full border transition-colors
+                      ${topK === n
+                        ? 'border-primary text-primary bg-primary/10'
+                        : 'border-outline-variant/20 hover:border-primary/40 hover:text-on-surface'
+                      }`}>
+                    {n}
+                  </button>
+                ))}
+              </div>
+
+              <div className="mt-8 flex justify-center" style={homeExiting ? { visibility: 'hidden' } : {}}>
                 <button ref={btnRef} onClick={handleGoToAI} disabled={aiTransitioning}
                   className="px-8 py-3 rounded-full bg-surface-container-high border border-outline-variant/20 flex items-center gap-3 text-lg font-bold tracking-widest uppercase text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest transition-all duration-300 group glow-primary disabled:pointer-events-none">
                   <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
@@ -612,39 +1066,71 @@ export default function MainSearch() {
       {/* ════ RESULTS / DETAIL 공통 헤더 ════ */}
       {view !== 'home' && (
         <header className={`fixed top-8 ${leftEdge} right-0 z-40 bg-slate-950/60 backdrop-blur-xl flex items-center px-6 py-3 gap-4 border-b border-outline-variant/10 shadow-[0_0_20px_rgba(133,173,255,0.1)] transition-[left] duration-300`}>
-          <button onClick={() => { setView('home'); setInputValue(''); setResults([]) }}
+          <button onClick={() => { setView('home'); setInputValue(''); setResults([]); setImgQuery(null) }}
             className={`text-lg font-bold tracking-tighter bg-gradient-to-r from-blue-300 to-purple-400 bg-clip-text text-transparent shrink-0 hover:opacity-70 transition-opacity ${!open ? 'ml-10' : ''}`}>
             DB_insight
           </button>
 
           <form onSubmit={handleSearch} className="flex-1">
             <div className={`flex items-center rounded-full border px-4 py-2 gap-3 transition-all
-              ${listening ? 'bg-red-500/5 border-red-400/50 shadow-[0_0_15px_rgba(248,113,113,0.15)]' : 'bg-surface-container-high border-outline-variant/20 focus-within:border-primary/50'}`}>
-              <span className={`material-symbols-outlined text-lg ${listening ? 'text-red-400' : 'text-primary'}`}>{listening ? 'mic' : 'search'}</span>
-              <div className="flex-1 relative">
-                <input
-                  className="bg-transparent border-none focus:ring-0 w-full text-on-surface placeholder-on-surface-variant text-lg outline-none"
-                  placeholder={listening ? '' : '인텔리전스에 질문하세요...'}
-                  value={listening ? '' : inputValue}
-                  onChange={(e) => !listening && setInputValue(e.target.value)}
-                  readOnly={listening}
-                />
-                {listening && (
-                  <div className="absolute inset-0 flex items-center gap-2 pointer-events-none">
-                    <span className="text-red-400 text-lg truncate">{interim || '듣는 중...'}</span>
-                    <div className="flex items-center gap-[2px] shrink-0">
-                      {[0,0.1,0.2,0.1,0].map((d,i) => (
-                        <div key={i} className="w-[2px] bg-red-400 rounded-full animate-bounce"
-                          style={{ height: `${[6,10,14,10,6][i]}px`, animationDelay: `${d}s`, animationDuration: '0.7s' }} />
-                      ))}
-                    </div>
+              ${listening
+                ? 'bg-red-500/5 border-red-400/50 shadow-[0_0_15px_rgba(248,113,113,0.15)]'
+                : imgQuery
+                  ? 'bg-surface-container-high border-emerald-500/40'
+                  : 'bg-surface-container-high border-outline-variant/20 focus-within:border-primary/50'
+              }`}>
+
+              {imgQuery ? (
+                /* ── 이미지 쿼리 칩 ── */
+                <>
+                  <img
+                    src={imgQuery.preview}
+                    alt="쿼리 이미지"
+                    className="w-7 h-7 rounded-md object-cover shrink-0 ring-1 ring-emerald-500/50"
+                  />
+                  <span className="text-emerald-400 text-xs font-bold uppercase tracking-wider shrink-0">이미지 검색</span>
+                  <span className="text-on-surface-variant text-sm truncate flex-1">{imgQuery.file.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => { setImgQuery(null); setResults([]); setView('home') }}
+                    className="shrink-0 text-on-surface-variant/40 hover:text-red-400 transition-colors"
+                    title="이미지 쿼리 해제"
+                  >
+                    <span className="material-symbols-outlined text-lg">close</span>
+                  </button>
+                </>
+              ) : (
+                /* ── 텍스트 입력 ── */
+                <>
+                  <span className={`material-symbols-outlined text-lg ${listening ? 'text-red-400' : 'text-primary'}`}>
+                    {listening ? 'mic' : 'search'}
+                  </span>
+                  <div className="flex-1 relative">
+                    <input
+                      className="bg-transparent border-none focus:ring-0 w-full text-on-surface placeholder-on-surface-variant text-lg outline-none"
+                      placeholder={listening ? '' : '인텔리전스에 질문하세요...'}
+                      value={listening ? '' : inputValue}
+                      onChange={(e) => !listening && setInputValue(e.target.value)}
+                      readOnly={listening}
+                    />
+                    {listening && (
+                      <div className="absolute inset-0 flex items-center gap-2 pointer-events-none">
+                        <span className="text-red-400 text-lg truncate">{interim || '듣는 중...'}</span>
+                        <div className="flex items-center gap-[2px] shrink-0">
+                          {[0,0.1,0.2,0.1,0].map((d,i) => (
+                            <div key={i} className="w-[2px] bg-red-400 rounded-full animate-bounce"
+                              style={{ height: `${[6,10,14,10,6][i]}px`, animationDelay: `${d}s`, animationDuration: '0.7s' }} />
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-              <button type="button" onClick={toggleMic}
-                className={`shrink-0 transition-all duration-200 ${listening ? 'text-red-400 animate-pulse' : 'text-on-surface-variant hover:text-primary'}`}>
-                <span className="material-symbols-outlined text-lg" style={listening ? { fontVariationSettings: '"FILL" 1' } : {}}>mic</span>
-              </button>
+                  <button type="button" onClick={toggleMic}
+                    className={`shrink-0 transition-all duration-200 ${listening ? 'text-red-400 animate-pulse' : 'text-on-surface-variant hover:text-primary'}`}>
+                    <span className="material-symbols-outlined text-lg" style={listening ? { fontVariationSettings: '"FILL" 1' } : {}}>mic</span>
+                  </button>
+                </>
+              )}
             </div>
           </form>
 
@@ -666,18 +1152,49 @@ export default function MainSearch() {
             {/* 헤더 */}
             <div className="flex justify-between items-end mb-10">
               <div className="space-y-2">
-                <span className="px-2 py-0.5 rounded text-lg font-bold bg-primary/10 text-primary uppercase tracking-widest border border-primary/20">현재 쿼리</span>
-                <h1 className="text-4xl font-extrabold tracking-tighter text-on-surface">{query}</h1>
+                <span className={`px-2 py-0.5 rounded text-lg font-bold uppercase tracking-widest border
+                  ${imgQuery ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-primary/10 text-primary border-primary/20'}`}>
+                  {imgQuery ? '이미지 쿼리' : '현재 쿼리'}
+                </span>
+                {imgQuery ? (
+                  <div className="flex items-center gap-4">
+                    <img
+                      src={imgQuery.preview}
+                      alt="쿼리 이미지"
+                      className="h-14 rounded-xl object-cover ring-2 ring-emerald-500/30 shadow-lg"
+                    />
+                    <div>
+                      <p className="text-2xl font-extrabold tracking-tighter text-on-surface">{imgQuery.file.name}</p>
+                      <p className="text-xs text-on-surface-variant/60 mt-0.5">
+                        {(imgQuery.file.size / 1024).toFixed(0)} KB · {imgQuery.file.type}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <h1 className="text-4xl font-extrabold tracking-tighter text-on-surface">{query}</h1>
+                )}
                 {searching
                   ? <p className="text-on-surface-variant flex items-center gap-2">
                       <span className="material-symbols-outlined text-primary text-lg animate-spin">progress_activity</span>검색 중...
                     </p>
                   : searchError
                     ? <p className="text-red-400 text-lg">{searchError}</p>
-                    : <p className="text-on-surface-variant">로컬 보관소에서 <span className="text-primary font-bold">{results.length}건</span>을 찾았습니다.</p>
+                    : <p className="text-on-surface-variant">
+                      로컬 보관소에서 <span className="text-primary font-bold">{results.length}건</span>을 찾았습니다.
+                      {typeFilter && <span className="ml-2 text-xs text-on-surface-variant/60">(필터 적용: {filteredResults.length}건 표시)</span>}
+                    </p>
                 }
               </div>
-              <div className="flex gap-3">
+              <div className="flex gap-3 flex-wrap items-center">
+                {/* 타입 필터 칩 */}
+                {typeFilter && (
+                  <button onClick={() => setTypeFilter(null)}
+                    className="px-3 py-1.5 rounded-full text-xs font-bold bg-primary/20 text-primary border border-primary/40 flex items-center gap-1 hover:bg-primary/30 transition-all">
+                    <span className="material-symbols-outlined text-sm">{getTypeMeta(typeFilter).icon}</span>
+                    {getTypeMeta(typeFilter).label}
+                    <span className="material-symbols-outlined text-sm">close</span>
+                  </button>
+                )}
                 <button className="px-4 py-2 rounded-full glass-panel border border-outline-variant/20 text-base font-bold hover:bg-primary/5 transition-all flex items-center gap-2">
                   <span className="material-symbols-outlined text-lg">filter_list</span>관련도
                 </button>
@@ -701,10 +1218,19 @@ export default function MainSearch() {
               </div>
             )}
 
+            {/* 필터 결과 없음 */}
+            {!searching && results.length > 0 && filteredResults.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-24 gap-4">
+                <span className="material-symbols-outlined text-on-surface-variant/20 text-5xl">filter_list_off</span>
+                <p className="text-on-surface-variant">"{getTypeMeta(typeFilter).label}" 타입 결과가 없습니다.</p>
+                <button onClick={() => setTypeFilter(null)} className="text-primary text-sm underline">필터 해제</button>
+              </div>
+            )}
+
             {/* 결과 카드 */}
-            {!searching && results.length > 0 && (
+            {!searching && filteredResults.length > 0 && (
               <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
-                {results.map((r, i) => (
+                {filteredResults.map((r, i) => (
                   <ResultCard key={r.file_path + i} result={r} rank={i + 1} onClick={() => handleSelectFile(r)} />
                 ))}
               </div>
@@ -762,6 +1288,18 @@ export default function MainSearch() {
                 <span className={`px-2 py-0.5 rounded-full text-lg font-bold border shrink-0 ${meta.color} bg-white/5 border-white/10`}>{meta.label}</span>
               </div>
               <div className="flex items-center gap-3 shrink-0">
+                <button
+                  onClick={() => handleSummarize(selectedFile)}
+                  disabled={summaryLoading}
+                  className="px-5 py-2 text-base font-bold uppercase tracking-widest flex items-center gap-2
+                    text-secondary bg-secondary/10 border border-secondary/30 rounded-full
+                    hover:bg-secondary/20 transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed">
+                  {summaryLoading
+                    ? <span className="material-symbols-outlined text-lg animate-spin">progress_activity</span>
+                    : <span className="material-symbols-outlined text-lg">auto_awesome</span>
+                  }
+                  요약
+                </button>
                 <button
                   onClick={() => openFolder(selectedFile.file_path)}
                   className="px-5 py-2 text-base font-bold uppercase tracking-widest text-primary bg-surface-container-high border border-outline-variant/15 rounded-full hover:bg-surface-variant transition-colors active:scale-95">
@@ -855,6 +1393,54 @@ export default function MainSearch() {
                       </p>
                     </div>
                   </div>
+
+                  {/* 요약 결과 카드 */}
+                  {(summary || summaryLoading) && (
+                    <div className="bg-surface-container-low rounded-xl p-5 border border-secondary/20 relative overflow-hidden">
+                      <div className="absolute -right-6 -top-6 w-20 h-20 bg-secondary/10 blur-2xl" />
+                      <h4 className="text-sm font-bold tracking-[0.15em] text-secondary mb-3 uppercase flex items-center gap-2">
+                        <span className="material-symbols-outlined text-base">auto_awesome</span>AI 요약
+                      </h4>
+                      {summaryLoading && (
+                        <div className="flex items-center gap-2 text-on-surface-variant/50 text-sm">
+                          <span className="material-symbols-outlined text-base animate-spin">progress_activity</span>
+                          요약 생성 중...
+                        </div>
+                      )}
+                      {summary?.error && (
+                        <p className="text-red-400 text-sm">{summary.error}</p>
+                      )}
+                      {summary && !summary.error && (
+                        <>
+                          {/* 키워드 태그 */}
+                          {summary.keywords?.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mb-3">
+                              {summary.keywords.map((kw, i) => (
+                                <span key={i} className="px-2 py-0.5 rounded-full text-[10px] font-bold
+                                  bg-secondary/15 text-secondary border border-secondary/20">
+                                  {kw}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          {/* 요약 문장 */}
+                          <div className="space-y-2">
+                            {(summary.sentences ?? [summary.summary]).map((s, i) => (
+                              <p key={i} className="text-xs text-on-surface-variant/80 leading-relaxed
+                                border-l-2 border-secondary/30 pl-2">
+                                {s}
+                              </p>
+                            ))}
+                          </div>
+                          {summary.char_total && (
+                            <p className="text-[10px] text-on-surface-variant/30 mt-2 text-right">
+                              전체 {summary.char_total.toLocaleString()}자 → 요약
+                            </p>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
 
                   {/* AV: 세그먼트 요약 */}
                   {isAV && selectedFile.segments?.length > 0 && (

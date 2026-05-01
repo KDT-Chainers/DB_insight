@@ -370,6 +370,97 @@ class TriChefEngine:
                 ))
         return out
 
+    def search_by_image(self, image_path: Path, domain: str = "image",
+                        topk: int = 20) -> list[TriChefResult]:
+        """이미지 파일을 쿼리로 검색 (image-to-image / image-to-doc).
+
+        임베딩 방식은 인덱싱과 동일:
+          q_Re : SigLIP2  image encoder  (cross-modal)
+          q_Im : BLIP 캡션 → BGE-M3 dense  (의미축)
+          q_Z  : DINOv2   image encoder  (구조축)
+        """
+        from embedders.trichef import dinov2_z
+        from embedders.trichef import qwen_caption
+
+        if domain not in self._cache:
+            logger.warning(f"[engine] 도메인 {domain} 캐시 없음")
+            return []
+
+        # ── 3축 이미지 쿼리 임베딩 ────────────────────────────────────────
+        img_path = Path(image_path)
+
+        # Re: SigLIP2 이미지 인코더 (1152d, 이미 L2-norm)
+        q_Re = siglip2_re.embed_images([img_path])[0]
+        q_Re = q_Re / (np.linalg.norm(q_Re) + 1e-8)
+
+        # Im: BLIP 캡션 생성 → BGE-M3 dense (1024d)
+        try:
+            cap = qwen_caption.caption(img_path)
+        except Exception as e:
+            logger.warning(f"[search_by_image] 캡션 생성 실패, 빈 문자열 대체: {e}")
+            cap = ""
+        if cap:
+            q_Im_arr = e5_caption_im.embed_query([cap])
+            q_Im = q_Im_arr[0] / (np.linalg.norm(q_Im_arr[0]) + 1e-8)
+        else:
+            q_Im = q_Re[:q_Re.shape[0]]   # fallback: SigLIP2를 의미축으로도 사용
+
+        # Z: DINOv2 이미지 인코더 (1024d, 이미 L2-norm)
+        try:
+            q_Z_arr = dinov2_z.embed_images([img_path])
+            q_Z = q_Z_arr[0] / (np.linalg.norm(q_Z_arr[0]) + 1e-8)
+        except Exception as e:
+            logger.warning(f"[search_by_image] DINOv2 실패, q_Im 대체: {e}")
+            q_Z = q_Im
+
+        # ── 이하 scoring 로직은 search() 와 동일 ─────────────────────────
+        d = self._cache[domain]
+        dense_scores = tri_gs.hermitian_score(
+            q_Re[None, :], q_Im[None, :], q_Z[None, :],
+            d["Re"], d["Im"], d["Z"],
+        )[0]
+        combined_order = np.argsort(-dense_scores)
+
+        # lexical / ASF 는 이미지 쿼리에서 비활성 (캡션이 있어도 매우 짧음)
+        rrf_scores = _rrf_merge([combined_order[:200]], n=len(dense_scores))
+        fused_scores = dense_scores   # image query: dense 단일
+
+        cal     = calibration.get_thresholds(domain)
+        abs_thr = cal["abs_threshold"]
+
+        q_mu  = float(np.mean(dense_scores))
+        q_sig = max(float(np.std(dense_scores)), q_mu * 0.8, 1e-6)
+
+        out: list[TriChefResult] = []
+        for i in combined_order[: topk * 3]:
+            s = float(dense_scores[i])
+            if s < abs_thr:
+                continue
+            z    = (s - q_mu) / q_sig
+            conf = 0.5 * (1 + math.erf(z / (2 ** 0.5)))
+            meta = {
+                "domain": domain, "dense": s,
+                "low_confidence": False,
+                "fused": round(float(fused_scores[i]), 4),
+                "rrf":   round(float(rrf_scores[i]), 4),
+                "caption": cap,
+            }
+            out.append(TriChefResult(id=d["ids"][i], score=s, confidence=conf, metadata=meta))
+            if len(out) >= topk:
+                break
+
+        # fallback: threshold 통과 결과 없으면 상위 K개 저신뢰도 반환
+        if not out:
+            for i in combined_order[:topk]:
+                s    = float(dense_scores[i])
+                z    = (s - q_mu) / q_sig
+                conf = 0.5 * (1 + math.erf(z / (2 ** 0.5)))
+                out.append(TriChefResult(
+                    id=d["ids"][i], score=s, confidence=conf,
+                    metadata={"domain": domain, "dense": s, "low_confidence": True, "fallback": True},
+                ))
+        return out
+
     def search_av(self, query: str, domain: str, topk: int = 10,
                   top_segments: int = 5) -> list[TriChefAVResult]:
         """Movie/Music 검색 — MR_TriCHEF search.py 방식으로 정렬.

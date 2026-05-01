@@ -10,6 +10,8 @@
     "preview": "vite preview",
     "electron": "electron .",
     "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:3000 && electron .\"",
+    "prepack": "npm run build",
+    "pack": "electron-builder --dir",
     "predist": "node -e \"const fs=require('fs');const {execSync}=require('child_process');try{execSync('rmdir /s /q out\\\\win-unpacked',{shell:true,stdio:'pipe'})}catch(_){}\"",
     "dist": "npm run build && electron-builder"
   },

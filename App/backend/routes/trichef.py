@@ -180,6 +180,64 @@ def serve_file():
     return send_file(str(candidate), mimetype=mime or "application/octet-stream")
 
 
+@bp.post("/search_by_image")
+def search_by_image():
+    """이미지 파일 업로드 → TRI-CHEF 이미지 검색.
+
+    multipart/form-data:
+      image  : 이미지 파일 (필수)
+      domain : "image" | "doc_page"  (기본 "image")
+      topk   : 정수 (기본 20)
+    """
+    import tempfile
+    import os
+
+    if "image" not in request.files:
+        return jsonify({"error": "image 파일 필수"}), 400
+
+    file   = request.files["image"]
+    domain = request.form.get("domain", "image")
+    topk   = int(request.form.get("topk", 20))
+
+    if domain not in ("image", "doc_page"):
+        return jsonify({"error": "domain 은 image 또는 doc_page 만 허용"}), 400
+
+    # 임시 파일로 저장 (확장자 보존)
+    suffix = Path(file.filename).suffix if file.filename else ".jpg"
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        file.save(tmp.name)
+        tmp_path = Path(tmp.name)
+
+    try:
+        engine = _get_engine()
+        results = engine.search_by_image(tmp_path, domain=domain, topk=topk)
+    except Exception as e:
+        logger.exception("search_by_image 실패")
+        return jsonify({"error": str(e)[:400]}), 500
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except Exception:
+            pass
+
+    items = []
+    for rank, r in enumerate(results, 1):
+        items.append({
+            "rank":           rank,
+            "domain":         domain,
+            "id":             r.id,
+            "score":          round(r.score, 4),
+            "confidence":     round(r.confidence, 4),
+            "dense":          round(r.metadata.get("dense", r.score), 4),
+            "low_confidence": r.metadata.get("low_confidence", False),
+            "caption":        r.metadata.get("caption", ""),
+            "preview_url":    f"/api/trichef/file?domain={domain}&path={r.id}",
+            "segments":       [],
+        })
+
+    return jsonify({"domain": domain, "top": items, "count": len(items)})
+
+
 @bp.post("/reindex")
 def reindex():
     body  = request.get_json(silent=True) or {}

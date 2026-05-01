@@ -1,9 +1,10 @@
 """
 파일 관련 유틸리티 API
 
-GET  /api/files/indexed       — 인덱싱된 파일 목록 (레거시 + TRI-CHEF)
-GET  /api/files/stats         — 타입별 청크 수 통계
-GET  /api/files/detail?path=  — 특정 파일의 전체 청크 텍스트
+GET  /api/files/indexed         — 인덱싱된 파일 목록 (레거시 + TRI-CHEF)
+GET  /api/files/stats           — 타입별 청크 수 통계
+GET  /api/files/detail?path=    — 특정 파일의 전체 청크 텍스트
+GET  /api/files/summarize?path= — 파일 내용 AI 요약
 
 ※ /api/files/open, /api/files/open-folder 는 routes/search.py 에 있음
 """
@@ -266,6 +267,112 @@ def detail():
         "file_type": file_type,
         "chunks":    unique,
         "full_text": full_text,
+    })
+
+
+# ── 파일 요약 ────────────────────────────────────────────────────
+
+@files_bp.get("/summarize")
+def summarize():
+    """
+    GET /api/files/summarize?path=C:/...
+
+    파일의 텍스트 내용을 추출적 요약하여 반환.
+    - 키워드: YAKE 상위 10개
+    - 요약문: 키워드 가중치 기반 상위 5문장 (원문 순서 유지)
+    - AV(video/audio): segments 텍스트를 요약
+    """
+    import re, math
+
+    file_path = request.args.get("path", "").strip()
+    if not file_path:
+        return jsonify({"error": "path is required"}), 400
+
+    # ── 텍스트 수집 ──────────────────────────────────────────
+    full_text = ""
+    file_type = None
+    segments_text = []
+
+    # TRI-CHEF 검색 결과로 넘어온 파일이면 detail API 재사용
+    from db.vector_store import _get_collection, COLLECTION_MAP
+    chunks: list[dict] = []
+    for t in COLLECTION_MAP:
+        try:
+            col = _get_collection(t)
+            if col.count() == 0:
+                continue
+            res = col.get(where={"file_path": file_path}, include=["metadatas"])
+            metas = res.get("metadatas") or []
+            if metas:
+                file_type = t
+                for m in metas:
+                    chunks.append({
+                        "chunk_text":   m.get("chunk_text", ""),
+                        "chunk_source": m.get("chunk_source", ""),
+                        "chunk_index":  m.get("chunk_index", 0),
+                    })
+        except Exception:
+            continue
+
+    if chunks:
+        chunks.sort(key=lambda c: c.get("chunk_index", 0))
+        full_text = " ".join(c["chunk_text"] for c in chunks if c["chunk_text"])
+
+    # TRI-CHEF 이미지/문서 — snippet이 없으면 빈 텍스트
+    if not full_text:
+        return jsonify({
+            "keywords": [],
+            "summary":  "이 파일에서 추출된 텍스트가 없습니다.",
+            "sentences": [],
+        })
+
+    # ── YAKE 키워드 추출 ────────────────────────────────────
+    keywords: list[str] = []
+    try:
+        import yake
+        kw_extractor = yake.KeywordExtractor(
+            lan="ko", n=2, dedupLim=0.7, top=10, features=None
+        )
+        raw_kw = kw_extractor.extract_keywords(full_text)
+        keywords = [kw for kw, _ in raw_kw]
+    except Exception:
+        pass
+
+    # ── 추출적 요약 (키워드 가중치 기반 상위 5문장) ──────────
+    sentences = [s.strip() for s in re.split(r'(?<=[.!?\n])\s+', full_text) if len(s.strip()) > 20]
+    if not sentences:
+        sentences = [full_text[:500]]
+
+    def score_sentence(sent: str) -> float:
+        s_lower = sent.lower()
+        score = 0.0
+        for kw in keywords:
+            if kw.lower() in s_lower:
+                score += 1.0
+        # 너무 짧거나 너무 긴 문장 페널티
+        length = len(sent)
+        if length < 30:
+            score *= 0.5
+        elif length > 400:
+            score *= 0.8
+        return score
+
+    scored = [(i, s, score_sentence(s)) for i, s in enumerate(sentences)]
+    # 상위 5문장 (최소 score > 0 인 것, 없으면 앞 5개)
+    top5 = sorted(scored, key=lambda x: -x[2])[:5]
+    top5_positive = [x for x in top5 if x[2] > 0]
+    if top5_positive:
+        top5 = top5_positive
+    # 원문 순서로 정렬
+    top5.sort(key=lambda x: x[0])
+    summary_sentences = [s for _, s, _ in top5]
+    summary = " ".join(summary_sentences)
+
+    return jsonify({
+        "keywords":  keywords,
+        "summary":   summary,
+        "sentences": summary_sentences,
+        "char_total": len(full_text),
     })
 
 

@@ -156,23 +156,48 @@ function killBackend() {
 // 백엔드 준비 대기 (최대 15초, 300ms 간격 폴링)
 // ---------------------------------------------------------------------------
 
-function waitForBackend(maxRetries = 100, interval = 500) {
+// maxRetries=300, interval=600ms → 최대 3분 대기 (ML 모델 로딩 포함)
+function waitForBackend(maxRetries = 300, interval = 600) {
   return new Promise((resolve) => {
     if (isDev) return resolve()
 
     const http = require('http')
     let tries = 0
 
+    // 스플래시 창에 상태 텍스트 전달
+    const updateSplash = (msg) => {
+      try {
+        if (splashWindow && !splashWindow.isDestroyed()) {
+          splashWindow.webContents.executeJavaScript(
+            `(function(){
+               var s = document.getElementById('splash-status');
+               if (s) s.innerHTML = ${JSON.stringify(msg)};
+             })()`
+          ).catch(() => {})
+        }
+      } catch (_) {}
+    }
+
     const check = () => {
       tries++
+
+      // 진행 단계별 메시지
+      let statusMsg
+      if (tries <= 5)       statusMsg = `백엔드 시작 중 <span class="dots"><span>.</span><span>.</span><span>.</span></span>`
+      else if (tries <= 30) statusMsg = `AI 모델 로딩 중 <span class="dots"><span>.</span><span>.</span><span>.</span></span>`
+      else if (tries <= 80) statusMsg = `SigLIP2 / BGE-M3 초기화 중 <span class="dots"><span>.</span><span>.</span><span>.</span></span>`
+      else                  statusMsg = `거의 다 됐습니다 <span class="dots"><span>.</span><span>.</span><span>.</span></span>`
+      updateSplash(statusMsg)
+
       const req = http.get('http://127.0.0.1:5001/api/auth/status', (res) => {
+        updateSplash('백엔드 준비 완료 ✓')
         resolve()
       })
       req.on('error', () => {
         if (tries < maxRetries) setTimeout(check, interval)
         else resolve()
       })
-      req.setTimeout(300, () => {
+      req.setTimeout(400, () => {
         req.destroy()
         if (tries < maxRetries) setTimeout(check, interval)
         else resolve()
