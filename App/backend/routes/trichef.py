@@ -1,8 +1,10 @@
 """routes/trichef.py — TRI-CHEF REST API Blueprint."""
 from __future__ import annotations
 
+import json as _json
 import logging
 import mimetypes
+import re as _re
 import threading
 from pathlib import Path
 
@@ -19,6 +21,58 @@ from embedders.trichef.incremental_runner import (
 
 logger = logging.getLogger(__name__)
 bp = Blueprint("trichef", __name__, url_prefix="/api/trichef")
+
+# ── doc_page ID → 원본 문서 정보 파싱 ────────────────────────────────────────
+_doc_reg_cache: dict | None = None
+_doc_reg_lock  = threading.Lock()
+
+
+def _get_doc_stem_map() -> dict[str, str]:
+    """stem_key → 원본 문서 절대경로 역방향 매핑 (서버 기동 시 1회 로드)."""
+    global _doc_reg_cache
+    if _doc_reg_cache is not None:
+        return _doc_reg_cache
+    with _doc_reg_lock:
+        if _doc_reg_cache is not None:
+            return _doc_reg_cache
+        mapping: dict[str, str] = {}
+        try:
+            from embedders.trichef.doc_page_render import stem_key_for
+            reg_path = Path(PATHS["TRICHEF_DOC_CACHE"]) / "registry.json"
+            if reg_path.exists():
+                reg = _json.loads(reg_path.read_text(encoding="utf-8"))
+                for rel_key, meta in reg.items():
+                    mapping[stem_key_for(rel_key)] = meta.get("abs", rel_key)
+        except Exception as e:
+            logger.warning(f"[doc_stem_map] 로드 실패: {e}")
+        _doc_reg_cache = mapping
+        logger.info(f"[doc_stem_map] {len(mapping)}개 문서 매핑 완료")
+        return _doc_reg_cache
+
+
+def _parse_doc_page_id(page_id: str) -> dict:
+    """page_images/<stem_key>/p####.jpg → file_name / page_num / source_path.
+
+    Returns:
+        file_name  : 원본 문서 stem 이름 (hash 제거)
+        page_num   : 1-based 페이지 번호
+        source_path: 원본 문서 절대경로 (registry 조회, 없으면 "")
+    """
+    try:
+        parts = Path(page_id).parts          # ('page_images', '<stem_key>', 'p####.jpg')
+        if len(parts) >= 3 and parts[0] == "page_images":
+            stem_key = parts[1]
+            page_stem = Path(parts[2]).stem   # "p####"
+            # stem_key = "<sanitized_name>__<8hex>" → 문서명 추출
+            doc_name  = _re.sub(r"__[0-9a-f]{8}$", "", stem_key)
+            page_match = _re.match(r"p(\d+)", page_stem)
+            page_num  = int(page_match.group(1)) + 1 if page_match else 1
+            source_path = _get_doc_stem_map().get(stem_key, "")
+            return {"file_name": doc_name, "page_num": page_num,
+                    "source_path": source_path}
+    except Exception:
+        pass
+    return {"file_name": Path(page_id).name, "page_num": 1, "source_path": ""}
 
 _engine: TriChefEngine | None = None
 _engine_lock = threading.Lock()
@@ -121,10 +175,24 @@ def search():
                     "abs_threshold":  round(cal["abs_threshold"], 4),
                 }
                 for rank, r in enumerate(res, 1):
+                    # doc_page: 원본 문서명·페이지·경로 파싱
+                    if d == "doc_page":
+                        doc_info    = _parse_doc_page_id(r.id)
+                        file_name   = doc_info["file_name"]
+                        page_num    = doc_info["page_num"]
+                        source_path = doc_info["source_path"]
+                    else:
+                        file_name   = Path(r.id).name
+                        page_num    = None
+                        source_path = str(Path(PATHS["RAW_DB"]) / "Img" / r.id) if d == "image" else ""
+
                     all_items.append({
                         "rank":           rank,
                         "domain":         d,
                         "id":             r.id,
+                        "file_name":      file_name,
+                        "page_num":       page_num,       # doc_page only, 1-based
+                        "source_path":    source_path,    # 원본 문서 절대경로
                         "score":          round(r.score, 4),
                         "confidence":     round(r.confidence, 4),
                         "dense":          round(r.metadata.get("dense", r.score), 4),
@@ -137,6 +205,29 @@ def search():
         except Exception as e:
             logger.exception(f"domain={d} 검색 실패")
             stats["per_domain"][d] = {"error": str(e)[:200], "count": 0}
+
+    # ── 도메인별 중복 제거 ─────────────────────────────────────────────────────
+    # image: staged/<sha8>/file.jpg ↔ file.jpg 중복 → leaf 파일명 기준, confidence 높은 것 유지
+    # doc_page: 같은 PDF/문서의 여러 페이지 → 문서명(file_name) 기준, confidence 높은 페이지 유지
+    _seen_img: dict[str, dict] = {}   # leaf_name → item
+    _seen_doc: dict[str, dict] = {}   # file_name → item (best page per doc)
+    _other:    list[dict]      = []
+
+    for item in all_items:
+        if item["domain"] == "image":
+            leaf = Path(item["id"]).name
+            prev = _seen_img.get(leaf)
+            if prev is None or item["confidence"] > prev["confidence"]:
+                _seen_img[leaf] = item
+        elif item["domain"] == "doc_page":
+            doc_key = item.get("file_name") or Path(item["id"]).name
+            prev = _seen_doc.get(doc_key)
+            if prev is None or item["confidence"] > prev["confidence"]:
+                _seen_doc[doc_key] = item
+        else:
+            _other.append(item)
+
+    all_items = list(_seen_img.values()) + list(_seen_doc.values()) + _other
 
     all_items.sort(key=lambda x: -x["confidence"])
     top = all_items[:topk]
@@ -222,10 +313,22 @@ def search_by_image():
 
     items = []
     for rank, r in enumerate(results, 1):
+        if domain == "doc_page":
+            doc_info    = _parse_doc_page_id(r.id)
+            file_name   = doc_info["file_name"]
+            page_num    = doc_info["page_num"]
+            source_path = doc_info["source_path"]
+        else:
+            file_name   = Path(r.id).name
+            page_num    = None
+            source_path = str(Path(PATHS["RAW_DB"]) / "Img" / r.id)
         items.append({
             "rank":           rank,
             "domain":         domain,
             "id":             r.id,
+            "file_name":      file_name,
+            "page_num":       page_num,
+            "source_path":    source_path,
             "score":          round(r.score, 4),
             "confidence":     round(r.confidence, 4),
             "dense":          round(r.metadata.get("dense", r.score), 4),

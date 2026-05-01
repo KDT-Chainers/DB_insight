@@ -263,11 +263,43 @@ def run_image_incremental() -> IncrementalResult:
     )
     if pruned:
         _save_registry(reg_path, registry)
+
+    # staged/ 중복 제거: non-staged 파일의 SHA 집합을 수집한 뒤
+    # staged/<sha8>/<filename> 이 그 중 하나와 동일한 SHA 면 인덱싱 스킵.
+    non_staged_shas: set[str] = set()
+    for p in img_files:
+        key = str(p.relative_to(raw_dir)).replace("\\", "/")
+        if not key.startswith("staged/"):
+            non_staged_shas.add(_sha256(p))
+
+    # 이미 registry 에 등록된 staged 중복 항목 제거 (이전 인덱싱 때 들어간 것 정리)
+    staged_dup_keys = [
+        k for k, v in list(registry.items())
+        if k.startswith("staged/") and v.get("sha") in non_staged_shas
+    ]
+    if staged_dup_keys:
+        logger.info(f"[img_inc] registry에서 staged 중복 {len(staged_dup_keys)}개 제거")
+        for k in staged_dup_keys:
+            del registry[k]
+        # npy / ids 에서도 해당 항목 제거 (prune_domain 재활용)
+        remaining_keys = current_keys - set(staged_dup_keys)
+        registry, _ = prune_domain(
+            "image", raw_dir, cache_dir, registry, remaining_keys,
+            npy_bases=["cache_img_Re_siglip2", "cache_img_Im_e5cap", "cache_img_Z_dinov2"],
+            ids_filename="img_ids.json",
+            col_name=TRICHEF_CFG["COL_IMAGE"],
+        )
+        _save_registry(reg_path, registry)
+
     existing_count = len(registry)
     new_files: list[Path] = []
     for p in img_files:
         key = str(p.relative_to(raw_dir)).replace("\\", "/")
         sha = _sha256(p)
+        # staged 파일이고 동일 SHA 의 원본이 이미 존재하면 스킵 (중복 방지)
+        if key.startswith("staged/") and sha in non_staged_shas:
+            logger.debug(f"[img_inc] staged 중복 스킵: {key}")
+            continue
         if registry.get(key, {}).get("sha") != sha:
             new_files.append(p)
             registry[key] = {"sha": sha, "abs": str(p)}

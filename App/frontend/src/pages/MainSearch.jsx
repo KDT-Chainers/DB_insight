@@ -76,12 +76,20 @@ async function searchFiles(query, topK = 30) {
   if (data.error) throw new Error(data.error)
 
   return (data.top ?? []).map(item => {
-    const isAV = item.domain === 'movie' || item.domain === 'music'
+    const isAV      = item.domain === 'movie' || item.domain === 'music'
+    const isDocPage = item.domain === 'doc_page'
+    // doc_page: file_path = 원본 문서 경로, trichef_id = 내부 page_images 경로
+    const filePath  = isDocPage
+      ? (item.source_path || item.id)
+      : (item.source_path || item.id)
+    const fileName  = item.file_name || (item.id || '').split(/[/\\]/).pop()
     return {
-      file_path:      item.id,
-      file_name:      item.file_name || (item.id || '').split(/[/\\]/).pop(),
+      file_path:      filePath,
+      trichef_id:     item.id,           // 내부 ID (preview/security mask용)
+      file_name:      fileName,
+      page_num:       item.page_num ?? null,
       file_type:      item.domain === 'image' ? 'image'
-                    : item.domain === 'doc_page' ? 'doc'
+                    : isDocPage ? 'doc'
                     : item.domain === 'movie' ? 'video' : 'audio',
       confidence:     item.confidence ?? 0,
       similarity:     item.confidence ?? 0,
@@ -304,11 +312,22 @@ function ResultCard({ result, rank, onClick, securityMode = false }) {
           )}
         </div>
 
-        {/* 파일명 */}
-        <div className="font-semibold text-[13px] text-[#f1f5f9] break-all">{result.file_name}</div>
+        {/* 파일명 + 페이지 배지 */}
+        <div className="flex items-start gap-2 flex-wrap">
+          <div className="font-semibold text-[13px] text-[#f1f5f9] break-all leading-snug flex-1 min-w-0">
+            {result.file_name}
+          </div>
+          {result.page_num != null && (
+            <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-[#1e3a5f] text-[#7dd3fc] border border-[#3b82f6]/30 font-mono whitespace-nowrap">
+              {result.page_num}p
+            </span>
+          )}
+        </div>
 
         {/* 경로 */}
-        <div className="text-[11px] text-[#64748b] break-all font-mono">{result.file_path}</div>
+        <div className="text-[11px] text-[#64748b] break-all font-mono">
+          {result.file_path || result.trichef_id}
+        </div>
 
         {/* 핵심 3지표 */}
         <div className="grid grid-cols-3 gap-1.5">
@@ -1631,12 +1650,16 @@ export default function MainSearch() {
                       {[
                         ['파일명', selectedFile.file_name],
                         ['유형',   meta.label],
+                        ...(selectedFile.page_num != null
+                          ? [['페이지', `${selectedFile.page_num}페이지`]]
+                          : []
+                        ),
                         ['신뢰도', `${confPct}%`],
                         ...(isAV
                           ? [['세그먼트', `${selectedFile.segments?.length ?? 0}개`]]
                           : [['청크 수', fileDetail ? `${fileDetail.chunks?.length ?? '-'}개` : '-']]
                         ),
-                        ['경로',   selectedFile.file_path],
+                        ['경로',   selectedFile.file_path || selectedFile.trichef_id],
                       ].map(([k, v]) => (
                         <div key={k} className="flex justify-between items-start py-2 border-b border-outline-variant/10 last:border-0 gap-2">
                           <span className="text-xs text-on-surface-variant shrink-0">{k}</span>
