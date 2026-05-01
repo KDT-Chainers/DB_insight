@@ -654,8 +654,17 @@ export default function MainSearch() {
   const [aiTransitioning, setAiTransitioning] = useState(false)
   const [ripplePos, setRipplePos] = useState({ x: '50%', y: '50%' })
 
-  const btnRef  = useRef(null)
-  const formRef = useRef(null)
+  const btnRef   = useRef(null)
+  const formRef  = useRef(null)
+  const inputRef = useRef(null)   // 검색창 자동 포커스용
+
+  // 뷰 변경 시 검색창 자동 포커스
+  useEffect(() => {
+    if (view === 'home' || view === 'results') {
+      const t = setTimeout(() => inputRef.current?.focus(), 120)
+      return () => clearTimeout(t)
+    }
+  }, [view])
 
   // STT
   const doSearchRef = useRef(null)
@@ -1124,6 +1133,7 @@ export default function MainSearch() {
                   </div>
                   <div className="flex-1 relative">
                     <input
+                      ref={inputRef}
                       type="text"
                       value={listening ? '' : inputValue}
                       onChange={(e) => !listening && setInputValue(e.target.value)}
@@ -1269,6 +1279,7 @@ export default function MainSearch() {
                   </span>
                   <div className="flex-1 relative">
                     <input
+                      ref={inputRef}
                       className="bg-transparent border-none focus:ring-0 w-full text-on-surface placeholder-on-surface-variant text-lg outline-none"
                       placeholder={listening ? '' : '인텔리전스에 질문하세요...'}
                       value={listening ? '' : inputValue}
