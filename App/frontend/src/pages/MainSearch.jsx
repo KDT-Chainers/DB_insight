@@ -57,78 +57,44 @@ function useSpeechRecognition({ onFinal }) {
   return { listening, interim, toggle }
 }
 
-// ── 검색 API (admin.html 과 동일 엔드포인트) ─────────────
-function _mapInspectRow(row, domain) {
-  return {
-    file_path:      row.source_path || row.id,
-    file_name:      row.filename || (row.id || '').split('/').pop(),
-    file_type:      domain === 'image' ? 'image' : 'doc',
-    confidence:     row.confidence ?? 0,
-    similarity:     row.confidence ?? 0,
-    dense:          row.dense ?? 0,
-    snippet:        '',
-    preview_url:    `/api/trichef/file?domain=${domain}&path=${encodeURIComponent(row.id)}`,
-    segments:       [],
-    trichef_id:     row.id,
-    trichef_domain: domain,
-  }
-}
-
+// ── 텍스트 검색 API (/api/trichef/search — per-query 적응형 confidence) ──
 async function searchFiles(query, topK = 30) {
-  const inspectOpts = (domain) => ({
+  const res = await fetch(`${API_BASE}/api/trichef/search`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      query, domain, top_n: topK,
-      use_lexical: true, use_asf: true,
-      use_rerank: false,
+      query,
+      topk: topK,
+      domains: ['image', 'doc_page', 'movie', 'music'],
+      use_lexical: true,
+      use_asf: true,
+      pool: 300,
     }),
   })
-  const avInspectOpts = (domain) => ({
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query, domain, top_n: topK, top_segments: 5 }),
+  if (!res.ok) throw new Error(`검색 실패 HTTP ${res.status}`)
+  const data = await res.json()
+  if (data.error) throw new Error(data.error)
+
+  return (data.top ?? []).map(item => {
+    const isAV = item.domain === 'movie' || item.domain === 'music'
+    return {
+      file_path:      item.id,
+      file_name:      item.file_name || (item.id || '').split(/[/\\]/).pop(),
+      file_type:      item.domain === 'image' ? 'image'
+                    : item.domain === 'doc_page' ? 'doc'
+                    : item.domain === 'movie' ? 'video' : 'audio',
+      confidence:     item.confidence ?? 0,
+      similarity:     item.confidence ?? 0,
+      dense:          item.dense ?? 0,
+      lexical:        item.lexical ?? null,
+      asf:            item.asf ?? null,
+      snippet:        '',
+      preview_url:    item.preview_url ?? null,
+      segments:       item.segments ?? [],
+      low_confidence: item.low_confidence ?? false,
+      trichef_domain: item.domain,
+    }
   })
-
-  const [imgRes, docRes, movieRes, musicRes] = await Promise.all([
-    fetch(`${API_BASE}/api/admin/inspect`,    inspectOpts('image')),
-    fetch(`${API_BASE}/api/admin/inspect`,    inspectOpts('doc_page')),
-    fetch(`${API_BASE}/api/admin/inspect_av`, avInspectOpts('movie')),
-    fetch(`${API_BASE}/api/admin/inspect_av`, avInspectOpts('music')),
-  ])
-
-  const results = []
-
-  if (imgRes.ok) {
-    const d = await imgRes.json()
-    results.push(...(d.rows ?? []).map(r => _mapInspectRow(r, 'image')))
-  }
-  if (docRes.ok) {
-    const d = await docRes.json()
-    results.push(...(d.rows ?? []).map(r => _mapInspectRow(r, 'doc_page')))
-  }
-  for (const [res, fileType, avDomain] of [[movieRes, 'video', 'movie'], [musicRes, 'audio', 'music']]) {
-    if (!res.ok) continue
-    const d = await res.json()
-    results.push(...(d.files ?? []).map(r => {
-      const topSeg = r.segments?.[0] ?? {}
-      return {
-        file_path:      r.file_path,
-        file_name:      r.file_name,
-        file_type:      fileType,
-        confidence:     r.confidence ?? 0,
-        similarity:     r.confidence ?? 0,
-        dense:          r.score ?? 0,
-        snippet:        topSeg.preview || topSeg.text || topSeg.caption || '',
-        preview_url:    null,
-        segments:       r.segments ?? [],
-        trichef_domain: avDomain,
-      }
-    }))
-  }
-
-  results.sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0) || (b.dense ?? 0) - (a.dense ?? 0))
-  return results.slice(0, topK)
 }
 
 // ── 이미지 파일 → 이미지 검색 ──────────────────────────
@@ -637,6 +603,8 @@ export default function MainSearch() {
     const q = location.state?.query
     if (q) {
       window.history.replaceState({}, '')   // state 소비
+      setImgQuery(null)
+      setTypeFilter(null)
       doSearchRef.current?.(q)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -676,7 +644,8 @@ export default function MainSearch() {
 
   const doSearch = (q) => {
     if (!q.trim() || aiTransitioning) return
-    setImgQuery(null)   // 텍스트 검색 시 이미지 쿼리 해제
+    setImgQuery(null)     // 텍스트 검색 시 이미지 쿼리 해제
+    setTypeFilter(null)   // 텍스트 검색 시 타입 필터 초기화
     setQuery(q)
     setInputValue(q)
 
