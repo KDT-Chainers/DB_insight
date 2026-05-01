@@ -146,10 +146,43 @@ function avStreamUrl(result) {
 }
 
 // ── 결과 카드 (admin.html card / avCard 구조 대응) ────────
-function ResultCard({ result, rank, onClick }) {
+function ResultCard({ result, rank, onClick, securityMode = false }) {
   const isAV       = result.file_type === 'video' || result.file_type === 'audio'
   const hasPreview = (result.file_type === 'image' || result.file_type === 'doc') && result.preview_url
   const [imgError, setImgError] = useState(false)
+
+  // 보안 모드: 마스킹 상태
+  const [secState, setSecState] = useState('idle')   // 'idle' | 'loading' | 'done' | 'clean' | 'error'
+  const [maskedSrc, setMaskedSrc] = useState(null)   // base64 masked image
+  const [piiTypes, setPiiTypes]   = useState([])
+
+  // 보안 모드 ON + 이미지 결과 → 마스킹 요청
+  useEffect(() => {
+    if (!securityMode || !hasPreview || isAV) return
+    if (secState !== 'idle') return
+
+    setSecState('loading')
+    const rel    = result.trichef_id || result.file_path
+    const domain = result.trichef_domain || 'image'
+    fetch(`${API_BASE}/api/security/mask_image?path=${encodeURIComponent(rel)}&domain=${domain}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.error) { setSecState('error'); return }
+        setPiiTypes(d.pii_types ?? [])
+        setMaskedSrc('data:image/png;base64,' + d.masked_b64)
+        setSecState(d.pii_found ? 'done' : 'clean')
+      })
+      .catch(() => setSecState('error'))
+  }, [securityMode, hasPreview, isAV, result.file_path, secState])
+
+  // 보안 모드 OFF → 상태 초기화
+  useEffect(() => {
+    if (!securityMode) {
+      setSecState('idle')
+      setMaskedSrc(null)
+      setPiiTypes([])
+    }
+  }, [securityMode])
   const playerRef  = useRef(null)
 
   // 점수 계산 (admin.html 동일)
@@ -212,12 +245,44 @@ function ResultCard({ result, rank, onClick }) {
       {!isAV && (
         <div className="relative h-[200px] bg-[#0b1220] flex items-center justify-center overflow-hidden">
           {hasPreview && !imgError ? (
-            <img
-              src={`${API_BASE}${result.preview_url}`}
-              alt={result.file_name}
-              className="max-w-full max-h-full object-contain cursor-zoom-in"
-              onError={() => setImgError(true)}
-            />
+            <>
+              {/* 보안 모드 로딩 스피너 */}
+              {securityMode && secState === 'loading' && (
+                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-[#0b1220]/80">
+                  <span className="material-symbols-outlined text-amber-400 text-3xl animate-spin">progress_activity</span>
+                  <span className="text-xs text-amber-400/80">PII 스캔 중...</span>
+                </div>
+              )}
+              <img
+                src={securityMode && maskedSrc ? maskedSrc : `${API_BASE}${result.preview_url}`}
+                alt={result.file_name}
+                className="max-w-full max-h-full object-contain cursor-zoom-in"
+                onError={() => setImgError(true)}
+              />
+              {/* PII 탐지 배지 */}
+              {secState === 'done' && piiTypes.length > 0 && (
+                <div className="absolute bottom-2 left-2 right-2 flex flex-wrap gap-1">
+                  {piiTypes.slice(0, 3).map(t => (
+                    <span key={t} className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/90 text-black">
+                      {t.replace('KR_', '')}
+                    </span>
+                  ))}
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/90 text-black flex items-center gap-0.5">
+                    <span className="material-symbols-outlined text-[10px]" style={{ fontVariationSettings: '"FILL" 1' }}>lock</span>
+                    마스킹됨
+                  </span>
+                </div>
+              )}
+              {/* 안전 배지 */}
+              {secState === 'clean' && (
+                <div className="absolute bottom-2 left-2">
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/90 text-black flex items-center gap-0.5">
+                    <span className="material-symbols-outlined text-[10px]" style={{ fontVariationSettings: '"FILL" 1' }}>verified</span>
+                    PII 없음
+                  </span>
+                </div>
+              )}
+            </>
           ) : (
             <span className="text-[#64748b] text-xs">{domainLabel}</span>
           )}
@@ -299,6 +364,94 @@ function ResultCard({ result, rank, onClick }) {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+// ── 상세 페이지 이미지 미리보기 (보안 마스킹 지원) ─────────
+function DetailImagePreview({ file, securityMode }) {
+  const hasPreview = (file.file_type === 'image' || file.file_type === 'doc') && file.preview_url
+  const [secState,  setSecState]  = useState('idle')   // idle|loading|done|clean|error
+  const [maskedSrc, setMaskedSrc] = useState(null)
+  const [piiTypes,  setPiiTypes]  = useState([])
+
+  // 보안 모드 ON → mask_image 호출
+  useEffect(() => {
+    if (!securityMode || !hasPreview) return
+    if (secState !== 'idle') return
+    setSecState('loading')
+    const rel    = file.trichef_id || file.file_path
+    const domain = file.trichef_domain || 'image'
+    fetch(`${API_BASE}/api/security/mask_image?path=${encodeURIComponent(rel)}&domain=${domain}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.error) { setSecState('error'); return }
+        setPiiTypes(d.pii_types ?? [])
+        setMaskedSrc('data:image/png;base64,' + d.masked_b64)
+        setSecState(d.pii_found ? 'done' : 'clean')
+      })
+      .catch(() => setSecState('error'))
+  }, [securityMode, hasPreview, file.file_path, secState])
+
+  // 보안 모드 OFF → 초기화
+  useEffect(() => {
+    if (!securityMode) { setSecState('idle'); setMaskedSrc(null); setPiiTypes([]) }
+  }, [securityMode])
+
+  if (!hasPreview) return null
+
+  const imgSrc = securityMode && maskedSrc ? maskedSrc : `${API_BASE}${file.preview_url}`
+
+  return (
+    <div className="w-full flex-1 flex items-center justify-center min-h-0 relative">
+      {/* PII 스캔 중 오버레이 */}
+      {secState === 'loading' && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/50 rounded-xl">
+          <div className="flex flex-col items-center gap-2">
+            <span className="material-symbols-outlined text-amber-400 text-4xl animate-spin"
+              style={{ fontVariationSettings: '"FILL" 1' }}>shield</span>
+            <span className="text-amber-300 text-sm font-bold tracking-widest uppercase">PII 스캔 중...</span>
+          </div>
+        </div>
+      )}
+
+      <img
+        src={imgSrc}
+        alt={file.file_name}
+        className="max-w-full max-h-full object-contain rounded-xl shadow-2xl border border-outline-variant/10"
+        style={{ maxHeight: '380px' }}
+      />
+
+      {/* PII 탐지 배지 */}
+      {secState === 'done' && (
+        <div className="absolute top-3 right-3 flex flex-col items-end gap-1.5 z-10">
+          <div className="flex items-center gap-1.5 bg-red-950/90 border border-red-500/60 px-2.5 py-1.5 rounded-full text-xs text-red-300 font-bold backdrop-blur-sm shadow-lg">
+            <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: '"FILL" 1' }}>warning</span>
+            개인정보 마스킹됨
+          </div>
+          {piiTypes.map(t => (
+            <span key={t} className="bg-amber-900/70 border border-amber-500/40 px-2 py-0.5 rounded-full text-[11px] text-amber-200 font-bold backdrop-blur-sm">
+              {t.replace('KR_', '').replace('_', ' ')}
+            </span>
+          ))}
+        </div>
+      )}
+      {secState === 'clean' && (
+        <div className="absolute top-3 right-3 z-10">
+          <div className="flex items-center gap-1.5 bg-emerald-950/80 border border-emerald-500/40 px-2.5 py-1.5 rounded-full text-xs text-emerald-300 font-bold backdrop-blur-sm">
+            <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: '"FILL" 1' }}>verified</span>
+            개인정보 없음
+          </div>
+        </div>
+      )}
+      {secState === 'error' && (
+        <div className="absolute top-3 right-3 z-10">
+          <div className="flex items-center gap-1 bg-slate-800/80 border border-slate-500/30 px-2 py-1 rounded-full text-xs text-slate-400 backdrop-blur-sm">
+            <span className="material-symbols-outlined text-sm">error</span>
+            스캔 실패
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -461,6 +614,9 @@ export default function MainSearch() {
 
   // 이미지 쿼리 상태 (텍스트 쿼리와 분리)
   const [imgQuery, setImgQuery] = useState(null)   // { file, preview } | null
+
+  // 보안 모드
+  const [securityMode, setSecurityMode] = useState(false)
 
   // 요약
   const [summary, setSummary]               = useState(null)
@@ -976,8 +1132,8 @@ export default function MainSearch() {
                 </div>
               </form>
 
-              {/* ── 결과 수 선택 ── */}
-              <div className="mt-4 flex items-center justify-center gap-2 text-xs text-on-surface-variant"
+              {/* ── 결과 수 선택 + 보안 모드 ── */}
+              <div className="mt-4 flex items-center justify-center gap-3 text-xs text-on-surface-variant flex-wrap"
                 style={homeExiting ? { visibility: 'hidden' } : {}}>
                 <span className="opacity-50">결과 수</span>
                 {[10, 20, 30, 50].map(n => (
@@ -990,6 +1146,24 @@ export default function MainSearch() {
                     {n}
                   </button>
                 ))}
+                <div className="w-px h-4 bg-outline-variant/20 mx-1" />
+                {/* 보안 모드 토글 */}
+                <button
+                  type="button"
+                  onClick={() => setSecurityMode(m => !m)}
+                  title={securityMode ? '보안 모드 ON — 클릭하여 해제' : '보안 모드: 검색 결과에서 개인정보 자동 마스킹'}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-full border font-bold transition-all duration-200
+                    ${securityMode
+                      ? 'bg-amber-500/20 border-amber-400/70 text-amber-400 shadow-[0_0_14px_rgba(251,191,36,0.25)]'
+                      : 'border-outline-variant/20 text-on-surface-variant hover:border-amber-400/40 hover:text-amber-400'
+                    }`}
+                >
+                  <span className="material-symbols-outlined text-sm leading-none"
+                    style={{ fontVariationSettings: securityMode ? '"FILL" 1' : '"FILL" 0' }}>
+                    {securityMode ? 'security' : 'lock_open'}
+                  </span>
+                  <span>{securityMode ? '보안 ON' : '보안 모드'}</span>
+                </button>
               </div>
 
               <div className="mt-8 flex justify-center" style={homeExiting ? { visibility: 'hidden' } : {}}>
@@ -1103,6 +1277,23 @@ export default function MainSearch() {
             </div>
           </form>
 
+          {/* 보안 모드 토글 */}
+          <button
+            onClick={() => setSecurityMode(m => !m)}
+            title={securityMode ? '보안 모드 ON — 클릭하여 해제' : '보안 모드 OFF — 클릭하여 활성화'}
+            className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-bold transition-all duration-200
+              ${securityMode
+                ? 'bg-amber-500/15 border-amber-400/60 text-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.2)]'
+                : 'bg-surface-container-high border-outline-variant/20 text-on-surface-variant hover:border-amber-400/40 hover:text-amber-400'
+              }`}
+          >
+            <span className="material-symbols-outlined text-base"
+              style={{ fontVariationSettings: securityMode ? '"FILL" 1' : '"FILL" 0' }}>
+              {securityMode ? 'security' : 'lock_open'}
+            </span>
+            <span className="hidden sm:inline">{securityMode ? '보안 ON' : '보안'}</span>
+          </button>
+
           {view === 'detail' && (
             <button onClick={handleBackToResults}
               className="flex items-center gap-2 px-4 py-2 rounded-full bg-surface-container-high border border-outline-variant/20 text-base font-bold text-on-surface-variant hover:text-primary hover:border-primary/30 transition-all shrink-0">
@@ -1200,7 +1391,7 @@ export default function MainSearch() {
             {!searching && filteredResults.length > 0 && (
               <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
                 {filteredResults.map((r, i) => (
-                  <ResultCard key={r.file_path + i} result={r} rank={i + 1} onClick={() => handleSelectFile(r)} />
+                  <ResultCard key={r.file_path + i} result={r} rank={i + 1} onClick={() => handleSelectFile(r)} securityMode={securityMode} />
                 ))}
               </div>
             )}
@@ -1257,6 +1448,13 @@ export default function MainSearch() {
                 <span className={`px-2 py-0.5 rounded-full text-lg font-bold border shrink-0 ${meta.color} bg-white/5 border-white/10`}>{meta.label}</span>
               </div>
               <div className="flex items-center gap-3 shrink-0">
+                {/* 보안 모드 표시 (상세 페이지) */}
+                {securityMode && (
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/15 border border-amber-400/50 text-amber-300 text-xs font-bold">
+                    <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: '"FILL" 1' }}>security</span>
+                    보안 ON
+                  </div>
+                )}
                 <button
                   onClick={() => handleSummarize(selectedFile)}
                   disabled={summaryLoading}
@@ -1304,16 +1502,9 @@ export default function MainSearch() {
                     {isAV ? (
                       <AVDetailContent result={selectedFile} />
                     ) : (selectedFile.file_type === 'image' || selectedFile.file_type === 'doc') && selectedFile.preview_url ? (
-                      /* 이미지/문서: 실제 미리보기 */
+                      /* 이미지/문서: 실제 미리보기 (보안 마스킹 지원) */
                       <div className="flex-1 flex flex-col items-center justify-center px-8 py-6 gap-4 overflow-hidden">
-                        <div className="w-full flex-1 flex items-center justify-center min-h-0">
-                          <img
-                            src={`${API_BASE}${selectedFile.preview_url}`}
-                            alt={selectedFile.file_name}
-                            className="max-w-full max-h-full object-contain rounded-xl shadow-2xl border border-outline-variant/10"
-                            style={{ maxHeight: '340px' }}
-                          />
-                        </div>
+                        <DetailImagePreview file={selectedFile} securityMode={securityMode} />
                         {selectedFile.snippet && (
                           <p className="w-full text-lg text-on-surface-variant/70 leading-relaxed line-clamp-3 text-center">
                             {selectedFile.snippet}

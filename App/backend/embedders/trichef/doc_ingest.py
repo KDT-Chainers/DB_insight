@@ -137,10 +137,15 @@ def _libreoffice_to_pdf(src: Path, out_dir: Path) -> Path | None:
 def to_pages(src: Path, stem_key: str | None = None) -> list[Path]:
     """모든 지원 포맷 → 페이지 JPEG 리스트.
 
-    `stem_key` 가 주어지면 render_pdf 로 그대로 전달되어 PAGE_DIR 의 서브
-    디렉토리 이름이 충돌 방지 형식(`<stem>__<md5hash>`)으로 생성된다.
+    `stem_key` 가 주어지면 render_pdf / render_image 로 그대로 전달되어
+    PAGE_DIR 의 서브디렉토리 이름이 충돌 방지 형식(`<stem>__<md5hash>`)으로
+    생성된다.
     """
     ext = src.suffix.lower()
+
+    # 이미지 파일 → 단일 페이지 JPEG 변환 (webp/png/jpg/heic 등)
+    if ext in doc_page_render.IMAGE_PAGE_EXTS:
+        return doc_page_render.render_image(src, stem_key=stem_key)
 
     if ext == ".pdf":
         return doc_page_render.render_pdf(src, stem_key=stem_key)

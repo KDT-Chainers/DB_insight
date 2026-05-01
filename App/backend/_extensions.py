@@ -39,6 +39,7 @@ DOC_EBOOK_EXTS:  frozenset[str] = frozenset({".epub"})
 
 DOC_EXTS: frozenset[str] = (
     DOC_PDF_EXTS | DOC_OFFICE_EXTS | DOC_HWP_EXTS | DOC_TEXT_EXTS | DOC_EBOOK_EXTS
+    | IMG_EXTS   # raw_DB/Doc/ 안의 이미지(주민등록증.webp 등)도 doc_page 도메인으로 색인
 )
 
 # 단일 도메인 진입점들이 사용 (image/doc 페이지 파일)
