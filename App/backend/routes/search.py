@@ -91,8 +91,10 @@ def search():
             )
 
             # 합치기 — guaranteed 먼저, 그 다음 extras (가중 score 순)
+            # [v4] dedup 단계에서 file_name 중복으로 결과 줄어들 수 있어 여유분 (×2)
+            # 받아서 후속 dedup 후 top_k 까지 채움.
             combined = guaranteed + extras
-            results = combined[:top_k]
+            results = combined[:top_k * 2]
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500

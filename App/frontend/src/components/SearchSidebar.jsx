@@ -92,8 +92,8 @@ export default function SearchSidebar() {
                 : 'bg-surface-container-high border-outline-variant/15 hover:bg-surface-container-highest text-on-surface'
             }`}
           >
-            <span className="material-symbols-outlined text-lg">database</span>
-            <span className="font-manrope uppercase tracking-[0.05em] text-lg">데이터</span>
+            <span className="material-symbols-outlined text-base">database</span>
+            <span className="font-manrope uppercase tracking-[0.03em] text-sm whitespace-nowrap">데이터</span>
           </button>
         </div>
 

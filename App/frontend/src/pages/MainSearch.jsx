@@ -482,11 +482,11 @@ export default function MainSearch() {
         setView('results')
         window.history.pushState({ view: 'results' }, '')
         requestAnimationFrame(() => setResultsReady(true))
-        fetchResults(q)
+        fetchResults(q, domainFilter)
       }, 480)
     } else {
       setView('results')
-      fetchResults(q)
+      fetchResults(q, domainFilter)
     }
   }
 
