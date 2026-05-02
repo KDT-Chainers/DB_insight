@@ -1,0 +1,1913 @@
+[
+  {
+    "query": "시대의",
+    "expected_basenames": [
+      "22. RR2021-22 교육 뉴노멀 시대의 학습복지 실현 방안(이희현)_수정본(M3).pdf",
+      "빅데이터 시대의 고고학 학술심포지엄 자료집.pdf"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "브리프 특집호",
+    "expected_basenames": [
+      "(SPRi)_AI브리프[특집호]_GPT4_v1.1.pdf",
+      "(SPRi)_AI브리프[특집호]_생성 AI가 노동시장에 미치는 영향 (1).pdf"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "월호 전문",
+    "expected_basenames": [
+      "250218 SW 중심사회 2월호(전문).pdf",
+      "SW 중심사회 5월호 전문.pdf"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "보고서 년",
+    "expected_basenames": [
+      "(공표용 보고서) 2025년 가상증강현실(VR·AR)산업 실태조사.pdf",
+      "[보고서] 2021년 이러닝산업 실태조사 보고서_20230828.pdf"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "융합실태조사",
+    "expected_basenames": [
+      "2020 SW융합실태조사 보고서(최종)_v20230421-01.pdf",
+      "2023년 SW융합실태조사_v240828a.pdf"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "교통",
+    "expected_basenames": [
+      "04. 등록본_국가 모빌리티 진단과 교통SOC 투자정책 연구_250115.pdf",
+      "04. 등록본_기본-RR-24-05. 교통 사망사고 정밀 분석을 위한 데이터 조사체계 및 활용방안_241219 (1).pdf"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "국가",
+    "expected_basenames": [
+      "04. 등록본_국가 모빌리티 진단과 교통SOC 투자정책 연구_250115.pdf",
+      "오세경 26-07 2025년 북중 무역 평가_국가 유통망의 복원과 무역 적자의 심화.pdf"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "주요국의",
+    "expected_basenames": [
+      "세경포 26-14 주요국의 산업부문 탄소 배출량 데이터 관리 제도 동향과 시사점.pdf",
+      "세경포 26-21 최근 주요국의 중앙아시아 다자 정상회의 개최 배경과 시사점.pdf"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "평가",
+    "expected_basenames": [
+      "세경포 26-16 EU CBAM 확정기간 이행 동향과 시사점_이행규정 평가 및 CBAM 노출도 분석.pdf",
+      "오세경 26-07 2025년 북중 무역 평가_국가 유통망의 복원과 무역 적자의 심화.pdf"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "배경과 시사점",
+    "expected_basenames": [
+      "세경포 26-21 최근 주요국의 중앙아시아 다자 정상회의 개최 배경과 시사점.pdf",
+      "세경포 26-29 방글라데시 최빈개도국(LDC) 졸업 유예 추진 배경과 시사점.pdf"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "배터리 산업",
+    "expected_basenames": [
+      "세경포 26-23 중국 전기차 및 배터리 산업 구조조정 현황 및 전망.pdf",
+      "연구보고서 2024-13 글로벌 산업통상정책 변화에 따른 한국 배터리 산업 영향과 대응전략.pdf"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "이란",
+    "expected_basenames": [
+      "세경포 26-25 미-이란 전쟁이 신흥국에 미치는 영향.pdf",
+      "오세경 26-09_미-이란 전쟁에 따른 유가 충격의 주요국 파급효과.pdf"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "주요",
+    "expected_basenames": [
+      "세경포 26-26 EU 산업가속화법(IAA)의 주요 내용과 시사점.pdf",
+      "오세경 26-08 IEEPA 관세에 관한 미 연방대법원 판결의 주요 쟁점과 후속 관세조치.pdf"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "관한",
+    "expected_basenames": [
+      "(이슈와논점+2220호-20240326)정치인+피습에+따른+경찰+경호의+입법적+쟁점+-「요인경호법안」과+「경찰경호에+관한+법률안」을+중심으로-.pdf",
+      "오세경 26-08 IEEPA 관세에 관한 미 연방대법원 판결의 주요 쟁점과 후속 관세조치.pdf"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "연구보고서",
+    "expected_basenames": [
+      "연구보고서 2024-07 국내기업의 인공지능 활용과 정책과제.pdf",
+      "연구보고서 2024-13 글로벌 산업통상정책 변화에 따른 한국 배터리 산업 영향과 대응전략.pdf"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "sm2016",
+    "expected_basenames": [
+      "SM2016-01-01.pdf",
+      "SM2016-01-02.pdf"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "쟁점",
+    "expected_basenames": [
+      "(이슈와논점+2220호-20240326)정치인+피습에+따른+경찰+경호의+입법적+쟁점+-「요인경호법안」과+「경찰경호에+관한+법률안」을+중심으로-.pdf",
+      "WP 26-01 언론기사에서 나타나는 국유지 관리 갈등 및 쟁점 분석_정민기.pdf"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "정책 과제",
+    "expected_basenames": [
+      "[단행본] 생활안전 중심의 범죄예방 환경조성 정책 과제.pdf",
+      "「재정건전화법안」의+쟁점과+입법과제++재정준칙+(경제&#xB7;산업+분야+입법+및+정책+과제+통권+제3호).pdf"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "법제사법위원회 회의록",
+    "expected_basenames": [
+      "법제사법위원회_회의록._제299회(5차).pdf",
+      "법제사법위원회_회의록._제315회(6차).pdf"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "의결",
+    "expected_basenames": [
+      "260410 (보도자료) 의결(다). ‘유효기간 만료’ 방송사, 재허가 의결.pdf",
+      "260410 (보도자료) 의결(사). 위치정보 사업자 373곳, 과징금·과태료 처분.pdf"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "nars",
+    "expected_basenames": [
+      "(보고서_211231)+NARS+현안분석+제239호+영국과+일본의+법안사전심사제+현황과+시사점.pdf",
+      "NARS+Brief+제59호.pdf"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "도서관이야기 년",
+    "expected_basenames": [
+      "[도서관이야기] 2023년 5+6월호.pdf",
+      "[도서관이야기] 2023년 7+8월호.pdf"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "펼침 아웃라인",
+    "expected_basenames": [
+      "도서관 12월호 펼침_아웃라인_compress.pdf",
+      "도서관 6월호 펼침_아웃라인_compressed.pdf"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "아웃라인",
+    "expected_basenames": [
+      "도서관 12월호 펼침_아웃라인_compress.pdf",
+      "도서관 6월호 펼침_아웃라인_compressed.pdf"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "자료집",
+    "expected_basenames": [
+      "대전환시대 국토 전망과 과제 - 릴레이 학술행사 세미나 자료집.pdf",
+      "빅데이터 시대의 고고학 학술심포지엄 자료집.pdf",
+      "환경정의_포럼_자료집.pdf"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "동향과",
+    "expected_basenames": [
+      "(SPRi) AI브리프특집호_AI 데이터센터 동향과 시사점_250730_F.pdf",
+      "세경포 26-14 주요국의 산업부문 탄소 배출량 데이터 관리 제도 동향과 시사점.pdf",
+      "세경포 26-16 EU CBAM 확정기간 이행 동향과 시사점_이행규정 평가 및 CBAM 노출도 분석.pdf"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "미치는",
+    "expected_basenames": [
+      "(SPRi)_AI브리프[특집호]_생성 AI가 노동시장에 미치는 영향 (1).pdf",
+      "세경포 26-25 미-이란 전쟁이 신흥국에 미치는 영향.pdf",
+      "온실가스 감축정책이 제조업 경쟁력에 미치는 영향.pdf"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "최종 소프트",
+    "expected_basenames": [
+      "(최종) 소프트8월호(단면).pdf",
+      "(최종)소프트 9월호(단면).pdf",
+      "최종_ 소프트 10월호(단면).pdf"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "수정",
+    "expected_basenames": [
+      "2020 VRAR산업 실태조사 결과보고서 최종_수정_221021.pdf",
+      "2021 가상증강현실(VRAR)산업 실태조사_수정_221026.pdf",
+      "SW 중심사회 2월호(0226 수정).pdf"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "년 산업",
+    "expected_basenames": [
+      "2017년 SW산업 실태조사 보고서.pdf",
+      "2022년 SW산업 연간보고서.pdf",
+      "2023년 SW산업 실태조사_20241210.pdf"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "소프트웨어",
+    "expected_basenames": [
+      "2018년 소프트웨어 산업 실태조사.pdf",
+      "2019 소프트웨어 산업 실태조사.pdf",
+      "연구17-015_2017 소프트웨어 산업 실태조사.pdf"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "년 융합",
+    "expected_basenames": [
+      "2022년 SW융합 실태조사_v20231006-01.pdf",
+      "2024년 SW융합 실태조사-최종(0902).pdf",
+      "RE-96_2019년 SW융합 실태조사.pdf"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "분석",
+    "expected_basenames": [
+      "(정책연구 2024-15-01)국가난제를 다룰 정책 접근과 분석(1권)-홍성주.pdf",
+      "WP 26-01 언론기사에서 나타나는 국유지 관리 갈등 및 쟁점 분석_정민기.pdf",
+      "세경포 26-16 EU CBAM 확정기간 이행 동향과 시사점_이행규정 평가 및 CBAM 노출도 분석.pdf"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "배경과",
+    "expected_basenames": [
+      "세경포 26-21 최근 주요국의 중앙아시아 다자 정상회의 개최 배경과 시사점.pdf",
+      "세경포 26-24 우리나라의 중동산 원유 의존 배경과 과제.pdf",
+      "세경포 26-29 방글라데시 최빈개도국(LDC) 졸업 유예 추진 배경과 시사점.pdf"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "b090003",
+    "expected_basenames": [
+      "B090003_2012_M_0088.pdf",
+      "B090003_2012_M_0089.pdf",
+      "B090003_2012_M_0090.pdf"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "회 차",
+    "expected_basenames": [
+      "국회본회의_회의록._제25회(8차).pdf",
+      "법제사법위원회_회의록._제299회(5차).pdf",
+      "법제사법위원회_회의록._제315회(6차).pdf"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "회의록 제",
+    "expected_basenames": [
+      "국회본회의_회의록._제25회(8차).pdf",
+      "법제사법위원회_회의록._제299회(5차).pdf",
+      "법제사법위원회_회의록._제315회(6차).pdf"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "제 호",
+    "expected_basenames": [
+      "(보고서_211231)+NARS+현안분석+제239호+영국과+일본의+법안사전심사제+현황과+시사점.pdf",
+      "NARS+Brief+제59호.pdf",
+      "「재정건전화법안」의+쟁점과+입법과제++재정준칙+(경제&#xB7;산업+분야+입법+및+정책+과제+통권+제3호).pdf"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "의사규칙",
+    "expected_basenames": [
+      "독일_연방의회_의사규칙.PDF",
+      "연방상원_의사규칙.PDF",
+      "연방참사원_의사규칙.PDF"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "보도자료",
+    "expected_basenames": [
+      "(국제농식품협력관-국제협력총괄과) 식량농업기구(FAO) 세계식량가격지수 전월 대비 2.4% 상승  보도자료(4.4 배포시).pdf",
+      "260410 (보도자료) 의결(다). ‘유효기간 만료’ 방송사, 재허가 의결.pdf",
+      "260410 (보도자료) 의결(사). 위치정보 사업자 373곳, 과징금·과태료 처분.pdf",
+      "260410_보도자료_산업전환 고용안정 전문가 포럼 2기 1차회의.pdf"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "월 중심사회",
+    "expected_basenames": [
+      "10월 SW 중심사회 .pdf",
+      "12월 SW 중심사회.pdf",
+      "2020년 2월 중심사회.pdf",
+      "5월 SW 중심사회(전체).pdf"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "산업 연간보고서",
+    "expected_basenames": [
+      "2015_SW산업 연간보고서.pdf",
+      "2016 SW산업 연간보고서.pdf",
+      "2022년 SW산업 연간보고서.pdf",
+      "SW산업 연간보고서_2014_상반기.pdf"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "년 가상증강현실",
+    "expected_basenames": [
+      "(공표용 보고서) 2025년 가상증강현실(VR·AR)산업 실태조사.pdf",
+      "2022년 가상증강현실(VRAR)산업 실태조사_230925.pdf",
+      "2024년 가상증강현실(VRAR)산업 실태조사 보고서-2.pdf",
+      "_공표용보고서_2023년 가상증강현실(VRAR)산업 실태조사_F.pdf"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "융합 실태조사",
+    "expected_basenames": [
+      "2021 SW융합 실태조사 보고서_v20230522-01.pdf",
+      "2022년 SW융합 실태조사_v20231006-01.pdf",
+      "2024년 SW융합 실태조사-최종(0902).pdf",
+      "RE-96_2019년 SW융합 실태조사.pdf"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "x297",
+    "expected_basenames": [
+      "report_210x297_201911_1st (1).pdf",
+      "report_210x297_201912_2st (1).pdf",
+      "report_210x297_201912_3rd.pdf",
+      "report_210x297_201912_4th.pdf"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "b090039",
+    "expected_basenames": [
+      "B090039_2001_M_0040.pdf",
+      "B090039_2011_M_0042.pdf",
+      "B090039_2011_M_0043.pdf",
+      "B090039_2011_M_0044.pdf"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "브리프 년",
+    "expected_basenames": [
+      "AI 브리프 2022년 11월호.pdf",
+      "AI 브리프 2022년 12월호.pdf",
+      "AI 브리프 2023년 2월호.pdf",
+      "AI브리프 2023년 1월호.pdf",
+      "SPRi_월간AI브리프_2022년03월호.pdf"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "월호 스페셜",
+    "expected_basenames": [
+      "SPRI_AI_Brief_2023년10월호_스페셜_F.pdf",
+      "SPRI_AI_Brief_2023년11월호_스페셜_F.pdf",
+      "SPRI_AI_Brief_2023년7월호_스페셜_F.pdf",
+      "SPRI_AI_Brief_2023년8월호_스페셜.pdf",
+      "SPRi AI Brief_6월호_스페셜.pdf"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "월 최종",
+    "expected_basenames": [
+      "SW중심사회 11월 최종(단면).pdf",
+      "SW중심사회_3월 최종(단면).pdf",
+      "SW중심사회_4월 최종(단면).pdf",
+      "SW중심사회_6월 최종(단면).pdf",
+      "SW중심사회_9월 최종(단면).pdf"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "가상증강현실 산업",
+    "expected_basenames": [
+      "(공표용 보고서) 2025년 가상증강현실(VR·AR)산업 실태조사.pdf",
+      "2021 가상증강현실(VRAR)산업 실태조사_수정_221026.pdf",
+      "2022년 가상증강현실(VRAR)산업 실태조사_230925.pdf",
+      "2024년 가상증강현실(VRAR)산업 실태조사 보고서-2.pdf",
+      "_공표용보고서_2023년 가상증강현실(VRAR)산업 실태조사_F.pdf"
+    ],
+    "source": "filename",
+    "domain": "doc"
+  },
+  {
+    "query": "e15",
+    "expected_basenames": [
+      "1B647C12-941E-4E15-9708-E50E16E9B499.jpg",
+      "FCBE7670-77E8-4197-9E15-AB8C9E831CB3.jpg"
+    ],
+    "source": "filename",
+    "domain": "image"
+  },
+  {
+    "query": "f0e",
+    "expected_basenames": [
+      "25C0229D-E112-4F0E-A050-C2FC416FD90A.jpg",
+      "DB3D7A28-57B7-4584-9F0E-990807F8E3A8.jpg"
+    ],
+    "source": "filename",
+    "domain": "image"
+  },
+  {
+    "query": "bf6",
+    "expected_basenames": [
+      "2C171054-D34C-4C4D-9BF6-E34D8908ACA3.jpg",
+      "9165CE64-ADE3-4BF6-9E21-1BD1CCC6663A.jpg"
+    ],
+    "source": "filename",
+    "domain": "image"
+  },
+  {
+    "query": "doll",
+    "expected_basenames": [
+      "cat_doll_34.jpg",
+      "cat_doll_35.jpg"
+    ],
+    "source": "filename",
+    "domain": "image"
+  },
+  {
+    "query": "art",
+    "expected_basenames": [
+      "coffee_art_29.jpg",
+      "coffee_art_30.jpg"
+    ],
+    "source": "filename",
+    "domain": "image"
+  },
+  {
+    "query": "painting",
+    "expected_basenames": [
+      "sunset_painting_44.jpg",
+      "sunset_painting_45.jpg"
+    ],
+    "source": "filename",
+    "domain": "image"
+  },
+  {
+    "query": "c59",
+    "expected_basenames": [
+      "36F73FE6-1376-4C59-B1B4-044B7BE2CC6A.jpg",
+      "B9FBB632-9C59-4BE7-9193-775321A8021D.jpg",
+      "EE9AD468-BFC1-4C59-9184-FEBB61F34149.jpg"
+    ],
+    "source": "filename",
+    "domain": "image"
+  },
+  {
+    "query": "model",
+    "expected_basenames": [
+      "book_model_19.jpg",
+      "book_model_20.jpg",
+      "food_model_24.jpg",
+      "food_model_25.jpg"
+    ],
+    "source": "filename",
+    "domain": "image"
+  },
+  {
+    "query": "fake",
+    "expected_basenames": [
+      "fake_flower_14.jpg",
+      "fake_flower_15.jpg",
+      "fake_tree_39.jpg",
+      "fake_tree_40.jpg"
+    ],
+    "source": "filename",
+    "domain": "image"
+  },
+  {
+    "query": "book",
+    "expected_basenames": [
+      "book_model_19.jpg",
+      "book_model_20.jpg",
+      "real_book_16.jpg",
+      "real_book_17.jpg",
+      "real_book_18.jpg"
+    ],
+    "source": "filename",
+    "domain": "image"
+  },
+  {
+    "query": "cat",
+    "expected_basenames": [
+      "cat_doll_34.jpg",
+      "cat_doll_35.jpg",
+      "real_cat_31.jpg",
+      "real_cat_32.jpg",
+      "real_cat_33.jpg"
+    ],
+    "source": "filename",
+    "domain": "image"
+  },
+  {
+    "query": "coffee",
+    "expected_basenames": [
+      "coffee_art_29.jpg",
+      "coffee_art_30.jpg",
+      "real_coffee_26.jpg",
+      "real_coffee_27.jpg",
+      "real_coffee_28.jpg"
+    ],
+    "source": "filename",
+    "domain": "image"
+  },
+  {
+    "query": "dog",
+    "expected_basenames": [
+      "dog_toy_09.jpg",
+      "dog_toy_10.jpg",
+      "real_dog_06.jpg",
+      "real_dog_07.jpg",
+      "real_dog_08.jpg"
+    ],
+    "source": "filename",
+    "domain": "image"
+  },
+  {
+    "query": "tree",
+    "expected_basenames": [
+      "fake_tree_39.jpg",
+      "fake_tree_40.jpg",
+      "real_tree_36.jpg",
+      "real_tree_37.jpg",
+      "real_tree_38.jpg"
+    ],
+    "source": "filename",
+    "domain": "image"
+  },
+  {
+    "query": "apple",
+    "expected_basenames": [
+      "real_apple_01.jpg",
+      "real_apple_02.jpg",
+      "real_apple_03.jpg",
+      "toy_apple_04.jpg",
+      "toy_apple_05.jpg"
+    ],
+    "source": "filename",
+    "domain": "image"
+  },
+  {
+    "query": "car",
+    "expected_basenames": [
+      "real_car_46.jpg",
+      "real_car_47.jpg",
+      "real_car_48.jpg",
+      "toy_car_49.jpg",
+      "toy_car_50.jpg"
+    ],
+    "source": "filename",
+    "domain": "image"
+  },
+  {
+    "query": "sunset",
+    "expected_basenames": [
+      "real_sunset_41.jpg",
+      "real_sunset_42.jpg",
+      "real_sunset_43.jpg",
+      "sunset_painting_44.jpg",
+      "sunset_painting_45.jpg"
+    ],
+    "source": "filename",
+    "domain": "image"
+  },
+  {
+    "query": "toy",
+    "expected_basenames": [
+      "dog_toy_09.jpg",
+      "dog_toy_10.jpg",
+      "toy_apple_04.jpg",
+      "toy_apple_05.jpg",
+      "toy_car_49.jpg",
+      "toy_car_50.jpg"
+    ],
+    "source": "filename",
+    "domain": "image"
+  },
+  {
+    "query": "seoul",
+    "expected_basenames": [
+      "seoul_01.jpg",
+      "seoul_02.jpg",
+      "seoul_03.jpg",
+      "seoul_04.jpg",
+      "seoul_05.jpg",
+      "seoul_06.jpg",
+      "seoul_09.jpg",
+      "seoul_10.jpg"
+    ],
+    "source": "filename",
+    "domain": "image"
+  },
+  {
+    "query": "cafe",
+    "expected_basenames": [
+      "korean_cafe_01.jpg",
+      "korean_cafe_02.jpg",
+      "korean_cafe_03.jpg",
+      "korean_cafe_04.jpg",
+      "korean_cafe_05.jpg",
+      "korean_cafe_06.jpg",
+      "korean_cafe_07.jpg",
+      "korean_cafe_09.jpg",
+      "korean_cafe_10.jpg"
+    ],
+    "source": "filename",
+    "domain": "image"
+  },
+  {
+    "query": "market",
+    "expected_basenames": [
+      "korean_market_01.jpg",
+      "korean_market_02.jpg",
+      "korean_market_03.jpg",
+      "korean_market_04.jpg",
+      "korean_market_05.jpg",
+      "korean_market_06.jpg",
+      "korean_market_07.jpg",
+      "korean_market_08.jpg",
+      "korean_market_09.jpg",
+      "korean_market_10.jpg"
+    ],
+    "source": "filename",
+    "domain": "image"
+  },
+  {
+    "query": "street",
+    "expected_basenames": [
+      "korean_street_01.jpg",
+      "korean_street_02.jpg",
+      "korean_street_03.jpg",
+      "korean_street_04.jpg",
+      "korean_street_05.jpg",
+      "korean_street_06.jpg",
+      "korean_street_07.jpg",
+      "korean_street_08.jpg",
+      "korean_street_09.jpg",
+      "korean_street_10.jpg"
+    ],
+    "source": "filename",
+    "domain": "image"
+  },
+  {
+    "query": "gradient",
+    "expected_basenames": [
+      "gradient_01.jpg",
+      "gradient_02.jpg",
+      "gradient_03.jpg",
+      "gradient_04.jpg",
+      "gradient_05.jpg",
+      "gradient_06.jpg",
+      "gradient_07.jpg",
+      "gradient_08.jpg",
+      "gradient_09.jpg",
+      "gradient_10.jpg"
+    ],
+    "source": "filename",
+    "domain": "image"
+  },
+  {
+    "query": "noise",
+    "expected_basenames": [
+      "noise_01.jpg",
+      "noise_02.jpg",
+      "noise_03.jpg",
+      "noise_04.jpg",
+      "noise_05.jpg",
+      "noise_06.jpg",
+      "noise_07.jpg",
+      "noise_08.jpg",
+      "noise_09.jpg",
+      "noise_10.jpg"
+    ],
+    "source": "filename",
+    "domain": "image"
+  },
+  {
+    "query": "pattern",
+    "expected_basenames": [
+      "pattern_01.jpg",
+      "pattern_02.jpg",
+      "pattern_03.jpg",
+      "pattern_04.jpg",
+      "pattern_05.jpg",
+      "pattern_06.jpg",
+      "pattern_07.jpg",
+      "pattern_08.jpg",
+      "pattern_09.jpg",
+      "pattern_10.jpg"
+    ],
+    "source": "filename",
+    "domain": "image"
+  },
+  {
+    "query": "solid",
+    "expected_basenames": [
+      "solid_01.jpg",
+      "solid_02.jpg",
+      "solid_03.jpg",
+      "solid_04.jpg",
+      "solid_05.jpg",
+      "solid_06.jpg",
+      "solid_07.jpg",
+      "solid_08.jpg",
+      "solid_09.jpg",
+      "solid_10.jpg"
+    ],
+    "source": "filename",
+    "domain": "image"
+  },
+  {
+    "query": "texture",
+    "expected_basenames": [
+      "texture_01.jpg",
+      "texture_02.jpg",
+      "texture_03.jpg",
+      "texture_04.jpg",
+      "texture_05.jpg",
+      "texture_06.jpg",
+      "texture_07.jpg",
+      "texture_08.jpg",
+      "texture_09.jpg",
+      "texture_10.jpg"
+    ],
+    "source": "filename",
+    "domain": "image"
+  },
+  {
+    "query": "animal",
+    "expected_basenames": [
+      "animal_00.jpg",
+      "animal_01.jpg",
+      "animal_02.jpg",
+      "animal_03.jpg",
+      "animal_04.jpg",
+      "animal_05.jpg",
+      "animal_06.jpg",
+      "animal_07.jpg",
+      "animal_08.jpg",
+      "animal_09.jpg",
+      "animal_10.jpg",
+      "animal_11.jpg",
+      "animal_12.jpg",
+      "animal_13.jpg",
+      "animal_15.jpg",
+      "animal_16.jpg",
+      "animal_17.jpg",
+      "animal_19.jpg",
+      "animal_20.jpg",
+      "animal_21.jpg"
+    ],
+    "source": "filename",
+    "domain": "image"
+  },
+  {
+    "query": "building",
+    "expected_basenames": [
+      "building_00.jpg",
+      "building_01.jpg",
+      "building_02.jpg",
+      "building_03.jpg",
+      "building_04.jpg",
+      "building_05.jpg",
+      "building_06.jpg",
+      "building_07.jpg",
+      "building_08.jpg",
+      "building_09.jpg",
+      "building_10.jpg",
+      "building_11.jpg",
+      "building_12.jpg",
+      "building_13.jpg",
+      "building_14.jpg",
+      "building_15.jpg",
+      "building_16.jpg",
+      "building_17.jpg",
+      "building_18.jpg",
+      "building_19.jpg"
+    ],
+    "source": "filename",
+    "domain": "image"
+  },
+  {
+    "query": "furniture",
+    "expected_basenames": [
+      "furniture_00.jpg",
+      "furniture_01.jpg",
+      "furniture_02.jpg",
+      "furniture_03.jpg",
+      "furniture_04.jpg",
+      "furniture_05.jpg",
+      "furniture_06.jpg",
+      "furniture_07.jpg",
+      "furniture_08.jpg",
+      "furniture_09.jpg",
+      "furniture_10.jpg",
+      "furniture_11.jpg",
+      "furniture_12.jpg",
+      "furniture_13.jpg",
+      "furniture_14.jpg",
+      "furniture_15.jpg",
+      "furniture_16.jpg",
+      "furniture_17.jpg",
+      "furniture_18.jpg",
+      "furniture_19.jpg"
+    ],
+    "source": "filename",
+    "domain": "image"
+  },
+  {
+    "query": "indoor",
+    "expected_basenames": [
+      "indoor_00.jpg",
+      "indoor_01.jpg",
+      "indoor_02.jpg",
+      "indoor_03.jpg",
+      "indoor_04.jpg",
+      "indoor_05.jpg",
+      "indoor_06.jpg",
+      "indoor_07.jpg",
+      "indoor_08.jpg",
+      "indoor_09.jpg",
+      "indoor_10.jpg",
+      "indoor_11.jpg",
+      "indoor_12.jpg",
+      "indoor_13.jpg",
+      "indoor_14.jpg",
+      "indoor_15.jpg",
+      "indoor_16.jpg",
+      "indoor_17.jpg",
+      "indoor_18.jpg",
+      "indoor_19.jpg"
+    ],
+    "source": "filename",
+    "domain": "image"
+  },
+  {
+    "query": "nature",
+    "expected_basenames": [
+      "nature_00.jpg",
+      "nature_01.jpg",
+      "nature_02.jpg",
+      "nature_03.jpg",
+      "nature_04.jpg",
+      "nature_05.jpg",
+      "nature_06.jpg",
+      "nature_07.jpg",
+      "nature_08.jpg",
+      "nature_09.jpg",
+      "nature_10.jpg",
+      "nature_11.jpg",
+      "nature_12.jpg",
+      "nature_13.jpg",
+      "nature_14.jpg",
+      "nature_15.jpg",
+      "nature_16.jpg",
+      "nature_17.jpg",
+      "nature_18.jpg",
+      "nature_19.jpg"
+    ],
+    "source": "filename",
+    "domain": "image"
+  },
+  {
+    "query": "sports",
+    "expected_basenames": [
+      "sports_00.jpg",
+      "sports_01.jpg",
+      "sports_02.jpg",
+      "sports_03.jpg",
+      "sports_04.jpg",
+      "sports_05.jpg",
+      "sports_06.jpg",
+      "sports_07.jpg",
+      "sports_08.jpg",
+      "sports_09.jpg",
+      "sports_10.jpg",
+      "sports_11.jpg",
+      "sports_12.jpg",
+      "sports_13.jpg",
+      "sports_14.jpg",
+      "sports_15.jpg",
+      "sports_16.jpg",
+      "sports_17.jpg",
+      "sports_18.jpg",
+      "sports_19.jpg"
+    ],
+    "source": "filename",
+    "domain": "image"
+  },
+  {
+    "query": "vehicle",
+    "expected_basenames": [
+      "vehicle_00.jpg",
+      "vehicle_01.jpg",
+      "vehicle_02.jpg",
+      "vehicle_03.jpg",
+      "vehicle_04.jpg",
+      "vehicle_05.jpg",
+      "vehicle_06.jpg",
+      "vehicle_07.jpg",
+      "vehicle_08.jpg",
+      "vehicle_09.jpg",
+      "vehicle_10.jpg",
+      "vehicle_11.jpg",
+      "vehicle_12.jpg",
+      "vehicle_13.jpg",
+      "vehicle_14.jpg",
+      "vehicle_15.jpg",
+      "vehicle_16.jpg",
+      "vehicle_17.jpg",
+      "vehicle_18.jpg",
+      "vehicle_19.jpg"
+    ],
+    "source": "filename",
+    "domain": "image"
+  },
+  {
+    "query": "e06",
+    "expected_basenames": [
+      "2013 글로벌 다큐멘터리-인류, 우리 모두의 이야기 E06 생존자들(Survivors) 130915 HDTV Film x264 720p-Ernie.mp4",
+      "NGC 코스모스 E06.140419.HDTV.H264.1080p-HDione.mkv"
+    ],
+    "source": "filename",
+    "domain": "video"
+  },
+  {
+    "query": "e09",
+    "expected_basenames": [
+      "2013 글로벌 다큐멘터리-인류, 우리 모두의 이야기 E09 개척자들(Pioneers) 131006 HDTV Film x264 720p-Ernie.mp4",
+      "NGC 코스모스 E09.140510.HDTV.H264.1080p-HDione.mkv"
+    ],
+    "source": "filename",
+    "domain": "video"
+  },
+  {
+    "query": "e12",
+    "expected_basenames": [
+      "2013 글로벌 다큐멘터리-인류, 우리 모두의 이야기 E12 새로운 변경(new frontier) 131019 HDTV Film x264 720p-Ernie.mp4",
+      "NGC 코스모스 E12.140531.HDTV.H264.1080p-HDione.mkv"
+    ],
+    "source": "filename",
+    "domain": "video"
+  },
+  {
+    "query": "개척자들",
+    "expected_basenames": [
+      "2013 글로벌 다큐멘터리-인류, 우리 모두의 이야기 E09 개척자들(Pioneers) 131006 HDTV Film x264 720p-Ernie.mp4",
+      "新 실크로드 제09부 - 제국의 개척자들.avi"
+    ],
+    "source": "filename",
+    "domain": "video"
+  },
+  {
+    "query": "물리다",
+    "expected_basenames": [
+      "듣기만 해도 이해되는 양자역학 한 방에 정리👊  범준에 물리다.mp4",
+      "물리학자들이 논리로 맞서 싸우면 무서운 이유 ㅋㅋㅋ (물리학자 vs 물리학자) l 범준에 물리다.mp4"
+    ],
+    "source": "filename",
+    "domain": "video"
+  },
+  {
+    "query": "범준에 물리다",
+    "expected_basenames": [
+      "듣기만 해도 이해되는 양자역학 한 방에 정리👊  범준에 물리다.mp4",
+      "물리학자들이 논리로 맞서 싸우면 무서운 이유 ㅋㅋㅋ (물리학자 vs 물리학자) l 범준에 물리다.mp4"
+    ],
+    "source": "filename",
+    "domain": "video"
+  },
+  {
+    "query": "지금",
+    "expected_basenames": [
+      "IMF때보다 심각하다. 지금 당장 현금 대신 담아야 할 자산ㅣ지식인초대석 EP.94 (홍익희 교수 1부).mp4",
+      "지금 한국은 최악의 경제 위기입니다.. 월급 4분의1은 '여기' 투자하세요! (김대종 교수 1편).mp4"
+    ],
+    "source": "filename",
+    "domain": "video"
+  },
+  {
+    "query": "ytn",
+    "expected_basenames": [
+      "'웰스 6이닝 1실점' LG, 개막 3연패 뒤 2연승...kt는 5연승 고공비행  YTN.mp4",
+      "민희진 뉴진스 위해...256억 포기할 테니 모든 소송 끝내자 파격 제안 [지금이뉴스]  YTN.mp4"
+    ],
+    "source": "filename",
+    "domain": "video"
+  },
+  {
+    "query": "얼굴",
+    "expected_basenames": [
+      "69년 폭등장과 폭락장에 살아남은 백전노장의 투자 비법! 87세 일본 주식 개미 😱┃금리를 알아야 부자가 된다┃저금리에서 살아남기┃돈의 얼굴┃#골라듄다큐.mp4",
+      "EBS 다큐프라임 [돈의 얼굴 1부 - 돈을 믿습니까_] 💰돈의 변천사 _ 은행의 원리 _ 돈에 관한 기초 상식.mp4"
+    ],
+    "source": "filename",
+    "domain": "video"
+  },
+  {
+    "query": "돈을",
+    "expected_basenames": [
+      "EBS 다큐프라임 [돈의 얼굴 1부 - 돈을 믿습니까_] 💰돈의 변천사 _ 은행의 원리 _ 돈에 관한 기초 상식.mp4",
+      "적은 돈을 큰 돈으로 불리는 가장 확실한 투자 전략ㅣ지식인초대석 EP.39 (오건영 단장 2부).mp4"
+    ],
+    "source": "filename",
+    "domain": "video"
+  },
+  {
+    "query": "지식인초대석",
+    "expected_basenames": [
+      "IMF때보다 심각하다. 지금 당장 현금 대신 담아야 할 자산ㅣ지식인초대석 EP.94 (홍익희 교수 1부).mp4",
+      "적은 돈을 큰 돈으로 불리는 가장 확실한 투자 전략ㅣ지식인초대석 EP.39 (오건영 단장 2부).mp4"
+    ],
+    "source": "filename",
+    "domain": "video"
+  },
+  {
+    "query": "이정현",
+    "expected_basenames": [
+      "[김태현의 정치쇼] 김성태 이정현, 공천 개판 만들고 도망...장동혁 대구 새 판 짤 듯  앵그리성태 260401(수).mp4",
+      "이정현 상륙한 뒤 '쑥대밭'..불지르고 사퇴 대혼란 [뉴스.zipMBC뉴스].mp4"
+    ],
+    "source": "filename",
+    "domain": "video"
+  },
+  {
+    "query": "jtbc",
+    "expected_basenames": [
+      "[뉴썰] 과학으로 보는 '산타와 루돌프'… _우는 아이 선물 안주는 이유 과학적이다_ _ JTBC News.mp4",
+      "[뉴썰] 나이 들수록 시간이 빨리 가는 '과학적' 이유! _ JTBC News.mp4"
+    ],
+    "source": "filename",
+    "domain": "video"
+  },
+  {
+    "query": "mbn",
+    "expected_basenames": [
+      "[단독] 종합특검 '관저 공사' 뺏긴 업체 대표 조사…감사원 부실감사 들여다본다 [굿모닝 MBN].mp4",
+      "[이슈 직진] 국힘 패널의 뼈아픈 지적..._민심으로부터 상당히 고립된 것 아닌가_ _ MBN 260331 방송.mp4"
+    ],
+    "source": "filename",
+    "domain": "video"
+  },
+  {
+    "query": "국힘",
+    "expected_basenames": [
+      "[이슈 직진] 국힘 패널의 뼈아픈 지적..._민심으로부터 상당히 고립된 것 아닌가_ _ MBN 260331 방송.mp4",
+      "국힘 '박덕흠 공관위'로 사태수습‥홍준표는 김부겸 지지 (2026.04.02뉴스데스크MBC).mp4"
+    ],
+    "source": "filename",
+    "domain": "video"
+  },
+  {
+    "query": "브라질",
+    "expected_basenames": [
+      "[축구 국가대표팀 친선경기] 브라질 vs 크로아티아 2분 하이라이트.mp4",
+      "브라질 이어 잉글랜드까지… '아시아 최강 면모' 선보인 일본 #SPOTIME #친선경기.mp4"
+    ],
+    "source": "filename",
+    "domain": "video"
+  },
+  {
+    "query": "미친",
+    "expected_basenames": [
+      "금메달을 확신한 자의 미친 여유ㅋㅋㅋ.mp4",
+      "보고도 안 믿겼습니다..한국을 100% 그대로 옮긴 미친 게임 [인조이].mp4"
+    ],
+    "source": "filename",
+    "domain": "video"
+  },
+  {
+    "query": "지식",
+    "expected_basenames": [
+      "데프콘도 10분 만에 완전히 이해한 '특수상대성이론' 물리학자 김범준 교수가 재밌는 사고실험을 통해 알려주는 양자역학 이야기 #과학 #EBS지식.mp4",
+      "이보다 더 쉽게 설명할 순 없다! 은행에서 돈이 돌아가는 원리💸 _ 배우 염혜란이 설명해 주는 꼭 알아야 할 금융 지식 #돈의얼굴.mp4"
+    ],
+    "source": "filename",
+    "domain": "video"
+  },
+  {
+    "query": "돈의얼굴",
+    "expected_basenames": [
+      "이보다 더 쉽게 설명할 순 없다! 은행에서 돈이 돌아가는 원리💸 _ 배우 염혜란이 설명해 주는 꼭 알아야 할 금융 지식 #돈의얼굴.mp4",
+      "인플레이션이 오면 누가 이득일까 _ 이제는 알아야 할 돈의 흐름 #돈의얼굴.mp4"
+    ],
+    "source": "filename",
+    "domain": "video"
+  },
+  {
+    "query": "e02",
+    "expected_basenames": [
+      "2013 글로벌 다큐멘터리-인류, 우리 모두의 이야기 E02 철의 인간(Iron Man) 130818 HDTV Film x264 720p-Ernie.mp4",
+      "NGC 코스모스 E02.140322.HDTV.H264.1080p-HDione.mkv",
+      "글로벌 다큐멘터리 인간과 우주.E02.150728.우주와 인간의 기원.HDTV.H264.720p-WITH.mp4"
+    ],
+    "source": "filename",
+    "domain": "video"
+  },
+  {
+    "query": "e05",
+    "expected_basenames": [
+      "2013 글로벌 다큐멘터리-인류, 우리 모두의 이야기 E05 역병(Plague) 130908 HDTV Film x264 720p-Ernie.mp4",
+      "NGC 코스모스 E05.140412.HDTV.H264.1080p-HDione.mkv",
+      "글로벌 다큐멘터리 인간과 우주.E05.END.150731.우리는 어디로 가는가.HDTV.H264.720p-WITH.mp4"
+    ],
+    "source": "filename",
+    "domain": "video"
+  },
+  {
+    "query": "부 고선지루트",
+    "expected_basenames": [
+      "1부.고선지루트.고구려인, 실크로드를 제패하다.HDTV.x264.720p-AHA.mp4",
+      "2부.고선지루트.사상최고의 작전, 와칸게곡의 혈투.HDTV.x264.720p-AHA.mp4",
+      "3부.고선지루트.중국산맥의 제왕, 탈라스에 서다.HDTV.x264.720p-AHA.mp4"
+    ],
+    "source": "filename",
+    "domain": "video"
+  },
+  {
+    "query": "돈의",
+    "expected_basenames": [
+      "69년 폭등장과 폭락장에 살아남은 백전노장의 투자 비법! 87세 일본 주식 개미 😱┃금리를 알아야 부자가 된다┃저금리에서 살아남기┃돈의 얼굴┃#골라듄다큐.mp4",
+      "EBS 다큐프라임 [돈의 얼굴 1부 - 돈을 믿습니까_] 💰돈의 변천사 _ 은행의 원리 _ 돈에 관한 기초 상식.mp4",
+      "인플레이션이 오면 누가 이득일까 _ 이제는 알아야 할 돈의 흐름 #돈의얼굴.mp4"
+    ],
+    "source": "filename",
+    "domain": "video"
+  },
+  {
+    "query": "하이라이트",
+    "expected_basenames": [
+      "[두산 vs 삼성] 42 경기 I 2026 신한 SOL KBO 리그 I 하이라이트 I TVING.mp4",
+      "[축구 국가대표팀 친선경기] 브라질 vs 크로아티아 2분 하이라이트.mp4",
+      "[친선경기] 스코틀랜드 vs 일본 3분 하이라이트｜SPOTV FOOTBALL.mp4"
+    ],
+    "source": "filename",
+    "domain": "video"
+  },
+  {
+    "query": "친선경기",
+    "expected_basenames": [
+      "[축구 국가대표팀 친선경기] 브라질 vs 크로아티아 2분 하이라이트.mp4",
+      "[친선경기] 스코틀랜드 vs 일본 3분 하이라이트｜SPOTV FOOTBALL.mp4",
+      "브라질 이어 잉글랜드까지… '아시아 최강 면모' 선보인 일본 #SPOTIME #친선경기.mp4"
+    ],
+    "source": "filename",
+    "domain": "video"
+  },
+  {
+    "query": "게임",
+    "expected_basenames": [
+      "몬스터들 뿐인데 가구는 왜 있는지 모르겠는 게임 [YAPYAP] [5화].mp4",
+      "보고도 안 믿겼습니다..한국을 100% 그대로 옮긴 미친 게임 [인조이].mp4",
+      "정신 나갈 것 같아 ≪여동생 운전 가르치는 게임≫.mp4",
+      "한국 사람들이 게임에서 등을 돌리고 있는 진짜 이유 (게임 편).mp4"
+    ],
+    "source": "filename",
+    "domain": "video"
+  },
+  {
+    "query": "인간과 우주",
+    "expected_basenames": [
+      "글로벌 다큐멘터리 인간과 우주.E01.150727.원시인에서 우주인으로.HDTV.H264.720p-WITH.mp4",
+      "글로벌 다큐멘터리 인간과 우주.E02.150728.우주와 인간의 기원.HDTV.H264.720p-WITH.mp4",
+      "글로벌 다큐멘터리 인간과 우주.E03.150729.외계인을 찾아서.HDTV.H264.720p-WITH.mp4",
+      "글로벌 다큐멘터리 인간과 우주.E04.150730.우리가 서 있는 자리.HDTV.H264.720p-WITH.mp4",
+      "글로벌 다큐멘터리 인간과 우주.E05.END.150731.우리는 어디로 가는가.HDTV.H264.720p-WITH.mp4"
+    ],
+    "source": "filename",
+    "domain": "video"
+  },
+  {
+    "query": "이유",
+    "expected_basenames": [
+      "[뉴썰] 과학으로 보는 '산타와 루돌프'… _우는 아이 선물 안주는 이유 과학적이다_ _ JTBC News.mp4",
+      "[뉴썰] 나이 들수록 시간이 빨리 가는 '과학적' 이유! _ JTBC News.mp4",
+      "과학자들도 포기한 우주 최강의 유사과학들 (관상이 과학일 수밖에 없는 이유 ㅋㅋ) ㅣ과학을 보다 EP.18.mp4",
+      "물리학자들이 논리로 맞서 싸우면 무서운 이유 ㅋㅋㅋ (물리학자 vs 물리학자) l 범준에 물리다.mp4",
+      "버는 주식은 도망치고, 잃는 주식은 집착하는 이유ㅣ개인투자자들의 ‘투자 실패 이유’를 심층 분석한다ㅣ수익률이 안 나오는 이유ㅣ#다큐프라임.mp4",
+      "한국 사람들이 게임에서 등을 돌리고 있는 진짜 이유 (게임 편).mp4"
+    ],
+    "source": "filename",
+    "domain": "video"
+  },
+  {
+    "query": "실크로드 제",
+    "expected_basenames": [
+      "新 실크로드 제01부 - 4천년의 깊은 잠.avi",
+      "新 실크로드 제02부 - 되살아나는 천년의 기억.avi",
+      "新 실크로드 제03부 - 초원의 길, 바람의 민족.avi",
+      "新 실크로드 제04부 - 서역의 모나리자.avi",
+      "新 실크로드 제05부 - 동으로 간 푸른 눈의 승려.avi",
+      "新 실크로드 제06부 - 이름 없는 자의 무덤.avi",
+      "新 실크로드 제07부 - 하늘의 실크로드.avi",
+      "新 실크로드 제08부 - 실크로드 문명의 흥망성쇠.avi",
+      "新 실크로드 제09부 - 제국의 개척자들.avi",
+      "新 실크로드 제10부 - 西安, 영원의 제국.avi"
+    ],
+    "source": "filename",
+    "domain": "video"
+  },
+  {
+    "query": "우리",
+    "expected_basenames": [
+      "2013 글로벌 다큐멘터리-인류, 우리 모두의 이야기 E01 발명가들(Inventors) 130811 HDTV Film x264 720p-Ernie.mp4",
+      "2013 글로벌 다큐멘터리-인류, 우리 모두의 이야기 E02 철의 인간(Iron Man) 130818 HDTV Film x264 720p-Ernie.mp4",
+      "2013 글로벌 다큐멘터리-인류, 우리 모두의 이야기 E03 제국 시대(Empires) 130825 HDTV Film x264 720p-Ernie.mp4",
+      "2013 글로벌 다큐멘터리-인류, 우리 모두의 이야기 E04 전사들(Warriors) 130901 HDTV Film x264 720p-Ernie.mp4",
+      "2013 글로벌 다큐멘터리-인류, 우리 모두의 이야기 E05 역병(Plague) 130908 HDTV Film x264 720p-Ernie.mp4",
+      "2013 글로벌 다큐멘터리-인류, 우리 모두의 이야기 E06 생존자들(Survivors) 130915 HDTV Film x264 720p-Ernie.mp4",
+      "2013 글로벌 다큐멘터리-인류, 우리 모두의 이야기 E07 신세계(New World) 130922 HDTV Film x264 720p-Ernie.mp4",
+      "2013 글로벌 다큐멘터리-인류, 우리 모두의 이야기 E08 보물(Treasure) 130929 HDTV Film x264 720p-Ernie.mp4",
+      "2013 글로벌 다큐멘터리-인류, 우리 모두의 이야기 E09 개척자들(Pioneers) 131006 HDTV Film x264 720p-Ernie.mp4",
+      "2013 글로벌 다큐멘터리-인류, 우리 모두의 이야기 E10 혁명(revolutions) 131012 HDTV x264 720p-Ernie.mp4",
+      "2013 글로벌 다큐멘터리-인류, 우리 모두의 이야기 E11 속도(Speed) 131013 HDTV Film x264 720p-Ernie.mp4",
+      "2013 글로벌 다큐멘터리-인류, 우리 모두의 이야기 E12 새로운 변경(new frontier) 131019 HDTV Film x264 720p-Ernie.mp4"
+    ],
+    "source": "filename",
+    "domain": "video"
+  },
+  {
+    "query": "장동혁 대표",
+    "expected_basenames": [
+      "'대구서도 못 입다니' 술렁, 서울선 장동혁 출입금지 [뉴스.zipMBC뉴스].mp4",
+      "[이슈 직진] 국힘 패널의 뼈아픈 지적..._민심으로부터 상당히 고립된 것 아닌가_ _ MBN 260331 방송.mp4",
+      "국힘 '박덕흠 공관위'로 사태수습‥홍준표는 김부겸 지지 (2026.04.02뉴스데스크MBC).mp4",
+      "이정현 상륙한 뒤 '쑥대밭'..불지르고 사퇴 대혼란 [뉴스.zipMBC뉴스].mp4"
+    ],
+    "source": "stt",
+    "domain": "video"
+  },
+  {
+    "query": "최고 위원",
+    "expected_basenames": [
+      "'대구서도 못 입다니' 술렁, 서울선 장동혁 출입금지 [뉴스.zipMBC뉴스].mp4",
+      "[이슈 직진] 국힘 패널의 뼈아픈 지적..._민심으로부터 상당히 고립된 것 아닌가_ _ MBN 260331 방송.mp4",
+      "이정현 상륙한 뒤 '쑥대밭'..불지르고 사퇴 대혼란 [뉴스.zipMBC뉴스].mp4"
+    ],
+    "source": "stt",
+    "domain": "video"
+  },
+  {
+    "query": "심사 위원",
+    "expected_basenames": [
+      "'대구서도 못 입다니' 술렁, 서울선 장동혁 출입금지 [뉴스.zipMBC뉴스].mp4",
+      "(500만🎉) 농구 역사를 바꿔버린 마이클 조던의 그 덩크.mp4",
+      "이정현 상륙한 뒤 '쑥대밭'..불지르고 사퇴 대혼란 [뉴스.zipMBC뉴스].mp4"
+    ],
+    "source": "stt",
+    "domain": "video"
+  },
+  {
+    "query": "공관 위원",
+    "expected_basenames": [
+      "[김태현의 정치쇼] 김성태 이정현, 공천 개판 만들고 도망...장동혁 대구 새 판 짤 듯  앵그리성태 260401(수).mp4",
+      "국힘 '박덕흠 공관위'로 사태수습‥홍준표는 김부겸 지지 (2026.04.02뉴스데스크MBC).mp4",
+      "이정현 상륙한 뒤 '쑥대밭'..불지르고 사퇴 대혼란 [뉴스.zipMBC뉴스].mp4"
+    ],
+    "source": "stt",
+    "domain": "video"
+  },
+  {
+    "query": "닉슨 대통령",
+    "expected_basenames": [
+      "102.mp4",
+      "[경제 모아보기 10탄] 알아두면 돈이 되는 재미있는 경제 이슈 10가지_10탄｜크랩.mp4"
+    ],
+    "source": "stt",
+    "domain": "video"
+  },
+  {
+    "query": "이정현 위원",
+    "expected_basenames": [
+      "[김태현의 정치쇼] 김성태 이정현, 공천 개판 만들고 도망...장동혁 대구 새 판 짤 듯  앵그리성태 260401(수).mp4",
+      "이정현 상륙한 뒤 '쑥대밭'..불지르고 사퇴 대혼란 [뉴스.zipMBC뉴스].mp4"
+    ],
+    "source": "stt",
+    "domain": "video"
+  },
+  {
+    "query": "공천관리 위원",
+    "expected_basenames": [
+      "국힘 '박덕흠 공관위'로 사태수습‥홍준표는 김부겸 지지 (2026.04.02뉴스데스크MBC).mp4",
+      "이정현 상륙한 뒤 '쑥대밭'..불지르고 사퇴 대혼란 [뉴스.zipMBC뉴스].mp4"
+    ],
+    "source": "stt",
+    "domain": "video"
+  },
+  {
+    "query": "주호영 의원",
+    "expected_basenames": [
+      "국힘 '박덕흠 공관위'로 사태수습‥홍준표는 김부겸 지지 (2026.04.02뉴스데스크MBC).mp4",
+      "이정현 상륙한 뒤 '쑥대밭'..불지르고 사퇴 대혼란 [뉴스.zipMBC뉴스].mp4"
+    ],
+    "source": "stt",
+    "domain": "video"
+  },
+  {
+    "query": "실험실 감독",
+    "expected_basenames": [
+      "NGC 코스모스 E10.140517.HDTV.H264.1080p-HDione.mkv",
+      "NGC 코스모스 E11.140524.HDTV.H264.1080p.REPACK-HDione.mkv"
+    ],
+    "source": "stt",
+    "domain": "video"
+  },
+  {
+    "query": "신청 선생님",
+    "expected_basenames": [
+      "예약 상담 신청 선생님 면담 - 민호.m4a",
+      "예약 상담 신청 선생님 면담 - 서연.m4a"
+    ],
+    "source": "filename",
+    "domain": "audio"
+  },
+  {
+    "query": "선생님 면담",
+    "expected_basenames": [
+      "예약 상담 신청 선생님 면담 - 민호.m4a",
+      "예약 상담 신청 선생님 면담 - 서연.m4a"
+    ],
+    "source": "filename",
+    "domain": "audio"
+  },
+  {
+    "query": "면담",
+    "expected_basenames": [
+      "예약 상담 신청 선생님 면담 - 민호.m4a",
+      "예약 상담 신청 선생님 면담 - 서연.m4a"
+    ],
+    "source": "filename",
+    "domain": "audio"
+  },
+  {
+    "query": "code",
+    "expected_basenames": [
+      "30분 만에 Claude Code 마스터하기 (한국어 자막) by 보리스 체르니(클로드코드 .wav",
+      "How To Make an All-In-One Discord Bot (Full Features + Free Code) - SILENT STORE (128k).wav"
+    ],
+    "source": "filename",
+    "domain": "audio"
+  },
+  {
+    "query": "난리난",
+    "expected_basenames": [
+      "유럽에서 난리난 G2식 하이브리드 바루스 - AD Lee (Kyahahaa) (128k).wav",
+      "이제 AI는 스스로 생각하고 학습한다.. 난리난 AI 에이전트 직접 확인해보니 .wav"
+    ],
+    "source": "filename",
+    "domain": "audio"
+  },
+  {
+    "query": "최초",
+    "expected_basenames": [
+      "[#유퀴즈온더블럭] 한국인 최초 퀀트 투자대회 1위 등장✨ 유니스트생이 알.wav",
+      "늑구 무사 귀환 기념 세나개 최초 울프독의 등장! 늑대의 본능이 나타날.wav"
+    ],
+    "source": "filename",
+    "domain": "audio"
+  },
+  {
+    "query": "사이트",
+    "expected_basenames": [
+      "바이브 코딩 기초, 수익형 웹 사이트 만들고 돈 벌기.wav",
+      "통계 사이트 1위까지 찍은 탈론의 화제의 ＂그 빌드＂.wav"
+    ],
+    "source": "filename",
+    "domain": "audio"
+  },
+  {
+    "query": "이게",
+    "expected_basenames": [
+      "'로또'였는데 ＂당첨돼도 문제＂..＂이게 맞나＂ 줄줄이 손절 ⧸ SBS 8뉴스.wav",
+      "이게 맛 없으면 진짜 삭발합니다..wav"
+    ],
+    "source": "filename",
+    "domain": "audio"
+  },
+  {
+    "query": "오늘",
+    "expected_basenames": [
+      "[오늘 이 뉴스] '끝이 안보여' 4만명 '어마'..＂싫으면 떠나라니＂ 포효 (2026.04.23.wav",
+      "[오늘 이 뉴스] 美국무부 공개에 급당황？..폭풍 질문에 '동공지진' (2026.04.24⧸M.wav"
+    ],
+    "source": "filename",
+    "domain": "audio"
+  },
+  {
+    "query": "만에",
+    "expected_basenames": [
+      "30분 만에 Claude Code 마스터하기 (한국어 자막) by 보리스 체르니(클로드코드 .wav",
+      "[자막뉴스] 시작부터 예사롭지 않은 올 여름...＂10년 만에 발생＂ 극한 경고 ⧸ Y.wav"
+    ],
+    "source": "filename",
+    "domain": "audio"
+  },
+  {
+    "query": "왔다",
+    "expected_basenames": [
+      "[김어준의 다스뵈이다] 392회 검사들 딱 걸렸어, 진짜 무서운 ai가 왔다, 영혼.wav",
+      "아들이 벌써 커서 친구를 데리고 왔다... ㅠㅠ 요리를 해보자....wav"
+    ],
+    "source": "filename",
+    "domain": "audio"
+  },
+  {
+    "query": "이유",
+    "expected_basenames": [
+      "당신이 사실 2명인 이유 (feat. 노벨상).wav",
+      "대 '딸깍'의 시대, 지금 당장 바이브 코딩으로 1인 창업을 해야 하는 이유 (1).wav"
+    ],
+    "source": "filename",
+    "domain": "audio"
+  },
+  {
+    "query": "박태웅 의장",
+    "expected_basenames": [
+      "AI가 만들어낸 인간 계급사회  l 박태웅 의장.wav",
+      "박태웅 의장 ＂인류역사상 가장 빠른 속도의 변화＂ [코너별 다시보기].wav"
+    ],
+    "source": "filename",
+    "domain": "audio"
+  },
+  {
+    "query": "공개",
+    "expected_basenames": [
+      "GPT 5.5 공개, 클로드 공식 사과, 화난 유저들이 오픈소스로 떠나고 있다 (주.wav",
+      "헌정사상 처음 군대가 국회 안으로..근접 영상 공개 '충격' #뉴스다 ⧸ JTBC News.wav"
+    ],
+    "source": "filename",
+    "domain": "audio"
+  },
+  {
+    "query": "한국",
+    "expected_basenames": [
+      "[김어준의 다스뵈이다] 387회 주식•부동산 어찌 되나, 유엔 AI 본부 한국 온.wav",
+      "[뉴스하이킥] 2026년 한국 AI의 경쟁력은？ - 박태웅, MBC 260101방송.wav"
+    ],
+    "source": "filename",
+    "domain": "audio"
+  },
+  {
+    "query": "스스로 학습하는",
+    "expected_basenames": [
+      "[뉴스하이킥] 해킹 스스로 학습하는 최상위 AI 미토스 나왔다..AI가 촉발하는 (1).wav",
+      "[뉴스하이킥] 해킹 스스로 학습하는 최상위 AI 미토스 나왔다..AI가 촉발하는.wav"
+    ],
+    "source": "filename",
+    "domain": "audio"
+  },
+  {
+    "query": "뉴스하이킥 해킹",
+    "expected_basenames": [
+      "[뉴스하이킥] 해킹 스스로 학습하는 최상위 AI 미토스 나왔다..AI가 촉발하는 (1).wav",
+      "[뉴스하이킥] 해킹 스스로 학습하는 최상위 AI 미토스 나왔다..AI가 촉발하는.wav"
+    ],
+    "source": "filename",
+    "domain": "audio"
+  },
+  {
+    "query": "최상위 미토스",
+    "expected_basenames": [
+      "[뉴스하이킥] 해킹 스스로 학습하는 최상위 AI 미토스 나왔다..AI가 촉발하는 (1).wav",
+      "[뉴스하이킥] 해킹 스스로 학습하는 최상위 AI 미토스 나왔다..AI가 촉발하는.wav"
+    ],
+    "source": "filename",
+    "domain": "audio"
+  },
+  {
+    "query": "학습하는",
+    "expected_basenames": [
+      "[뉴스하이킥] 해킹 스스로 학습하는 최상위 AI 미토스 나왔다..AI가 촉발하는 (1).wav",
+      "[뉴스하이킥] 해킹 스스로 학습하는 최상위 AI 미토스 나왔다..AI가 촉발하는.wav"
+    ],
+    "source": "filename",
+    "domain": "audio"
+  },
+  {
+    "query": "지금",
+    "expected_basenames": [
+      "[한예종 1편] ＂지금 너무 빨라요, 올해가 마지막 기회입니다＂..심상찮은 6개.wav",
+      "대 '딸깍'의 시대, 지금 당장 바이브 코딩으로 1인 창업을 해야 하는 이유 (1).wav"
+    ],
+    "source": "filename",
+    "domain": "audio"
+  },
+  {
+    "query": "kling",
+    "expected_basenames": [
+      "AI뉴스 - GPT-5.3-Codex, Opus 4.6, AI가 SW 기업 파괴, Kling 3.0, Seedance 2.0, openclaw 근황.wav",
+      "AI뉴스 - Kling O1, GPT-5.2 및 갈릭, Grok 4.2, Gemini 3 Deep Think, SteadyDancer, Live Avatar, V.wav"
+    ],
+    "source": "filename",
+    "domain": "audio"
+  },
+  {
+    "query": "이상",
+    "expected_basenames": [
+      "[한예종 2편] ＂이미 선 넘었다, 더 이상 AI 감당 못 해＂..인간 창작의 종말일까.wav",
+      "＂학벌 필요없어요.＂ AI시대에 주목받는 진짜 역량ㅣ지식인초대석 EP.59 (이상.wav"
+    ],
+    "source": "filename",
+    "domain": "audio"
+  },
+  {
+    "query": "바이브 코딩으로",
+    "expected_basenames": [
+      "대 '딸깍'의 시대, 지금 당장 바이브 코딩으로 1인 창업을 해야 하는 이유 (1).wav",
+      "앱 개발 이렇게 쉬웠나？ 바이브 코딩으로 풀스택 AI 앱 개발 20분만에 끝내기.wav"
+    ],
+    "source": "filename",
+    "domain": "audio"
+  },
+  {
+    "query": "쉬웠나 바이브",
+    "expected_basenames": [
+      "앱 개발 이렇게 쉬웠나？ 바이브 코딩으로 풀스택 AI 앱 개발 20분만에 끝내기.wav",
+      "코딩이 이렇게 쉬웠나？ 바이브 코딩 왕기초로 평생 무제한 무료 웹 서비스 .wav"
+    ],
+    "source": "filename",
+    "domain": "audio"
+  },
+  {
+    "query": "jtbc",
+    "expected_basenames": [
+      "[자막뉴스] ＂7번이나 당했어＂ 기자 당황…왜 안 잡지 물어봤더니 ⧸ JTBC News.wav",
+      "돌아오는 장동혁 '빈손' 우려…국민의힘 후폭풍 부나 ⧸ JTBC 뉴스룸.wav",
+      "헌정사상 처음 군대가 국회 안으로..근접 영상 공개 '충격' #뉴스다 ⧸ JTBC News.wav"
+    ],
+    "source": "filename",
+    "domain": "audio"
+  },
+  {
+    "query": "mbc",
+    "expected_basenames": [
+      "'김진태는 빨간색 입었네'.. 그런데 자세히 봤더니... [뉴스.zip⧸MBC뉴스].wav",
+      "[뉴스하이킥] 2026년 한국 AI의 경쟁력은？ - 박태웅, MBC 260101방송.wav",
+      "＂압박을..견디지 못했습니다＂, 무너졌던 공무원들 '울컥' [뉴스.zip⧸MBC뉴스].wav"
+    ],
+    "source": "filename",
+    "domain": "audio"
+  },
+  {
+    "query": "클로드",
+    "expected_basenames": [
+      "AI뉴스 - Z-Image, Flux 2, 클로드 오퍼스 4.5, 오픈AI 광고, 쇼핑, DeepSeekMath-V2, Fara-.wav",
+      "GPT 5.5 공개, 클로드 공식 사과, 화난 유저들이 오픈소스로 떠나고 있다 (주.wav",
+      "나의 AI 에이전트 전환기 (w. 클로드 코드, 오픈클로).wav"
+    ],
+    "source": "filename",
+    "domain": "audio"
+  },
+  {
+    "query": "뉴스하이킥",
+    "expected_basenames": [
+      "[뉴스하이킥] 2026년 한국 AI의 경쟁력은？ - 박태웅, MBC 260101방송.wav",
+      "[뉴스하이킥] 해킹 스스로 학습하는 최상위 AI 미토스 나왔다..AI가 촉발하는 (1).wav",
+      "[뉴스하이킥] 해킹 스스로 학습하는 최상위 AI 미토스 나왔다..AI가 촉발하는.wav"
+    ],
+    "source": "filename",
+    "domain": "audio"
+  },
+  {
+    "query": "오픈",
+    "expected_basenames": [
+      "AI뉴스 - GPT-5.2, 오픈AI 디즈니 계약, 테슬라 그록 통합, 우주 GPU, 중국 H200 수.wav",
+      "AI뉴스 - Meta 마누스 인수, 업스테이지 중국 베끼기 논란, 오픈AI 펜, Tencent HY-.wav",
+      "AI뉴스 - Z-Image, Flux 2, 클로드 오퍼스 4.5, 오픈AI 광고, 쇼핑, DeepSeekMath-V2, Fara-.wav"
+    ],
+    "source": "filename",
+    "domain": "audio"
+  },
+  {
+    "query": "자막뉴스",
+    "expected_basenames": [
+      "[자막뉴스] 시작부터 예사롭지 않은 올 여름...＂10년 만에 발생＂ 극한 경고 ⧸ Y.wav",
+      "[자막뉴스] ＂7번이나 당했어＂ 기자 당황…왜 안 잡지 물어봤더니 ⧸ JTBC News.wav",
+      "[자막뉴스] ＂미친 수준＂ 트럼프 발언 나비효과...들끓고 있는 이란 내부 ⧸ YTN.wav",
+      "[자막뉴스] ＂하다 하다 이젠 이것까지 로봇이？＂…벼랑 끝에 내몰린 청년들 ⧸ .wav"
+    ],
+    "source": "filename",
+    "domain": "audio"
+  },
+  {
+    "query": "트럼프 대통령",
+    "expected_basenames": [
+      "[김어준의 다스뵈이다] 387회 주식•부동산 어찌 되나, 유엔 AI 본부 한국 온.wav",
+      "[김어준의 다스뵈이다] 392회 검사들 딱 걸렸어, 진짜 무서운 ai가 왔다, 영혼.wav",
+      "[이런뉴스] 이란 매체 “트럼프 자작극”…조목조목 내민 증거는？ ⧸ KBS 2026.0.wav",
+      "[자막뉴스] ＂미친 수준＂ 트럼프 발언 나비효과...들끓고 있는 이란 내부 ⧸ YTN.wav",
+      "모두가 속았다! 4월 27일 AI 도미노가 무너집니다. OpenAI의 CEO 샘 알트먼의 이.wav",
+      "＂일해서 돈버는 시대 끝났다.＂ AI시대 몸값 폭등하는 사람의 특징ㅣ지식인초.wav"
+    ],
+    "source": "stt",
+    "domain": "audio"
+  },
+  {
+    "query": "조국 대표",
+    "expected_basenames": [
+      "AI 3위 강국, 드디어 세계를 이끈다 #AI #박태웅 #한상기 #이해민 #차지호.wav",
+      "[김어준의 다스뵈이다] 356회 철학자의 명비어천가, 특검 이렇게 수사하라.wav",
+      "[김어준의 다스뵈이다] 369회 통일교의 홀리바게닝, 힘내라 이화영, AI 제대.wav",
+      "[김어준의 다스뵈이다] 383회 코스피 5000과 부동산 전망, 나꼼수 이후 첫 투.wav",
+      "[김어준의 다스뵈이다] 392회 검사들 딱 걸렸어, 진짜 무서운 ai가 왔다, 영혼.wav",
+      "x-2026-4-27-wpu-43-d.wav"
+    ],
+    "source": "stt",
+    "domain": "audio"
+  },
+  {
+    "query": "박구영 교수",
+    "expected_basenames": [
+      "[김어준의 다스뵈이다] 356회 철학자의 명비어천가, 특검 이렇게 수사하라.wav",
+      "[김어준의 다스뵈이다] 363회 김건희의 오빠 사용법, 특검 여기 주목, 케데헌.wav",
+      "[김어준의 다스뵈이다] 368회 날강도 미국, 원영적 사고, 띠지 혐오론자.wav",
+      "[김어준의 다스뵈이다] 387회 주식•부동산 어찌 되나, 유엔 AI 본부 한국 온.wav",
+      "[김어준의 다스뵈이다] 392회 검사들 딱 걸렸어, 진짜 무서운 ai가 왔다, 영혼.wav",
+      "[김어준의 다스뵈이다] 393회 대장동의 진짜 전말, 란 12.3 해설, 12시에 만나.wav"
+    ],
+    "source": "stt",
+    "domain": "audio"
+  },
+  {
+    "query": "신장식 의원",
+    "expected_basenames": [
+      "[김어준의 다스뵈이다] 378회 계엄으로 누굴 어떻게 죽이려고 했나, AI와 우.wav",
+      "[김어준의 다스뵈이다] 380회 윤석열 사형선고, 미패권의 붕괴, 힘을 길러야 .wav",
+      "[김어준의 다스뵈이다] 383회 코스피 5000과 부동산 전망, 나꼼수 이후 첫 투.wav",
+      "[김어준의 다스뵈이다] 387회 주식•부동산 어찌 되나, 유엔 AI 본부 한국 온.wav",
+      "[김어준의 다스뵈이다] 392회 검사들 딱 걸렸어, 진짜 무서운 ai가 왔다, 영혼.wav",
+      "[김어준의 다스뵈이다] 393회 대장동의 진짜 전말, 란 12.3 해설, 12시에 만나.wav"
+    ],
+    "source": "stt",
+    "domain": "audio"
+  },
+  {
+    "query": "장동혁 대표",
+    "expected_basenames": [
+      "'김진태는 빨간색 입었네'.. 그런데 자세히 봤더니... [뉴스.zip⧸MBC뉴스].wav",
+      "[김어준의 다스뵈이다] 380회 윤석열 사형선고, 미패권의 붕괴, 힘을 길러야 .wav",
+      "[김어준의 다스뵈이다] 392회 검사들 딱 걸렸어, 진짜 무서운 ai가 왔다, 영혼.wav",
+      "[김어준의 다스뵈이다] 393회 대장동의 진짜 전말, 란 12.3 해설, 12시에 만나.wav",
+      "x-2026-4-27-wpu-43-d.wav"
+    ],
+    "source": "stt",
+    "domain": "audio"
+  },
+  {
+    "query": "이재명 대표",
+    "expected_basenames": [
+      "[김어준의 다스뵈이다] 356회 철학자의 명비어천가, 특검 이렇게 수사하라.wav",
+      "[김어준의 다스뵈이다] 363회 김건희의 오빠 사용법, 특검 여기 주목, 케데헌.wav",
+      "[김어준의 다스뵈이다] 392회 검사들 딱 걸렸어, 진짜 무서운 ai가 왔다, 영혼.wav",
+      "[김어준의 다스뵈이다] 393회 대장동의 진짜 전말, 란 12.3 해설, 12시에 만나.wav",
+      "헌정사상 처음 군대가 국회 안으로..근접 영상 공개 '충격' #뉴스다 ⧸ JTBC News.wav"
+    ],
+    "source": "stt",
+    "domain": "audio"
+  },
+  {
+    "query": "전략 위원",
+    "expected_basenames": [
+      "[김어준의 다스뵈이다] 369회 통일교의 홀리바게닝, 힘내라 이화영, AI 제대.wav",
+      "[김어준의 다스뵈이다] 387회 주식•부동산 어찌 되나, 유엔 AI 본부 한국 온.wav",
+      "[뉴스하이킥] 해킹 스스로 학습하는 최상위 AI 미토스 나왔다..AI가 촉발하는 (1).wav",
+      "[뉴스하이킥] 해킹 스스로 학습하는 최상위 AI 미토스 나왔다..AI가 촉발하는.wav",
+      "대한민국은 진짜 AI 선진국이 맞습니까？ #박태웅.wav"
+    ],
+    "source": "stt",
+    "domain": "audio"
+  },
+  {
+    "query": "이광수 대표",
+    "expected_basenames": [
+      "12-2026-4-27-r-1-o-3-vr.wav",
+      "[김어준의 다스뵈이다] 383회 코스피 5000과 부동산 전망, 나꼼수 이후 첫 투.wav",
+      "[김어준의 다스뵈이다] 387회 주식•부동산 어찌 되나, 유엔 AI 본부 한국 온.wav",
+      "[김어준의 다스뵈이다] 393회 대장동의 진짜 전말, 란 12.3 해설, 12시에 만나.wav"
+    ],
+    "source": "stt",
+    "domain": "audio"
+  },
+  {
+    "query": "연준 의장",
+    "expected_basenames": [
+      "[김어준의 다스뵈이다] 380회 윤석열 사형선고, 미패권의 붕괴, 힘을 길러야 .wav",
+      "[김어준의 다스뵈이다] 392회 검사들 딱 걸렸어, 진짜 무서운 ai가 왔다, 영혼.wav",
+      "모두가 속았다! 4월 27일 AI 도미노가 무너집니다. OpenAI의 CEO 샘 알트먼의 이.wav",
+      "＂일해서 돈버는 시대 끝났다.＂ AI시대 몸값 폭등하는 사람의 특징ㅣ지식인초.wav"
+    ],
+    "source": "stt",
+    "domain": "audio"
+  },
+  {
+    "query": "국회 의장",
+    "expected_basenames": [
+      "[김어준의 다스뵈이다] 369회 통일교의 홀리바게닝, 힘내라 이화영, AI 제대.wav",
+      "[자막뉴스] ＂미친 수준＂ 트럼프 발언 나비효과...들끓고 있는 이란 내부 ⧸ YTN.wav",
+      "x-2026-4-27-wpu-43-d.wav"
+    ],
+    "source": "stt",
+    "domain": "audio"
+  },
+  {
+    "query": "문재인 대통령",
+    "expected_basenames": [
+      "[김어준의 다스뵈이다] 356회 철학자의 명비어천가, 특검 이렇게 수사하라.wav",
+      "[김어준의 다스뵈이다] 386회 트럼프의 착각, 전쟁은 언제 끝나는가, 댓글알.wav",
+      "[김어준의 다스뵈이다] 392회 검사들 딱 걸렸어, 진짜 무서운 ai가 왔다, 영혼.wav"
+    ],
+    "source": "stt",
+    "domain": "audio"
+  },
+  {
+    "query": "철학 교수",
+    "expected_basenames": [
+      "[김어준의 다스뵈이다] 356회 철학자의 명비어천가, 특검 이렇게 수사하라.wav",
+      "[김어준의 다스뵈이다] 368회 날강도 미국, 원영적 사고, 띠지 혐오론자.wav",
+      "[김어준의 다스뵈이다] 393회 대장동의 진짜 전말, 란 12.3 해설, 12시에 만나.wav"
+    ],
+    "source": "stt",
+    "domain": "audio"
+  },
+  {
+    "query": "법무부 장관",
+    "expected_basenames": [
+      "[김어준의 다스뵈이다] 363회 김건희의 오빠 사용법, 특검 여기 주목, 케데헌.wav",
+      "[김어준의 다스뵈이다] 393회 대장동의 진짜 전말, 란 12.3 해설, 12시에 만나.wav",
+      "x-2026-4-27-wpu-43-d.wav"
+    ],
+    "source": "stt",
+    "domain": "audio"
+  },
+  {
+    "query": "윤석열 대통령",
+    "expected_basenames": [
+      "[김어준의 다스뵈이다] 363회 김건희의 오빠 사용법, 특검 여기 주목, 케데헌.wav",
+      "[김어준의 다스뵈이다] 393회 대장동의 진짜 전말, 란 12.3 해설, 12시에 만나.wav",
+      "x-2026-4-27-wpu-43-d.wav"
+    ],
+    "source": "stt",
+    "domain": "audio"
+  },
+  {
+    "query": "민주당 의원",
+    "expected_basenames": [
+      "[김어준의 다스뵈이다] 363회 김건희의 오빠 사용법, 특검 여기 주목, 케데헌.wav",
+      "[김어준의 다스뵈이다] 368회 날강도 미국, 원영적 사고, 띠지 혐오론자.wav",
+      "[김어준의 다스뵈이다] 383회 코스피 5000과 부동산 전망, 나꼼수 이후 첫 투.wav"
+    ],
+    "source": "stt",
+    "domain": "audio"
+  },
+  {
+    "query": "최고 위원",
+    "expected_basenames": [
+      "[김어준의 다스뵈이다] 363회 김건희의 오빠 사용법, 특검 여기 주목, 케데헌.wav",
+      "x-2026-4-27-wpu-43-d.wav",
+      "헌정사상 처음 군대가 국회 안으로..근접 영상 공개 '충격' #뉴스다 ⧸ JTBC News.wav"
+    ],
+    "source": "stt",
+    "domain": "audio"
+  },
+  {
+    "query": "재무 장관",
+    "expected_basenames": [
+      "[김어준의 다스뵈이다] 368회 날강도 미국, 원영적 사고, 띠지 혐오론자.wav",
+      "[김어준의 다스뵈이다] 392회 검사들 딱 걸렸어, 진짜 무서운 ai가 왔다, 영혼.wav",
+      "＂일해서 돈버는 시대 끝났다.＂ AI시대 몸값 폭등하는 사람의 특징ㅣ지식인초.wav"
+    ],
+    "source": "stt",
+    "domain": "audio"
+  },
+  {
+    "query": "이명세 감독",
+    "expected_basenames": [
+      "[김어준의 다스뵈이다] 369회 통일교의 홀리바게닝, 힘내라 이화영, AI 제대.wav",
+      "[김어준의 다스뵈이다] 392회 검사들 딱 걸렸어, 진짜 무서운 ai가 왔다, 영혼.wav",
+      "[김어준의 다스뵈이다] 393회 대장동의 진짜 전말, 란 12.3 해설, 12시에 만나.wav"
+    ],
+    "source": "stt",
+    "domain": "audio"
+  },
+  {
+    "query": "그러니까 박사",
+    "expected_basenames": [
+      "AI가 만들어낸 인간 계급사회  l 박태웅 의장.wav",
+      "[김어준의 다스뵈이다] 369회 통일교의 홀리바게닝, 힘내라 이화영, AI 제대.wav",
+      "x-2026-4-27-wpu-43-d.wav"
+    ],
+    "source": "stt",
+    "domain": "audio"
+  },
+  {
+    "query": "지금 대표",
+    "expected_basenames": [
+      "[김어준의 다스뵈이다] 378회 계엄으로 누굴 어떻게 죽이려고 했나, AI와 우.wav",
+      "”한국만 몰라요”, AI로 무너진 미국 취업시장, 그리고 살아남은 기업·사.wav",
+      "＂일해서 돈버는 시대 끝났다.＂ AI시대 몸값 폭등하는 사람의 특징ㅣ지식인초.wav"
+    ],
+    "source": "stt",
+    "domain": "audio"
+  }
+]

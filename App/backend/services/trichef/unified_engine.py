@@ -284,6 +284,25 @@ class TriChefEngine:
             q_Re[None, :], q_Im[None, :], q_Z[None, :],
             d["Re"], d["Im"], d["Z"],
         )[0]
+
+        # [substring boost — Doc/Img]
+        # 쿼리 토큰이 id (file_name 또는 페이지 stem) 에 그대로 포함되면 dense 에 가산.
+        # AV 의 동일 boost 로직과 일관. "AI브리프", "IMG_4810" 같은 직접 검색 강화.
+        try:
+            q_tokens = [t.lower() for t in query.split() if len(t) >= 2]
+            if q_tokens:
+                boost = np.zeros(len(d["ids"]), dtype=dense_scores.dtype)
+                for i, rid in enumerate(d["ids"]):
+                    hay = rid.lower()
+                    matched = sum(1 for tok in q_tokens if tok in hay)
+                    if matched > 0:
+                        boost[i] += 0.05 * matched
+                        if matched == len(q_tokens):
+                            boost[i] += 0.10  # 전체 매칭 보너스
+                dense_scores = dense_scores + boost
+        except Exception as _be:
+            logger.debug(f"[engine:{domain}] substring boost 실패: {_be}")
+
         dense_order = np.argsort(-dense_scores)
 
         # v2 P2: sparse lexical 채널
@@ -391,12 +410,44 @@ class TriChefEngine:
             d["Re"], d["Im"], d["Z"],
         )[0]   # (N,)
 
+        # [substring boost] AV vocab/ASF 가 사람 이름·고유명사 어휘를 포함하지
+        # 못하는 한계 보완. 쿼리 토큰이 segment STT 본문 또는 파일명에 그대로
+        # 포함되는 경우 dense 점수에 가산. 음성/영상에서 "박태웅 의장" 같은
+        # 정확한 인명·직함 검색이 dense semantic 잡음에 묻혀 누락되는 문제 해결.
+        #
+        # 가중치 설계:
+        #   - 토큰당 +0.10 (개별 매칭, 1회만 — 중복 매칭 무관)
+        #   - 모든 토큰 매칭(=고유명사+직함 정확 일치): 추가 +0.20
+        #   → "박태웅 의장" 가 정확히 들어간 segment: +0.10 + +0.10 + +0.20 = +0.40
+        #   → "의장" 만 들어간 segment:                     +0.10
+        try:
+            q_tokens = [t for t in query.split() if len(t) >= 2]
+            if q_tokens:
+                boost = np.zeros(len(d["segments"]), dtype=seg_scores.dtype)
+                tok_lower = [t.lower() for t in q_tokens]
+                for i, seg in enumerate(d["segments"]):
+                    text  = (seg.get("stt_text", "") or seg.get("text", "") or "")
+                    fname = seg.get("file_name", "") or seg.get("file", "")
+                    hay   = (text + " " + fname).lower()
+                    matched = sum(1 for tok in tok_lower if tok in hay)
+                    if matched > 0:
+                        boost[i] += 0.10 * matched
+                        if matched == len(tok_lower):
+                            boost[i] += 0.20  # 전체 매칭 보너스
+                seg_scores = seg_scores + boost
+        except Exception as _be:
+            logger.debug(f"[engine:{domain}] substring boost 실패: {_be}")
+
         # AV는 null calibration(segment-vs-segment) 대신
         # 이 쿼리에 대한 실제 seg_scores 분포로 per-query 캘리브레이션한다.
-        # image/doc 과 동일한 공식 → 전체 검색에서 도메인 간 confidence 비교 가능.
-        # sigma 하한: q_mu * 0.8 (image/doc과 동일, z-score 폭발 방지)
+        # AV scores 는 raw cosine 유사도 (≈0.7~0.9 영역) — image/doc 의 orthogonalized
+        # null-centered 분포와 regime 이 완전히 다르다. 따라서 image/doc 의 q_mu*0.8
+        # 하한을 그대로 쓰면 q_sig 가 16배 이상 부풀려져 z-score 가 거의 0 으로 압축
+        # 되고 모든 결과의 confidence 가 ~0.5 근처로 수렴 → 5% 저신뢰 필터에 걸려
+        # 실제 매칭이 사라진다.
+        #   고정 하한 0.02 (cosine 유사도 표준편차의 일반 하한)으로 변경.
         q_mu  = float(seg_scores.mean())
-        q_sig = max(float(seg_scores.std()), q_mu * 0.8, 1e-6)
+        q_sig = max(float(seg_scores.std()), 0.02, 1e-6)
         abs_thr = q_mu   # 평균 미만 파일은 관련 없음으로 처리
 
         # ASF 세그먼트 점수 (MR_TriCHEF search.py _aggregate 방식)
@@ -418,8 +469,24 @@ class TriChefEngine:
         # MR_TriCHEF WEIGHTS: (α dense, β lexical=0, γ asf)
         _ALPHA, _GAMMA = 0.75, 0.25
 
+        # [v3] file 처리 순서를 dense_agg 내림차순으로 사전 정렬.
+        # 기존에는 dict insertion order (segment 순) 로 iterate 후 topk*3 break 했는데,
+        # substring boost 로 후순위 file 이 top 으로 올라갈 수 있어 누락 발생.
+        # 모든 file 의 top-3 mean 을 한 번 계산 후 정렬 — 233~400 file 수준이라 부담 미미.
+        file_keys = list(file_idx.keys())
+        pre_agg: list[tuple[float, str]] = []
+        for fp in file_keys:
+            idxs = file_idx[fp]
+            top3 = sorted((float(seg_scores[i]) for i in idxs), reverse=True)[:3]
+            agg = float(np.mean(top3)) if top3 else 0.0
+            pre_agg.append((agg, fp))
+        pre_agg.sort(reverse=True)
+        # topk*5 까지 후보 확장 (boost reordering 여유)
+        ordered_keys = [fp for _, fp in pre_agg[:max(topk * 5, 50)]]
+
         out: list[TriChefAVResult] = []
-        for fp, idxs in file_idx.items():
+        for fp in ordered_keys:
+            idxs = file_idx[fp]
             # ── 파일 내 top-3 dense 평균 (MR_TriCHEF _aggregate) ──────────
             d_ranked = sorted(
                 [(i, float(seg_scores[i])) for i in idxs],
@@ -479,8 +546,6 @@ class TriChefEngine:
                     "asf_agg":   round(asf_agg, 4),
                 },
             ))
-            if len(out) >= topk * 3:
-                break
 
         out.sort(key=lambda x: -x.score)
         return out[:topk]

@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import SearchSidebar from '../components/SearchSidebar'
 import { useSidebar } from '../context/SidebarContext'
 import { API_BASE } from '../api'
+import LocationBadge from '../components/search/LocationBadge'
+import DomainFilter from '../components/search/DomainFilter'
+import ScoreBreakdown from '../components/search/ScoreBreakdown'
 
 // ── 파일 타입 메타 ───────────────────────────────────────
 const TYPE_META = {
@@ -58,8 +61,9 @@ function useSpeechRecognition({ onFinal }) {
 }
 
 // ── 검색 API ────────────────────────────────────────────
-async function searchFiles(query, topK = 20) {
-  const res = await fetch(`${API_BASE}/api/search?q=${encodeURIComponent(query)}&top_k=${topK}`)
+async function searchFiles(query, topK = 20, type = '') {
+  const typeQ = type ? `&type=${encodeURIComponent(type)}` : ''
+  const res = await fetch(`${API_BASE}/api/search?q=${encodeURIComponent(query)}&top_k=${topK}${typeQ}`)
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   const data = await res.json()
   if (data.error) throw new Error(data.error)
@@ -101,17 +105,28 @@ function ResultCard({ result, rank, onClick }) {
   const playerRef  = useRef(null)
 
   // 점수 계산 (admin.html 동일)
+  // [BUGFIX] 백엔드는 'rerank_score' 필드로 송신. 'rerank' 만 보던 기존 코드는
+  // 항상 null → (z_score+3)/6 폴백으로 모든 결과 정확도 0.500 표시되는 버그.
   const conf    = result.confidence ?? result.similarity ?? 0
   const confPct = (conf * 100).toFixed(1)
   const dense   = result.dense ?? null
-  const rerank  = result.rerank ?? null
+  const rerank  = result.rerank_score ?? result.rerank ?? null
   const zScore  = result.z_score ?? null
 
   const clamp01 = x => (x == null || isNaN(x)) ? null : Math.max(0, Math.min(1, x))
-  const sigm    = x => 1 / (1 + Math.exp(-x))
+  // [정확도 표시] BGE-reranker-v2-m3 의 raw logit 은 보통 [-15, +15] 범위로,
+  // 그대로 sigmoid 하면 음수 결과가 모두 0.001 근처에 압축되어 의미가 없다.
+  // 중심점 -3 (= 비관련 로짓 평균), 스케일 3 으로 시프트한 sigmoid 사용:
+  //   rerank=-10 → -7/3=-2.33 → 0.089
+  //   rerank=-5  → -2/3=-0.67 → 0.339
+  //   rerank=-3  → 0          → 0.500   ← 중립
+  //   rerank=0   → 1.0        → 0.731
+  //   rerank=+3  → 2.0        → 0.881
+  //   rerank=+10 → 13/3=4.33  → 0.987
+  const sigmCalibrated = x => 1 / (1 + Math.exp(-((x + 3) / 3)))
   const sim     = clamp01(dense) != null ? clamp01(dense).toFixed(3) : '—'
   const acc     = rerank != null
-    ? sigm(rerank).toFixed(3)
+    ? sigmCalibrated(rerank).toFixed(3)
     : Math.max(0, Math.min(1, ((zScore ?? 0) + 3) / 6)).toFixed(3)
 
   const streamUrl  = isAV ? avStreamUrl(result) : null
@@ -187,8 +202,11 @@ function ResultCard({ result, rank, onClick }) {
           )}
         </div>
 
-        {/* 파일명 */}
-        <div className="font-semibold text-[13px] text-[#f1f5f9] break-all">{result.file_name}</div>
+        {/* 파일명 + 위치 배지 (페이지/타임코드) */}
+        <div className="flex items-start gap-1.5">
+          <div className="font-semibold text-[13px] text-[#f1f5f9] break-all flex-1">{result.file_name}</div>
+          <LocationBadge location={result.location} fileType={result.file_type} />
+        </div>
 
         {/* 경로 */}
         <div className="text-[11px] text-[#64748b] break-all font-mono">{result.file_path}</div>
@@ -371,6 +389,10 @@ export default function MainSearch() {
   const [results, setResults] = useState([])
   const [searching, setSearching] = useState(false)
   const [searchError, setSearchError] = useState('')
+  // [#2] 도메인 필터 — '' (전체) | 'doc' | 'image' | 'video' | 'audio'
+  const [domainFilter, setDomainFilter] = useState('')
+  // [노이즈 제거] 저신뢰도 결과 숨김 (기본 ON). 사용자가 토글로 모두 표시 가능.
+  const [hideLowConf, setHideLowConf] = useState(true)
 
   // home → results 애니메이션
   const [flyStyle, setFlyStyle] = useState(null)
@@ -412,11 +434,12 @@ export default function MainSearch() {
   }, [view])
 
   // ── 검색 실행 ──────────────────────────────────────────
-  const fetchResults = useCallback(async (q) => {
+  // [#2] 도메인 필터를 백엔드에 전달 → 서버 측에서 type 별 top_k 할당.
+  const fetchResults = useCallback(async (q, type = '') => {
     setSearching(true)
     setSearchError('')
     try {
-      const data = await searchFiles(q)
+      const data = await searchFiles(q, 20, type)
       setResults(data)
     } catch (e) {
       setSearchError(e.message)
@@ -425,6 +448,12 @@ export default function MainSearch() {
       setSearching(false)
     }
   }, [])
+
+  // [#2] 도메인 필터 변경 시 자동 재검색 (현재 query 가 있을 때만).
+  useEffect(() => {
+    if (view === 'results' && query) fetchResults(query, domainFilter)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [domainFilter])
 
   const doSearch = (q) => {
     if (!q.trim() || aiTransitioning) return
@@ -684,6 +713,43 @@ export default function MainSearch() {
               </div>
             </div>
 
+            {/* [#2] 도메인 필터 칩 — 검색창 구조 미변경, 결과 헤더 아래에 독립 마운트 */}
+            <div className="mb-6 -mt-4">
+              <DomainFilter
+                value={domainFilter}
+                onChange={setDomainFilter}
+                counts={(() => {
+                  const c = { _total: results.length, doc: 0, image: 0, video: 0, audio: 0 }
+                  results.forEach(r => { c[r.file_type] = (c[r.file_type] ?? 0) + 1 })
+                  return c
+                })()}
+              />
+            </div>
+
+            {/* [노이즈 제거] 저신뢰도 결과 숨김 토글 — 신뢰도 < 5% 인 결과 자동 hide.
+                Reranker 가 부적합 판정한 결과(예: '박태웅 의장' 검색에 신발 사진)를
+                기본 숨김 처리하여 노이즈 제거. 사용자는 토글로 전체 보기 가능. */}
+            {(() => {
+              const LOW = 0.05
+              const lowCount = results.filter(r => (r.confidence ?? 0) < LOW).length
+              if (lowCount === 0) return null
+              return (
+                <div className="mb-4 -mt-2 flex items-center gap-3 text-sm">
+                  <span className="text-on-surface-variant/60">
+                    {hideLowConf
+                      ? <>저신뢰도 <span className="font-bold text-amber-400">{lowCount}건</span> 숨김</>
+                      : <>모든 결과 표시 중</>}
+                  </span>
+                  <button
+                    onClick={() => setHideLowConf(v => !v)}
+                    className="px-2 py-0.5 rounded-full bg-white/5 hover:bg-white/10 text-xs font-bold text-on-surface-variant transition-all"
+                  >
+                    {hideLowConf ? '모두 표시' : '저신뢰도 숨김'}
+                  </button>
+                </div>
+              )
+            })()}
+
             {/* 로딩 */}
             {searching && (
               <div className="flex flex-col items-center justify-center py-32 gap-4">
@@ -701,14 +767,33 @@ export default function MainSearch() {
               </div>
             )}
 
-            {/* 결과 카드 */}
-            {!searching && results.length > 0 && (
-              <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
-                {results.map((r, i) => (
-                  <ResultCard key={r.file_path + i} result={r} rank={i + 1} onClick={() => handleSelectFile(r)} />
-                ))}
-              </div>
-            )}
+            {/* 결과 카드 — 저신뢰도 숨김 토글 적용 */}
+            {!searching && results.length > 0 && (() => {
+              const LOW = 0.05
+              const visible = hideLowConf
+                ? results.filter(r => (r.confidence ?? 0) >= LOW)
+                : results
+              if (visible.length === 0) {
+                return (
+                  <div className="flex flex-col items-center justify-center py-20 gap-3">
+                    <span className="material-symbols-outlined text-on-surface-variant/30 text-5xl">filter_alt_off</span>
+                    <p className="text-on-surface-variant">신뢰할 만한 결과를 찾지 못했습니다.</p>
+                    <p className="text-xs text-on-surface-variant/40">
+                      모든 결과의 신뢰도가 5% 미만입니다. 다른 키워드를 시도하거나
+                      <button onClick={() => setHideLowConf(false)}
+                              className="ml-1 underline hover:text-primary">전체 결과 보기</button>
+                    </p>
+                  </div>
+                )
+              }
+              return (
+                <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
+                  {visible.map((r, i) => (
+                    <ResultCard key={r.file_path + i} result={r} rank={i + 1} onClick={() => handleSelectFile(r)} />
+                  ))}
+                </div>
+              )
+            })()}
 
             {/* 하단 통계 */}
             {!searching && results.length > 0 && (
@@ -854,6 +939,12 @@ export default function MainSearch() {
                         {isAV ? 'BGE-M3 세그먼트 집계 + Calibration' : 'TRI-CHEF Hermitian 유사도 · Calibration'}
                       </p>
                     </div>
+                  </div>
+
+                  {/* [#9] 점수 분해 — dense/lexical/asf/rerank/z_score 시각화 (admin.html 패리티) */}
+                  <div className="bg-surface-container-low rounded-xl p-5 border border-outline-variant/5">
+                    <h4 className="text-sm font-bold tracking-[0.15em] text-on-surface-variant mb-3 uppercase">점수 분해</h4>
+                    <ScoreBreakdown result={selectedFile} />
                   </div>
 
                   {/* AV: 세그먼트 요약 */}

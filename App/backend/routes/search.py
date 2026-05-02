@@ -55,28 +55,60 @@ def search():
             if not results:
                 results = _search_legacy_audio(query, top_k)
         else:
-            # 전체 검색: 이미지·문서·영상·음원 모두 TRI-CHEF
-            img_doc = _search_trichef(query, ["image", "doc_page"], top_k)
-            video   = _search_trichef_av(query, ["movie"], top_k)
+            # 전체 검색: 이미지·문서·영상·음원 모두 TRI-CHEF.
+            # [v3] 도메인별 최소 보장 비율 — AV conf 가 dense 0.99 로 매우 높고
+            # doc/image conf 가 0.4~0.7 로 낮아, 단순 confidence sort 시 doc/image
+            # 가 거의 모두 잘려나가는 문제 해결.
+            #   각 도메인 top_k/4 보장 (round-robin), 남는 자리는 score sort.
+            img_only  = _search_trichef(query, ["image"], top_k)
+            doc_only  = _search_trichef(query, ["doc_page"], top_k)
+            video     = _search_trichef_av(query, ["movie"], top_k)
             if not video:
                 video = _search_legacy_video(query, top_k)
-            audio   = _search_trichef_av(query, ["music"], top_k)
+            audio     = _search_trichef_av(query, ["music"], top_k)
             if not audio:
                 audio = _search_legacy_audio(query, top_k)
-            combined = img_doc + video + audio
-            # 도메인별 가중치: image/doc는 confidence 그대로,
-            # video/audio는 per-query adaptive confidence이지만
-            # 동일 쿼리에서 이미지·문서가 더 직접적으로 관련될 가능성이 높으므로
-            # 약간 하향 조정해 전체 검색에서 균형 있는 결과를 제공한다.
+
+            # 도메인별 정렬 (각 도메인 내부 confidence 순)
+            for lst in (img_only, doc_only, video, audio):
+                lst.sort(key=lambda r: r.get("confidence", 0), reverse=True)
+
+            # 최소 보장: 각 도메인 quota = max(1, top_k // 4)
+            quota = max(1, top_k // 4)
+            guaranteed: list[dict] = []
+            for lst in (doc_only, img_only, video, audio):
+                guaranteed.extend(lst[:quota])
+
+            # 추가 자리: 4 × quota 초과한 부분에 대해 score sort
             _DOMAIN_W = {"image": 1.0, "doc": 1.0, "video": 0.75, "audio": 0.75}
-            combined.sort(
-                key=lambda r: r.get("confidence", 0) * _DOMAIN_W.get(r.get("file_type", ""), 1.0),
+            extras = []
+            for lst in (img_only, doc_only, video, audio):
+                extras.extend(lst[quota:])
+            extras.sort(
+                key=lambda r: r.get("confidence", 0) *
+                              _DOMAIN_W.get(r.get("file_type", ""), 1.0),
                 reverse=True,
             )
+
+            # 합치기 — guaranteed 먼저, 그 다음 extras (가중 score 순)
+            combined = guaranteed + extras
             results = combined[:top_k]
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+    # Optional cross-encoder rerank (env-gated, GPU bf16). 비활성/실패 시 원본 유지.
+    from services.rerank_adapter import maybe_rerank
+    results = maybe_rerank(query, results)
+
+    # 위치 정보(location) 부착 — 페이지+라인(doc) / 타임코드+텍스트(video/audio).
+    # image 는 None → location 키 자체 생략.
+    # query 전달 → doc 결과는 매칭 줄 + snippet 도 함께 부착.
+    from services.location_resolver import extract_location
+    for r in results:
+        loc = extract_location(r, query=query)
+        if loc is not None:
+            r["location"] = loc
 
     return jsonify({"query": query, "results": results})
 
@@ -117,7 +149,11 @@ def _search_trichef(query: str, domains: list[str], top_k: int) -> list[dict]:
 
     for domain in domains:
         try:
-            hits = engine.search(query, domain=domain, topk=top_k)
+            # [#1] admin.html(/api/admin/inspect)과 동일 채널 디폴트로 통일.
+            # use_lexical/use_asf=True → BGE-M3 sparse + ASF Attention-Similarity-Filter
+            # 두 채널을 dense 와 함께 fusion. LOO R@1 +20pp 가능 (벤치 결과).
+            hits = engine.search(query, domain=domain, topk=top_k,
+                                 use_lexical=True, use_asf=True, pool=200)
         except Exception:
             continue
         for hit in hits:
@@ -247,7 +283,26 @@ def _search_trichef_av(query: str, domains: list[str], top_k: int) -> list[dict]
             })
 
     results.sort(key=lambda x: -x["confidence"])
-    return results[:top_k]
+
+    # [중복 제거 v2] 같은 파일이 abs/rel 두 형식으로 dual-registered 된 케이스
+    # (Movie/Rec 의 396/232 SHA-중복) 검색 결과 중복 출현 방지.
+    # 단순화: file_name (basename) 만으로 dedup. 같은 basename 의 다른 파일이
+    # 있을 가능성은 낮고, 있어도 검색 결과에서 첫 매칭 우선이 합리적.
+    seen: set = set()
+    deduped: list[dict] = []
+    for r in results:
+        # basename 추출 (file_name 우선, 없으면 file_path 의 마지막 segment)
+        fn = r.get("file_name")
+        if not fn:
+            fp = (r.get("file_path") or "").replace("\\", "/")
+            fn = fp.rsplit("/", 1)[-1] if fp else ""
+        key = fn.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(r)
+
+    return deduped[:top_k]
 
 
 # ── 구형 ChromaDB 비디오/오디오 검색 ────────────────────────────────────

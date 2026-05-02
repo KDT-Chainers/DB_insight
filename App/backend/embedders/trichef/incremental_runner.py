@@ -28,6 +28,10 @@ logger = logging.getLogger(__name__)
 
 
 # W4-B: BLIP 영어 캡셔너 → Qwen2-VL 한국어 캡셔너 교체. lazy 싱글톤.
+# [VRAM-safe] _load() 즉시 호출은 8GB GPU 에서 영상 처리(SigLIP2+DINOv2+Whisper)
+# 와 동시 로드 시 OOM 유발. 환경변수 OMC_QWEN_PREWARM=1 일 때만 즉시 적재.
+# 기본은 caption() 첫 호출 시 lazy 적재 — image/doc 처리 직전에만 VRAM 사용.
+import os as _os
 _QWEN_CAPTIONER = None
 def _get_qwen_captioner():
     global _QWEN_CAPTIONER
@@ -39,7 +43,33 @@ def _get_qwen_captioner():
             sys.path.insert(0, str(_DI_ROOT))
         from captioner.qwen_vl_ko import QwenKoCaptioner
         _QWEN_CAPTIONER = QwenKoCaptioner(dtype="float16")
+        # OOM 방지: 명시 활성화 시에만 즉시 VRAM 적재.
+        if _os.environ.get("OMC_QWEN_PREWARM", "").strip().lower() in ("1", "true", "yes"):
+            _QWEN_CAPTIONER._load()
     return _QWEN_CAPTIONER
+
+
+def _unload_qwen_captioner():
+    """Qwen-VL VRAM 점유 해제 — 영상/음성 처리 직전 호출하여 OOM 방지."""
+    global _QWEN_CAPTIONER
+    if _QWEN_CAPTIONER is None:
+        return
+    try:
+        if hasattr(_QWEN_CAPTIONER, "unload"):
+            _QWEN_CAPTIONER.unload()
+        elif hasattr(_QWEN_CAPTIONER, "_model"):
+            _QWEN_CAPTIONER._model = None
+            _QWEN_CAPTIONER._processor = None
+    except Exception:
+        pass
+    _QWEN_CAPTIONER = None
+    try:
+        import gc, torch
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception:
+        pass
 
 
 def _caption_for_im(cap_dir: Path, img_path: Path, key: str | None = None) -> str:
@@ -146,13 +176,23 @@ def _upsert_chroma(collection: str, ids: list[str],
                    src_root: Path) -> None:
     """ChromaDB 에 Re||Im⊥||Z⊥⊥ concat 벡터로 upsert.
 
-    ChromaDB 는 빠른 prefilter 용으로만 사용.
-    메인 점수는 .npy 원본으로 Hermitian 계산.
+    [Electron P2] services.chroma_async 로 비동기 큐잉 → 다음 파일 처리 중
+    백그라운드 thread 가 ChromaDB I/O 진행. 배치 종료 시 drain_and_wait 로
+    일관성 보장. 동기 폴백 환경: OMC_DISABLE_CHROMA_ASYNC=1.
     """
-    col = _get_trichef_collection(collection)
     metadatas = [{"path": str(src_root / i), "id": i} for i in ids]
     embeds = np.hstack([Re, Im_perp, Z_perp]).astype(np.float32)
-    CHUNK = 5000  # ChromaDB max batch size ~5461
+    try:
+        from services.chroma_async import enqueue_upsert
+        enqueue_upsert(lambda: _get_trichef_collection(collection),
+                       ids, embeds, metadatas)
+        return
+    except Exception as e:
+        logger.warning(f"[_upsert_chroma] async 실패, 동기 폴백: {e}")
+
+    # 동기 폴백 (services.chroma_async 미존재 시).
+    col = _get_trichef_collection(collection)
+    CHUNK = 5000
     for start in range(0, len(ids), CHUNK):
         end = start + CHUNK
         col.upsert(
@@ -467,7 +507,7 @@ def run_doc_incremental() -> IncrementalResult:
 from _extensions import IMAGE_EMBED_EXTS, DOC_EXTS as DOC_EMBED_EXTS
 
 
-def embed_image_file(file_path: str, progress_cb=None) -> dict:
+def embed_image_file(file_path: str, progress_cb=None, defer_lexical_rebuild: bool = False) -> dict:
     """
     단일 이미지 파일 TRI-CHEF 3축 임베딩.
     파일을 raw_DB/Img/staged/ 에 하드링크(실패 시 복사)로 스테이징 후
@@ -504,9 +544,34 @@ def embed_image_file(file_path: str, progress_cb=None) -> dict:
 
     key = str(stage_rel).replace("\\", "/")             # "staged/abcd1234/foo.jpg"
 
-    # 이미 인덱싱 완료
+    # 이미 인덱싱 완료 (자기 key 형식)
     if registry.get(key, {}).get("sha") == sha:
         return {"status": "skipped", "reason": "이미 인덱싱된 파일"}
+
+    # [중복 방지] 다른 key 형식(예: "YS_1차/foo.jpg")으로 이미 같은 SHA 등록된 경우 skip.
+    # run_image_incremental(bulk) 와 embed_image_file(single) 가 다른 key 사용 →
+    # 같은 파일이 두 형식으로 중복 등록되는 문제를 차단.
+    # [#15] SHA-skip 시 새 abs 경로를 기존 entry 의 abs_aliases 에 추가 →
+    # registry_lookup 이 alias 인덱스로 indexed=true 판정 → "신규 N" 무한 루프 차단.
+    for _ek, _ev in registry.items():
+        if _ek == key:
+            continue
+        if isinstance(_ev, dict) and _ev.get("sha") == sha:
+            try:
+                aliases = _ev.get("abs_aliases") or []
+                new_abs = str(p.resolve())
+                norm_new = str(Path(new_abs)).lower().replace("\\", "/")
+                already = any(
+                    str(Path(a)).lower().replace("\\", "/") == norm_new
+                    for a in aliases
+                )
+                if not already:
+                    aliases.append(new_abs)
+                    _ev["abs_aliases"] = aliases
+                    _save_registry(reg_path, registry)
+            except Exception:
+                pass
+            return {"status": "skipped", "reason": f"중복 방지: 이미 등록됨 ({_ek})"}
 
     # 스테이징 (하드링크 → 실패 시 복사)
     if not staged.exists():
@@ -559,10 +624,13 @@ def embed_image_file(file_path: str, progress_cb=None) -> dict:
     Im_perp, Z_perp = tri_gs.orthogonalize(Re_all, Im_all, Z_all)
     _upsert_chroma(TRICHEF_CFG["COL_IMAGE"], all_ids, Re_all, Im_perp, Z_perp, raw_dir)
 
-    try:
-        lexical_rebuild.rebuild_image_lexical()
-    except Exception as e:
-        logger.warning(f"[embed_image_file] lexical rebuild 실패: {e}")
+    # [P0 #B] 배치 호출자가 defer_lexical_rebuild=True 로 지연 요청 시 스킵 →
+    # _run_job 종료 직전에 1회 호출. 단일 파일 호출(레거시) 시 그대로 동작.
+    if not defer_lexical_rebuild:
+        try:
+            lexical_rebuild.rebuild_image_lexical()
+        except Exception as e:
+            logger.warning(f"[embed_image_file] lexical rebuild 실패: {e}")
 
     registry[key] = {"sha": sha, "abs": str(p), "staged": str(staged)}
     _save_registry(reg_path, registry)
@@ -570,7 +638,7 @@ def embed_image_file(file_path: str, progress_cb=None) -> dict:
     return {"status": "done", "chunks": 1}
 
 
-def embed_doc_file(file_path: str, progress_cb=None) -> dict:
+def embed_doc_file(file_path: str, progress_cb=None, defer_lexical_rebuild: bool = False) -> dict:
     """
     단일 문서 파일 TRI-CHEF 3축 임베딩 (페이지 렌더링 포함).
     파일을 raw_DB/Doc/staged/ 에 스테이징 후 기존 파이프라인 실행.
@@ -610,6 +678,28 @@ def embed_doc_file(file_path: str, progress_cb=None) -> dict:
 
     if registry.get(key, {}).get("sha") == sha:
         return {"status": "skipped", "reason": "이미 인덱싱된 파일"}
+
+    # [중복 방지] 다른 key 로 이미 같은 SHA 등록된 경우 skip.
+    # [#15] SHA-skip 시 abs_aliases 에 새 abs 추가 (신규 N 루프 차단).
+    for _ek, _ev in registry.items():
+        if _ek == key:
+            continue
+        if isinstance(_ev, dict) and _ev.get("sha") == sha:
+            try:
+                aliases = _ev.get("abs_aliases") or []
+                new_abs = str(p.resolve())
+                norm_new = str(Path(new_abs)).lower().replace("\\", "/")
+                already = any(
+                    str(Path(a)).lower().replace("\\", "/") == norm_new
+                    for a in aliases
+                )
+                if not already:
+                    aliases.append(new_abs)
+                    _ev["abs_aliases"] = aliases
+                    _save_registry(reg_path, registry)
+            except Exception:
+                pass
+            return {"status": "skipped", "reason": f"중복 방지: 이미 등록됨 ({_ek})"}
 
     if not staged.exists():
         try:
@@ -679,10 +769,12 @@ def embed_doc_file(file_path: str, progress_cb=None) -> dict:
     _upsert_chroma(TRICHEF_CFG["COL_DOC_PAGE"], all_ids, Re_all, Im_perp, Z_perp,
                    doc_extract)
 
-    try:
-        lexical_rebuild.rebuild_doc_lexical()
-    except Exception as e:
-        logger.warning(f"[embed_doc_file] lexical rebuild 실패: {e}")
+    # [P0 #B] 배치 호출자가 defer_lexical_rebuild=True 로 지연 요청 시 스킵.
+    if not defer_lexical_rebuild:
+        try:
+            lexical_rebuild.rebuild_doc_lexical()
+        except Exception as e:
+            logger.warning(f"[embed_doc_file] lexical rebuild 실패: {e}")
 
     registry[key] = {"sha": sha, "abs": str(p), "staged": str(staged),
                      "pages": len(img_pages)}
