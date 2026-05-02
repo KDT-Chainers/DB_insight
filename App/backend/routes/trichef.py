@@ -229,6 +229,16 @@ def search():
 
     all_items = list(_seen_img.values()) + list(_seen_doc.values()) + _other
 
+    # 5도메인 통합 confidence 조정 (edge case + saturate 완화)
+    try:
+        from services.score_adjust import adjust_confidence
+        for it in all_items:
+            for f in ("confidence", "dense"):
+                if f in it and it[f] is not None:
+                    it[f] = round(adjust_confidence(it[f], query), 4)
+    except Exception:
+        pass
+
     all_items.sort(key=lambda x: -x["confidence"])
     top = all_items[:topk]
     for i, it in enumerate(top, 1):

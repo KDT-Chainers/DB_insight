@@ -46,6 +46,15 @@ def search():
         logger.exception("[bgm.search] 실패")
         return jsonify({"query": query, "results": [], "error": str(e)[:300]}), 500
 
+    # 5도메인 통합 confidence 조정 (edge case + saturate 완화)
+    try:
+        from services.score_adjust import adjust_confidences
+        adjust_confidences(result.get("results", []), query)
+        for r in result.get("results", []):
+            adjust_confidences(r.get("segments") or [], query)
+    except Exception:
+        pass
+
     # /api/admin/inspect 호환 형식으로 추가 매핑 (frontend 통합용)
     rows = []
     for r in result.get("results", []):

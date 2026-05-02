@@ -103,6 +103,18 @@ def search():
     from services.rerank_adapter import maybe_rerank
     results = maybe_rerank(query, results)
 
+    # 5도메인 통합 confidence 조정 (edge case + upper saturate 완화).
+    # raw confidence (z-score CDF) 가 너무 saturate 되어 빈쿼리/짧은쿼리도 90%+
+    # 표시되는 문제 해결.
+    try:
+        from services.score_adjust import adjust_confidence
+        for r in results:
+            for f in ("confidence", "similarity"):
+                if f in r and r[f] is not None:
+                    r[f] = round(adjust_confidence(r[f], query), 4)
+    except Exception:
+        pass
+
     # 위치 정보(location) 부착 — 페이지+라인(doc) / 타임코드+텍스트(video/audio).
     # image 는 None → location 키 자체 생략.
     # query 전달 → doc 결과는 매칭 줄 + snippet 도 함께 부착.
