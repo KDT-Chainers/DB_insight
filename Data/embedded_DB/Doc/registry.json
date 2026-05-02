@@ -1770,5 +1770,11 @@
   "논문/radford2018improving.pdf": {
     "sha": "eb81a65e0856bd38e855e1f1de6ee12e7c3eb92ae05c8270d345a475beb631d0",
     "abs": "C:\\yssong\\KDT-FT-team3-Chainers\\DB_insight\\Data\\raw_DB\\Doc\\논문\\radford2018improving.pdf"
+  },
+  "staged/ae576e5b/주민등록증.png": {
+    "sha": "ae576e5b1aaab484c49f0fd34234469e8ef773dc8279ab6a4486b83124a5c0f1",
+    "abs": "C:\\yssong\\KDT-FT-team3-Chainers\\Data\\raw_DB\\Img\\주민등록증.png",
+    "staged": "C:\\yssong\\KDT-FT-team3-Chainers\\DB_insight\\Data\\raw_DB\\Doc\\staged\\ae576e5b\\주민등록증.png",
+    "pages": 1
   }
 }

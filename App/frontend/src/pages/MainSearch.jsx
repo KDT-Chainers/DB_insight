@@ -128,11 +128,44 @@ function avStreamUrl(result) {
 }
 
 // ── 결과 카드 (admin.html card / avCard 구조 대응) ────────
-function ResultCard({ result, rank, onClick }) {
+function ResultCard({ result, rank, onClick, securityMode = false }) {
   const isAV       = result.file_type === 'video' || result.file_type === 'audio'
   const hasPreview = (result.file_type === 'image' || result.file_type === 'doc') && result.preview_url
   const [imgError, setImgError] = useState(false)
   const playerRef  = useRef(null)
+
+  // ── 보안 모드: 이미지/문서 미리보기에 PII 마스킹 적용 ──
+  const [maskedSrc, setMaskedSrc] = useState(null)
+  const [secState, setSecState]   = useState('idle')  // idle | loading | done | nopii
+  const [piiTypes, setPiiTypes]   = useState([])
+  useEffect(() => {
+    if (!securityMode || !hasPreview || isAV) return
+    if (secState !== 'idle') return
+    setSecState('loading')
+    const rel = result.trichef_id || result.file_path
+    const domain = result.trichef_domain || (result.file_type === 'doc' ? 'doc_page' : 'image')
+    fetch(`${API_BASE}/api/security/mask_image?path=${encodeURIComponent(rel)}&domain=${domain}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.pii_found && d.masked_b64) {
+          setMaskedSrc(`data:image/png;base64,${d.masked_b64}`)
+          setPiiTypes(d.pii_types || [])
+          setSecState('done')
+        } else {
+          setSecState('nopii')
+        }
+      })
+      .catch(() => setSecState('nopii'))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [securityMode, hasPreview, isAV, result.trichef_id, result.file_path, secState])
+  // 보안 모드 OFF 시 상태 초기화
+  useEffect(() => {
+    if (!securityMode) {
+      setSecState('idle')
+      setMaskedSrc(null)
+      setPiiTypes([])
+    }
+  }, [securityMode])
 
   // 점수 계산 (admin.html 동일)
   // [BUGFIX] 백엔드는 'rerank_score' 필드로 송신. 'rerank' 만 보던 기존 코드는
@@ -202,16 +235,38 @@ function ResultCard({ result, rank, onClick }) {
         </div>
       )}
 
-      {/* 이미지·문서: 썸네일 */}
+      {/* 이미지·문서: 썸네일 (보안 모드 시 PII 마스킹) */}
       {!isAV && (
         <div className="relative h-[200px] bg-[#0b1220] flex items-center justify-center overflow-hidden">
           {hasPreview && !imgError ? (
-            <img
-              src={`${API_BASE}${result.preview_url}`}
-              alt={result.file_name}
-              className="max-w-full max-h-full object-contain cursor-zoom-in"
-              onError={() => setImgError(true)}
-            />
+            <>
+              <img
+                src={securityMode && maskedSrc ? maskedSrc : `${API_BASE}${result.preview_url}`}
+                alt={result.file_name}
+                className="max-w-full max-h-full object-contain cursor-zoom-in"
+                onError={() => setImgError(true)}
+              />
+              {/* 보안 모드 로딩 스피너 */}
+              {securityMode && secState === 'loading' && (
+                <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-amber-400 animate-spin">progress_activity</span>
+                </div>
+              )}
+              {/* PII 발견 배지 */}
+              {securityMode && secState === 'done' && piiTypes.length > 0 && (
+                <span className="absolute top-2 right-2 px-2 py-0.5 rounded-md bg-red-500 text-white text-[10px] font-bold shadow flex items-center gap-1">
+                  <span className="material-symbols-outlined text-xs">shield</span>
+                  PII 마스킹 ({piiTypes.length})
+                </span>
+              )}
+              {/* PII 없음 배지 */}
+              {securityMode && secState === 'nopii' && (
+                <span className="absolute top-2 right-2 px-2 py-0.5 rounded-md bg-emerald-500/80 text-white text-[10px] font-bold shadow flex items-center gap-1">
+                  <span className="material-symbols-outlined text-xs">check_circle</span>
+                  안전
+                </span>
+              )}
+            </>
           ) : (
             <span className="text-[#64748b] text-xs">{domainLabel}</span>
           )}
@@ -424,6 +479,8 @@ export default function MainSearch() {
   const [domainFilter, setDomainFilter] = useState('')
   // [노이즈 제거] 저신뢰도 결과 숨김 (기본 ON). 사용자가 토글로 모두 표시 가능.
   const [hideLowConf, setHideLowConf] = useState(true)
+  // 보안 모드 — 활성 시 결과 미리보기에 PII 마스킹 (주민번호/여권/계좌 등)
+  const [securityMode, setSecurityMode] = useState(false)
   // + 버튼 멀티 메뉴
   const [plusMenuOpen, setPlusMenuOpen] = useState(false)
   // 이미지 검색 — 입력 모달 + 업로드 파일 + 미리보기
@@ -448,6 +505,17 @@ export default function MainSearch() {
 
   const btnRef  = useRef(null)
   const formRef = useRef(null)
+  const homeInputRef    = useRef(null)
+  const resultsInputRef = useRef(null)
+
+  // 페이지 진입 / view 변경 시 검색창 자동 포커스
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (view === 'home') homeInputRef.current?.focus()
+      else if (view === 'results') resultsInputRef.current?.focus()
+    }, 100)
+    return () => clearTimeout(t)
+  }, [view])
 
   // STT
   const doSearchRef = useRef(null)
@@ -726,7 +794,9 @@ export default function MainSearch() {
                   </div>
                   <div className="flex-1 relative">
                     <input
+                      ref={homeInputRef}
                       type="text"
+                      autoFocus
                       value={listening ? '' : inputValue}
                       onChange={(e) => !listening && setInputValue(e.target.value)}
                       placeholder={listening ? '' : '로컬 파일에 대해 무엇이든 물어보세요...'}
@@ -745,6 +815,15 @@ export default function MainSearch() {
                       </div>
                     )}
                   </div>
+                  {/* 보안 모드 토글 — 마이크 옆에 위치 */}
+                  <button type="button" onClick={() => setSecurityMode(v => !v)}
+                    title={securityMode ? '보안 모드 켜짐: 결과 미리보기에 PII 마스킹 적용' : '보안 모드 꺼짐'}
+                    className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 shrink-0
+                      ${securityMode
+                        ? 'bg-red-500/20 text-red-400 ring-2 ring-red-400/40 shadow-[0_0_20px_rgba(248,113,113,0.3)]'
+                        : 'text-on-surface-variant hover:text-red-400 hover:bg-red-400/10'}`}>
+                    <span className="material-symbols-outlined" style={securityMode ? { fontVariationSettings: '"FILL" 1' } : {}}>shield</span>
+                  </button>
                   <button type="button" onClick={toggleMic}
                     className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 shrink-0
                       ${listening ? 'bg-red-500/20 text-red-400 animate-pulse' : 'text-on-surface-variant hover:text-primary hover:bg-primary/10'}`}>
@@ -807,6 +886,7 @@ export default function MainSearch() {
               <span className={`material-symbols-outlined text-lg ${listening ? 'text-red-400' : 'text-primary'}`}>{listening ? 'mic' : 'search'}</span>
               <div className="flex-1 relative">
                 <input
+                  ref={resultsInputRef}
                   className="bg-transparent border-none focus:ring-0 w-full text-on-surface placeholder-on-surface-variant text-lg outline-none"
                   placeholder={listening ? '' : '인텔리전스에 질문하세요...'}
                   value={listening ? '' : inputValue}
@@ -825,6 +905,12 @@ export default function MainSearch() {
                   </div>
                 )}
               </div>
+              {/* 보안 모드 토글 (results header) */}
+              <button type="button" onClick={() => setSecurityMode(v => !v)}
+                title={securityMode ? '보안 모드 켜짐' : '보안 모드 꺼짐'}
+                className={`shrink-0 transition-all duration-200 ${securityMode ? 'text-red-400' : 'text-on-surface-variant hover:text-red-400'}`}>
+                <span className="material-symbols-outlined text-lg" style={securityMode ? { fontVariationSettings: '"FILL" 1' } : {}}>shield</span>
+              </button>
               <button type="button" onClick={toggleMic}
                 className={`shrink-0 transition-all duration-200 ${listening ? 'text-red-400 animate-pulse' : 'text-on-surface-variant hover:text-primary'}`}>
                 <span className="material-symbols-outlined text-lg" style={listening ? { fontVariationSettings: '"FILL" 1' } : {}}>mic</span>
@@ -974,7 +1060,7 @@ export default function MainSearch() {
               return (
                 <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
                   {visible.map((r, i) => (
-                    <ResultCard key={r.file_path + i} result={r} rank={i + 1} onClick={() => handleSelectFile(r)} />
+                    <ResultCard key={r.file_path + i} result={r} rank={i + 1} onClick={() => handleSelectFile(r)} securityMode={securityMode} />
                   ))}
                 </div>
               )
