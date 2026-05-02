@@ -81,8 +81,8 @@ export default function SearchSidebar() {
                 : 'bg-surface-container-high border-outline-variant/15 hover:bg-surface-container-highest text-on-surface'
             }`}
           >
-            <span className="material-symbols-outlined text-lg">settings</span>
-            <span className="font-manrope uppercase tracking-[0.05em] text-lg">설정</span>
+            <span className="material-symbols-outlined text-base">settings</span>
+            <span className="font-manrope uppercase tracking-[0.03em] text-sm whitespace-nowrap">설정</span>
           </button>
           <button
             onClick={() => navigate('/data')}

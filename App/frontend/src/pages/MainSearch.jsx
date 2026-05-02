@@ -124,10 +124,11 @@ function ResultCard({ result, rank, onClick }) {
   //   rerank=+3  → 2.0        → 0.881
   //   rerank=+10 → 13/3=4.33  → 0.987
   const sigmCalibrated = x => 1 / (1 + Math.exp(-((x + 3) / 3)))
-  const sim     = clamp01(dense) != null ? clamp01(dense).toFixed(3) : '—'
+  // 신뢰도/정확도/유사도 모두 0~100% 형식으로 통일 표시
+  const sim     = clamp01(dense) != null ? `${(clamp01(dense) * 100).toFixed(1)}%` : '—'
   const acc     = rerank != null
-    ? sigmCalibrated(rerank).toFixed(3)
-    : Math.max(0, Math.min(1, ((zScore ?? 0) + 3) / 6)).toFixed(3)
+    ? `${(sigmCalibrated(rerank) * 100).toFixed(1)}%`
+    : `${(Math.max(0, Math.min(1, ((zScore ?? 0) + 3) / 6)) * 100).toFixed(1)}%`
 
   const streamUrl  = isAV ? avStreamUrl(result) : null
   const domainLabel = result.trichef_domain ?? result.file_type ?? 'unknown'
