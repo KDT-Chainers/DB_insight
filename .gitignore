@@ -181,9 +181,19 @@ App/backend/=*
 
 merge
 기획서
-md/
 pipeline_details_260427_1420
 pipeline_details_260427_1420.md
+
+# md/ — 임시 로그/JSON 만 제외, 보고서 .md 는 보존
+md/_*
+md/*.log
+md/*.json
+md/*.txt
+md/*.html
+
+# 임시 디버깅 스크립트 (1회용 진단/테스트)
+scripts/_diag_*.py
+scripts/_test_*.py
 
 # ============================================================
 # LaTeX intermediate artifacts

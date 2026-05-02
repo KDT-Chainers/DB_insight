@@ -74,6 +74,7 @@ function _startPythonBackend() {
   // app.getPath('exe') = 실행된 exe의 실제 경로 (portable 포함)
   const exeDir = path.dirname(app.getPath('exe'))
   const candidates = [
+    'C:\\yssong\\KDT-FT-team3-Chainers\\DB_insight\\App\\backend', // 로컬 PC 고정 경로 (이 사용자)
     path.join(exeDir, '..', '..', 'backend'),                     // portable: out/ → App/backend
     path.join(exeDir, '..', '..', '..', 'backend'),               // win-unpacked: out/win-unpacked/ → App/backend
     path.resolve(__dirname, '..', '..', 'backend'),                // 개발 모드 (소스에서 실행 시)
@@ -111,7 +112,24 @@ function _startPythonBackend() {
         detached: false,
         shell: true,              // PATH 기반 해석을 위해 shell 사용
         windowsHide: true,        // CMD 창 숨김
-        env: { ...process.env },  // 현재 환경변수 전달
+        env: {
+          ...process.env,
+          // Cross-encoder rerank 활성화 — services/rerank_adapter.py:28 가
+          // 이 변수를 truthy 로 판정하면 GPU bf16 으로 BGE-reranker-v2-m3 를
+          // lazy 로딩하여 /api/search 결과를 재정렬한다. 첫 호출 ~1s 추가.
+          TRICHEF_USE_RERANKER: '1',
+          // HuggingFace 모델 오프라인 모드 — 캐시에 있는 모델은 사용하되
+          // hub 검증 HTTPS 호출을 건너뛴다. faster-whisper / transformers /
+          // huggingface_hub 모두 이 변수를 인식. 네트워크 일시 단절 시
+          // ConnectionError(MaxRetryError) 발생 방지. 캐시 미보유 모델은
+          // 로컬 다운로드가 필요하므로 첫 사용 전 한 번 인터넷 연결 필수.
+          HF_HUB_OFFLINE:        '1',
+          TRANSFORMERS_OFFLINE:  '1',
+          // [Electron P1] __pycache__ 디스크 쓰기 방지 → I/O 경쟁 감소.
+          PYTHONDONTWRITEBYTECODE: '1',
+          // 진행률·에러 로그 즉시 flush → 디버깅 가시성 ↑ (헤드리스 spawn 환경 필수).
+          PYTHONUNBUFFERED:        '1',
+        },
       })
       backendProcess.on('error', (err) => {
         try { if (typeof logStream === 'number') fs.writeSync(logStream, `\n[spawn error] ${err.message}\n`) } catch (_) {}
@@ -292,6 +310,10 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
+      // [Electron P1] 인덱싱 중 백그라운드 탭/창 throttle 비활성 → 진행률 즉시 갱신.
+      backgroundThrottling: false,
+      // 검색·인덱싱 UI 에는 맞춤법 검사 불필요 (한국어 dict 로딩 + IPC 부담 제거).
+      spellcheck: false,
     },
     show: false,
   })

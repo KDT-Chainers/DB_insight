@@ -74,6 +74,43 @@ from pipeline.frame_sampler import extract_audio, extract_frames, probe_duration
 # STT 정렬 헬퍼 (movie_runner.py 에서 복사 — 패키지 간 순환 import 방지)
 # ══════════════════════════════════════════════════════════════════════
 
+def _audio_has_voice(wav_path: Path, rms_threshold: float = 0.005,
+                     min_voice_ratio: float = 0.02) -> bool:
+    """[#5] BGM/무음 영상 감지 — Whisper STT 시간 절감.
+
+    16kHz mono WAV(extract_audio 결과) 의 100ms 윈도우 RMS 분포를 검사.
+    RMS > threshold 인 윈도우 비율이 min_voice_ratio 미만이면 음성 없음으로
+    판정 → STT 건너뛰고 빈 segments 반환. 영상당 5~10초 절감 가능.
+
+    BGM_only(연주 음악) 도 무음으로 처리 — Whisper 가 가사 없는 음악에 대해
+    환각(hallucination) 텍스트를 생성하는 문제를 동시에 회피.
+    """
+    try:
+        import wave
+        with wave.open(str(wav_path), "rb") as wf:
+            n = wf.getnframes()
+            sr = wf.getframerate() or 16000
+            if n <= 0:
+                return False
+            raw = wf.readframes(n)
+        arr = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
+        if arr.size == 0:
+            return False
+        win = max(1, int(sr * 0.1))   # 100ms 윈도우
+        # 윈도우 단위 RMS 계산 (마지막 부분 잔여는 패딩으로 무시)
+        n_full = (arr.size // win) * win
+        if n_full < win:
+            return float(np.sqrt(np.mean(arr ** 2))) > rms_threshold
+        windows = arr[:n_full].reshape(-1, win)
+        rms = np.sqrt((windows ** 2).mean(axis=1))
+        voice_ratio = float((rms > rms_threshold).mean())
+        return voice_ratio >= min_voice_ratio
+    except Exception as _e:
+        # 검사 실패 시 안전하게 voice 있다고 가정 → STT 진행 (기존 동작 유지)
+        logger.debug(f"[voice_check] {wav_path.name}: {_e}")
+        return True
+
+
 def _align_stt_to_frames(
     stt_segs: list[dict],
     frame_times: list[tuple[float, float]],
@@ -176,6 +213,28 @@ def embed_movie_file(file_path: str, progress_cb: Callable | None = None) -> dic
     if reg.get(rel, {}).get("sha") == sha:
         return {"status": "skipped", "reason": "이미 인덱싱됨 (SHA 일치)"}
 
+    # [#15] 다른 key 형식으로 같은 SHA 등록되어 있으면 alias 등록 후 skip
+    # → registry_lookup 이 indexed=true 판정 + 중복 entry 안 만듦
+    for _ek, _ev in reg.items():
+        if _ek == rel:
+            continue
+        if isinstance(_ev, dict) and _ev.get("sha") == sha:
+            try:
+                aliases = _ev.get("abs_aliases") or []
+                new_abs = str(src.resolve())
+                norm_new = str(Path(new_abs)).lower().replace("\\", "/")
+                already = any(
+                    str(Path(a)).lower().replace("\\", "/") == norm_new
+                    for a in aliases
+                )
+                if not already:
+                    aliases.append(new_abs)
+                    _ev["abs_aliases"] = aliases
+                    mr_registry.save(reg_path, reg)
+            except Exception:
+                pass
+            return {"status": "skipped", "reason": f"중복 방지: 이미 등록됨 ({_ek})"}
+
     t0 = time.time()
     tmp = Path(tempfile.mkdtemp(prefix="app_movie_"))
     try:
@@ -200,6 +259,19 @@ def embed_movie_file(file_path: str, progress_cb: Callable | None = None) -> dic
         # ── Step 2: SigLIP2 Re (1152d) + DINOv2 Z (1024d) ─────────
         if _cb(1):
             return {"status": "skipped", "reason": "사용자 중단"}
+        # [OOM 방지] 8GB VRAM 한계 — image/doc 용 Qwen-VL 모델이 적재되어 있으면
+        # SigLIP2/DINOv2/Whisper 동시 로드 시 OOM. 영상 처리 시작 전 unload.
+        try:
+            from .incremental_runner import _unload_qwen_captioner
+            _unload_qwen_captioner()
+        except Exception:
+            pass
+        # [VRAM] 큰 모델 로드 직전 공격적 정리 — 이전 영상의 deferred dealloc 회수
+        try:
+            from services.vram_janitor import ensure_free
+            ensure_free(target_free_mb=4500)
+        except Exception:
+            pass
         sig = SigLIP2Encoder()
         Re = sig.embed_images(frame_paths, batch=4)   # batch 축소: 8 → 4
         sig.unload(); del sig
@@ -214,16 +286,26 @@ def embed_movie_file(file_path: str, progress_cb: Callable | None = None) -> dic
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-        # ── Step 3: Whisper STT ────────────────────────────────────
+        # ── Step 3: Whisper STT (BGM/무음 영상은 자동 skip) ────────
         if _cb(2):
             return {"status": "skipped", "reason": "사용자 중단"}
-        stt_m = WhisperSTT()
-        stt_segs = stt_m.transcribe(wav, language=None)
-        stt_m.unload(); del stt_m
-        gc.collect()
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-        logger.info(f"[movie] {src.name}: {len(stt_segs)} STT segments")
+        # [VRAM] Whisper(~3GB) 로드 직전 정리
+        try:
+            from services.vram_janitor import ensure_free
+            ensure_free(target_free_mb=3500)
+        except Exception:
+            pass
+        if _audio_has_voice(wav):
+            stt_m = WhisperSTT()
+            stt_segs = stt_m.transcribe(wav, language=None)
+            stt_m.unload(); del stt_m
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            logger.info(f"[movie] {src.name}: {len(stt_segs)} STT segments")
+        else:
+            stt_segs = []
+            logger.info(f"[movie] {src.name}: BGM/무음 감지 → STT 건너뜀")
 
         # ── Step 4: BGE-M3 Im (1024d) ─────────────────────────────
         if _cb(3):
@@ -336,6 +418,27 @@ def embed_music_file(file_path: str, progress_cb: Callable | None = None) -> dic
     if reg.get(rel, {}).get("sha") == sha:
         return {"status": "skipped", "reason": "이미 인덱싱됨 (SHA 일치)"}
 
+    # [#15] 다른 key 형식으로 같은 SHA 등록되어 있으면 alias 등록 후 skip
+    for _ek, _ev in reg.items():
+        if _ek == rel:
+            continue
+        if isinstance(_ev, dict) and _ev.get("sha") == sha:
+            try:
+                aliases = _ev.get("abs_aliases") or []
+                new_abs = str(src.resolve())
+                norm_new = str(Path(new_abs)).lower().replace("\\", "/")
+                already = any(
+                    str(Path(a)).lower().replace("\\", "/") == norm_new
+                    for a in aliases
+                )
+                if not already:
+                    aliases.append(new_abs)
+                    _ev["abs_aliases"] = aliases
+                    mr_registry.save(reg_path, reg)
+            except Exception:
+                pass
+            return {"status": "skipped", "reason": f"중복 방지: 이미 등록됨 ({_ek})"}
+
     t0 = time.time()
     tmp = Path(tempfile.mkdtemp(prefix="app_music_"))
     try:
@@ -345,12 +448,27 @@ def embed_music_file(file_path: str, progress_cb: Callable | None = None) -> dic
         wav = extract_audio(src, tmp / "audio.wav")
         dur = probe_duration(src)
 
-        # ── Step 2: Whisper STT ────────────────────────────────────
+        # ── Step 2: Whisper STT (BGM/무음 자동 skip) ───────────────
         if _cb(1):
             return {"status": "skipped", "reason": "사용자 중단"}
-        stt_m = WhisperSTT()
-        stt_segs = stt_m.transcribe(wav, language=None)
-        stt_m.unload(); del stt_m; gc.collect()
+        # [OOM 방지] Qwen-VL 적재 상태면 unload (음성 도메인은 Qwen 불필요).
+        try:
+            from .incremental_runner import _unload_qwen_captioner
+            _unload_qwen_captioner()
+        except Exception:
+            pass
+        try:
+            from services.vram_janitor import ensure_free
+            ensure_free(target_free_mb=3500)
+        except Exception:
+            pass
+        if _audio_has_voice(wav):
+            stt_m = WhisperSTT()
+            stt_segs = stt_m.transcribe(wav, language=None)
+            stt_m.unload(); del stt_m; gc.collect()
+        else:
+            stt_segs = []
+            logger.info(f"[music] {src.name}: BGM/무음 감지 → STT 건너뜀")
 
         stt_status = "ok" if any(s["text"].strip() for s in stt_segs) else "no_speech"
         # original_transcript: 파일명을 원본 전사 대리값으로 사용

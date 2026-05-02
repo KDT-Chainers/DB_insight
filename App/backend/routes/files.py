@@ -183,8 +183,11 @@ def stats():
             if f["file_path"] not in existing_paths:
                 all_files.append(f)
 
+        # by_type 가 권위 있는 카운트 — total 도 동일 합산으로 일치 보장.
+        # (legacy all_files 와 tc_files dedup 결과가 by_type 합과 어긋날 수 있어
+        #  사용자 UI 가 '서로 다른 두 합' 을 보게 되는 P1 버그를 차단)
         total_chunks = sum(v["chunk_count"] for v in by_type.values())
-        total_files  = len(all_files)
+        total_files  = sum(v["file_count"]  for v in by_type.values())
         return jsonify({
             "by_type":      by_type,
             "total_files":  total_files,

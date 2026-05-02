@@ -1,8 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import SearchSidebar from '../components/SearchSidebar'
 import { useSidebar } from '../context/SidebarContext'
 import { API_BASE } from '../api'
+import LocationBadge from '../components/search/LocationBadge'
+import DomainFilter from '../components/search/DomainFilter'
+import ScoreBreakdown from '../components/search/ScoreBreakdown'
 
 // ── 파일 타입 메타 ───────────────────────────────────────
 const TYPE_META = {
@@ -57,79 +60,20 @@ function useSpeechRecognition({ onFinal }) {
   return { listening, interim, toggle }
 }
 
-// ── 텍스트 검색 API (/api/trichef/search — per-query 적응형 confidence) ──
-async function searchFiles(query, topK = 30) {
-  const res = await fetch(`${API_BASE}/api/trichef/search`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      query,
-      topk: topK,
-      domains: ['image', 'doc_page', 'movie', 'music'],
-      use_lexical: true,
-      use_asf: true,
-      pool: 300,
-    }),
-  })
-  if (!res.ok) throw new Error(`검색 실패 HTTP ${res.status}`)
+// ── 검색 API ────────────────────────────────────────────
+async function searchFiles(query, topK = 20, type = '') {
+  const typeQ = type ? `&type=${encodeURIComponent(type)}` : ''
+  const res = await fetch(`${API_BASE}/api/search?q=${encodeURIComponent(query)}&top_k=${topK}${typeQ}`)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
   const data = await res.json()
   if (data.error) throw new Error(data.error)
-
-  return (data.top ?? []).map(item => {
-    const isAV      = item.domain === 'movie' || item.domain === 'music'
-    const isDocPage = item.domain === 'doc_page'
-    // doc_page: file_path = 원본 문서 경로, trichef_id = 내부 page_images 경로
-    const filePath  = isDocPage
-      ? (item.source_path || item.id)
-      : (item.source_path || item.id)
-    const fileName  = item.file_name || (item.id || '').split(/[/\\]/).pop()
-    return {
-      file_path:      filePath,
-      trichef_id:     item.id,           // 내부 ID (preview/security mask용)
-      file_name:      fileName,
-      page_num:       item.page_num ?? null,
-      file_type:      item.domain === 'image' ? 'image'
-                    : isDocPage ? 'doc'
-                    : item.domain === 'movie' ? 'video' : 'audio',
-      confidence:     item.confidence ?? 0,
-      similarity:     item.confidence ?? 0,
-      dense:          item.dense ?? 0,
-      lexical:        item.lexical ?? null,
-      asf:            item.asf ?? null,
-      snippet:        '',
-      preview_url:    item.preview_url ?? null,
-      segments:       item.segments ?? [],
-      low_confidence: item.low_confidence ?? false,
-      trichef_domain: item.domain,
-    }
-  })
-}
-
-// ── 이미지 파일 → 이미지 검색 ──────────────────────────
-async function searchByImage(file, topK = 20) {
-  const formData = new FormData()
-  formData.append('image', file)
-  formData.append('domain', 'image')
-  formData.append('topk', String(topK))
-  const res = await fetch(`${API_BASE}/api/trichef/search_by_image`, {
-    method: 'POST',
-    body: formData,
-  })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(err.error || `HTTP ${res.status}`)
-  }
-  const data = await res.json()
-  return (data.top ?? []).map(r => ({
-    file_path:   r.id,
-    file_name:   (r.id || '').split('/').pop(),
-    file_type:   'image',
-    confidence:  r.confidence ?? 0,
-    similarity:  r.confidence ?? 0,
-    dense:       r.dense ?? 0,
-    snippet:     r.caption ? `캡션: ${r.caption}` : '',
-    preview_url: r.preview_url ?? null,
-    segments:    [],
+  const results = data.results ?? []
+  // confidence 정규화: confidence 없으면 similarity 사용
+  return results.map(r => ({
+    ...r,
+    confidence: r.confidence ?? r.similarity ?? 0,
+    similarity:  r.similarity  ?? r.confidence ?? 0,
+    segments:    r.segments    ?? [],
   }))
 }
 
@@ -154,57 +98,35 @@ function avStreamUrl(result) {
 }
 
 // ── 결과 카드 (admin.html card / avCard 구조 대응) ────────
-function ResultCard({ result, rank, onClick, securityMode = false }) {
+function ResultCard({ result, rank, onClick }) {
   const isAV       = result.file_type === 'video' || result.file_type === 'audio'
   const hasPreview = (result.file_type === 'image' || result.file_type === 'doc') && result.preview_url
   const [imgError, setImgError] = useState(false)
-
-  // 보안 모드: 마스킹 상태
-  const [secState, setSecState] = useState('idle')   // 'idle' | 'loading' | 'done' | 'clean' | 'error'
-  const [maskedSrc, setMaskedSrc] = useState(null)   // base64 masked image
-  const [piiTypes, setPiiTypes]   = useState([])
-
-  // 보안 모드 ON + 이미지 결과 → 마스킹 요청
-  useEffect(() => {
-    if (!securityMode || !hasPreview || isAV) return
-    if (secState !== 'idle') return
-
-    setSecState('loading')
-    const rel    = result.trichef_id || result.file_path
-    const domain = result.trichef_domain || 'image'
-    fetch(`${API_BASE}/api/security/mask_image?path=${encodeURIComponent(rel)}&domain=${domain}`)
-      .then(r => r.json())
-      .then(d => {
-        if (d.error) { setSecState('error'); return }
-        setPiiTypes(d.pii_types ?? [])
-        setMaskedSrc('data:image/png;base64,' + d.masked_b64)
-        setSecState(d.pii_found ? 'done' : 'clean')
-      })
-      .catch(() => setSecState('error'))
-  }, [securityMode, hasPreview, isAV, result.file_path, secState])
-
-  // 보안 모드 OFF → 상태 초기화
-  useEffect(() => {
-    if (!securityMode) {
-      setSecState('idle')
-      setMaskedSrc(null)
-      setPiiTypes([])
-    }
-  }, [securityMode])
   const playerRef  = useRef(null)
 
   // 점수 계산 (admin.html 동일)
+  // [BUGFIX] 백엔드는 'rerank_score' 필드로 송신. 'rerank' 만 보던 기존 코드는
+  // 항상 null → (z_score+3)/6 폴백으로 모든 결과 정확도 0.500 표시되는 버그.
   const conf    = result.confidence ?? result.similarity ?? 0
   const confPct = (conf * 100).toFixed(1)
   const dense   = result.dense ?? null
-  const rerank  = result.rerank ?? null
+  const rerank  = result.rerank_score ?? result.rerank ?? null
   const zScore  = result.z_score ?? null
 
   const clamp01 = x => (x == null || isNaN(x)) ? null : Math.max(0, Math.min(1, x))
-  const sigm    = x => 1 / (1 + Math.exp(-x))
+  // [정확도 표시] BGE-reranker-v2-m3 의 raw logit 은 보통 [-15, +15] 범위로,
+  // 그대로 sigmoid 하면 음수 결과가 모두 0.001 근처에 압축되어 의미가 없다.
+  // 중심점 -3 (= 비관련 로짓 평균), 스케일 3 으로 시프트한 sigmoid 사용:
+  //   rerank=-10 → -7/3=-2.33 → 0.089
+  //   rerank=-5  → -2/3=-0.67 → 0.339
+  //   rerank=-3  → 0          → 0.500   ← 중립
+  //   rerank=0   → 1.0        → 0.731
+  //   rerank=+3  → 2.0        → 0.881
+  //   rerank=+10 → 13/3=4.33  → 0.987
+  const sigmCalibrated = x => 1 / (1 + Math.exp(-((x + 3) / 3)))
   const sim     = clamp01(dense) != null ? clamp01(dense).toFixed(3) : '—'
   const acc     = rerank != null
-    ? sigm(rerank).toFixed(3)
+    ? sigmCalibrated(rerank).toFixed(3)
     : Math.max(0, Math.min(1, ((zScore ?? 0) + 3) / 6)).toFixed(3)
 
   const streamUrl  = isAV ? avStreamUrl(result) : null
@@ -253,44 +175,12 @@ function ResultCard({ result, rank, onClick, securityMode = false }) {
       {!isAV && (
         <div className="relative h-[200px] bg-[#0b1220] flex items-center justify-center overflow-hidden">
           {hasPreview && !imgError ? (
-            <>
-              {/* 보안 모드 로딩 스피너 */}
-              {securityMode && secState === 'loading' && (
-                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-[#0b1220]/80">
-                  <span className="material-symbols-outlined text-amber-400 text-3xl animate-spin">progress_activity</span>
-                  <span className="text-xs text-amber-400/80">PII 스캔 중...</span>
-                </div>
-              )}
-              <img
-                src={securityMode && maskedSrc ? maskedSrc : `${API_BASE}${result.preview_url}`}
-                alt={result.file_name}
-                className="max-w-full max-h-full object-contain cursor-zoom-in"
-                onError={() => setImgError(true)}
-              />
-              {/* PII 탐지 배지 */}
-              {secState === 'done' && piiTypes.length > 0 && (
-                <div className="absolute bottom-2 left-2 right-2 flex flex-wrap gap-1">
-                  {piiTypes.slice(0, 3).map(t => (
-                    <span key={t} className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/90 text-black">
-                      {t.replace('KR_', '')}
-                    </span>
-                  ))}
-                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/90 text-black flex items-center gap-0.5">
-                    <span className="material-symbols-outlined text-[10px]" style={{ fontVariationSettings: '"FILL" 1' }}>lock</span>
-                    마스킹됨
-                  </span>
-                </div>
-              )}
-              {/* 안전 배지 */}
-              {secState === 'clean' && (
-                <div className="absolute bottom-2 left-2">
-                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/90 text-black flex items-center gap-0.5">
-                    <span className="material-symbols-outlined text-[10px]" style={{ fontVariationSettings: '"FILL" 1' }}>verified</span>
-                    PII 없음
-                  </span>
-                </div>
-              )}
-            </>
+            <img
+              src={`${API_BASE}${result.preview_url}`}
+              alt={result.file_name}
+              className="max-w-full max-h-full object-contain cursor-zoom-in"
+              onError={() => setImgError(true)}
+            />
           ) : (
             <span className="text-[#64748b] text-xs">{domainLabel}</span>
           )}
@@ -312,22 +202,14 @@ function ResultCard({ result, rank, onClick, securityMode = false }) {
           )}
         </div>
 
-        {/* 파일명 + 페이지 배지 */}
-        <div className="flex items-start gap-2 flex-wrap">
-          <div className="font-semibold text-[13px] text-[#f1f5f9] break-all leading-snug flex-1 min-w-0">
-            {result.file_name}
-          </div>
-          {result.page_num != null && (
-            <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-[#1e3a5f] text-[#7dd3fc] border border-[#3b82f6]/30 font-mono whitespace-nowrap">
-              {result.page_num}p
-            </span>
-          )}
+        {/* 파일명 + 위치 배지 (페이지/타임코드) */}
+        <div className="flex items-start gap-1.5">
+          <div className="font-semibold text-[13px] text-[#f1f5f9] break-all flex-1">{result.file_name}</div>
+          <LocationBadge location={result.location} fileType={result.file_type} />
         </div>
 
         {/* 경로 */}
-        <div className="text-[11px] text-[#64748b] break-all font-mono">
-          {result.file_path || result.trichef_id}
-        </div>
+        <div className="text-[11px] text-[#64748b] break-all font-mono">{result.file_path}</div>
 
         {/* 핵심 3지표 */}
         <div className="grid grid-cols-3 gap-1.5">
@@ -383,94 +265,6 @@ function ResultCard({ result, rank, onClick, securityMode = false }) {
           </div>
         )}
       </div>
-    </div>
-  )
-}
-
-// ── 상세 페이지 이미지 미리보기 (보안 마스킹 지원) ─────────
-function DetailImagePreview({ file, securityMode }) {
-  const hasPreview = (file.file_type === 'image' || file.file_type === 'doc') && file.preview_url
-  const [secState,  setSecState]  = useState('idle')   // idle|loading|done|clean|error
-  const [maskedSrc, setMaskedSrc] = useState(null)
-  const [piiTypes,  setPiiTypes]  = useState([])
-
-  // 보안 모드 ON → mask_image 호출
-  useEffect(() => {
-    if (!securityMode || !hasPreview) return
-    if (secState !== 'idle') return
-    setSecState('loading')
-    const rel    = file.trichef_id || file.file_path
-    const domain = file.trichef_domain || 'image'
-    fetch(`${API_BASE}/api/security/mask_image?path=${encodeURIComponent(rel)}&domain=${domain}`)
-      .then(r => r.json())
-      .then(d => {
-        if (d.error) { setSecState('error'); return }
-        setPiiTypes(d.pii_types ?? [])
-        setMaskedSrc('data:image/png;base64,' + d.masked_b64)
-        setSecState(d.pii_found ? 'done' : 'clean')
-      })
-      .catch(() => setSecState('error'))
-  }, [securityMode, hasPreview, file.file_path, secState])
-
-  // 보안 모드 OFF → 초기화
-  useEffect(() => {
-    if (!securityMode) { setSecState('idle'); setMaskedSrc(null); setPiiTypes([]) }
-  }, [securityMode])
-
-  if (!hasPreview) return null
-
-  const imgSrc = securityMode && maskedSrc ? maskedSrc : `${API_BASE}${file.preview_url}`
-
-  return (
-    <div className="w-full flex-1 flex items-center justify-center min-h-0 relative">
-      {/* PII 스캔 중 오버레이 */}
-      {secState === 'loading' && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/50 rounded-xl">
-          <div className="flex flex-col items-center gap-2">
-            <span className="material-symbols-outlined text-amber-400 text-4xl animate-spin"
-              style={{ fontVariationSettings: '"FILL" 1' }}>shield</span>
-            <span className="text-amber-300 text-sm font-bold tracking-widest uppercase">PII 스캔 중...</span>
-          </div>
-        </div>
-      )}
-
-      <img
-        src={imgSrc}
-        alt={file.file_name}
-        className="max-w-full max-h-full object-contain rounded-xl shadow-2xl border border-outline-variant/10"
-        style={{ maxHeight: '380px' }}
-      />
-
-      {/* PII 탐지 배지 */}
-      {secState === 'done' && (
-        <div className="absolute top-3 right-3 flex flex-col items-end gap-1.5 z-10">
-          <div className="flex items-center gap-1.5 bg-red-950/90 border border-red-500/60 px-2.5 py-1.5 rounded-full text-xs text-red-300 font-bold backdrop-blur-sm shadow-lg">
-            <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: '"FILL" 1' }}>warning</span>
-            개인정보 마스킹됨
-          </div>
-          {piiTypes.map(t => (
-            <span key={t} className="bg-amber-900/70 border border-amber-500/40 px-2 py-0.5 rounded-full text-[11px] text-amber-200 font-bold backdrop-blur-sm">
-              {t.replace('KR_', '').replace('_', ' ')}
-            </span>
-          ))}
-        </div>
-      )}
-      {secState === 'clean' && (
-        <div className="absolute top-3 right-3 z-10">
-          <div className="flex items-center gap-1.5 bg-emerald-950/80 border border-emerald-500/40 px-2.5 py-1.5 rounded-full text-xs text-emerald-300 font-bold backdrop-blur-sm">
-            <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: '"FILL" 1' }}>verified</span>
-            개인정보 없음
-          </div>
-        </div>
-      )}
-      {secState === 'error' && (
-        <div className="absolute top-3 right-3 z-10">
-          <div className="flex items-center gap-1 bg-slate-800/80 border border-slate-500/30 px-2 py-1 rounded-full text-xs text-slate-400 backdrop-blur-sm">
-            <span className="material-symbols-outlined text-sm">error</span>
-            스캔 실패
-          </div>
-        </div>
-      )}
     </div>
   )
 }
@@ -578,31 +372,10 @@ function AVDetailContent({ result }) {
   )
 }
 
-// ── 라디얼 메뉴 아이템 ──────────────────────────────────
-const RADIAL_ITEMS = [
-  { icon: 'image_search', label: '이미지 검색', action: 'img_search',    color: 'from-emerald-500 to-teal-500' },
-  { icon: 'audiotrack',   label: 'BGM 검색',    action: 'bgm_search',    color: 'from-pink-500 to-rose-500' },
-  { icon: 'description',  label: '문서',         action: 'filter_doc',    color: 'from-blue-500 to-indigo-500' },
-  { icon: 'movie',        label: '동영상',       action: 'filter_video',  color: 'from-purple-500 to-violet-500' },
-  { icon: 'image',        label: '이미지',       action: 'filter_image',  color: 'from-green-500 to-emerald-500' },
-  { icon: 'volume_up',    label: '음성',         action: 'filter_audio',  color: 'from-amber-500 to-orange-500' },
-]
-
-// 6개를 부채꼴로 배치 (위쪽 반원, ±75° 범위)
-const RADIAL_POSITIONS = (() => {
-  const R = 115
-  const angles = [-75, -45, -15, 15, 45, 75]
-  return angles.map(a => {
-    const rad = (a * Math.PI) / 180
-    return { x: R * Math.sin(rad), y: -R * Math.cos(rad) }
-  })
-})()
-
 // ── 메인 컴포넌트 ────────────────────────────────────────
 export default function MainSearch() {
-  const navigate  = useNavigate()
-  const location  = useLocation()
-  const { open }  = useSidebar()
+  const navigate = useNavigate()
+  const { open } = useSidebar()
 
   // view: 'home' | 'results' | 'detail'
   const [view, setView] = useState('home')
@@ -616,31 +389,10 @@ export default function MainSearch() {
   const [results, setResults] = useState([])
   const [searching, setSearching] = useState(false)
   const [searchError, setSearchError] = useState('')
-  const [topK, setTopK] = useState(30)
-
-  // 라디얼 메뉴
-  const [radialOpen, setRadialOpen] = useState(false)
-  const [typeFilter, setTypeFilter] = useState(null)   // null | 'doc' | 'video' | 'image' | 'audio'
-  const radialRef   = useRef(null)
-  const imgInputRef = useRef(null)
-  const bgmInputRef = useRef(null)
-
-  // 이미지 업로드 모달
-  const [imgModalOpen, setImgModalOpen] = useState(false)
-  const [imgPreview,   setImgPreview]   = useState(null)   // base64 미리보기
-  const [imgFile,      setImgFile]      = useState(null)   // File 객체
-  const [dragOver,     setDragOver]     = useState(false)
-
-  // 이미지 쿼리 상태 (텍스트 쿼리와 분리)
-  const [imgQuery, setImgQuery] = useState(null)   // { file, preview } | null
-
-  // 보안 모드
-  const [securityMode, setSecurityMode] = useState(false)
-
-  // 요약
-  const [summary, setSummary]               = useState(null)
-  const [summaryLoading, setSummaryLoading] = useState(false)
-
+  // [#2] 도메인 필터 — '' (전체) | 'doc' | 'image' | 'video' | 'audio'
+  const [domainFilter, setDomainFilter] = useState('')
+  // [노이즈 제거] 저신뢰도 결과 숨김 (기본 ON). 사용자가 토글로 모두 표시 가능.
+  const [hideLowConf, setHideLowConf] = useState(true)
 
   // home → results 애니메이션
   const [flyStyle, setFlyStyle] = useState(null)
@@ -654,17 +406,8 @@ export default function MainSearch() {
   const [aiTransitioning, setAiTransitioning] = useState(false)
   const [ripplePos, setRipplePos] = useState({ x: '50%', y: '50%' })
 
-  const btnRef   = useRef(null)
-  const formRef  = useRef(null)
-  const inputRef = useRef(null)   // 검색창 자동 포커스용
-
-  // 뷰 변경 시 검색창 자동 포커스
-  useEffect(() => {
-    if (view === 'home' || view === 'results') {
-      const t = setTimeout(() => inputRef.current?.focus(), 120)
-      return () => clearTimeout(t)
-    }
-  }, [view])
+  const btnRef  = useRef(null)
+  const formRef = useRef(null)
 
   // STT
   const doSearchRef = useRef(null)
@@ -679,121 +422,6 @@ export default function MainSearch() {
   const leftEdge  = open ? 'left-64' : 'left-0'
   const sidebarPx = open ? 256 : 0
 
-  // 라디얼 메뉴 외부 클릭 닫기
-  useEffect(() => {
-    if (!radialOpen) return
-    const handleClick = (e) => {
-      if (radialRef.current && !radialRef.current.contains(e.target)) {
-        setRadialOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [radialOpen])
-
-  // 라디얼 메뉴 액션 핸들러
-  const handleRadialAction = (action) => {
-    setRadialOpen(false)
-    if (action === 'img_search') {
-      setImgFile(null)
-      setImgPreview(null)
-      setImgModalOpen(true)
-      return
-    }
-    if (action === 'bgm_search') {
-      bgmInputRef.current?.click()
-      return
-    }
-    const filterMap = {
-      filter_doc:   'doc',
-      filter_video: 'video',
-      filter_image: 'image',
-      filter_audio: 'audio',
-    }
-    const ft = filterMap[action]
-    setTypeFilter(prev => (prev === ft ? null : ft))  // 같은 필터 재클릭 시 해제
-  }
-
-  // 이미지 파일 → 미리보기 세팅 (모달용)
-  const applyImgFile = (file) => {
-    if (!file || !file.type.startsWith('image/')) return
-    setImgFile(file)
-    const reader = new FileReader()
-    reader.onload = (e) => setImgPreview(e.target.result)
-    reader.readAsDataURL(file)
-  }
-
-  // 모달 드래그앤드롭
-  const handleModalDrop = (e) => {
-    e.preventDefault()
-    setDragOver(false)
-    const file = e.dataTransfer.files?.[0]
-    if (file) applyImgFile(file)
-  }
-
-  // hidden input 변경 (모달 내부 클릭 선택)
-  const handleImgFile = (e) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    e.target.value = ''
-    applyImgFile(file)
-  }
-
-  // 모달 "검색" 버튼 → 실제 검색 실행
-  const runImgSearch = async () => {
-    if (!imgFile) return
-    setImgModalOpen(false)
-
-    // 텍스트 쿼리 초기화, 이미지 쿼리로 전환
-    setImgQuery({ file: imgFile, preview: imgPreview })
-    setQuery('')
-    setInputValue('')
-    setSearching(true)
-    setSearchError('')
-    setTypeFilter('image')
-
-    // home → results 전환
-    if (view === 'home') {
-      setHomeExiting(true)
-      setTimeout(() => { setView('results'); setHomeExiting(false); setResultsReady(true) }, 320)
-    }
-
-    try {
-      const data = await searchByImage(imgFile, topK)
-      setResults(data)
-      fetch(`${API_BASE}/api/history`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: `[이미지] ${imgFile.name}`, method: 'image_search', result_count: data.length }),
-      }).catch(() => {})
-    } catch (err) {
-      setSearchError(err.message)
-      setResults([])
-    } finally {
-      setSearching(false)
-    }
-  }
-
-  // BGM 파일 선택 핸들러
-  const handleBgmFile = (e) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    e.target.value = ''
-    alert(`BGM 검색: ${file.name}\n(백엔드 오디오 쿼리 API 연동 예정)`)
-  }
-
-  // 사이드바 검색 기록 클릭 시 자동 검색 (location.state.query)
-  useEffect(() => {
-    const q = location.state?.query
-    if (q) {
-      window.history.replaceState({}, '')   // state 소비
-      setImgQuery(null)
-      setTypeFilter(null)
-      doSearchRef.current?.(q)
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.state])
-
   // 뒤로가기
   useEffect(() => {
     const handlePopState = () => {
@@ -806,30 +434,29 @@ export default function MainSearch() {
   }, [view])
 
   // ── 검색 실행 ──────────────────────────────────────────
-  const fetchResults = useCallback(async (q) => {
+  // [#2] 도메인 필터를 백엔드에 전달 → 서버 측에서 type 별 top_k 할당.
+  const fetchResults = useCallback(async (q, type = '') => {
     setSearching(true)
     setSearchError('')
     try {
-      const data = await searchFiles(q, topK)
+      const data = await searchFiles(q, 20, type)
       setResults(data)
-      // 검색 기록 저장
-      fetch(`${API_BASE}/api/history`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: q, method: 'trichef', result_count: data.length }),
-      }).catch(() => {})
     } catch (e) {
       setSearchError(e.message)
       setResults([])
     } finally {
       setSearching(false)
     }
-  }, [topK])
+  }, [])
+
+  // [#2] 도메인 필터 변경 시 자동 재검색 (현재 query 가 있을 때만).
+  useEffect(() => {
+    if (view === 'results' && query) fetchResults(query, domainFilter)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [domainFilter])
 
   const doSearch = (q) => {
     if (!q.trim() || aiTransitioning) return
-    setImgQuery(null)     // 텍스트 검색 시 이미지 쿼리 해제
-    setTypeFilter(null)   // 텍스트 검색 시 타입 필터 초기화
     setQuery(q)
     setInputValue(q)
 
@@ -870,7 +497,6 @@ export default function MainSearch() {
     setSelectedFile(file)
     setFileDetail(null)
     setDetailVisible(false)
-    setSummary(null)          // 파일 바뀌면 요약 초기화
     setView('detail')
     window.history.pushState({ view: 'detail' }, '')
     requestAnimationFrame(() => requestAnimationFrame(() => setDetailVisible(true)))
@@ -886,21 +512,6 @@ export default function MainSearch() {
     }
   }
 
-  const handleSummarize = async (file) => {
-    if (summaryLoading) return
-    setSummaryLoading(true)
-    setSummary(null)
-    try {
-      const res  = await fetch(`${API_BASE}/api/files/summarize?path=${encodeURIComponent(file.file_path)}`)
-      const data = await res.json()
-      setSummary(data)
-    } catch (e) {
-      setSummary({ error: e.message })
-    } finally {
-      setSummaryLoading(false)
-    }
-  }
-
   const handleBackToResults = () => { setDetailVisible(false); setTimeout(() => setView('results'), 320) }
 
   const handleGoToAI = () => {
@@ -910,135 +521,9 @@ export default function MainSearch() {
     setTimeout(() => navigate('/ai'), 900)
   }
 
-  // 타입 필터 적용된 결과
-  const filteredResults = typeFilter
-    ? results.filter(r => {
-        if (typeFilter === 'video') return r.file_type === 'video' || r.file_type === 'movie'
-        if (typeFilter === 'audio') return r.file_type === 'audio' || r.file_type === 'music'
-        return r.file_type === typeFilter
-      })
-    : results
-
   return (
     <div className={view === 'home' ? 'overflow-hidden h-screen grid-bg relative' : 'min-h-screen relative bg-background text-on-surface'}
       style={view !== 'home' ? { backgroundImage: 'radial-gradient(circle at 2px 2px, rgba(65,71,91,0.15) 1px, transparent 0)', backgroundSize: '32px 32px' } : {}}>
-      {/* 숨김 파일 입력 (이미지·BGM 검색용) */}
-      <input ref={imgInputRef} type="file" accept="image/*" className="hidden" onChange={handleImgFile} />
-      <input ref={bgmInputRef} type="file" accept="audio/*" className="hidden" onChange={handleBgmFile} />
-
-      {/* ── 이미지 업로드 모달 ── */}
-      {imgModalOpen && (
-        <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center"
-          style={{ background: 'rgba(4,8,20,0.85)', backdropFilter: 'blur(12px)' }}
-          onClick={() => setImgModalOpen(false)}
-        >
-          <div
-            className="relative w-[480px] max-w-[92vw] rounded-2xl border border-outline-variant/20 bg-[#0c1326] shadow-[0_0_80px_rgba(133,173,255,0.12)] flex flex-col overflow-hidden"
-            onClick={e => e.stopPropagation()}
-          >
-            {/* 헤더 */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-outline-variant/15">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
-                  <span className="material-symbols-outlined text-white text-base" style={{ fontVariationSettings: '"FILL" 1' }}>image_search</span>
-                </div>
-                <span className="font-bold text-on-surface">이미지 검색</span>
-              </div>
-              <button
-                onClick={() => setImgModalOpen(false)}
-                className="w-7 h-7 rounded-lg flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-all"
-              >
-                <span className="material-symbols-outlined text-lg">close</span>
-              </button>
-            </div>
-
-            {/* 본문 */}
-            <div className="p-6 flex flex-col gap-4">
-              {/* 드래그앤드롭 존 */}
-              <div
-                onDragOver={e => { e.preventDefault(); setDragOver(true) }}
-                onDragLeave={() => setDragOver(false)}
-                onDrop={handleModalDrop}
-                onClick={() => imgInputRef.current?.click()}
-                className={`relative flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed transition-all duration-200 cursor-pointer select-none overflow-hidden
-                  ${dragOver
-                    ? 'border-primary bg-primary/10 scale-[1.01]'
-                    : 'border-outline-variant/30 hover:border-primary/50 hover:bg-primary/5'
-                  }`}
-                style={{ minHeight: imgPreview ? 'auto' : '220px' }}
-              >
-                {imgPreview ? (
-                  /* 미리보기 */
-                  <>
-                    <img
-                      src={imgPreview}
-                      alt="미리보기"
-                      className="max-h-[260px] max-w-full object-contain rounded-lg"
-                    />
-                    <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity bg-black/50 rounded-xl">
-                      <span className="text-white text-sm font-semibold flex items-center gap-2">
-                        <span className="material-symbols-outlined text-lg">swap_horiz</span>
-                        이미지 변경
-                      </span>
-                    </div>
-                  </>
-                ) : (
-                  /* 빈 상태 */
-                  <>
-                    <div className={`w-16 h-16 rounded-full flex items-center justify-center transition-all
-                      ${dragOver ? 'bg-primary/20' : 'bg-surface-container-high'}`}>
-                      <span className={`material-symbols-outlined text-4xl transition-colors
-                        ${dragOver ? 'text-primary' : 'text-on-surface-variant/50'}`}
-                        style={{ fontVariationSettings: '"FILL" 0' }}>
-                        upload_file
-                      </span>
-                    </div>
-                    <p className="text-on-surface font-semibold text-sm">
-                      이미지를 업로드하세요
-                    </p>
-                    <p className="text-on-surface-variant text-xs text-center leading-relaxed">
-                      이미지를 끌어다 놓거나<br />
-                      <span className="text-primary underline underline-offset-2">클릭하여 이미지 선택</span>
-                    </p>
-                    <p className="text-on-surface-variant/40 text-[10px]">
-                      JPG · PNG · WEBP · HEIC 지원
-                    </p>
-                  </>
-                )}
-              </div>
-
-              {/* 파일명 표시 */}
-              {imgFile && (
-                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-container-high">
-                  <span className="material-symbols-outlined text-emerald-400 text-base">check_circle</span>
-                  <span className="text-sm text-on-surface truncate flex-1">{imgFile.name}</span>
-                  <button
-                    onClick={() => { setImgFile(null); setImgPreview(null) }}
-                    className="text-on-surface-variant/40 hover:text-red-400 transition-colors shrink-0"
-                  >
-                    <span className="material-symbols-outlined text-base">close</span>
-                  </button>
-                </div>
-              )}
-
-              {/* 검색 버튼 */}
-              <button
-                onClick={runImgSearch}
-                disabled={!imgFile}
-                className={`w-full py-3 rounded-xl font-bold text-sm tracking-wide flex items-center justify-center gap-2 transition-all duration-200
-                  ${imgFile
-                    ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-500 hover:to-teal-500 shadow-[0_4px_20px_rgba(16,185,129,0.25)]'
-                    : 'bg-surface-container-high text-on-surface-variant/40 cursor-not-allowed'
-                  }`}
-              >
-                <span className="material-symbols-outlined text-base" style={{ fontVariationSettings: '"FILL" 1' }}>image_search</span>
-                이미지로 검색
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* AI 포털 전환 오버레이 */}
       {aiTransitioning && (
@@ -1081,59 +566,11 @@ export default function MainSearch() {
                 style={homeExiting ? { visibility: 'hidden' } : {}}>
                 <div className={`glass-effect rounded-full p-2 flex items-center gap-4 shadow-[0_0_50px_rgba(133,173,255,0.1)] transition-all duration-300
                   ${listening ? 'border border-red-400/60 shadow-[0_0_30px_rgba(248,113,113,0.2)]' : 'border border-outline-variant/20 hover:border-primary/40'}`}>
-                  {/* ── + 버튼 + 라디얼 메뉴 ── */}
-                  <div ref={radialRef} className="relative shrink-0">
-                    {/* 부채꼴 메뉴 아이템 */}
-                    {RADIAL_ITEMS.map((item, i) => {
-                      const { x, y } = RADIAL_POSITIONS[i]
-                      const isActive = item.action.startsWith('filter_') &&
-                        typeFilter === item.action.replace('filter_', '')
-                      return (
-                        <div
-                          key={item.action}
-                          onClick={() => handleRadialAction(item.action)}
-                          className="absolute z-50 flex flex-col items-center gap-1 cursor-pointer"
-                          style={{
-                            left: '50%',
-                            top:  '50%',
-                            transform: radialOpen
-                              ? `translate(calc(-50% + ${x}px), calc(-50% + ${y}px)) scale(1)`
-                              : `translate(-50%, -50%) scale(0.4)`,
-                            opacity:    radialOpen ? 1 : 0,
-                            pointerEvents: radialOpen ? 'auto' : 'none',
-                            transition: `transform 0.28s cubic-bezier(0.34,1.56,0.64,1) ${i * 30}ms,
-                                         opacity   0.2s ease ${i * 20}ms`,
-                          }}
-                        >
-                          <div className={`w-11 h-11 rounded-full bg-gradient-to-br ${item.color}
-                            flex items-center justify-center shadow-lg
-                            hover:scale-110 active:scale-95 transition-transform duration-150
-                            ${isActive ? 'ring-2 ring-white/70' : ''}`}>
-                            <span className="material-symbols-outlined text-white text-lg">{item.icon}</span>
-                          </div>
-                          <span className="text-[9px] font-bold text-white/90 bg-slate-900/80 px-1.5 py-0.5 rounded-full whitespace-nowrap shadow">
-                            {item.label}
-                          </span>
-                        </div>
-                      )
-                    })}
-                    {/* + 버튼 */}
-                    <button
-                      type="button"
-                      onClick={() => setRadialOpen(o => !o)}
-                      className={`w-12 h-12 rounded-full bg-gradient-to-r from-primary to-secondary flex items-center justify-center text-on-primary-fixed shadow-lg transition-all duration-300
-                        ${radialOpen ? 'rotate-45 scale-110 shadow-primary/40' : 'active:scale-90'}`}
-                    >
-                      <span className="material-symbols-outlined font-bold">add</span>
-                    </button>
-                    {/* 활성 필터 배지 */}
-                    {typeFilter && (
-                      <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-primary border border-surface-container-low" />
-                    )}
-                  </div>
+                  <button type="button" className="w-12 h-12 rounded-full bg-gradient-to-r from-primary to-secondary flex items-center justify-center text-on-primary-fixed shadow-lg active:scale-90 transition-transform shrink-0">
+                    <span className="material-symbols-outlined font-bold">add</span>
+                  </button>
                   <div className="flex-1 relative">
                     <input
-                      ref={inputRef}
                       type="text"
                       value={listening ? '' : inputValue}
                       onChange={(e) => !listening && setInputValue(e.target.value)}
@@ -1161,41 +598,7 @@ export default function MainSearch() {
                 </div>
               </form>
 
-              {/* ── 결과 수 선택 + 보안 모드 ── */}
-              <div className="mt-4 flex items-center justify-center gap-3 text-xs text-on-surface-variant flex-wrap"
-                style={homeExiting ? { visibility: 'hidden' } : {}}>
-                <span className="opacity-50">결과 수</span>
-                {[10, 20, 30, 50].map(n => (
-                  <button key={n} type="button" onClick={() => setTopK(n)}
-                    className={`px-3 py-1 rounded-full border transition-colors
-                      ${topK === n
-                        ? 'border-primary text-primary bg-primary/10'
-                        : 'border-outline-variant/20 hover:border-primary/40 hover:text-on-surface'
-                      }`}>
-                    {n}
-                  </button>
-                ))}
-                <div className="w-px h-4 bg-outline-variant/20 mx-1" />
-                {/* 보안 모드 토글 */}
-                <button
-                  type="button"
-                  onClick={() => setSecurityMode(m => !m)}
-                  title={securityMode ? '보안 모드 ON — 클릭하여 해제' : '보안 모드: 검색 결과에서 개인정보 자동 마스킹'}
-                  className={`flex items-center gap-1.5 px-3 py-1 rounded-full border font-bold transition-all duration-200
-                    ${securityMode
-                      ? 'bg-amber-500/20 border-amber-400/70 text-amber-400 shadow-[0_0_14px_rgba(251,191,36,0.25)]'
-                      : 'border-outline-variant/20 text-on-surface-variant hover:border-amber-400/40 hover:text-amber-400'
-                    }`}
-                >
-                  <span className="material-symbols-outlined text-sm leading-none"
-                    style={{ fontVariationSettings: securityMode ? '"FILL" 1' : '"FILL" 0' }}>
-                    {securityMode ? 'security' : 'lock_open'}
-                  </span>
-                  <span>{securityMode ? '보안 ON' : '보안 모드'}</span>
-                </button>
-              </div>
-
-              <div className="mt-8 flex justify-center" style={homeExiting ? { visibility: 'hidden' } : {}}>
+              <div className="mt-10 flex justify-center" style={homeExiting ? { visibility: 'hidden' } : {}}>
                 <button ref={btnRef} onClick={handleGoToAI} disabled={aiTransitioning}
                   className="px-8 py-3 rounded-full bg-surface-container-high border border-outline-variant/20 flex items-center gap-3 text-lg font-bold tracking-widest uppercase text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest transition-all duration-300 group glow-primary disabled:pointer-events-none">
                   <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
@@ -1238,91 +641,41 @@ export default function MainSearch() {
       {/* ════ RESULTS / DETAIL 공통 헤더 ════ */}
       {view !== 'home' && (
         <header className={`fixed top-8 ${leftEdge} right-0 z-40 bg-slate-950/60 backdrop-blur-xl flex items-center px-6 py-3 gap-4 border-b border-outline-variant/10 shadow-[0_0_20px_rgba(133,173,255,0.1)] transition-[left] duration-300`}>
-          <button onClick={() => { setView('home'); setInputValue(''); setResults([]); setImgQuery(null) }}
+          <button onClick={() => { setView('home'); setInputValue(''); setResults([]) }}
             className={`text-lg font-bold tracking-tighter bg-gradient-to-r from-blue-300 to-purple-400 bg-clip-text text-transparent shrink-0 hover:opacity-70 transition-opacity ${!open ? 'ml-10' : ''}`}>
             DB_insight
           </button>
 
           <form onSubmit={handleSearch} className="flex-1">
             <div className={`flex items-center rounded-full border px-4 py-2 gap-3 transition-all
-              ${listening
-                ? 'bg-red-500/5 border-red-400/50 shadow-[0_0_15px_rgba(248,113,113,0.15)]'
-                : imgQuery
-                  ? 'bg-surface-container-high border-emerald-500/40'
-                  : 'bg-surface-container-high border-outline-variant/20 focus-within:border-primary/50'
-              }`}>
-
-              {imgQuery ? (
-                /* ── 이미지 쿼리 칩 ── */
-                <>
-                  <img
-                    src={imgQuery.preview}
-                    alt="쿼리 이미지"
-                    className="w-7 h-7 rounded-md object-cover shrink-0 ring-1 ring-emerald-500/50"
-                  />
-                  <span className="text-emerald-400 text-xs font-bold uppercase tracking-wider shrink-0">이미지 검색</span>
-                  <span className="text-on-surface-variant text-sm truncate flex-1">{imgQuery.file.name}</span>
-                  <button
-                    type="button"
-                    onClick={() => { setImgQuery(null); setResults([]); setView('home') }}
-                    className="shrink-0 text-on-surface-variant/40 hover:text-red-400 transition-colors"
-                    title="이미지 쿼리 해제"
-                  >
-                    <span className="material-symbols-outlined text-lg">close</span>
-                  </button>
-                </>
-              ) : (
-                /* ── 텍스트 입력 ── */
-                <>
-                  <span className={`material-symbols-outlined text-lg ${listening ? 'text-red-400' : 'text-primary'}`}>
-                    {listening ? 'mic' : 'search'}
-                  </span>
-                  <div className="flex-1 relative">
-                    <input
-                      ref={inputRef}
-                      className="bg-transparent border-none focus:ring-0 w-full text-on-surface placeholder-on-surface-variant text-lg outline-none"
-                      placeholder={listening ? '' : '인텔리전스에 질문하세요...'}
-                      value={listening ? '' : inputValue}
-                      onChange={(e) => !listening && setInputValue(e.target.value)}
-                      readOnly={listening}
-                    />
-                    {listening && (
-                      <div className="absolute inset-0 flex items-center gap-2 pointer-events-none">
-                        <span className="text-red-400 text-lg truncate">{interim || '듣는 중...'}</span>
-                        <div className="flex items-center gap-[2px] shrink-0">
-                          {[0,0.1,0.2,0.1,0].map((d,i) => (
-                            <div key={i} className="w-[2px] bg-red-400 rounded-full animate-bounce"
-                              style={{ height: `${[6,10,14,10,6][i]}px`, animationDelay: `${d}s`, animationDuration: '0.7s' }} />
-                          ))}
-                        </div>
-                      </div>
-                    )}
+              ${listening ? 'bg-red-500/5 border-red-400/50 shadow-[0_0_15px_rgba(248,113,113,0.15)]' : 'bg-surface-container-high border-outline-variant/20 focus-within:border-primary/50'}`}>
+              <span className={`material-symbols-outlined text-lg ${listening ? 'text-red-400' : 'text-primary'}`}>{listening ? 'mic' : 'search'}</span>
+              <div className="flex-1 relative">
+                <input
+                  className="bg-transparent border-none focus:ring-0 w-full text-on-surface placeholder-on-surface-variant text-lg outline-none"
+                  placeholder={listening ? '' : '인텔리전스에 질문하세요...'}
+                  value={listening ? '' : inputValue}
+                  onChange={(e) => !listening && setInputValue(e.target.value)}
+                  readOnly={listening}
+                />
+                {listening && (
+                  <div className="absolute inset-0 flex items-center gap-2 pointer-events-none">
+                    <span className="text-red-400 text-lg truncate">{interim || '듣는 중...'}</span>
+                    <div className="flex items-center gap-[2px] shrink-0">
+                      {[0,0.1,0.2,0.1,0].map((d,i) => (
+                        <div key={i} className="w-[2px] bg-red-400 rounded-full animate-bounce"
+                          style={{ height: `${[6,10,14,10,6][i]}px`, animationDelay: `${d}s`, animationDuration: '0.7s' }} />
+                      ))}
+                    </div>
                   </div>
-                  <button type="button" onClick={toggleMic}
-                    className={`shrink-0 transition-all duration-200 ${listening ? 'text-red-400 animate-pulse' : 'text-on-surface-variant hover:text-primary'}`}>
-                    <span className="material-symbols-outlined text-lg" style={listening ? { fontVariationSettings: '"FILL" 1' } : {}}>mic</span>
-                  </button>
-                </>
-              )}
+                )}
+              </div>
+              <button type="button" onClick={toggleMic}
+                className={`shrink-0 transition-all duration-200 ${listening ? 'text-red-400 animate-pulse' : 'text-on-surface-variant hover:text-primary'}`}>
+                <span className="material-symbols-outlined text-lg" style={listening ? { fontVariationSettings: '"FILL" 1' } : {}}>mic</span>
+              </button>
             </div>
           </form>
-
-          {/* 보안 모드 토글 */}
-          <button
-            onClick={() => setSecurityMode(m => !m)}
-            title={securityMode ? '보안 모드 ON — 클릭하여 해제' : '보안 모드 OFF — 클릭하여 활성화'}
-            className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-bold transition-all duration-200
-              ${securityMode
-                ? 'bg-amber-500/15 border-amber-400/60 text-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.2)]'
-                : 'bg-surface-container-high border-outline-variant/20 text-on-surface-variant hover:border-amber-400/40 hover:text-amber-400'
-              }`}
-          >
-            <span className="material-symbols-outlined text-base"
-              style={{ fontVariationSettings: securityMode ? '"FILL" 1' : '"FILL" 0' }}>
-              {securityMode ? 'security' : 'lock_open'}
-            </span>
-            <span className="hidden sm:inline">{securityMode ? '보안 ON' : '보안'}</span>
-          </button>
 
           {view === 'detail' && (
             <button onClick={handleBackToResults}
@@ -1342,54 +695,60 @@ export default function MainSearch() {
             {/* 헤더 */}
             <div className="flex justify-between items-end mb-10">
               <div className="space-y-2">
-                <span className={`px-2 py-0.5 rounded text-lg font-bold uppercase tracking-widest border
-                  ${imgQuery ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-primary/10 text-primary border-primary/20'}`}>
-                  {imgQuery ? '이미지 쿼리' : '현재 쿼리'}
-                </span>
-                {imgQuery ? (
-                  <div className="flex items-center gap-4">
-                    <img
-                      src={imgQuery.preview}
-                      alt="쿼리 이미지"
-                      className="h-14 rounded-xl object-cover ring-2 ring-emerald-500/30 shadow-lg"
-                    />
-                    <div>
-                      <p className="text-2xl font-extrabold tracking-tighter text-on-surface">{imgQuery.file.name}</p>
-                      <p className="text-xs text-on-surface-variant/60 mt-0.5">
-                        {(imgQuery.file.size / 1024).toFixed(0)} KB · {imgQuery.file.type}
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  <h1 className="text-4xl font-extrabold tracking-tighter text-on-surface">{query}</h1>
-                )}
+                <span className="px-2 py-0.5 rounded text-lg font-bold bg-primary/10 text-primary uppercase tracking-widest border border-primary/20">현재 쿼리</span>
+                <h1 className="text-4xl font-extrabold tracking-tighter text-on-surface">{query}</h1>
                 {searching
                   ? <p className="text-on-surface-variant flex items-center gap-2">
                       <span className="material-symbols-outlined text-primary text-lg animate-spin">progress_activity</span>검색 중...
                     </p>
                   : searchError
                     ? <p className="text-red-400 text-lg">{searchError}</p>
-                    : <p className="text-on-surface-variant">
-                      로컬 보관소에서 <span className="text-primary font-bold">{results.length}건</span>을 찾았습니다.
-                      {typeFilter && <span className="ml-2 text-xs text-on-surface-variant/60">(필터 적용: {filteredResults.length}건 표시)</span>}
-                    </p>
+                    : <p className="text-on-surface-variant">로컬 보관소에서 <span className="text-primary font-bold">{results.length}건</span>을 찾았습니다.</p>
                 }
               </div>
-              <div className="flex gap-3 flex-wrap items-center">
-                {/* 타입 필터 칩 */}
-                {typeFilter && (
-                  <button onClick={() => setTypeFilter(null)}
-                    className="px-3 py-1.5 rounded-full text-xs font-bold bg-primary/20 text-primary border border-primary/40 flex items-center gap-1 hover:bg-primary/30 transition-all">
-                    <span className="material-symbols-outlined text-sm">{getTypeMeta(typeFilter).icon}</span>
-                    {getTypeMeta(typeFilter).label}
-                    <span className="material-symbols-outlined text-sm">close</span>
-                  </button>
-                )}
+              <div className="flex gap-3">
                 <button className="px-4 py-2 rounded-full glass-panel border border-outline-variant/20 text-base font-bold hover:bg-primary/5 transition-all flex items-center gap-2">
                   <span className="material-symbols-outlined text-lg">filter_list</span>관련도
                 </button>
               </div>
             </div>
+
+            {/* [#2] 도메인 필터 칩 — 검색창 구조 미변경, 결과 헤더 아래에 독립 마운트 */}
+            <div className="mb-6 -mt-4">
+              <DomainFilter
+                value={domainFilter}
+                onChange={setDomainFilter}
+                counts={(() => {
+                  const c = { _total: results.length, doc: 0, image: 0, video: 0, audio: 0 }
+                  results.forEach(r => { c[r.file_type] = (c[r.file_type] ?? 0) + 1 })
+                  return c
+                })()}
+              />
+            </div>
+
+            {/* [노이즈 제거] 저신뢰도 결과 숨김 토글 — 신뢰도 < 5% 인 결과 자동 hide.
+                Reranker 가 부적합 판정한 결과(예: '박태웅 의장' 검색에 신발 사진)를
+                기본 숨김 처리하여 노이즈 제거. 사용자는 토글로 전체 보기 가능. */}
+            {(() => {
+              const LOW = 0.05
+              const lowCount = results.filter(r => (r.confidence ?? 0) < LOW).length
+              if (lowCount === 0) return null
+              return (
+                <div className="mb-4 -mt-2 flex items-center gap-3 text-sm">
+                  <span className="text-on-surface-variant/60">
+                    {hideLowConf
+                      ? <>저신뢰도 <span className="font-bold text-amber-400">{lowCount}건</span> 숨김</>
+                      : <>모든 결과 표시 중</>}
+                  </span>
+                  <button
+                    onClick={() => setHideLowConf(v => !v)}
+                    className="px-2 py-0.5 rounded-full bg-white/5 hover:bg-white/10 text-xs font-bold text-on-surface-variant transition-all"
+                  >
+                    {hideLowConf ? '모두 표시' : '저신뢰도 숨김'}
+                  </button>
+                </div>
+              )
+            })()}
 
             {/* 로딩 */}
             {searching && (
@@ -1408,23 +767,33 @@ export default function MainSearch() {
               </div>
             )}
 
-            {/* 필터 결과 없음 */}
-            {!searching && results.length > 0 && filteredResults.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-24 gap-4">
-                <span className="material-symbols-outlined text-on-surface-variant/20 text-5xl">filter_list_off</span>
-                <p className="text-on-surface-variant">"{getTypeMeta(typeFilter).label}" 타입 결과가 없습니다.</p>
-                <button onClick={() => setTypeFilter(null)} className="text-primary text-sm underline">필터 해제</button>
-              </div>
-            )}
-
-            {/* 결과 카드 */}
-            {!searching && filteredResults.length > 0 && (
-              <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
-                {filteredResults.map((r, i) => (
-                  <ResultCard key={r.file_path + i} result={r} rank={i + 1} onClick={() => handleSelectFile(r)} securityMode={securityMode} />
-                ))}
-              </div>
-            )}
+            {/* 결과 카드 — 저신뢰도 숨김 토글 적용 */}
+            {!searching && results.length > 0 && (() => {
+              const LOW = 0.05
+              const visible = hideLowConf
+                ? results.filter(r => (r.confidence ?? 0) >= LOW)
+                : results
+              if (visible.length === 0) {
+                return (
+                  <div className="flex flex-col items-center justify-center py-20 gap-3">
+                    <span className="material-symbols-outlined text-on-surface-variant/30 text-5xl">filter_alt_off</span>
+                    <p className="text-on-surface-variant">신뢰할 만한 결과를 찾지 못했습니다.</p>
+                    <p className="text-xs text-on-surface-variant/40">
+                      모든 결과의 신뢰도가 5% 미만입니다. 다른 키워드를 시도하거나
+                      <button onClick={() => setHideLowConf(false)}
+                              className="ml-1 underline hover:text-primary">전체 결과 보기</button>
+                    </p>
+                  </div>
+                )
+              }
+              return (
+                <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
+                  {visible.map((r, i) => (
+                    <ResultCard key={r.file_path + i} result={r} rank={i + 1} onClick={() => handleSelectFile(r)} />
+                  ))}
+                </div>
+              )
+            })()}
 
             {/* 하단 통계 */}
             {!searching && results.length > 0 && (
@@ -1478,25 +847,6 @@ export default function MainSearch() {
                 <span className={`px-2 py-0.5 rounded-full text-lg font-bold border shrink-0 ${meta.color} bg-white/5 border-white/10`}>{meta.label}</span>
               </div>
               <div className="flex items-center gap-3 shrink-0">
-                {/* 보안 모드 표시 (상세 페이지) */}
-                {securityMode && (
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/15 border border-amber-400/50 text-amber-300 text-xs font-bold">
-                    <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: '"FILL" 1' }}>security</span>
-                    보안 ON
-                  </div>
-                )}
-                <button
-                  onClick={() => handleSummarize(selectedFile)}
-                  disabled={summaryLoading}
-                  className="px-5 py-2 text-base font-bold uppercase tracking-widest flex items-center gap-2
-                    text-secondary bg-secondary/10 border border-secondary/30 rounded-full
-                    hover:bg-secondary/20 transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed">
-                  {summaryLoading
-                    ? <span className="material-symbols-outlined text-lg animate-spin">progress_activity</span>
-                    : <span className="material-symbols-outlined text-lg">auto_awesome</span>
-                  }
-                  요약
-                </button>
                 <button
                   onClick={() => openFolder(selectedFile.file_path)}
                   className="px-5 py-2 text-base font-bold uppercase tracking-widest text-primary bg-surface-container-high border border-outline-variant/15 rounded-full hover:bg-surface-variant transition-colors active:scale-95">
@@ -1532,9 +882,16 @@ export default function MainSearch() {
                     {isAV ? (
                       <AVDetailContent result={selectedFile} />
                     ) : (selectedFile.file_type === 'image' || selectedFile.file_type === 'doc') && selectedFile.preview_url ? (
-                      /* 이미지/문서: 실제 미리보기 (보안 마스킹 지원) */
+                      /* 이미지/문서: 실제 미리보기 */
                       <div className="flex-1 flex flex-col items-center justify-center px-8 py-6 gap-4 overflow-hidden">
-                        <DetailImagePreview file={selectedFile} securityMode={securityMode} />
+                        <div className="w-full flex-1 flex items-center justify-center min-h-0">
+                          <img
+                            src={`${API_BASE}${selectedFile.preview_url}`}
+                            alt={selectedFile.file_name}
+                            className="max-w-full max-h-full object-contain rounded-xl shadow-2xl border border-outline-variant/10"
+                            style={{ maxHeight: '340px' }}
+                          />
+                        </div>
                         {selectedFile.snippet && (
                           <p className="w-full text-lg text-on-surface-variant/70 leading-relaxed line-clamp-3 text-center">
                             {selectedFile.snippet}
@@ -1584,53 +941,11 @@ export default function MainSearch() {
                     </div>
                   </div>
 
-                  {/* 요약 결과 카드 */}
-                  {(summary || summaryLoading) && (
-                    <div className="bg-surface-container-low rounded-xl p-5 border border-secondary/20 relative overflow-hidden">
-                      <div className="absolute -right-6 -top-6 w-20 h-20 bg-secondary/10 blur-2xl" />
-                      <h4 className="text-sm font-bold tracking-[0.15em] text-secondary mb-3 uppercase flex items-center gap-2">
-                        <span className="material-symbols-outlined text-base">auto_awesome</span>AI 요약
-                      </h4>
-                      {summaryLoading && (
-                        <div className="flex items-center gap-2 text-on-surface-variant/50 text-sm">
-                          <span className="material-symbols-outlined text-base animate-spin">progress_activity</span>
-                          요약 생성 중...
-                        </div>
-                      )}
-                      {summary?.error && (
-                        <p className="text-red-400 text-sm">{summary.error}</p>
-                      )}
-                      {summary && !summary.error && (
-                        <>
-                          {/* 키워드 태그 */}
-                          {summary.keywords?.length > 0 && (
-                            <div className="flex flex-wrap gap-1 mb-3">
-                              {summary.keywords.map((kw, i) => (
-                                <span key={i} className="px-2 py-0.5 rounded-full text-[10px] font-bold
-                                  bg-secondary/15 text-secondary border border-secondary/20">
-                                  {kw}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                          {/* 요약 문장 */}
-                          <div className="space-y-2">
-                            {(summary.sentences ?? [summary.summary]).map((s, i) => (
-                              <p key={i} className="text-xs text-on-surface-variant/80 leading-relaxed
-                                border-l-2 border-secondary/30 pl-2">
-                                {s}
-                              </p>
-                            ))}
-                          </div>
-                          {summary.char_total && (
-                            <p className="text-[10px] text-on-surface-variant/30 mt-2 text-right">
-                              전체 {summary.char_total.toLocaleString()}자 → 요약
-                            </p>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  )}
+                  {/* [#9] 점수 분해 — dense/lexical/asf/rerank/z_score 시각화 (admin.html 패리티) */}
+                  <div className="bg-surface-container-low rounded-xl p-5 border border-outline-variant/5">
+                    <h4 className="text-sm font-bold tracking-[0.15em] text-on-surface-variant mb-3 uppercase">점수 분해</h4>
+                    <ScoreBreakdown result={selectedFile} />
+                  </div>
 
                   {/* AV: 세그먼트 요약 */}
                   {isAV && selectedFile.segments?.length > 0 && (
@@ -1661,16 +976,12 @@ export default function MainSearch() {
                       {[
                         ['파일명', selectedFile.file_name],
                         ['유형',   meta.label],
-                        ...(selectedFile.page_num != null
-                          ? [['페이지', `${selectedFile.page_num}페이지`]]
-                          : []
-                        ),
                         ['신뢰도', `${confPct}%`],
                         ...(isAV
                           ? [['세그먼트', `${selectedFile.segments?.length ?? 0}개`]]
                           : [['청크 수', fileDetail ? `${fileDetail.chunks?.length ?? '-'}개` : '-']]
                         ),
-                        ['경로',   selectedFile.file_path || selectedFile.trichef_id],
+                        ['경로',   selectedFile.file_path],
                       ].map(([k, v]) => (
                         <div key={k} className="flex justify-between items-start py-2 border-b border-outline-variant/10 last:border-0 gap-2">
                           <span className="text-xs text-on-surface-variant shrink-0">{k}</span>

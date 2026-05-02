@@ -1,8 +1,16 @@
 import { useNavigate } from 'react-router-dom'
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import WindowControls from '../components/WindowControls'
 import PageSidebar from '../components/PageSidebar'
 import { API_BASE as API } from '../api'
+import { checkIndexed, fetchOrphans } from '../api/registry'
+import IndexedBadge from '../components/indexing/IndexedBadge'
+import SelectNewOnlyButton from '../components/indexing/SelectNewOnlyButton'
+import FolderStatusBadge from '../components/indexing/FolderStatusBadge'
+import IndexingETA from '../components/indexing/IndexingETA'
+import { saveIndexingState, loadIndexingState,
+         saveActiveJob, loadActiveJob, clearActiveJob } from '../utils/indexingPersist'
+import { estimateIndexing } from '../api/indexing'
 const TYPE_ICON  = { doc: 'description', video: 'movie', image: 'image', audio: 'volume_up' }
 const TYPE_LABEL = { doc: '문서', video: '동영상', image: '이미지', audio: '음성' }
 const TYPE_COLOR = { doc: 'text-[#85adff]', video: 'text-[#ac8aff]', image: 'text-emerald-400', audio: 'text-amber-400' }
@@ -20,6 +28,25 @@ async function scanPath(path) {
   }
   const data = await res.json()
   return data.items ?? data.files ?? []
+}
+
+// 폴더 이하 모든 지원 파일 경로를 재귀적으로 수집한다.
+// 폴더 체크박스 클릭 시 하위 트리 전체를 한 번에 선택/해제하기 위한 헬퍼.
+// 형제 폴더는 병렬 fetch, 깊이 방향은 순차. 백엔드 스캔이 1단계만 반환하므로
+// 다단계 raw_DB(예: Rec/태윤_1차/...)에서도 파일까지 모두 모은다.
+async function collectAllFilesRecursive(folderPath) {
+  try {
+    const items = await scanPath(folderPath)
+    const direct = items
+      .filter(i => i.kind === 'file' && i.type)
+      .map(i => i.path)
+    const subFolders = items.filter(i => i.kind === 'folder').map(i => i.path)
+    if (subFolders.length === 0) return direct
+    const sub = await Promise.all(subFolders.map(p => collectAllFilesRecursive(p)))
+    return [...direct, ...sub.flat()]
+  } catch {
+    return []
+  }
 }
 
 async function startIndexing(filePaths) {
@@ -43,7 +70,7 @@ async function stopIndexing(jobId) {
 }
 
 // ── 파일 행 ─────────────────────────────────────────────
-function FileRow({ item, depth, checked, onToggle, jobResult }) {
+function FileRow({ item, depth, checked, onToggle, jobResult, indexedInfo }) {
   const icon = TYPE_ICON[item.type] ?? 'insert_drive_file'
   const sizeKB = item.size != null ? (item.size / 1024).toFixed(1) : '-'
   const supported = item.type !== null
@@ -85,6 +112,7 @@ function FileRow({ item, depth, checked, onToggle, jobResult }) {
       />
       <span className="material-symbols-outlined text-on-surface-variant text-[16px] shrink-0">{icon}</span>
       <span className="text-base text-on-surface flex-1 truncate">{item.name}</span>
+      <IndexedBadge indexed={indexedInfo?.indexed} domain={indexedInfo?.domain} />
       <span className="text-sm text-on-surface-variant/30 shrink-0 group-hover:text-on-surface-variant/60">{sizeKB} KB</span>
       {statusIcon}
     </div>
@@ -92,7 +120,7 @@ function FileRow({ item, depth, checked, onToggle, jobResult }) {
 }
 
 // ── 폴더 행 (lazy expand + 체크박스) ────────────────────
-function FolderRow({ item, depth, checkedPaths, onToggle, onSetMany, jobResultMap }) {
+function FolderRow({ item, depth, checkedPaths, onToggle, onSetMany, jobResultMap, indexedMap, registerPaths, orphanMap, registerOrphans }) {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [checkLoading, setCheckLoading] = useState(false)
@@ -101,8 +129,28 @@ function FolderRow({ item, depth, checkedPaths, onToggle, onSetMany, jobResultMa
 
   // 직접 파일 자식 목록 (loaded 시)
   const directFiles = (children ?? []).filter(i => i.kind === 'file' && i.type)
-  const checkedCount = directFiles.filter(i => checkedPaths.has(i.path)).length
-  const allChecked = directFiles.length > 0 && checkedCount === directFiles.length
+
+  // 재귀 트리(하위 모든 파일) 기준 체크 상태 — indexedMap 에 등재된 파일 중
+  // 이 폴더 경로 prefix 인 것들. registerPaths 가 채워주므로 폴더 클릭 직후
+  // 즉시 반영된다. raw_DB 같이 1단계 직접 파일이 0개인 폴더에서도 동작.
+  const subtreeFiles = useMemo(() => {
+    if (!indexedMap) return []
+    const base = item.path
+    const out = []
+    for (const p of Object.keys(indexedMap)) {
+      if (!p.startsWith(base)) continue
+      const sep = p[base.length]
+      if (sep === '\\' || sep === '/') out.push(p)
+    }
+    return out
+  }, [indexedMap, item.path])
+
+  // 표시용 카운트는 (1) 직접 파일 / (2) subtree 중 더 큰 쪽으로
+  const effectiveFiles = subtreeFiles.length > directFiles.length
+    ? subtreeFiles
+    : directFiles.map(i => i.path)
+  const checkedCount = effectiveFiles.filter(p => checkedPaths.has(p)).length
+  const allChecked = effectiveFiles.length > 0 && checkedCount === effectiveFiles.length
   const someChecked = checkedCount > 0 && !allChecked
 
   // indeterminate 상태 적용
@@ -119,6 +167,8 @@ function FolderRow({ item, depth, checkedPaths, onToggle, onSetMany, jobResultMa
       try {
         const items = await scanPath(item.path)
         setChildren(items)
+        registerPaths?.(items.filter(i => i.kind === 'file' && i.type).map(i => i.path))
+        registerOrphans?.(item.path)
       } catch {
         setChildren([])
       } finally {
@@ -128,30 +178,35 @@ function FolderRow({ item, depth, checkedPaths, onToggle, onSetMany, jobResultMa
     setOpen(v => !v)
   }
 
-  // 폴더 체크박스 클릭
+  // 폴더 체크박스 클릭 — 하위 트리 전체(재귀)를 일괄 선택/해제
   const handleFolderCheck = async (e) => {
     e.stopPropagation()
-    const willCheck = e.target.checked || someChecked  // indeterminate → uncheck all
+    // 의도: 현재 전체 체크 또는 부분 체크면 → 모두 해제,
+    //       그 외(미체크)면 → 하위 모든 파일 선택.
+    const wantSelectAll = !(allChecked || someChecked)
 
-    let items = children
-    if (items === null) {
-      setCheckLoading(true)
-      try {
-        items = await scanPath(item.path)
-        setChildren(items)
-        setOpen(true)
-      } catch {
-        items = []
-        setChildren([])
-      } finally {
-        setCheckLoading(false)
+    setCheckLoading(true)
+    let allFiles = []
+    try {
+      // 1단계 스캔이 아직이면 펼치며 선로딩 (UX: 클릭 즉시 반응)
+      if (children === null) {
+        try {
+          const items = await scanPath(item.path)
+          setChildren(items)
+          setOpen(true)
+        } catch {
+          setChildren([])
+        }
       }
+      // 핵심: 하위 트리 전체 재귀 수집
+      allFiles = await collectAllFilesRecursive(item.path)
+      if (allFiles.length > 0) registerPaths?.(allFiles)
+      registerOrphans?.(item.path)
+    } finally {
+      setCheckLoading(false)
     }
 
-    const filePaths = items.filter(i => i.kind === 'file' && i.type).map(i => i.path)
-    // indeterminate 상태면 uncheck all, 아니면 willCheck 따름
-    const doCheck = someChecked ? false : willCheck
-    onSetMany(filePaths, doCheck)
+    if (allFiles.length > 0) onSetMany(allFiles, wantSelectAll)
   }
 
   return (
@@ -191,12 +246,13 @@ function FolderRow({ item, depth, checkedPaths, onToggle, onSetMany, jobResultMa
           <span className="text-base text-on-surface flex-1 truncate font-medium">{item.name}</span>
         </span>
 
-        {/* 자식 수 배지 */}
-        {children !== null && (
-          <span className="shrink-0 text-lg text-on-surface-variant/30 group-hover:text-on-surface-variant/60">
-            {children.length}
-          </span>
-        )}
+        {/* 상태 배지 — 인덱싱 완료(초록) / 부분(파랑) / 신규(황색) / 삭제(빨강) */}
+        <FolderStatusBadge
+          subtreeFiles={subtreeFiles}
+          indexedMap={indexedMap}
+          childCount={children?.length ?? null}
+          orphanCount={orphanMap?.[item.path] ?? 0}
+        />
       </div>
 
       {/* 자식 목록 */}
@@ -217,12 +273,17 @@ function FolderRow({ item, depth, checkedPaths, onToggle, onSetMany, jobResultMa
                   checkedPaths={checkedPaths} onToggle={onToggle}
                   onSetMany={onSetMany}
                   jobResultMap={jobResultMap}
+                  indexedMap={indexedMap}
+                  registerPaths={registerPaths}
+                  orphanMap={orphanMap}
+                  registerOrphans={registerOrphans}
                 />
               : <FileRow
                   key={child.path} item={child} depth={depth + 1}
                   checked={checkedPaths.has(child.path)}
                   onToggle={onToggle}
                   jobResult={jobResultMap?.[child.path]}
+                  indexedInfo={indexedMap?.[child.path]}
                 />
           )}
         </>
@@ -265,6 +326,18 @@ function RingProgress({ pct, isDone, isError, isStopped }) {
 }
 
 // ── 인덱싱 진행 모달 ────────────────────────────────────
+function _fmtDuration(sec) {
+  if (sec == null || !isFinite(sec) || sec < 0) return '—'
+  if (sec < 1) return '< 1s'
+  const total = Math.round(sec)
+  const h = Math.floor(total / 3600)
+  const m = Math.floor((total % 3600) / 60)
+  const s = total % 60
+  if (h > 0) return `${h}h ${m}m`
+  if (m > 0) return `${m}m ${s}s`
+  return `${s}s`
+}
+
 function IndexingModal({ rootPath, selectedCount, jobStatus, jobId, onClose, onStop }) {
   const total     = jobStatus?.total   ?? selectedCount
   const done      = jobStatus?.done    ?? 0
@@ -277,6 +350,26 @@ function IndexingModal({ rootPath, selectedCount, jobStatus, jobId, onClose, onS
   const isStopped  = jobStatus?.status === 'stopped'
   const isStopping = !!(jobStatus?.stopping && !isStopped)
   const isRunning  = !isDone && !isError && !isStopped
+
+  // [ETA] 잔여 시간 추정 — 1초 tick 으로 갱신.
+  // [BUGFIX] 모달 close/open 시 startTime 리셋 → ETA 가 모달 재진입 시점부터
+  // 다시 계산되어 부풀려지는 문제. 백엔드 jobStatus.started_at (epoch sec) 사용
+  // → 모달 상태와 무관하게 일관된 elapsed/rate.
+  const [, setTick] = useState(0)
+  useEffect(() => {
+    if (!isRunning) return
+    const id = setInterval(() => setTick(t => t + 1), 1000)
+    return () => clearInterval(id)
+  }, [isRunning])
+
+  let remainingSec = null
+  if (isRunning && jobStatus?.started_at && processed > 0 && processed < total) {
+    const elapsedSec = Date.now() / 1000 - jobStatus.started_at
+    if (elapsedSec > 0.5) {
+      const rate = processed / elapsedSec
+      if (rate > 0) remainingSec = (total - processed) / rate
+    }
+  }
 
   const runningResult = (jobStatus?.results ?? []).find(r => r.status === 'running')
   const allResults    = jobStatus?.results ?? []
@@ -414,6 +507,18 @@ function IndexingModal({ rootPath, selectedCount, jobStatus, jobId, onClose, onS
               <p className="text-sm text-center text-on-surface-variant/50 tabular-nums">
                 {processed} / {total} 파일
               </p>
+              {/* [ETA] 잔여 시간 — 진행률 기반 실시간 추정 (1초 tick) */}
+              {remainingSec != null && (
+                <p className="text-xs text-center text-on-surface-variant/60 tabular-nums">
+                  <span className="text-on-surface-variant/40">잔여 약</span>{' '}
+                  <span className="font-bold text-[#85adff]">{_fmtDuration(remainingSec)}</span>
+                </p>
+              )}
+              {isDone && (
+                <p className="text-xs text-center text-emerald-400/80 tabular-nums">
+                  완료
+                </p>
+              )}
             </div>
 
             {/* 통계 */}
@@ -856,6 +961,45 @@ export default function DataIndexing() {
 
   const [checkedPaths, setCheckedPaths] = useState(new Set())
 
+  // path → { indexed, domain } 캐시. 폴더가 펼쳐질 때마다 누적.
+  const [indexedMap, setIndexedMap] = useState({})
+  const registerPaths = useCallback(async (paths) => {
+    if (!paths || paths.length === 0) return
+    const results = await checkIndexed(paths)
+    if (Object.keys(results).length === 0) return
+    setIndexedMap(prev => ({ ...prev, ...results }))
+  }, [])
+
+  // 폴더 path → orphan(임베딩 후 삭제된) 파일 카운트.
+  const [orphanMap, setOrphanMap] = useState({})
+  const registerOrphans = useCallback(async (folderPath) => {
+    if (!folderPath) return
+    const { count } = await fetchOrphans(folderPath)
+    setOrphanMap(prev => ({ ...prev, [folderPath]: count }))
+  }, [])
+
+  // 인덱싱 예상 시간 (선택 변경 시 debounced fetch).
+  const [estimateData, setEstimateData] = useState(null)
+  const [estimateLoading, setEstimateLoading] = useState(false)
+  const estimateTimerRef = useRef(null)
+  useEffect(() => {
+    if (checkedPaths.size === 0) {
+      setEstimateData(null)
+      return
+    }
+    if (estimateTimerRef.current) clearTimeout(estimateTimerRef.current)
+    setEstimateLoading(true)
+    estimateTimerRef.current = setTimeout(async () => {
+      const paths = [...checkedPaths]
+      const data = await estimateIndexing(paths)
+      setEstimateData(data)
+      setEstimateLoading(false)
+    }, 500)  // debounce
+    return () => {
+      if (estimateTimerRef.current) clearTimeout(estimateTimerRef.current)
+    }
+  }, [checkedPaths])
+
   const [indexing, setIndexing] = useState(false)
   const [jobId, setJobId] = useState(null)
   const [jobStatus, setJobStatus] = useState(null)
@@ -864,8 +1008,60 @@ export default function DataIndexing() {
   const pollRef = useRef(null)
 
   const stopPolling = () => {
-    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
+    // setInterval 폴링(레거시) 또는 EventSource 모두 정리.
+    if (pollRef.current) {
+      try {
+        if (typeof pollRef.current === 'number') {
+          clearInterval(pollRef.current)
+        } else if (typeof pollRef.current.close === 'function') {
+          pollRef.current.close()
+        }
+      } catch {}
+      pollRef.current = null
+    }
   }
+
+  // ── 영속화: 마운트 시 이전 선택 복원 ──────────────────────────────────
+  useEffect(() => {
+    const saved = loadIndexingState()
+    if (!saved || !saved.rootPath) return
+    let cancelled = false
+    ;(async () => {
+      setRootPath(saved.rootPath)
+      setLoading(true)
+      setLoadError('')
+      try {
+        const items = await scanPath(saved.rootPath)
+        if (cancelled) return
+        setRootItems(items)
+        setCheckedPaths(saved.checkedPaths)
+        const supported = items.filter(i => i.kind === 'file' && i.type).map(i => i.path)
+        if (supported.length) registerPaths(supported)
+        registerOrphans(saved.rootPath)
+      } catch (e) {
+        if (!cancelled) setLoadError(`복원 실패: ${e.message}. 폴더가 이동/삭제되었을 수 있습니다.`)
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // ── 영속화: rootPath / checkedPaths 변경 시 자동 저장 ─────────────────
+  useEffect(() => {
+    if (rootPath) saveIndexingState({ rootPath, checkedPaths })
+  }, [rootPath, checkedPaths])
+
+  // [UX] 인덱싱 탭 진입 시 진행 중인 작업이 있으면 모달 자동 재오픈.
+  // 사용자가 다른 페이지(워크스페이스 등)에서 인덱싱 사이드바를 클릭하여
+  // 돌아왔을 때, 현재 진행 상황을 즉시 확인할 수 있도록 보장.
+  useEffect(() => {
+    if (tab === 'indexing' && indexing && !modalVisible) {
+      setModalVisible(true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab])
 
   const handleSelectFolder = async () => {
     const path = await window.electronAPI?.selectFolder()
@@ -876,6 +1072,7 @@ export default function DataIndexing() {
     setLoading(true)
     setRootItems([])
     setCheckedPaths(new Set())
+    setIndexedMap({})
     stopPolling()
     setJobStatus(null)
     setJobError('')
@@ -887,6 +1084,8 @@ export default function DataIndexing() {
       // 지원 파일 기본 체크
       const supported = items.filter(i => i.kind === 'file' && i.type).map(i => i.path)
       setCheckedPaths(new Set(supported))
+      registerPaths(supported)
+      registerOrphans(path)
     } catch (e) {
       setLoadError(`스캔 실패: ${e.message}`)
     } finally {
@@ -911,6 +1110,44 @@ export default function DataIndexing() {
     })
   }, [])
 
+  // SSE 연결 + 폴링 폴백을 캡슐화한 헬퍼 — handleStartIndexing 과
+  // 페이지 재진입 시 job 복원에서 동일 로직 재사용.
+  const attachJobStream = useCallback((job_id) => {
+    const onTerminal = (s) => {
+      if (s && (s.status === 'done' || s.status === 'error' || s.status === 'stopped')) {
+        stopPolling(); setIndexing(false); clearActiveJob()
+        return true
+      }
+      return false
+    }
+    const startPollFallback = () => {
+      pollRef.current = setInterval(async () => {
+        try {
+          const s = await fetchStatus(job_id)
+          setJobStatus(s)
+          onTerminal(s)
+        } catch { stopPolling(); setIndexing(false); setJobError('상태 조회 실패') }
+      }, 1000)
+    }
+    try {
+      const es = new EventSource(`${API}/api/index/stream/${job_id}`)
+      pollRef.current = es
+      es.onmessage = (ev) => {
+        try {
+          const s = JSON.parse(ev.data)
+          setJobStatus(s)
+          onTerminal(s)
+        } catch {}
+      }
+      es.onerror = () => {
+        stopPolling()
+        startPollFallback()
+      }
+    } catch {
+      startPollFallback()
+    }
+  }, [])
+
   const handleStartIndexing = async () => {
     if (checkedPaths.size === 0) return
     setIndexing(true)
@@ -920,19 +1157,50 @@ export default function DataIndexing() {
     try {
       const { job_id } = await startIndexing([...checkedPaths])
       setJobId(job_id)
+      saveActiveJob(job_id)   // [재진입] 다른 페이지 이동 후 복원용
       const initial = await fetchStatus(job_id)
       setJobStatus(initial)
-      pollRef.current = setInterval(async () => {
-        try {
-          const s = await fetchStatus(job_id)
-          setJobStatus(s)
-          if (s.status === 'done' || s.status === 'error' || s.status === 'stopped') {
-            stopPolling(); setIndexing(false)
-          }
-        } catch { stopPolling(); setIndexing(false); setJobError('상태 조회 실패') }
-      }, 1000)
+      attachJobStream(job_id)
     } catch { setJobError('인덱싱 시작 실패'); setIndexing(false); setModalVisible(false) }
   }
+
+  // [재진입] 컴포넌트 마운트 시 활성 job 자동 복구.
+  // 사용자가 워크스페이스 등 다른 페이지로 갔다가 돌아오면 진행 상황 복원.
+  useEffect(() => {
+    const savedJobId = loadActiveJob()
+    if (!savedJobId) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const status = await fetchStatus(savedJobId)
+        if (cancelled) return
+        const isTerminal = ['done', 'error', 'stopped'].includes(status?.status)
+        if (status && !status.error && !isTerminal) {
+          // 진행 중인 job — UI 복원 + SSE 재연결
+          setJobId(savedJobId)
+          setJobStatus(status)
+          setIndexing(true)
+          setModalVisible(true)
+          attachJobStream(savedJobId)
+        } else {
+          // 종료/존재X → localStorage 정리
+          clearActiveJob()
+        }
+      } catch {
+        // backend 재시작 등으로 status 조회 실패 → 정리
+        clearActiveJob()
+      }
+    })()
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // [재진입] unmount 시 SSE 만 닫고 backend job 은 그대로 유지.
+  // pollRef 청소(stopPolling) — backend 에 /stop 요청 보내지 않음 → job 살아있음.
+  useEffect(() => {
+    return () => { stopPolling() }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const jobResultMap = jobStatus?.results
     ? Object.fromEntries(jobStatus.results.map(r => [r.path, r]))
@@ -950,6 +1218,7 @@ export default function DataIndexing() {
           <div className="mx-3 mb-3 p-3 rounded-xl bg-primary/10 border border-primary/20">
             <p className="text-base text-primary font-bold uppercase tracking-widest mb-1">선택됨</p>
             <p className="text-xl font-black text-primary leading-none">{selectedCount}<span className="text-sm ml-1 font-normal">개 파일</span></p>
+            <IndexingETA data={estimateData} loading={estimateLoading} />
           </div>
         )}
         footerSub={
@@ -1037,7 +1306,12 @@ export default function DataIndexing() {
           <div className="flex-1 glass-panel rounded-xl border border-outline-variant/15 overflow-hidden flex flex-col min-h-0">
             <div className="shrink-0 px-4 py-2.5 border-b border-outline-variant/10 flex items-center justify-between">
               <h2 className="text-base font-bold tracking-tight text-on-surface">리소스 탐색기</h2>
-              {jobStatus && (
+              <div className="flex items-center gap-2">
+                <SelectNewOnlyButton
+                  indexedMap={indexedMap}
+                  onApply={(paths) => setCheckedPaths(new Set(paths))}
+                />
+                {jobStatus && (
                 <button
                   onClick={() => setModalVisible(true)}
                   className={`flex items-center gap-1.5 text-base font-bold uppercase px-2.5 py-0.5 rounded-full transition-all hover:brightness-125
@@ -1049,6 +1323,7 @@ export default function DataIndexing() {
                   {jobStatus.status === 'done' ? '완료' : jobStatus.status === 'error' ? '오류' : '처리 중'}
                 </button>
               )}
+              </div>
             </div>
 
             <div className="flex-1 overflow-y-auto py-1.5 min-h-0">
@@ -1083,10 +1358,15 @@ export default function DataIndexing() {
                       onToggle={toggleFile}
                       onSetMany={setManyFiles}
                       jobResultMap={jobResultMap}
+                      indexedMap={indexedMap}
+                      registerPaths={registerPaths}
+                      orphanMap={orphanMap}
+                      registerOrphans={registerOrphans}
                     />
                   : <FileRow
                       key={item.path} item={item} depth={0}
                       checked={checkedPaths.has(item.path)}
+                      indexedInfo={indexedMap?.[item.path]}
                       onToggle={toggleFile}
                       jobResult={jobResultMap?.[item.path]}
                     />
@@ -1098,8 +1378,14 @@ export default function DataIndexing() {
           <div className="shrink-0 flex flex-col items-center gap-2 pb-1">
             {jobError && <p className="text-sm text-red-400">{jobError}</p>}
             <button
-              onClick={handleStartIndexing}
-              disabled={selectedCount === 0 || indexing}
+              onClick={() => {
+                // [UX] 인덱싱 진행 중 모달이 닫힌 상태면 클릭으로 모달 재오픈.
+                // 이전: disabled 처리되어 사용자가 진행 화면으로 돌아갈 수 없었음.
+                if (indexing) setModalVisible(true)
+                else handleStartIndexing()
+              }}
+              disabled={!indexing && selectedCount === 0}
+              title={indexing ? '진행 화면 다시 보기' : undefined}
               className="relative group disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <div className="absolute -inset-0.5 bg-gradient-to-r from-primary to-secondary rounded-full blur opacity-40 group-hover:opacity-70 transition duration-500" />
@@ -1110,7 +1396,7 @@ export default function DataIndexing() {
                     style={{ fontVariationSettings: '"FILL" 1' }}
                   >{indexing ? 'progress_activity' : 'rocket_launch'}</span>
                   <span className="text-on-surface font-black tracking-widest text-lg uppercase">
-                    {indexing ? '인덱싱 중...' : '인덱싱 시작'}
+                    {indexing ? '진행 화면 보기' : '인덱싱 시작'}
                   </span>
                 </span>
                 <span className="pl-5 text-secondary text-base font-bold uppercase tracking-widest">
