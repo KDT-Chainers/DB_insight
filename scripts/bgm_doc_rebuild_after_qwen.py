@@ -272,6 +272,256 @@ def verify() -> bool:
     return ok
 
 
+def _check_qwen_completeness() -> dict:
+    """Qwen 5-stage 완료율 체크."""
+    n_ids = _img_ids_count()
+    if n_ids == 0:
+        return {"ok": True, "n_ids": 0, "stages": {}, "skipped": True}
+    stages = _stage_progress()
+    threshold = int(n_ids * 0.95)
+    incomplete = [s for s, v in stages.items() if v < threshold]
+    return {
+        "ok": len(incomplete) == 0,
+        "n_ids": n_ids,
+        "stages": stages,
+        "incomplete": incomplete,
+        "threshold": threshold,
+    }
+
+
+def _check_doc_rows() -> dict:
+    """Doc 도메인 행 수 일치."""
+    import numpy as np
+    ids = json.loads((DOC_CACHE / "doc_page_ids.json").read_text(encoding="utf-8"))
+    n = len(ids.get("ids", []) if isinstance(ids, dict) else ids)
+    out = {"ok": True, "n_ids": n, "files": {}}
+    for fname in ["cache_doc_page_Re.npy", "cache_doc_page_Im.npy",
+                  "cache_doc_page_Im_body.npy", "cache_doc_page_Z.npy"]:
+        p = DOC_CACHE / fname
+        if p.is_file():
+            try:
+                rows = np.load(p, mmap_mode="r").shape[0]
+            except Exception:
+                rows = -1
+            out["files"][fname] = rows
+            if rows != n:
+                out["ok"] = False
+    sp_path = DOC_CACHE / "cache_doc_page_sparse.npz"
+    if sp_path.is_file():
+        try:
+            from scipy.sparse import load_npz
+            rows = load_npz(str(sp_path)).shape[0]
+        except Exception:
+            rows = -1
+        out["files"]["cache_doc_page_sparse.npz"] = rows
+        if rows != n:
+            out["ok"] = False
+    asf_path = DOC_CACHE / "asf_token_sets.json"
+    if asf_path.is_file():
+        try:
+            asf_n = len(json.loads(asf_path.read_text(encoding="utf-8")))
+        except Exception:
+            asf_n = -1
+        out["files"]["asf_token_sets.json"] = asf_n
+        if asf_n != n:
+            out["ok"] = False
+    return out
+
+
+def _check_image_rows() -> dict:
+    """Image 도메인 행 수 일치."""
+    import numpy as np
+    ids = json.loads((IMG_CACHE / "img_ids.json").read_text(encoding="utf-8"))
+    n = len(ids.get("ids", []) if isinstance(ids, dict) else ids)
+    out = {"ok": True, "n_ids": n, "files": {}}
+    for fname in ["cache_img_Re_siglip2.npy", "cache_img_Z_dinov2.npy",
+                  "cache_img_Im_L1.npy", "cache_img_Im_L2.npy", "cache_img_Im_L3.npy",
+                  "cache_img_Im_e5cap.npy"]:
+        p = IMG_CACHE / fname
+        if p.is_file():
+            try:
+                rows = np.load(p, mmap_mode="r").shape[0]
+            except Exception:
+                rows = -1
+            out["files"][fname] = rows
+            if rows != n:
+                out["ok"] = False
+    sp_path = IMG_CACHE / "cache_img_sparse.npz"
+    if sp_path.is_file():
+        try:
+            from scipy.sparse import load_npz
+            rows = load_npz(str(sp_path)).shape[0]
+        except Exception:
+            rows = -1
+        out["files"]["cache_img_sparse.npz"] = rows
+        if rows != n:
+            out["ok"] = False
+    asf_path = IMG_CACHE / "asf_token_sets.json"
+    if asf_path.is_file():
+        try:
+            asf_n = len(json.loads(asf_path.read_text(encoding="utf-8")))
+        except Exception:
+            asf_n = -1
+        out["files"]["asf_token_sets.json"] = asf_n
+        if asf_n != n:
+            out["ok"] = False
+    return out
+
+
+def _check_page_text_coverage() -> dict:
+    """page_text 커버리지 (≥99% 목표)."""
+    page_text = ROOT / "Data" / "extracted_DB" / "Doc" / "page_text"
+    ids = json.loads((DOC_CACHE / "doc_page_ids.json").read_text(encoding="utf-8"))
+    ids_list = ids.get("ids", []) if isinstance(ids, dict) else ids
+    n = len(ids_list)
+    if n == 0 or not page_text.is_dir():
+        return {"ok": False, "covered": 0, "total": n, "ratio": 0.0}
+    import re
+    pattern = re.compile(r"^page_images/(.+)/p(\d+)\.(?:jpg|png)$")
+    n_covered = 0
+    for rid in ids_list:
+        m = pattern.match(rid)
+        if not m:
+            continue
+        stem, page = m.group(1), int(m.group(2))
+        if (page_text / stem / f"p{page:04d}.txt").is_file():
+            n_covered += 1
+    ratio = n_covered / n
+    return {"ok": ratio >= 0.99, "covered": n_covered, "total": n, "ratio": round(ratio, 4)}
+
+
+def _check_smoke_searches() -> dict:
+    """5도메인 1쿼리씩 빠른 search 동작 확인 (CPU)."""
+    import os as _os
+    _os.environ["FORCE_CPU"] = "1"
+    sys.path.insert(0, str(APP_BACKEND))
+    out = {"ok": True, "domains": {}}
+    try:
+        from routes.trichef import _get_engine
+        from services.bgm.search_engine import get_engine as get_bgm
+        engine = _get_engine()
+        bgm = get_bgm()
+    except Exception as e:
+        return {"ok": False, "error": f"engine load failed: {e}"}
+
+    queries = {
+        "doc_page": "취업",
+        "image":    "산",
+        "movie":    "회의",
+        "music":    "안녕",
+        "bgm":      "잔잔한",
+    }
+    for d, q in queries.items():
+        try:
+            t = time.time()
+            if d == "bgm":
+                r = bgm.search(q, top_k=1)
+                n = len(r.get("results", []))
+            elif d in ("movie", "music"):
+                hits = engine.search_av(q, domain=d, topk=1)
+                n = len(hits)
+            else:
+                hits = engine.search(q, domain=d, topk=1, use_lexical=True, use_asf=True)
+                n = len(hits)
+            elapsed = round((time.time() - t) * 1000, 1)
+            ok_d = n > 0
+            out["domains"][d] = {"ok": ok_d, "n": n, "ms": elapsed}
+            if not ok_d:
+                out["ok"] = False
+        except Exception as e:
+            out["domains"][d] = {"ok": False, "error": str(e)[:120]}
+            out["ok"] = False
+    return out
+
+
+def final_verify_with_retry(args) -> dict:
+    """
+    종합 검증 + 1회 자동 재시도. 결과를 logs/post_rebuild_report.json 저장.
+
+    Pass 정의: Qwen 95%+ AND Doc 행 일치 AND Image 행 일치 AND page_text 99%+ AND
+              5도메인 smoke search 성공.
+    """
+    def _run_checks() -> dict:
+        return {
+            "qwen":       _check_qwen_completeness(),
+            "doc_rows":   _check_doc_rows(),
+            "image_rows": _check_image_rows(),
+            "page_text":  _check_page_text_coverage(),
+            "smoke":      _check_smoke_searches(),
+        }
+
+    print(f"\n[{_ts()}] === FINAL VERIFY (1차) ===", flush=True)
+    r1 = _run_checks()
+    fails = [k for k, v in r1.items() if not v.get("ok", False)]
+    print(f"  qwen ok=     {r1['qwen']['ok']}  (5 stage 완료율)", flush=True)
+    print(f"  doc rows ok= {r1['doc_rows']['ok']}  (n_ids={r1['doc_rows']['n_ids']}, files={r1['doc_rows']['files']})", flush=True)
+    print(f"  img rows ok= {r1['image_rows']['ok']}  (n_ids={r1['image_rows']['n_ids']})", flush=True)
+    print(f"  page_text=   {r1['page_text']['ok']}  ({r1['page_text']['ratio']*100:.1f}% covered)", flush=True)
+    print(f"  smoke=       {r1['smoke']['ok']}  ({sum(1 for d in r1['smoke'].get('domains', {}).values() if d.get('ok')) }/5 domains)", flush=True)
+
+    final = r1
+    retried = False
+
+    if fails and not args.skip_retry:
+        print(f"\n[{_ts()}] 재시도 가능 항목: {fails}", flush=True)
+        retried = True
+        if "doc_rows" in fails:
+            if not r1["doc_rows"]["files"].get("cache_doc_page_Im_body.npy") == r1["doc_rows"]["n_ids"]:
+                rebuild_im_body(workers=args.workers, batch_size=args.batch_size)
+            rebuild_sparse()
+        if "image_rows" in fails:
+            rebuild_image_lexical()
+        if "page_text" in fails:
+            run_easyocr_pending()
+            rebuild_sparse()  # OCR 결과 반영
+        # 재검증
+        print(f"\n[{_ts()}] === FINAL VERIFY (2차, 재시도 후) ===", flush=True)
+        r2 = _run_checks()
+        final = r2
+        print(f"  qwen ok=     {r2['qwen']['ok']}", flush=True)
+        print(f"  doc rows ok= {r2['doc_rows']['ok']}", flush=True)
+        print(f"  img rows ok= {r2['image_rows']['ok']}", flush=True)
+        print(f"  page_text=   {r2['page_text']['ok']}", flush=True)
+        print(f"  smoke=       {r2['smoke']['ok']}", flush=True)
+
+    final_pass = all(v.get("ok", False) for v in final.values())
+    final["pass"] = final_pass
+    final["retried"] = retried
+
+    # 저장
+    report_path = ROOT / "logs" / "post_rebuild_report.json"
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(
+        json.dumps(final, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    return final
+
+
+def print_banner(report: dict):
+    """완료 배너 — 한 눈에 PASS/FAIL 확인."""
+    if report.get("pass"):
+        retry_note = " (after retry)" if report.get("retried") else ""
+        msg = f"ALL CHECKS PASSED{retry_note}"
+        print(f"""
++========================================+
+|                                        |
+|  [PASS] {msg:<31} |
+|  All searches ready to use.            |
+|                                        |
++========================================+
+""", flush=True)
+    else:
+        print(f"""
++========================================+
+|                                        |
+|  [FAIL] ISSUES DETECTED                |
+|  See logs/post_rebuild_report.json     |
+|                                        |
++========================================+
+""", flush=True)
+
+
 def reload_backend_engine_if_running():
     """실행 중인 Flask 엔진의 reload 트리거 (선택)."""
     try:
@@ -302,7 +552,17 @@ def main():
                         help="Image 도메인 lexical 재빌드 스킵")
     parser.add_argument("--skip-ocr", action="store_true",
                         help="EasyOCR 처리 스킵")
+    parser.add_argument("--skip-retry", action="store_true",
+                        help="검증 실패 시 자동 재시도 비활성")
+    parser.add_argument("--verify-only", action="store_true",
+                        help="재빌드 안 하고 검증만 (이미 완료된 작업 점검용)")
     args = parser.parse_args()
+
+    # 검증만 (이미 완료된 작업 점검) — 재빌드 안 함
+    if args.verify_only:
+        report = final_verify_with_retry(args)
+        print_banner(report)
+        return 0 if report.get("pass") else 2
 
     if not args.now:
         wait_for_qwen()
@@ -311,40 +571,54 @@ def main():
 
     rc = 0
     if not args.skip_im_body:
-        rc1 = rebuild_im_body(workers=args.workers, batch_size=args.batch_size)
-        if rc1 != 0:
-            rc = rc1
-            print(f"[{_ts()}] Im_body 실패 — sparse 단계 스킵", flush=True)
-            return rc
+        try:
+            rc1 = rebuild_im_body(workers=args.workers, batch_size=args.batch_size)
+            if rc1 != 0:
+                rc = rc1
+                print(f"[{_ts()}] Im_body 실패 (rc={rc1}) — 다음 단계 시도", flush=True)
+        except Exception as e:
+            print(f"[{_ts()}] Im_body 예외: {e} — 다음 단계 시도", flush=True)
+            rc = 1
 
     if not args.skip_sparse:
-        rc2 = rebuild_sparse()
-        if rc2 != 0:
-            rc = rc2
+        try:
+            rc2 = rebuild_sparse()
+            if rc2 != 0:
+                rc = rc2
+        except Exception as e:
+            print(f"[{_ts()}] sparse 예외: {e}", flush=True)
+            rc = 1
 
     # Image 도메인도 함께 재빌드 (Qwen 5-stage 캡션이 image 에 반영되어야 sparse 활성화)
     if not args.skip_image:
-        rc3 = rebuild_image_lexical()
-        if rc3 != 0:
-            rc = rc3
+        try:
+            rc3 = rebuild_image_lexical()
+            if rc3 != 0:
+                rc = rc3
+        except Exception as e:
+            print(f"[{_ts()}] image lexical 예외: {e}", flush=True)
+            rc = 1
 
     # EasyOCR — 169 미커버 페이지 처리
     if not args.skip_ocr:
-        rc4 = run_easyocr_pending()
-        # OCR 후 새로 생긴 page_text 를 sparse 에 반영하기 위해 doc sparse 한 번 더
-        if rc4 == 0 and not args.skip_sparse:
-            print(f"\n[{_ts()}] EasyOCR 결과 반영 — Doc sparse 재빌드 (v2)", flush=True)
-            rebuild_sparse()
+        try:
+            rc4 = run_easyocr_pending()
+            # OCR 후 새로 생긴 page_text 를 sparse 에 반영하기 위해 doc sparse 한 번 더
+            if rc4 == 0 and not args.skip_sparse:
+                print(f"\n[{_ts()}] EasyOCR 결과 반영 — Doc sparse 재빌드 (v2)", flush=True)
+                rebuild_sparse()
+        except Exception as e:
+            print(f"[{_ts()}] EasyOCR 예외: {e}", flush=True)
+            rc = 1
 
-    ok = verify()
-    if not ok:
-        print(f"\n[{_ts()}] ⚠ 검증 실패 — 일부 행 수 불일치", flush=True)
+    # ── 최종 검증 + 1회 자동 재시도 ─────────────────────────────────────
+    report = final_verify_with_retry(args)
+    print_banner(report)
+    if not report.get("pass"):
         rc = max(rc, 2)
-    else:
-        print(f"\n[{_ts()}] ✓ 모든 행 수 일치", flush=True)
 
     reload_backend_engine_if_running()
-    print(f"\n[{_ts()}] 전체 완료 (rc={rc})", flush=True)
+    print(f"\n[{_ts()}] 전체 완료 (rc={rc}, pass={report.get('pass')})", flush=True)
     return rc
 
 
