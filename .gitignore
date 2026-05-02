@@ -69,6 +69,12 @@ Data/embedded_DB/*_backup_v*/
 Data/embedded_DB/Movie_backup_v*/
 Data/embedded_DB/Rec_backup_*/
 
+# BGM 인덱스는 작음 (~5MB) — 다른 PC pull 즉시 검색 가능하도록 git 에 포함
+!Data/embedded_DB/Bgm/clap_emb.npy
+!Data/embedded_DB/Bgm/cache_seg_emb.npy
+!Data/embedded_DB/Bgm/clap_index.faiss
+!Data/embedded_DB/Bgm/cache_seg_faiss.faiss
+
 # ============================================================
 # 임베딩 관련 파일 패턴 (Data/ 밖에 생성될 경우 대비)
 # ============================================================
@@ -123,6 +129,9 @@ Data/models/
 *.dmg
 *.pkg
 
+# fpcalc.exe (Chromaprint 바이너리, 3.4MB) — BGM 검색에 필수, 깃에 포함
+!App/backend/bin/fpcalc.exe
+
 # ============================================================
 # Environment variables
 # ============================================================
@@ -144,6 +153,31 @@ yarn-error.log*
 build_out*.txt
 *_out.txt
 result.txt
+
+# top-level diagnostic logs (BGM ingest, doc rebuild queue 등)
+logs/
+
+# ============================================================
+# 사용자별 PC 설정 / DB (PC 마다 다름, push 안 함)
+# ============================================================
+# Flask backend 의 사용자 인증 / 검색 히스토리 SQLite
+App/backend/db/app.db
+App/backend/db/*.db-journal
+App/backend/db/__pycache__/
+
+# Electron 빌드 출력 + admin_ui 빌드 캐시
+App/admin_ui/__pycache__/
+App/admin_ui/dist/
+App/admin_ui/out/
+
+# 사용자 설정 (BGM ACR API key, 화면 크기 등) — PC 마다 다름
+App/data/
+Data/settings.json
+
+# BGM audio_meta.json 의 path 필드 — PC 마다 다른 abs 경로
+# (감각적 차원에서는 가능하지만 push 시 매번 충돌 → normalize_registry_paths.py 로 PC 별 자동 갱신)
+# 메타 데이터 자체는 push (filename / acr_artist / tags 등 공유 가치 있음)
+# path 필드만 PC 별 차이를 ignore 할 수는 없으므로 normalize 워크플로우 사용
 
 # ============================================================
 # OS

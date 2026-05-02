@@ -33,12 +33,63 @@ print("[normalize_registry_paths] 시작", flush=True)
 ROOT = Path(__file__).resolve().parents[1]
 RAW_DB = ROOT / "Data" / "raw_DB"
 EMB_DB = ROOT / "Data" / "embedded_DB"
-DOMAINS = ["Doc", "Img", "Movie", "Rec"]
+DOMAINS = ["Doc", "Img", "Movie", "Rec", "Bgm"]
 
 
 def normalize_path(p: str) -> str:
     """경로 문자열 정규화 (포워드 슬래시)."""
     return str(p).replace("\\", "/")
+
+
+# ── BGM 전용: audio_meta.json 의 path 필드 정규화 ─────────────────────────────
+def fix_bgm(dry_run: bool) -> dict:
+    """BGM audio_meta.json 의 path 필드를 현재 PC 의 RAW_DB/Movie/정혜_BGM_1차/ 로 갱신."""
+    meta_path = EMB_DB / "Bgm" / "audio_meta.json"
+    if not meta_path.is_file():
+        return {"domain": "Bgm", "skipped": True, "reason": "audio_meta.json 없음"}
+
+    items = json.loads(meta_path.read_text(encoding="utf-8"))
+    if not isinstance(items, list):
+        return {"domain": "Bgm", "skipped": True, "reason": "예상 형식 아님 (list 필요)"}
+
+    raw_bgm = RAW_DB / "Movie" / "정혜_BGM_1차"
+    n_changed = 0
+    n_missing = 0
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        fname = it.get("filename") or ""
+        if not fname:
+            continue
+        new_path = normalize_path(raw_bgm / fname)
+        if it.get("path") != new_path:
+            it["path"] = new_path
+            n_changed += 1
+        if not Path(new_path).is_file():
+            n_missing += 1
+
+    print(f"\n=== Bgm ===", flush=True)
+    print(f"  total entries:      {len(items)}", flush=True)
+    print(f"  path 갱신:          {n_changed}", flush=True)
+    print(f"  디스크 미존재:      {n_missing}", flush=True)
+
+    if dry_run:
+        print("  (dry-run: 저장 안 함)", flush=True)
+        return {"domain": "Bgm", "abs_changed": n_changed,
+                "missing": n_missing, "dry_run": True}
+
+    if n_changed > 0:
+        bak = meta_path.with_suffix(meta_path.suffix + f".bak.{int(time.time())}")
+        shutil.copy2(meta_path, bak)
+        meta_path.write_text(
+            json.dumps(items, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        print(f"  저장: {meta_path.name} (백업: {bak.name})", flush=True)
+    else:
+        print("  변경 없음 — 이미 정규화됨", flush=True)
+
+    return {"domain": "Bgm", "abs_changed": n_changed, "missing": n_missing}
 
 
 def fix_domain(dom: str, dry_run: bool) -> dict:
@@ -124,7 +175,12 @@ def main() -> int:
         print(f"\n[ERROR] {RAW_DB} 없음 — 먼저 raw_DB 데이터를 배치하세요", flush=True)
         return 2
 
-    results = [fix_domain(d, args.dry_run) for d in domains]
+    results = []
+    for d in domains:
+        if d == "Bgm":
+            results.append(fix_bgm(args.dry_run))
+        else:
+            results.append(fix_domain(d, args.dry_run))
 
     print("\n" + "=" * 60, flush=True)
     print("요약", flush=True)

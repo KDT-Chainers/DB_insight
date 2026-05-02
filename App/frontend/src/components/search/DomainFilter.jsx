@@ -12,6 +12,7 @@ const ITEMS = [
   { value: 'image', label: '이미지', icon: 'image',        color: 'text-emerald-400' },
   { value: 'video', label: '동영상', icon: 'movie',        color: 'text-[#ac8aff]' },
   { value: 'audio', label: '음성',   icon: 'volume_up',    color: 'text-amber-400' },
+  { value: 'bgm',   label: 'BGM',    icon: 'music_note',   color: 'text-pink-400' },
 ]
 
 export default function DomainFilter({ value, onChange, counts }) {

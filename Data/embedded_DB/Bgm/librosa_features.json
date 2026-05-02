@@ -1,0 +1,1986 @@
+[
+  {
+    "filename": "001.mp4",
+    "tags": [
+      "fast",
+      "warm-timbre",
+      "rhythmic",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 151.99908088235293,
+      "spectral_centroid_mean": 1770.6527326893527,
+      "spectral_centroid_std": 328.04672886617476,
+      "spectral_rolloff_mean": 3600.013309925244,
+      "zcr_mean": 0.08519154260780287,
+      "harm_perc_ratio": 0.42714974328304633,
+      "rms_mean": 0.05950600281357765,
+      "rms_std": 0.04702804982662201,
+      "duration_sec": 22.613333333333333
+    }
+  },
+  {
+    "filename": "002.mp4",
+    "tags": [
+      "medium-tempo",
+      "dark-timbre",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 103.359375,
+      "spectral_centroid_mean": 1279.6859300744197,
+      "spectral_centroid_std": 317.137067015255,
+      "spectral_rolloff_mean": 2662.418860066993,
+      "zcr_mean": 0.038905171895057766,
+      "harm_perc_ratio": 1.9616894807163834,
+      "rms_mean": 0.04014645516872406,
+      "rms_std": 0.01879749447107315,
+      "duration_sec": 18.069342403628117
+    }
+  },
+  {
+    "filename": "003.mp4",
+    "tags": [
+      "medium-tempo",
+      "warm-timbre",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 107.666015625,
+      "spectral_centroid_mean": 1703.8965958735516,
+      "spectral_centroid_std": 436.37632709564053,
+      "spectral_rolloff_mean": 3643.790735065608,
+      "zcr_mean": 0.07026124395718232,
+      "harm_perc_ratio": 0.5501117155949543,
+      "rms_mean": 0.03610262647271156,
+      "rms_std": 0.01878545805811882,
+      "duration_sec": 12.586666666666666
+    }
+  },
+  {
+    "filename": "004.mp4",
+    "tags": [
+      "fast",
+      "warm-timbre",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 129.19921875,
+      "spectral_centroid_mean": 2197.1814109757347,
+      "spectral_centroid_std": 506.16417862054124,
+      "spectral_rolloff_mean": 4710.975670761414,
+      "zcr_mean": 0.10010526865256125,
+      "harm_perc_ratio": 2.0751701178449173,
+      "rms_mean": 0.023675404489040375,
+      "rms_std": 0.012191073969006538,
+      "duration_sec": 10.410702947845804
+    }
+  },
+  {
+    "filename": "005.mp4",
+    "tags": [
+      "slow",
+      "dark-timbre",
+      "rhythmic",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 73.828125,
+      "spectral_centroid_mean": 1244.250811980329,
+      "spectral_centroid_std": 575.5068974753339,
+      "spectral_rolloff_mean": 2517.5605241642443,
+      "zcr_mean": 0.03748896906146179,
+      "harm_perc_ratio": 0.4206109342617611,
+      "rms_mean": 0.03713064268231392,
+      "rms_std": 0.03073136694729328,
+      "duration_sec": 6.976009070294785
+    }
+  },
+  {
+    "filename": "006.mp4",
+    "tags": [
+      "fast",
+      "dark-timbre",
+      "melodic",
+      "loud",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 129.19921875,
+      "spectral_centroid_mean": 293.96927798069214,
+      "spectral_centroid_std": 54.92344268193911,
+      "spectral_rolloff_mean": 355.0990364768288,
+      "zcr_mean": 0.015425248579545454,
+      "harm_perc_ratio": 13.63837111120642,
+      "rms_mean": 0.21760182082653046,
+      "rms_std": 0.036538247019052505,
+      "duration_sec": 16.341360544217686
+    }
+  },
+  {
+    "filename": "007.mp4",
+    "tags": [
+      "fast",
+      "warm-timbre"
+    ],
+    "params": {
+      "tempo_bpm": 135.99917763157896,
+      "spectral_centroid_mean": 2007.403964463345,
+      "spectral_centroid_std": 1006.000946320306,
+      "spectral_rolloff_mean": 4293.756454292385,
+      "zcr_mean": 0.08742167544699872,
+      "harm_perc_ratio": 1.0217450200061806,
+      "rms_mean": 0.027869656682014465,
+      "rms_std": 0.02760409377515316,
+      "duration_sec": 36.35201814058957
+    }
+  },
+  {
+    "filename": "008.mp4",
+    "tags": [
+      "fast",
+      "warm-timbre"
+    ],
+    "params": {
+      "tempo_bpm": 117.45383522727273,
+      "spectral_centroid_mean": 2477.69480312902,
+      "spectral_centroid_std": 893.7520031919871,
+      "spectral_rolloff_mean": 5394.196548698118,
+      "zcr_mean": 0.11242392336251934,
+      "harm_perc_ratio": 0.7798739191779755,
+      "rms_mean": 0.02150871604681015,
+      "rms_std": 0.02554909512400627,
+      "duration_sec": 60.0
+    }
+  },
+  {
+    "filename": "009.mp4",
+    "tags": [
+      "fast",
+      "warm-timbre",
+      "quiet"
+    ],
+    "params": {
+      "tempo_bpm": 112.34714673913044,
+      "spectral_centroid_mean": 1706.3157718340226,
+      "spectral_centroid_std": 653.1206482202302,
+      "spectral_rolloff_mean": 3480.6931093514686,
+      "zcr_mean": 0.08276808405496988,
+      "harm_perc_ratio": 1.8032864004520364,
+      "rms_mean": 0.019719203934073448,
+      "rms_std": 0.01561562716960907,
+      "duration_sec": 30.826666666666668
+    }
+  },
+  {
+    "filename": "010.mp4",
+    "tags": [
+      "fast",
+      "warm-timbre",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 112.34714673913044,
+      "spectral_centroid_mean": 1761.7743815364927,
+      "spectral_centroid_std": 613.0110508309541,
+      "spectral_rolloff_mean": 3987.308791588093,
+      "zcr_mean": 0.06040165342133621,
+      "harm_perc_ratio": 3.335947014010407,
+      "rms_mean": 0.02666049636900425,
+      "rms_std": 0.008346600458025932,
+      "duration_sec": 10.773333333333333
+    }
+  },
+  {
+    "filename": "011.mp4",
+    "tags": [
+      "fast",
+      "warm-timbre",
+      "noisy",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 129.19921875,
+      "spectral_centroid_mean": 2439.9890987312524,
+      "spectral_centroid_std": 492.3719201670467,
+      "spectral_rolloff_mean": 5074.038158565146,
+      "zcr_mean": 0.14661119404319223,
+      "harm_perc_ratio": 1.7988383282079081,
+      "rms_mean": 0.028138456866145134,
+      "rms_std": 0.008441257290542126,
+      "duration_sec": 20.288027210884355
+    }
+  },
+  {
+    "filename": "012.mp4",
+    "tags": [
+      "medium-tempo",
+      "warm-timbre",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 99.38401442307692,
+      "spectral_centroid_mean": 1689.9978459260499,
+      "spectral_centroid_std": 310.62814697252253,
+      "spectral_rolloff_mean": 3203.1676432291665,
+      "zcr_mean": 0.10463035300925926,
+      "harm_perc_ratio": 0.9544985295107914,
+      "rms_mean": 0.04439304396510124,
+      "rms_std": 0.02682408131659031,
+      "duration_sec": 15.658684807256236
+    }
+  },
+  {
+    "filename": "013.mp4",
+    "tags": [
+      "medium-tempo",
+      "warm-timbre",
+      "rhythmic",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 107.666015625,
+      "spectral_centroid_mean": 1504.3981407623355,
+      "spectral_centroid_std": 399.3027550492416,
+      "spectral_rolloff_mean": 3410.8149257274945,
+      "zcr_mean": 0.044817723265481654,
+      "harm_perc_ratio": 0.4448900800406423,
+      "rms_mean": 0.02966105379164219,
+      "rms_std": 0.027150126174092293,
+      "duration_sec": 10.11201814058957
+    }
+  },
+  {
+    "filename": "014.mp4",
+    "tags": [
+      "fast",
+      "warm-timbre",
+      "quiet",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 117.45383522727273,
+      "spectral_centroid_mean": 2020.1541762128277,
+      "spectral_centroid_std": 458.82240194452976,
+      "spectral_rolloff_mean": 4562.73428540711,
+      "zcr_mean": 0.08843116876911315,
+      "harm_perc_ratio": 1.4002959858115378,
+      "rms_mean": 0.017417578026652336,
+      "rms_std": 0.007219152990728617,
+      "duration_sec": 7.573333333333333
+    }
+  },
+  {
+    "filename": "015.mp4",
+    "tags": [
+      "fast",
+      "warm-timbre",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 143.5546875,
+      "spectral_centroid_mean": 1568.2516139202605,
+      "spectral_centroid_std": 619.8701561847706,
+      "spectral_rolloff_mean": 3204.3718794701804,
+      "zcr_mean": 0.062464754346390844,
+      "harm_perc_ratio": 1.3789606644749137,
+      "rms_mean": 0.05137479677796364,
+      "rms_std": 0.02855946682393551,
+      "duration_sec": 13.184036281179138
+    }
+  },
+  {
+    "filename": "016.mp4",
+    "tags": [
+      "medium-tempo",
+      "warm-timbre",
+      "quiet",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 92.28515625,
+      "spectral_centroid_mean": 2021.3501877906128,
+      "spectral_centroid_std": 591.0059988773542,
+      "spectral_rolloff_mean": 4389.102202868852,
+      "zcr_mean": 0.09465772284836066,
+      "harm_perc_ratio": 0.7316829810875835,
+      "rms_mean": 0.015314396470785141,
+      "rms_std": 0.015797730535268784,
+      "duration_sec": 7.061360544217687
+    }
+  },
+  {
+    "filename": "017.mp4",
+    "tags": [
+      "fast",
+      "warm-timbre",
+      "quiet",
+      "noisy",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 117.45383522727273,
+      "spectral_centroid_mean": 2281.587629692449,
+      "spectral_centroid_std": 725.8983411726525,
+      "spectral_rolloff_mean": 4659.393233933708,
+      "zcr_mean": 0.12000788604864017,
+      "harm_perc_ratio": 0.7542611931817433,
+      "rms_mean": 0.011484147049486637,
+      "rms_std": 0.008269556798040867,
+      "duration_sec": 11.093333333333334
+    }
+  },
+  {
+    "filename": "018.mp4",
+    "tags": [
+      "fast",
+      "warm-timbre",
+      "quiet"
+    ],
+    "params": {
+      "tempo_bpm": 112.34714673913044,
+      "spectral_centroid_mean": 1814.8822999831361,
+      "spectral_centroid_std": 479.48292608439016,
+      "spectral_rolloff_mean": 3874.101876956619,
+      "zcr_mean": 0.08673179412641623,
+      "harm_perc_ratio": 2.021229582827129,
+      "rms_mean": 0.018753809854388237,
+      "rms_std": 0.008817290887236595,
+      "duration_sec": 38.93333333333333
+    }
+  },
+  {
+    "filename": "019.mp4",
+    "tags": [
+      "fast",
+      "warm-timbre",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 117.45383522727273,
+      "spectral_centroid_mean": 1771.4470409554283,
+      "spectral_centroid_std": 423.2285774779733,
+      "spectral_rolloff_mean": 3765.589317908654,
+      "zcr_mean": 0.08117380666208791,
+      "harm_perc_ratio": 1.2814384215209471,
+      "rms_mean": 0.03348170965909958,
+      "rms_std": 0.013882875442504883,
+      "duration_sec": 10.56
+    }
+  },
+  {
+    "filename": "020.mp4",
+    "tags": [
+      "slow",
+      "warm-timbre",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 47.8515625,
+      "spectral_centroid_mean": 1990.667351271557,
+      "spectral_centroid_std": 683.6484897787102,
+      "spectral_rolloff_mean": 4382.098858173077,
+      "zcr_mean": 0.09133780715811966,
+      "harm_perc_ratio": 0.9642336615819234,
+      "rms_mean": 0.025868503376841545,
+      "rms_std": 0.01878802478313446,
+      "duration_sec": 2.709342403628118
+    }
+  },
+  {
+    "filename": "021.mp4",
+    "tags": [
+      "medium-tempo",
+      "warm-timbre",
+      "noisy",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 86.1328125,
+      "spectral_centroid_mean": 2371.562012929063,
+      "spectral_centroid_std": 322.9693832154653,
+      "spectral_rolloff_mean": 4871.534028252361,
+      "zcr_mean": 0.13547911748260438,
+      "harm_perc_ratio": 1.129995496405097,
+      "rms_mean": 0.021864812821149826,
+      "rms_std": 0.0073760985396802425,
+      "duration_sec": 11.669342403628118
+    }
+  },
+  {
+    "filename": "022.mp4",
+    "tags": [
+      "fast",
+      "warm-timbre",
+      "melodic",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 135.99917763157896,
+      "spectral_centroid_mean": 1704.5948112845217,
+      "spectral_centroid_std": 347.6803694918538,
+      "spectral_rolloff_mean": 3802.3727416992188,
+      "zcr_mean": 0.05308605375744048,
+      "harm_perc_ratio": 6.464284865981856,
+      "rms_mean": 0.1137704849243164,
+      "rms_std": 0.037533778697252274,
+      "duration_sec": 7.786666666666667
+    }
+  },
+  {
+    "filename": "023.mp4",
+    "tags": [
+      "fast",
+      "warm-timbre",
+      "quiet",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 112.34714673913044,
+      "spectral_centroid_mean": 1564.616006859332,
+      "spectral_centroid_std": 649.2544850199952,
+      "spectral_rolloff_mean": 3302.0094862158135,
+      "zcr_mean": 0.06343478808730715,
+      "harm_perc_ratio": 1.9218894985384125,
+      "rms_mean": 0.01175155770033598,
+      "rms_std": 0.010539215058088303,
+      "duration_sec": 16.533333333333335
+    }
+  },
+  {
+    "filename": "024.mp4",
+    "tags": [
+      "medium-tempo",
+      "warm-timbre",
+      "quiet",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 78.30255681818181,
+      "spectral_centroid_mean": 1786.3783412554542,
+      "spectral_centroid_std": 681.3185317467069,
+      "spectral_rolloff_mean": 3765.167194234914,
+      "zcr_mean": 0.07345096982758621,
+      "harm_perc_ratio": 0.8398387771801977,
+      "rms_mean": 0.018288282677531242,
+      "rms_std": 0.012064890936017036,
+      "duration_sec": 10.090702947845806
+    }
+  },
+  {
+    "filename": "025.mp4",
+    "tags": [
+      "medium-tempo",
+      "warm-timbre",
+      "quiet",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 86.1328125,
+      "spectral_centroid_mean": 1799.0825143950158,
+      "spectral_centroid_std": 336.4068064126454,
+      "spectral_rolloff_mean": 4050.14441392447,
+      "zcr_mean": 0.06430474271201414,
+      "harm_perc_ratio": 1.9532564092345908,
+      "rms_mean": 0.013131954707205296,
+      "rms_std": 0.010405582375824451,
+      "duration_sec": 6.549342403628118
+    }
+  },
+  {
+    "filename": "026.mp4",
+    "tags": [
+      "medium-tempo",
+      "bright-timbre",
+      "noisy",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 95.703125,
+      "spectral_centroid_mean": 4133.3952319207965,
+      "spectral_centroid_std": 612.0702497147468,
+      "spectral_rolloff_mean": 7904.544839514308,
+      "zcr_mean": 0.2515589702560241,
+      "harm_perc_ratio": 1.8634695543108106,
+      "rms_mean": 0.04703735187649727,
+      "rms_std": 0.0116991326212883,
+      "duration_sec": 5.76
+    }
+  },
+  {
+    "filename": "027.mp4",
+    "tags": [
+      "medium-tempo",
+      "warm-timbre",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 107.666015625,
+      "spectral_centroid_mean": 1717.5762737654998,
+      "spectral_centroid_std": 366.66568642213883,
+      "spectral_rolloff_mean": 3397.13484339108,
+      "zcr_mean": 0.08011775579058193,
+      "harm_perc_ratio": 2.2861288093051937,
+      "rms_mean": 0.09405504167079926,
+      "rms_std": 0.03920760378241539,
+      "duration_sec": 15.146666666666667
+    }
+  },
+  {
+    "filename": "028.mp4",
+    "tags": [
+      "fast",
+      "warm-timbre",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 135.99917763157896,
+      "spectral_centroid_mean": 1658.8162213433127,
+      "spectral_centroid_std": 320.5515896329861,
+      "spectral_rolloff_mean": 3473.561846864952,
+      "zcr_mean": 0.08350865403938906,
+      "harm_perc_ratio": 1.2960917631427171,
+      "rms_mean": 0.029594050720334053,
+      "rms_std": 0.008829067461192608,
+      "duration_sec": 7.210702947845805
+    }
+  },
+  {
+    "filename": "029.mp4",
+    "tags": [
+      "medium-tempo",
+      "dark-timbre",
+      "melodic",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 95.703125,
+      "spectral_centroid_mean": 430.34433838094293,
+      "spectral_centroid_std": 340.32802452884016,
+      "spectral_rolloff_mean": 654.7925182224549,
+      "zcr_mean": 0.010121768282860825,
+      "harm_perc_ratio": 7.31019285389332,
+      "rms_mean": 0.08023140579462051,
+      "rms_std": 0.05586952343583107,
+      "duration_sec": 9.002675736961452
+    }
+  },
+  {
+    "filename": "030.mp4",
+    "tags": [
+      "fast",
+      "warm-timbre",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 135.99917763157896,
+      "spectral_centroid_mean": 1987.4268022448418,
+      "spectral_centroid_std": 350.02288852258005,
+      "spectral_rolloff_mean": 4078.349823312661,
+      "zcr_mean": 0.10113126879295532,
+      "harm_perc_ratio": 2.036590344158229,
+      "rms_mean": 0.1006888747215271,
+      "rms_std": 0.05003409460186958,
+      "duration_sec": 27.008027210884354
+    }
+  },
+  {
+    "filename": "031.mp4",
+    "tags": [
+      "medium-tempo",
+      "warm-timbre",
+      "melodic",
+      "loud",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 80.74951171875,
+      "spectral_centroid_mean": 1631.2547222525432,
+      "spectral_centroid_std": 714.1960363520682,
+      "spectral_rolloff_mean": 3382.9241241977384,
+      "zcr_mean": 0.06720970545537898,
+      "harm_perc_ratio": 13.176019158174178,
+      "rms_mean": 0.18501225113868713,
+      "rms_std": 0.07508605718612671,
+      "duration_sec": 18.986666666666668
+    }
+  },
+  {
+    "filename": "032.mp4",
+    "tags": [
+      "fast",
+      "warm-timbre",
+      "melodic",
+      "loud",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 161.4990234375,
+      "spectral_centroid_mean": 1906.377362932823,
+      "spectral_centroid_std": 844.5210057567114,
+      "spectral_rolloff_mean": 3981.7516696068546,
+      "zcr_mean": 0.09254242271505377,
+      "harm_perc_ratio": 10.618608848349655,
+      "rms_mean": 0.20669977366924286,
+      "rms_std": 0.0780213475227356,
+      "duration_sec": 6.464036281179139
+    }
+  },
+  {
+    "filename": "033.mp4",
+    "tags": [
+      "fast",
+      "dark-timbre",
+      "loud",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 112.34714673913044,
+      "spectral_centroid_mean": 433.0630668377033,
+      "spectral_centroid_std": 375.56534397632663,
+      "spectral_rolloff_mean": 672.7745643028846,
+      "zcr_mean": 0.015068427666083916,
+      "harm_perc_ratio": 4.517741464242222,
+      "rms_mean": 0.18132789433002472,
+      "rms_std": 0.03980490192770958,
+      "duration_sec": 9.941360544217687
+    }
+  },
+  {
+    "filename": "034.mp4",
+    "tags": [
+      "medium-tempo",
+      "dark-timbre",
+      "melodic",
+      "loud",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 92.28515625,
+      "spectral_centroid_mean": 301.36508978966725,
+      "spectral_centroid_std": 293.15292013756397,
+      "spectral_rolloff_mean": 440.942978277439,
+      "zcr_mean": 0.01160476099738676,
+      "harm_perc_ratio": 6.683501733103333,
+      "rms_mean": 0.17252138257026672,
+      "rms_std": 0.0857996940612793,
+      "duration_sec": 6.656009070294784
+    }
+  },
+  {
+    "filename": "035.mp4",
+    "tags": [
+      "fast",
+      "dark-timbre",
+      "melodic",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 258.3984375,
+      "spectral_centroid_mean": 217.63087888844964,
+      "spectral_centroid_std": 181.22170251150706,
+      "spectral_rolloff_mean": 276.2271730302892,
+      "zcr_mean": 0.00854599423499268,
+      "harm_perc_ratio": 7.917984023516421,
+      "rms_mean": 0.14060793817043304,
+      "rms_std": 0.0505189523100853,
+      "duration_sec": 15.850702947845805
+    }
+  },
+  {
+    "filename": "036.mp4",
+    "tags": [
+      "medium-tempo",
+      "warm-timbre",
+      "quiet",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 103.359375,
+      "spectral_centroid_mean": 1592.2905578063194,
+      "spectral_centroid_std": 713.3524889384596,
+      "spectral_rolloff_mean": 3394.5738662629437,
+      "zcr_mean": 0.06621019455304311,
+      "harm_perc_ratio": 0.6854131804353972,
+      "rms_mean": 0.004260031506419182,
+      "rms_std": 0.002157914685085416,
+      "duration_sec": 27.456009070294783
+    }
+  },
+  {
+    "filename": "037.mp4",
+    "tags": [
+      "fast",
+      "dark-timbre",
+      "quiet",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 117.45383522727273,
+      "spectral_centroid_mean": 1492.2448067761657,
+      "spectral_centroid_std": 259.5560368962477,
+      "spectral_rolloff_mean": 2866.193565955529,
+      "zcr_mean": 0.06897864708533653,
+      "harm_perc_ratio": 1.5049345571964277,
+      "rms_mean": 0.01426574494689703,
+      "rms_std": 0.003744389396160841,
+      "duration_sec": 24.128027210884355
+    }
+  },
+  {
+    "filename": "038.mp4",
+    "tags": [
+      "fast",
+      "warm-timbre",
+      "quiet",
+      "noisy",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 143.5546875,
+      "spectral_centroid_mean": 2663.63127905633,
+      "spectral_centroid_std": 857.6883842323133,
+      "spectral_rolloff_mean": 5441.92568496919,
+      "zcr_mean": 0.14579527948943663,
+      "harm_perc_ratio": 1.1004087102859799,
+      "rms_mean": 0.018259821459650993,
+      "rms_std": 0.010411735624074936,
+      "duration_sec": 8.23469387755102
+    }
+  },
+  {
+    "filename": "039.mp4",
+    "tags": [
+      "fast",
+      "warm-timbre",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 161.4990234375,
+      "spectral_centroid_mean": 1546.5804934635437,
+      "spectral_centroid_std": 421.41239949123445,
+      "spectral_rolloff_mean": 3146.554513704979,
+      "zcr_mean": 0.0645358845338983,
+      "harm_perc_ratio": 2.1347451781260713,
+      "rms_mean": 0.09192916005849838,
+      "rms_std": 0.030690710991621017,
+      "duration_sec": 8.213333333333333
+    }
+  },
+  {
+    "filename": "040.mp4",
+    "tags": [
+      "fast",
+      "warm-timbre",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 117.45383522727273,
+      "spectral_centroid_mean": 1658.9492306819718,
+      "spectral_centroid_std": 409.58462617341996,
+      "spectral_rolloff_mean": 3296.1370131548715,
+      "zcr_mean": 0.08260809206495098,
+      "harm_perc_ratio": 1.2024558589170213,
+      "rms_mean": 0.05255897715687752,
+      "rms_std": 0.010158641263842583,
+      "duration_sec": 9.472018140589569
+    }
+  },
+  {
+    "filename": "041.mp4",
+    "tags": [
+      "fast",
+      "dark-timbre",
+      "rhythmic",
+      "quiet",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 161.4990234375,
+      "spectral_centroid_mean": 1362.595863923638,
+      "spectral_centroid_std": 309.2808860515679,
+      "spectral_rolloff_mean": 2495.839113609813,
+      "zcr_mean": 0.0705748941296729,
+      "harm_perc_ratio": 0.3954124854510672,
+      "rms_mean": 0.014644612558186054,
+      "rms_std": 0.008539360947906971,
+      "duration_sec": 9.92
+    }
+  },
+  {
+    "filename": "042.mp4",
+    "tags": [
+      "fast",
+      "warm-timbre",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 151.99908088235293,
+      "spectral_centroid_mean": 1526.9330243260918,
+      "spectral_centroid_std": 439.81345013014055,
+      "spectral_rolloff_mean": 3035.304722850679,
+      "zcr_mean": 0.06445754383484163,
+      "harm_perc_ratio": 1.0796133921785267,
+      "rms_mean": 0.06168175861239433,
+      "rms_std": 0.04124937579035759,
+      "duration_sec": 10.261360544217688
+    }
+  },
+  {
+    "filename": "043.mp4",
+    "tags": [
+      "medium-tempo",
+      "warm-timbre"
+    ],
+    "params": {
+      "tempo_bpm": 107.666015625,
+      "spectral_centroid_mean": 1598.4043202734879,
+      "spectral_centroid_std": 379.4877829232737,
+      "spectral_rolloff_mean": 3140.8511051452115,
+      "zcr_mean": 0.07198817895478075,
+      "harm_perc_ratio": 1.1244038851328602,
+      "rms_mean": 0.0576782152056694,
+      "rms_std": 0.04523615911602974,
+      "duration_sec": 38.122675736961455
+    }
+  },
+  {
+    "filename": "044.mp4",
+    "tags": [
+      "fast",
+      "warm-timbre",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 135.99917763157896,
+      "spectral_centroid_mean": 1547.4543024603004,
+      "spectral_centroid_std": 469.5777235906412,
+      "spectral_rolloff_mean": 2979.756044213328,
+      "zcr_mean": 0.06824693168375394,
+      "harm_perc_ratio": 1.9680019493733283,
+      "rms_mean": 0.11657845973968506,
+      "rms_std": 0.053419966250658035,
+      "duration_sec": 22.08
+    }
+  },
+  {
+    "filename": "045.mp4",
+    "tags": [
+      "fast",
+      "dark-timbre",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 151.99908088235293,
+      "spectral_centroid_mean": 1128.4710914516997,
+      "spectral_centroid_std": 222.82599046550715,
+      "spectral_rolloff_mean": 1786.2730160788383,
+      "zcr_mean": 0.06275325790975103,
+      "harm_perc_ratio": 3.093688034773349,
+      "rms_mean": 0.027758538722991943,
+      "rms_std": 0.033318664878606796,
+      "duration_sec": 5.589342403628118
+    }
+  },
+  {
+    "filename": "046.mp4",
+    "tags": [
+      "fast",
+      "warm-timbre",
+      "quiet",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 172.265625,
+      "spectral_centroid_mean": 1651.9334767128921,
+      "spectral_centroid_std": 355.3854093189171,
+      "spectral_rolloff_mean": 3451.72151064368,
+      "zcr_mean": 0.06277180786892901,
+      "harm_perc_ratio": 1.171354104319592,
+      "rms_mean": 0.018744593486189842,
+      "rms_std": 0.009685968048870564,
+      "duration_sec": 18.645351473922904
+    }
+  },
+  {
+    "filename": "047.mp4",
+    "tags": [
+      "fast",
+      "warm-timbre",
+      "loud",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 117.45383522727273,
+      "spectral_centroid_mean": 1672.294482704239,
+      "spectral_centroid_std": 339.0447588938962,
+      "spectral_rolloff_mean": 3202.6162241598163,
+      "zcr_mean": 0.08013668097195357,
+      "harm_perc_ratio": 1.5124709902462579,
+      "rms_mean": 0.18712618947029114,
+      "rms_std": 0.03466128557920456,
+      "duration_sec": 11.989342403628118
+    }
+  },
+  {
+    "filename": "048.mp4",
+    "tags": [
+      "medium-tempo",
+      "warm-timbre",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 99.38401442307692,
+      "spectral_centroid_mean": 1895.247855536445,
+      "spectral_centroid_std": 452.0213002850881,
+      "spectral_rolloff_mean": 4157.904659043874,
+      "zcr_mean": 0.07744997542425497,
+      "harm_perc_ratio": 1.8610019116709349,
+      "rms_mean": 0.12003415822982788,
+      "rms_std": 0.02591376192867756,
+      "duration_sec": 14.016009070294784
+    }
+  },
+  {
+    "filename": "049.mp4",
+    "tags": [
+      "medium-tempo",
+      "dark-timbre",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 83.35433467741936,
+      "spectral_centroid_mean": 1278.0763008689025,
+      "spectral_centroid_std": 230.07161030761293,
+      "spectral_rolloff_mean": 2256.3627673733617,
+      "zcr_mean": 0.06159333259828629,
+      "harm_perc_ratio": 2.832411827355006,
+      "rms_mean": 0.08675272762775421,
+      "rms_std": 0.01466408371925354,
+      "duration_sec": 11.498684807256236
+    }
+  },
+  {
+    "filename": "050.mp4",
+    "tags": [
+      "fast",
+      "dark-timbre",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 117.45383522727273,
+      "spectral_centroid_mean": 1327.3086513980268,
+      "spectral_centroid_std": 410.56659176575374,
+      "spectral_rolloff_mean": 2372.8001328765367,
+      "zcr_mean": 0.06381475730020492,
+      "harm_perc_ratio": 1.1611065935783393,
+      "rms_mean": 0.11946126073598862,
+      "rms_std": 0.030786603689193726,
+      "duration_sec": 5.653333333333333
+    }
+  },
+  {
+    "filename": "051.mp4",
+    "tags": [
+      "fast",
+      "warm-timbre",
+      "rhythmic",
+      "quiet",
+      "noisy",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 172.265625,
+      "spectral_centroid_mean": 2650.666930233426,
+      "spectral_centroid_std": 716.3193854543592,
+      "spectral_rolloff_mean": 5786.188285872781,
+      "zcr_mean": 0.12498988766642012,
+      "harm_perc_ratio": 0.15627972740463564,
+      "rms_mean": 0.011408057995140553,
+      "rms_std": 0.011225175112485886,
+      "duration_sec": 7.829342403628118
+    }
+  },
+  {
+    "filename": "052.mp4",
+    "tags": [
+      "fast",
+      "warm-timbre",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 112.34714673913044,
+      "spectral_centroid_mean": 1958.2320958150192,
+      "spectral_centroid_std": 451.52066824225045,
+      "spectral_rolloff_mean": 3961.8901455564196,
+      "zcr_mean": 0.10173483455882353,
+      "harm_perc_ratio": 2.269054843064551,
+      "rms_mean": 0.07482245564460754,
+      "rms_std": 0.05030570179224014,
+      "duration_sec": 10.261360544217688
+    }
+  },
+  {
+    "filename": "053.mp4",
+    "tags": [
+      "fast",
+      "warm-timbre",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 112.34714673913044,
+      "spectral_centroid_mean": 1669.4709215777368,
+      "spectral_centroid_std": 574.8908795384352,
+      "spectral_rolloff_mean": 3565.863137167008,
+      "zcr_mean": 0.0607389856557377,
+      "harm_perc_ratio": 3.301151532682608,
+      "rms_mean": 0.04949053376913071,
+      "rms_std": 0.026544274762272835,
+      "duration_sec": 5.653333333333333
+    }
+  },
+  {
+    "filename": "054.mp4",
+    "tags": [
+      "fast",
+      "warm-timbre",
+      "noisy",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 184.5703125,
+      "spectral_centroid_mean": 2475.5209424923314,
+      "spectral_centroid_std": 749.6327022799828,
+      "spectral_rolloff_mean": 4995.937181555707,
+      "zcr_mean": 0.12755527420948617,
+      "harm_perc_ratio": 0.7291485154488778,
+      "rms_mean": 0.050069697201251984,
+      "rms_std": 0.04779751971364021,
+      "duration_sec": 11.726122448979591
+    }
+  },
+  {
+    "filename": "055.mp4",
+    "tags": [
+      "fast",
+      "warm-timbre"
+    ],
+    "params": {
+      "tempo_bpm": 129.19921875,
+      "spectral_centroid_mean": 2104.0425172751893,
+      "spectral_centroid_std": 787.3976281022497,
+      "spectral_rolloff_mean": 4188.313642393868,
+      "zcr_mean": 0.10501179245283018,
+      "harm_perc_ratio": 1.4510666727118755,
+      "rms_mean": 0.06431035697460175,
+      "rms_std": 0.05190592259168625,
+      "duration_sec": 30.74326530612245
+    }
+  },
+  {
+    "filename": "056.mp4",
+    "tags": [
+      "fast",
+      "dark-timbre",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 172.265625,
+      "spectral_centroid_mean": 593.722545536088,
+      "spectral_centroid_std": 121.90761507268904,
+      "spectral_rolloff_mean": 784.0190686677631,
+      "zcr_mean": 0.02001218867481203,
+      "harm_perc_ratio": 3.027451714915033,
+      "rms_mean": 0.05485178902745247,
+      "rms_std": 0.018978755921125412,
+      "duration_sec": 3.0720181405895692
+    }
+  },
+  {
+    "filename": "057.mp4",
+    "tags": [
+      "medium-tempo",
+      "warm-timbre",
+      "quiet",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 103.359375,
+      "spectral_centroid_mean": 1639.5583867064536,
+      "spectral_centroid_std": 320.00403425783014,
+      "spectral_rolloff_mean": 4045.1134314903848,
+      "zcr_mean": 0.06482455261752136,
+      "harm_perc_ratio": 2.8878393822095725,
+      "rms_mean": 0.017552176490426064,
+      "rms_std": 0.002848246833309531,
+      "duration_sec": 10.858684807256235
+    }
+  },
+  {
+    "filename": "058.mp4",
+    "tags": [
+      "fast",
+      "warm-timbre",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 151.99908088235293,
+      "spectral_centroid_mean": 1585.3470871924485,
+      "spectral_centroid_std": 603.0198636646625,
+      "spectral_rolloff_mean": 3525.5745474747787,
+      "zcr_mean": 0.05297274852362205,
+      "harm_perc_ratio": 3.5882685810640425,
+      "rms_mean": 0.02908792532980442,
+      "rms_std": 0.01884627342224121,
+      "duration_sec": 11.776009070294785
+    }
+  },
+  {
+    "filename": "059.mp4",
+    "tags": [
+      "fast",
+      "warm-timbre",
+      "rhythmic",
+      "quiet",
+      "noisy"
+    ],
+    "params": {
+      "tempo_bpm": 117.45383522727273,
+      "spectral_centroid_mean": 1960.92068686858,
+      "spectral_centroid_std": 1034.0231930804289,
+      "spectral_rolloff_mean": 3324.054899894785,
+      "zcr_mean": 0.15357654677825078,
+      "harm_perc_ratio": 0.16924993845068725,
+      "rms_mean": 0.019225822761654854,
+      "rms_std": 0.022149179130792618,
+      "duration_sec": 60.0
+    }
+  },
+  {
+    "filename": "060.mp4",
+    "tags": [
+      "medium-tempo",
+      "dark-timbre",
+      "quiet",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 103.359375,
+      "spectral_centroid_mean": 982.8340671457081,
+      "spectral_centroid_std": 498.4117024356892,
+      "spectral_rolloff_mean": 1873.7825719321647,
+      "zcr_mean": 0.035129879409843204,
+      "harm_perc_ratio": 1.8243350623803953,
+      "rms_mean": 0.007885291241109371,
+      "rms_std": 0.005381728522479534,
+      "duration_sec": 26.645351473922904
+    }
+  },
+  {
+    "filename": "061.mp4",
+    "tags": [
+      "fast",
+      "warm-timbre",
+      "quiet"
+    ],
+    "params": {
+      "tempo_bpm": 129.19921875,
+      "spectral_centroid_mean": 1860.078866174928,
+      "spectral_centroid_std": 667.2763084382545,
+      "spectral_rolloff_mean": 3838.5309555951285,
+      "zcr_mean": 0.07187447090267028,
+      "harm_perc_ratio": 2.019350289627037,
+      "rms_mean": 0.015489835292100906,
+      "rms_std": 0.011154328472912312,
+      "duration_sec": 59.97977324263039
+    }
+  },
+  {
+    "filename": "062.mp4",
+    "tags": [
+      "fast",
+      "dark-timbre",
+      "quiet"
+    ],
+    "params": {
+      "tempo_bpm": 112.34714673913044,
+      "spectral_centroid_mean": 1066.470978175771,
+      "spectral_centroid_std": 568.2190113267739,
+      "spectral_rolloff_mean": 2043.983473644906,
+      "zcr_mean": 0.046699453064531736,
+      "harm_perc_ratio": 0.5269950023598581,
+      "rms_mean": 0.011728431098163128,
+      "rms_std": 0.011251638643443584,
+      "duration_sec": 60.0
+    }
+  },
+  {
+    "filename": "063.mp4",
+    "tags": [
+      "fast",
+      "dark-timbre",
+      "melodic",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 135.99917763157896,
+      "spectral_centroid_mean": 984.3688475475527,
+      "spectral_centroid_std": 244.95584349872186,
+      "spectral_rolloff_mean": 1789.1189925703484,
+      "zcr_mean": 0.02680163069486983,
+      "harm_perc_ratio": 9.505983373494146,
+      "rms_mean": 0.05853884294629097,
+      "rms_std": 0.02512013539671898,
+      "duration_sec": 15.146666666666667
+    }
+  },
+  {
+    "filename": "064.mp4",
+    "tags": [
+      "fast",
+      "dark-timbre",
+      "melodic",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 135.99917763157896,
+      "spectral_centroid_mean": 984.3688475475527,
+      "spectral_centroid_std": 244.95584349872186,
+      "spectral_rolloff_mean": 1789.1189925703484,
+      "zcr_mean": 0.02680163069486983,
+      "harm_perc_ratio": 9.505983373494146,
+      "rms_mean": 0.05853884294629097,
+      "rms_std": 0.02512013539671898,
+      "duration_sec": 15.146666666666667
+    }
+  },
+  {
+    "filename": "065.mp4",
+    "tags": [
+      "medium-tempo",
+      "dark-timbre",
+      "quiet",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 86.1328125,
+      "spectral_centroid_mean": 1349.8489317228357,
+      "spectral_centroid_std": 340.9418409672559,
+      "spectral_rolloff_mean": 2702.5502657700595,
+      "zcr_mean": 0.05251376340075155,
+      "harm_perc_ratio": 3.0140182902421033,
+      "rms_mean": 0.011945802718400955,
+      "rms_std": 0.0025636907666921616,
+      "duration_sec": 26.24
+    }
+  },
+  {
+    "filename": "066.mp4",
+    "tags": [
+      "fast",
+      "dark-timbre",
+      "melodic",
+      "quiet",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 198.76802884615384,
+      "spectral_centroid_mean": 678.7715677449384,
+      "spectral_centroid_std": 135.52816685490407,
+      "spectral_rolloff_mean": 1240.1425010279606,
+      "zcr_mean": 0.027710674798976608,
+      "harm_perc_ratio": 16.842901693282332,
+      "rms_mean": 0.00450487807393074,
+      "rms_std": 0.00284326309338212,
+      "duration_sec": 7.9360090702947845
+    }
+  },
+  {
+    "filename": "067.mp4",
+    "tags": [
+      "fast",
+      "dark-timbre",
+      "quiet"
+    ],
+    "params": {
+      "tempo_bpm": 117.45383522727273,
+      "spectral_centroid_mean": 897.4805679818204,
+      "spectral_centroid_std": 530.2929657322204,
+      "spectral_rolloff_mean": 1459.0495106605554,
+      "zcr_mean": 0.050651621154218264,
+      "harm_perc_ratio": 0.9410896834291539,
+      "rms_mean": 0.011393580585718155,
+      "rms_std": 0.007646466139703989,
+      "duration_sec": 60.0
+    }
+  },
+  {
+    "filename": "068.mp4",
+    "tags": [
+      "fast",
+      "warm-timbre",
+      "rhythmic"
+    ],
+    "params": {
+      "tempo_bpm": 112.34714673913044,
+      "spectral_centroid_mean": 1842.6574944681622,
+      "spectral_centroid_std": 1298.7255100764664,
+      "spectral_rolloff_mean": 3340.897722942073,
+      "zcr_mean": 0.09361068010791715,
+      "harm_perc_ratio": 0.34884523894397,
+      "rms_mean": 0.06826386600732803,
+      "rms_std": 0.05404925346374512,
+      "duration_sec": 59.96666666666667
+    }
+  },
+  {
+    "filename": "069.mp4",
+    "tags": [
+      "medium-tempo",
+      "warm-timbre",
+      "loud"
+    ],
+    "params": {
+      "tempo_bpm": 103.359375,
+      "spectral_centroid_mean": 1832.8513523281028,
+      "spectral_centroid_std": 858.0931113368588,
+      "spectral_rolloff_mean": 4345.155297256098,
+      "zcr_mean": 0.04655647351674409,
+      "harm_perc_ratio": 1.3170898583145274,
+      "rms_mean": 0.2686014175415039,
+      "rms_std": 0.12871886789798737,
+      "duration_sec": 59.95832199546485
+    }
+  },
+  {
+    "filename": "070.mp4",
+    "tags": [
+      "fast",
+      "warm-timbre",
+      "melodic"
+    ],
+    "params": {
+      "tempo_bpm": 172.265625,
+      "spectral_centroid_mean": 1503.4378414122832,
+      "spectral_centroid_std": 995.4992088673123,
+      "spectral_rolloff_mean": 3099.1056116615855,
+      "zcr_mean": 0.05282360022260937,
+      "harm_perc_ratio": 5.4911001246865,
+      "rms_mean": 0.14612674713134766,
+      "rms_std": 0.12172285467386246,
+      "duration_sec": 59.95827664399093
+    }
+  },
+  {
+    "filename": "071.mp4",
+    "tags": [
+      "fast",
+      "warm-timbre",
+      "melodic",
+      "loud"
+    ],
+    "params": {
+      "tempo_bpm": 117.45383522727273,
+      "spectral_centroid_mean": 1840.804812871436,
+      "spectral_centroid_std": 1317.3591185986802,
+      "spectral_rolloff_mean": 3717.111875952744,
+      "zcr_mean": 0.06659566456155633,
+      "harm_perc_ratio": 9.563267914844447,
+      "rms_mean": 0.17754782736301422,
+      "rms_std": 0.1795777678489685,
+      "duration_sec": 59.95827664399093
+    }
+  },
+  {
+    "filename": "072.mp4",
+    "tags": [
+      "fast",
+      "warm-timbre",
+      "loud"
+    ],
+    "params": {
+      "tempo_bpm": 184.5703125,
+      "spectral_centroid_mean": 2142.5185715913626,
+      "spectral_centroid_std": 1042.0044086054847,
+      "spectral_rolloff_mean": 4707.164038681402,
+      "zcr_mean": 0.07933464449041812,
+      "harm_perc_ratio": 3.450926746356542,
+      "rms_mean": 0.16811063885688782,
+      "rms_std": 0.11006352305412292,
+      "duration_sec": 59.95827664399093
+    }
+  },
+  {
+    "filename": "073.mp4",
+    "tags": [
+      "medium-tempo",
+      "dark-timbre",
+      "melodic"
+    ],
+    "params": {
+      "tempo_bpm": 95.703125,
+      "spectral_centroid_mean": 891.5831785395505,
+      "spectral_centroid_std": 512.5640004038223,
+      "spectral_rolloff_mean": 1557.6267149390244,
+      "zcr_mean": 0.034293487466124664,
+      "harm_perc_ratio": 36.82434333654202,
+      "rms_mean": 0.048411037772893906,
+      "rms_std": 0.021604377776384354,
+      "duration_sec": 59.96
+    }
+  },
+  {
+    "filename": "074.mp4",
+    "tags": [
+      "medium-tempo",
+      "dark-timbre",
+      "melodic"
+    ],
+    "params": {
+      "tempo_bpm": 95.703125,
+      "spectral_centroid_mean": 1254.1266605038086,
+      "spectral_centroid_std": 452.72335954868475,
+      "spectral_rolloff_mean": 2374.327309434259,
+      "zcr_mean": 0.04181361715121904,
+      "harm_perc_ratio": 8.57853022642581,
+      "rms_mean": 0.024909906089305878,
+      "rms_std": 0.00780821219086647,
+      "duration_sec": 59.989342403628115
+    }
+  },
+  {
+    "filename": "075.mp4",
+    "tags": [
+      "fast",
+      "warm-timbre",
+      "loud",
+      "noisy"
+    ],
+    "params": {
+      "tempo_bpm": 135.99917763157896,
+      "spectral_centroid_mean": 2527.7402706557727,
+      "spectral_centroid_std": 608.0635587999122,
+      "spectral_rolloff_mean": 4921.85607998485,
+      "zcr_mean": 0.13183240435057886,
+      "harm_perc_ratio": 2.4899789626805604,
+      "rms_mean": 0.22551806271076202,
+      "rms_std": 0.06905478984117508,
+      "duration_sec": 32.066802721088436
+    }
+  },
+  {
+    "filename": "076.mp4",
+    "tags": [
+      "medium-tempo",
+      "warm-timbre",
+      "melodic",
+      "loud"
+    ],
+    "params": {
+      "tempo_bpm": 78.30255681818181,
+      "spectral_centroid_mean": 1671.237406805806,
+      "spectral_centroid_std": 896.6319777610976,
+      "spectral_rolloff_mean": 3277.8195264862807,
+      "zcr_mean": 0.07838530324477352,
+      "harm_perc_ratio": 11.529058298746172,
+      "rms_mean": 0.19308724999427795,
+      "rms_std": 0.06186608970165253,
+      "duration_sec": 59.96666666666667
+    }
+  },
+  {
+    "filename": "077.mp4",
+    "tags": [
+      "medium-tempo",
+      "warm-timbre",
+      "loud"
+    ],
+    "params": {
+      "tempo_bpm": 92.28515625,
+      "spectral_centroid_mean": 2381.731340290832,
+      "spectral_centroid_std": 1009.4903332313711,
+      "spectral_rolloff_mean": 5197.038157393293,
+      "zcr_mean": 0.0877490366700542,
+      "harm_perc_ratio": 4.218084564304794,
+      "rms_mean": 0.2532287836074829,
+      "rms_std": 0.1103154644370079,
+      "duration_sec": 59.96
+    }
+  },
+  {
+    "filename": "078.mp4",
+    "tags": [
+      "medium-tempo",
+      "warm-timbre",
+      "loud"
+    ],
+    "params": {
+      "tempo_bpm": 95.703125,
+      "spectral_centroid_mean": 2178.3983228586244,
+      "spectral_centroid_std": 1033.076524286345,
+      "spectral_rolloff_mean": 4710.348585175305,
+      "zcr_mean": 0.09446096623354626,
+      "harm_perc_ratio": 1.4686760043068197,
+      "rms_mean": 0.22044344246387482,
+      "rms_std": 0.0994645208120346,
+      "duration_sec": 59.96666666666667
+    }
+  },
+  {
+    "filename": "079.mp4",
+    "tags": [
+      "medium-tempo",
+      "warm-timbre",
+      "loud",
+      "noisy"
+    ],
+    "params": {
+      "tempo_bpm": 95.703125,
+      "spectral_centroid_mean": 2760.7118434818713,
+      "spectral_centroid_std": 1072.3005309699427,
+      "spectral_rolloff_mean": 5888.183121773396,
+      "zcr_mean": 0.12132916620899238,
+      "harm_perc_ratio": 0.8783450902191067,
+      "rms_mean": 0.25269633531570435,
+      "rms_std": 0.13583272695541382,
+      "duration_sec": 39.61328798185941
+    }
+  },
+  {
+    "filename": "080.mp4",
+    "tags": [
+      "medium-tempo",
+      "warm-timbre"
+    ],
+    "params": {
+      "tempo_bpm": 107.666015625,
+      "spectral_centroid_mean": 2240.8624012712503,
+      "spectral_centroid_std": 1203.998164061068,
+      "spectral_rolloff_mean": 4295.96572503811,
+      "zcr_mean": 0.11996936096593108,
+      "harm_perc_ratio": 0.7578695879052689,
+      "rms_mean": 0.07853547483682632,
+      "rms_std": 0.045819565653800964,
+      "duration_sec": 59.96666666666667
+    }
+  },
+  {
+    "filename": "081.mp4",
+    "tags": [
+      "fast",
+      "warm-timbre",
+      "loud"
+    ],
+    "params": {
+      "tempo_bpm": 117.45383522727273,
+      "spectral_centroid_mean": 2190.16807992276,
+      "spectral_centroid_std": 1253.2938235048275,
+      "spectral_rolloff_mean": 4699.152653391769,
+      "zcr_mean": 0.07728832450154859,
+      "harm_perc_ratio": 3.420901396017593,
+      "rms_mean": 0.23858630657196045,
+      "rms_std": 0.128647580742836,
+      "duration_sec": 59.96
+    }
+  },
+  {
+    "filename": "082.mp4",
+    "tags": [
+      "fast",
+      "warm-timbre",
+      "loud"
+    ],
+    "params": {
+      "tempo_bpm": 184.5703125,
+      "spectral_centroid_mean": 2361.40286004903,
+      "spectral_centroid_std": 1131.6876231419626,
+      "spectral_rolloff_mean": 5333.027462842988,
+      "zcr_mean": 0.09611314514372822,
+      "harm_perc_ratio": 2.9153758726495766,
+      "rms_mean": 0.24375049769878387,
+      "rms_std": 0.1025008112192154,
+      "duration_sec": 59.95827664399093
+    }
+  },
+  {
+    "filename": "083.mp4",
+    "tags": [
+      "fast",
+      "warm-timbre",
+      "loud"
+    ],
+    "params": {
+      "tempo_bpm": 172.265625,
+      "spectral_centroid_mean": 2075.023021293232,
+      "spectral_centroid_std": 1062.545351066676,
+      "spectral_rolloff_mean": 4380.364543635671,
+      "zcr_mean": 0.07449171868950832,
+      "harm_perc_ratio": 2.4915290641362757,
+      "rms_mean": 0.19602082669734955,
+      "rms_std": 0.12017904967069626,
+      "duration_sec": 59.95827664399093
+    }
+  },
+  {
+    "filename": "084.mp4",
+    "tags": [
+      "fast",
+      "warm-timbre"
+    ],
+    "params": {
+      "tempo_bpm": 129.19921875,
+      "spectral_centroid_mean": 2072.3270873420115,
+      "spectral_centroid_std": 557.3105370158873,
+      "spectral_rolloff_mean": 4732.732112233231,
+      "zcr_mean": 0.09672581240321332,
+      "harm_perc_ratio": 3.4491050115173842,
+      "rms_mean": 0.1212322935461998,
+      "rms_std": 0.056300628930330276,
+      "duration_sec": 59.96666666666667
+    }
+  },
+  {
+    "filename": "085.mp4",
+    "tags": [
+      "slow",
+      "dark-timbre",
+      "quiet"
+    ],
+    "params": {
+      "tempo_bpm": 73.828125,
+      "spectral_centroid_mean": 1359.2886808396013,
+      "spectral_centroid_std": 563.693248798716,
+      "spectral_rolloff_mean": 2722.8835350957816,
+      "zcr_mean": 0.053335278395897835,
+      "harm_perc_ratio": 2.974119440734829,
+      "rms_mean": 0.006978755351155996,
+      "rms_std": 0.0031343353912234306,
+      "duration_sec": 60.0
+    }
+  },
+  {
+    "filename": "086.mp4",
+    "tags": [
+      "fast",
+      "dark-timbre",
+      "melodic"
+    ],
+    "params": {
+      "tempo_bpm": 129.19921875,
+      "spectral_centroid_mean": 1286.3241574926315,
+      "spectral_centroid_std": 456.31203579820993,
+      "spectral_rolloff_mean": 2481.6724936659493,
+      "zcr_mean": 0.05274779139657508,
+      "harm_perc_ratio": 12.999757448487395,
+      "rms_mean": 0.021310605108737946,
+      "rms_std": 0.008896692655980587,
+      "duration_sec": 60.0
+    }
+  },
+  {
+    "filename": "087.mp4",
+    "tags": [
+      "fast",
+      "warm-timbre",
+      "melodic",
+      "loud"
+    ],
+    "params": {
+      "tempo_bpm": 135.99917763157896,
+      "spectral_centroid_mean": 2009.1424212763761,
+      "spectral_centroid_std": 938.4105428256929,
+      "spectral_rolloff_mean": 4380.906416730183,
+      "zcr_mean": 0.05990358382936508,
+      "harm_perc_ratio": 6.1716156053968705,
+      "rms_mean": 0.29701393842697144,
+      "rms_std": 0.12029236555099487,
+      "duration_sec": 59.96666666666667
+    }
+  },
+  {
+    "filename": "088.mp4",
+    "tags": [
+      "fast",
+      "warm-timbre",
+      "melodic",
+      "loud"
+    ],
+    "params": {
+      "tempo_bpm": 161.4990234375,
+      "spectral_centroid_mean": 1928.849172425588,
+      "spectral_centroid_std": 1079.6506758812334,
+      "spectral_rolloff_mean": 4233.708674733231,
+      "zcr_mean": 0.07395712349980643,
+      "harm_perc_ratio": 8.904329649138756,
+      "rms_mean": 0.1509546935558319,
+      "rms_std": 0.04440773278474808,
+      "duration_sec": 59.96666666666667
+    }
+  },
+  {
+    "filename": "089.mp4",
+    "tags": [
+      "medium-tempo",
+      "warm-timbre",
+      "loud"
+    ],
+    "params": {
+      "tempo_bpm": 95.703125,
+      "spectral_centroid_mean": 2487.633150338686,
+      "spectral_centroid_std": 1073.7427167927008,
+      "spectral_rolloff_mean": 5301.757217035061,
+      "zcr_mean": 0.10271467739789004,
+      "harm_perc_ratio": 3.516363602600701,
+      "rms_mean": 0.25984030961990356,
+      "rms_std": 0.10757578164339066,
+      "duration_sec": 59.96
+    }
+  },
+  {
+    "filename": "090.mp4",
+    "tags": [
+      "medium-tempo",
+      "warm-timbre"
+    ],
+    "params": {
+      "tempo_bpm": 99.38401442307692,
+      "spectral_centroid_mean": 2138.12991762992,
+      "spectral_centroid_std": 949.7753777903531,
+      "spectral_rolloff_mean": 4841.227610518293,
+      "zcr_mean": 0.08520838626355014,
+      "harm_perc_ratio": 3.0680601880537672,
+      "rms_mean": 0.03714383393526077,
+      "rms_std": 0.03106028586626053,
+      "duration_sec": 59.95832199546485
+    }
+  },
+  {
+    "filename": "091.mp4",
+    "tags": [
+      "medium-tempo",
+      "warm-timbre",
+      "melodic"
+    ],
+    "params": {
+      "tempo_bpm": 99.38401442307692,
+      "spectral_centroid_mean": 1685.024360826208,
+      "spectral_centroid_std": 482.2249271550836,
+      "spectral_rolloff_mean": 4394.331761410362,
+      "zcr_mean": 0.0433022702810565,
+      "harm_perc_ratio": 10.263335218011237,
+      "rms_mean": 0.09345812350511551,
+      "rms_std": 0.027359601110219955,
+      "duration_sec": 60.0
+    }
+  },
+  {
+    "filename": "092.mp4",
+    "tags": [
+      "medium-tempo",
+      "dark-timbre",
+      "melodic",
+      "quiet",
+      "short-clip"
+    ],
+    "params": {
+      "tempo_bpm": 89.10290948275862,
+      "spectral_centroid_mean": 1082.303816922658,
+      "spectral_centroid_std": 426.97877747723095,
+      "spectral_rolloff_mean": 1943.7035917710627,
+      "zcr_mean": 0.047489115845264315,
+      "harm_perc_ratio": 12.241538671236889,
+      "rms_mean": 0.008697216399013996,
+      "rms_std": 0.008242948912084103,
+      "duration_sec": 10.518684807256236
+    }
+  },
+  {
+    "filename": "093.mp4",
+    "tags": [
+      "fast",
+      "warm-timbre"
+    ],
+    "params": {
+      "tempo_bpm": 129.19921875,
+      "spectral_centroid_mean": 1792.18591850572,
+      "spectral_centroid_std": 786.4733882155447,
+      "spectral_rolloff_mean": 3578.20752973527,
+      "zcr_mean": 0.07670342885303792,
+      "harm_perc_ratio": 0.9293434645983846,
+      "rms_mean": 0.044936273247003555,
+      "rms_std": 0.023526040837168694,
+      "duration_sec": 60.0
+    }
+  },
+  {
+    "filename": "094.mp4",
+    "tags": [
+      "medium-tempo",
+      "dark-timbre",
+      "melodic"
+    ],
+    "params": {
+      "tempo_bpm": 80.74951171875,
+      "spectral_centroid_mean": 1295.4712507045758,
+      "spectral_centroid_std": 323.0952331192003,
+      "spectral_rolloff_mean": 2419.4145367979636,
+      "zcr_mean": 0.0457693755442144,
+      "harm_perc_ratio": 9.892134274094767,
+      "rms_mean": 0.10096213966608047,
+      "rms_std": 0.04230682924389839,
+      "duration_sec": 60.0
+    }
+  },
+  {
+    "filename": "095.mp4",
+    "tags": [
+      "fast",
+      "dark-timbre",
+      "melodic",
+      "quiet"
+    ],
+    "params": {
+      "tempo_bpm": 143.5546875,
+      "spectral_centroid_mean": 1310.4017806025352,
+      "spectral_centroid_std": 664.4797083033795,
+      "spectral_rolloff_mean": 2620.146656331632,
+      "zcr_mean": 0.049192446304179564,
+      "harm_perc_ratio": 14.639782032103913,
+      "rms_mean": 0.01650964841246605,
+      "rms_std": 0.007670304272323847,
+      "duration_sec": 60.0
+    }
+  },
+  {
+    "filename": "096.mp4",
+    "tags": [
+      "fast",
+      "warm-timbre",
+      "melodic"
+    ],
+    "params": {
+      "tempo_bpm": 135.99917763157896,
+      "spectral_centroid_mean": 1811.1868496119998,
+      "spectral_centroid_std": 1038.774122152041,
+      "spectral_rolloff_mean": 3899.9356897865855,
+      "zcr_mean": 0.06839982880855594,
+      "harm_perc_ratio": 12.482559156611892,
+      "rms_mean": 0.051843658089637756,
+      "rms_std": 0.037831004709005356,
+      "duration_sec": 59.96666666666667
+    }
+  },
+  {
+    "filename": "097.mp4",
+    "tags": [
+      "fast",
+      "warm-timbre",
+      "loud"
+    ],
+    "params": {
+      "tempo_bpm": 117.45383522727273,
+      "spectral_centroid_mean": 2433.9460699131637,
+      "spectral_centroid_std": 911.5763059257836,
+      "spectral_rolloff_mean": 5596.627882050305,
+      "zcr_mean": 0.09243260471109176,
+      "harm_perc_ratio": 1.657468776159426,
+      "rms_mean": 0.17707721889019012,
+      "rms_std": 0.06779500842094421,
+      "duration_sec": 59.96
+    }
+  },
+  {
+    "filename": "098.mp4",
+    "tags": [
+      "fast",
+      "warm-timbre",
+      "melodic"
+    ],
+    "params": {
+      "tempo_bpm": 123.046875,
+      "spectral_centroid_mean": 1626.9227276930633,
+      "spectral_centroid_std": 976.1319811556533,
+      "spectral_rolloff_mean": 3421.2366615853657,
+      "zcr_mean": 0.06992346290650407,
+      "harm_perc_ratio": 18.7435694603915,
+      "rms_mean": 0.050554726272821426,
+      "rms_std": 0.02115342952311039,
+      "duration_sec": 59.96666666666667
+    }
+  },
+  {
+    "filename": "099.mp4",
+    "tags": [
+      "slow",
+      "dark-timbre",
+      "melodic"
+    ],
+    "params": {
+      "tempo_bpm": 67.99958881578948,
+      "spectral_centroid_mean": 1066.6292870232644,
+      "spectral_centroid_std": 341.8716923697263,
+      "spectral_rolloff_mean": 1891.8802267257643,
+      "zcr_mean": 0.047638789788119196,
+      "harm_perc_ratio": 22.7561057780884,
+      "rms_mean": 0.1046464741230011,
+      "rms_std": 0.03463843837380409,
+      "duration_sec": 60.0
+    }
+  },
+  {
+    "filename": "100.mp4",
+    "tags": [
+      "fast",
+      "dark-timbre",
+      "melodic"
+    ],
+    "params": {
+      "tempo_bpm": 129.19921875,
+      "spectral_centroid_mean": 1377.6918968435336,
+      "spectral_centroid_std": 823.8802164501228,
+      "spectral_rolloff_mean": 2631.062720386935,
+      "zcr_mean": 0.0548168146951958,
+      "harm_perc_ratio": 13.13641423411622,
+      "rms_mean": 0.022122373804450035,
+      "rms_std": 0.013203665614128113,
+      "duration_sec": 57.51469387755102
+    }
+  },
+  {
+    "filename": "101.mp4",
+    "tags": [
+      "fast",
+      "warm-timbre",
+      "melodic"
+    ],
+    "params": {
+      "tempo_bpm": 112.34714673913044,
+      "spectral_centroid_mean": 1849.7116760224872,
+      "spectral_centroid_std": 998.2141625913695,
+      "spectral_rolloff_mean": 4127.905868902439,
+      "zcr_mean": 0.05816955211962834,
+      "harm_perc_ratio": 28.626737506452393,
+      "rms_mean": 0.06184648722410202,
+      "rms_std": 0.040439825505018234,
+      "duration_sec": 59.96666666666667
+    }
+  },
+  {
+    "filename": "102.mp4",
+    "tags": [
+      "fast",
+      "warm-timbre"
+    ],
+    "params": {
+      "tempo_bpm": 123.046875,
+      "spectral_centroid_mean": 1922.539283600952,
+      "spectral_centroid_std": 1227.9121290624798,
+      "spectral_rolloff_mean": 3778.6519864710367,
+      "zcr_mean": 0.08086187028164925,
+      "harm_perc_ratio": 1.4830168795645537,
+      "rms_mean": 0.03266942873597145,
+      "rms_std": 0.019312331452965736,
+      "duration_sec": 59.95827664399093
+    }
+  }
+]

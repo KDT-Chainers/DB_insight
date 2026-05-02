@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useScale } from '../context/ScaleContext'
 import { API_BASE } from '../api'
 import WindowControls from '../components/WindowControls'
@@ -10,6 +10,62 @@ export default function Settings() {
   const [cloudSync, setCloudSync] = useState(true)
   const [neuralFeedback, setNeuralFeedback] = useState(false)
   const { scale, setScale, MIN_SCALE, MAX_SCALE, STEP } = useScale()
+
+  // ── BGM API 스위치 ───────────────────────────────────────
+  const [bgmStatus, setBgmStatus] = useState(null)
+  const [bgmHost, setBgmHost] = useState('')
+  const [bgmKey, setBgmKey] = useState('')
+  const [bgmSecret, setBgmSecret] = useState('')
+  const [bgmTesting, setBgmTesting] = useState(false)
+  const [bgmSyncing, setBgmSyncing] = useState(false)
+  const [bgmMsg, setBgmMsg] = useState('')
+
+  const refreshBgmStatus = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/bgm/api_status`)
+      if (res.ok) {
+        const d = await res.json()
+        setBgmStatus(d)
+        setBgmHost(d.host || '')
+      }
+    } catch { /* 백엔드 비동작 시 무시 */ }
+  }, [])
+  useEffect(() => { refreshBgmStatus() }, [refreshBgmStatus])
+
+  const updateBgmApi = async (patch) => {
+    setBgmMsg('')
+    try {
+      const res = await fetch(`${API_BASE}/api/bgm/api_toggle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      })
+      const d = await res.json()
+      setBgmStatus(d)
+      setBgmHost(d.host || '')
+      // 키 입력 필드는 보안상 패치 후 비움 (마스킹 표시는 status로 확인)
+      if (patch.access_key !== undefined) setBgmKey('')
+      if (patch.access_secret !== undefined) setBgmSecret('')
+      setBgmMsg(`설정 갱신: api_enabled=${d.api_enabled}`)
+    } catch (e) {
+      setBgmMsg(`갱신 실패: ${e.message}`)
+    }
+  }
+
+  const handleSyncCatalog = async () => {
+    setBgmSyncing(true); setBgmMsg('카탈로그 동기화 중...')
+    try {
+      const res = await fetch(`${API_BASE}/api/bgm/catalog_sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ only_missing: true }),
+      })
+      const d = await res.json()
+      if (d.error) setBgmMsg(`실패: ${d.error}`)
+      else setBgmMsg(`완료: ${d.synced}곡 메타 보강`)
+    } catch (e) { setBgmMsg(`실패: ${e.message}`) }
+    finally { setBgmSyncing(false) }
+  }
 
   const [modalOpen, setModalOpen] = useState(false)
   const [currentPw, setCurrentPw] = useState('')
@@ -167,6 +223,124 @@ export default function Settings() {
                       </div>
                     ))}
                   </div>
+                </div>
+              </section>
+
+              {/* BGM 검색 — 외부 API 스위치 */}
+              <section className="glass-panel p-6 rounded-xl border border-pink-500/20 bg-pink-500/5 relative overflow-hidden">
+                <div className="absolute -right-16 -bottom-16 w-48 h-48 bg-pink-500/10 blur-[60px] rounded-full" />
+                <div className="flex items-center gap-2 mb-5">
+                  <span className="material-symbols-outlined text-pink-400">music_note</span>
+                  <span className="text-sm font-manrope uppercase tracking-[0.2em] text-pink-400 font-bold">BGM 검색</span>
+                  <div className="h-px flex-grow bg-pink-500/20" />
+                </div>
+                <div className="space-y-4 relative z-10">
+                  <p className="text-sm text-on-surface-variant">
+                    기본은 로컬 모델 (Chromaprint + CLAP)로 검색합니다. 외부 ACRCloud API를 켜면 메타데이터 보강 및
+                    fallback으로 이용할 수 있습니다.
+                  </p>
+
+                  {/* 마스터 토글 */}
+                  <div className="p-4 rounded-xl bg-surface-container-low border border-outline-variant/10 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-on-surface">외부 음원 인식 API 사용</p>
+                      <p className="text-xs text-on-surface-variant mt-0.5">
+                        OFF 상태에서는 외부 호출이 0건이며 로컬 모델만 사용합니다.
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => updateBgmApi({ api_enabled: !(bgmStatus?.api_enabled) })}
+                      className={`shrink-0 w-10 h-5 rounded-full relative cursor-pointer p-1 transition-colors duration-300
+                        ${bgmStatus?.api_enabled ? 'bg-pink-400/40' : 'bg-surface-container-highest'}`}
+                    >
+                      <div className={`w-3 h-3 rounded-full absolute top-1 transition-all
+                        ${bgmStatus?.api_enabled ? 'bg-pink-400 right-1' : 'bg-outline left-1'}`} />
+                    </button>
+                  </div>
+
+                  {/* API 활성 시 키 입력 + 액션 */}
+                  {bgmStatus?.api_enabled && (
+                    <div className="space-y-3 pl-3 border-l-2 border-pink-500/30">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <input
+                          type="text"
+                          placeholder="ACR Host (예: identify-eu-west-1.acrcloud.com)"
+                          value={bgmHost}
+                          onChange={(e) => setBgmHost(e.target.value)}
+                          className="bg-surface-container-high border border-outline-variant/30 rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:border-pink-400/60 col-span-1 sm:col-span-3"
+                        />
+                        <input
+                          type="text"
+                          placeholder={bgmStatus?.access_key_set ? 'access_key (저장됨, 변경 시 입력)' : 'access_key'}
+                          value={bgmKey}
+                          onChange={(e) => setBgmKey(e.target.value)}
+                          className="bg-surface-container-high border border-outline-variant/30 rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:border-pink-400/60"
+                        />
+                        <input
+                          type="password"
+                          placeholder={bgmStatus?.access_secret_set ? 'access_secret (저장됨)' : 'access_secret'}
+                          value={bgmSecret}
+                          onChange={(e) => setBgmSecret(e.target.value)}
+                          className="bg-surface-container-high border border-outline-variant/30 rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:border-pink-400/60"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => updateBgmApi({
+                            host: bgmHost,
+                            ...(bgmKey ? { access_key: bgmKey } : {}),
+                            ...(bgmSecret ? { access_secret: bgmSecret } : {}),
+                          })}
+                          className="px-4 py-2 rounded-lg bg-pink-500/20 text-pink-300 border border-pink-400/40 text-sm font-bold hover:bg-pink-500/30 transition"
+                        >
+                          저장
+                        </button>
+                      </div>
+
+                      <div className="flex items-center gap-2 text-xs text-on-surface-variant">
+                        <span className="material-symbols-outlined text-base">
+                          {bgmStatus?.api_configured ? 'check_circle' : 'error'}
+                        </span>
+                        {bgmStatus?.api_configured
+                          ? '자격증명 등록됨'
+                          : '자격증명 미등록 — 키 입력 후 저장하세요'}
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          disabled={!bgmStatus?.api_configured || bgmSyncing}
+                          onClick={handleSyncCatalog}
+                          className="px-4 py-2 rounded-full bg-gradient-to-r from-pink-500 to-rose-500 text-white text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed hover:shadow-lg hover:shadow-pink-500/30 transition"
+                        >
+                          {bgmSyncing ? '동기화 중...' : '음원 카탈로그 동기화 (102곡)'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => updateBgmApi({
+                            fallback_to_local: !(bgmStatus?.fallback_to_local),
+                          })}
+                          className="px-4 py-2 rounded-full bg-white/5 border border-outline-variant/30 text-on-surface text-sm font-bold hover:bg-white/10 transition"
+                        >
+                          로컬 fallback: {bgmStatus?.fallback_to_local ? 'ON' : 'OFF'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => updateBgmApi({
+                            auto_enrich_catalog: !(bgmStatus?.auto_enrich),
+                          })}
+                          className="px-4 py-2 rounded-full bg-white/5 border border-outline-variant/30 text-on-surface text-sm font-bold hover:bg-white/10 transition"
+                        >
+                          자동 메타 보강: {bgmStatus?.auto_enrich ? 'ON' : 'OFF'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {bgmMsg && (
+                    <div className="text-xs text-on-surface-variant px-2 py-1 bg-white/5 rounded">
+                      {bgmMsg}
+                    </div>
+                  )}
                 </div>
               </section>
 

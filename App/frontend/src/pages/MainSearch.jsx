@@ -15,6 +15,7 @@ const TYPE_META = {
   audio: { icon: 'volume_up',   color: 'text-amber-400',   label: '음성',   grad: 'from-[#78350f] to-[#92400e]' },
   movie: { icon: 'movie',       color: 'text-[#ac8aff]',   label: '동영상', grad: 'from-[#4c1d95] to-[#5b21b6]' },
   music: { icon: 'volume_up',   color: 'text-amber-400',   label: '음성',   grad: 'from-[#78350f] to-[#92400e]' },
+  bgm:   { icon: 'music_note',  color: 'text-pink-400',    label: 'BGM',    grad: 'from-[#831843] to-[#9d174d]' },
 }
 const getTypeMeta = (t) =>
   TYPE_META[t] ?? { icon: 'insert_drive_file', color: 'text-on-surface-variant', label: t ?? '파일', grad: 'from-[#1c253e] to-[#263354]' }
@@ -90,21 +91,76 @@ async function searchByImage(file, topK = 30) {
   }))
 }
 
+// ── BGM 결과 행 → MainSearch 결과 카드 형식 변환 ──────────
+function _mapBgmRow(r) {
+  const title  = r.acr_title  || r.guess_title  || (r.filename || '').replace(/\.[^.]+$/, '')
+  const artist = r.acr_artist || r.guess_artist || ''
+  const conf   = r.confidence ?? r.score ?? 0
+  return {
+    file_path:      r.filename,                   // BGM은 RAW_BGM_DIR 내부 — preview는 /api/bgm/file 사용
+    file_name:      r.filename,
+    file_type:      'bgm',
+    confidence:     conf,
+    similarity:     conf,
+    dense:          r.dense ?? r.score ?? conf,
+    snippet:        artist ? `${artist} · ${title}` : title,
+    preview_url:    null,
+    segments:       r.segments || [],             // [{start, end, score, label}]
+    bgm_filename:   r.filename,
+    bgm_artist:     artist,
+    bgm_title:      title,
+    bgm_tags:       r.tags || [],
+    bgm_duration:   r.duration ?? 0,
+    bgm_acr:        Boolean(r.acr_artist || r.acr_title),
+    bgm_top_segment: r.top_segment || null,
+    trichef_domain: 'bgm',
+  }
+}
+
+async function searchBgm(query, topK = 20) {
+  const res = await fetch(`${API_BASE}/api/bgm/search`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query, top_k: topK }),
+  })
+  if (!res.ok) {
+    // BGM 인덱스가 없거나 엔진 미준비여도 일반 검색은 계속되도록 빈 배열 반환
+    return []
+  }
+  const data = await res.json()
+  if (data.error) return []
+  return (data.results ?? []).map(_mapBgmRow)
+}
+
 // ── 검색 API ────────────────────────────────────────────
 async function searchFiles(query, topK = 20, type = '') {
+  // BGM 단독 도메인일 때는 /api/bgm/search 만 호출
+  if (type === 'bgm') {
+    return await searchBgm(query, topK)
+  }
+
   const typeQ = type ? `&type=${encodeURIComponent(type)}` : ''
-  const res = await fetch(`${API_BASE}/api/search?q=${encodeURIComponent(query)}&top_k=${topK}${typeQ}`)
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  const data = await res.json()
-  if (data.error) throw new Error(data.error)
-  const results = data.results ?? []
-  // confidence 정규화: confidence 없으면 similarity 사용
-  return results.map(r => ({
-    ...r,
-    confidence: r.confidence ?? r.similarity ?? 0,
-    similarity:  r.similarity  ?? r.confidence ?? 0,
-    segments:    r.segments    ?? [],
-  }))
+  const generalP = fetch(`${API_BASE}/api/search?q=${encodeURIComponent(query)}&top_k=${topK}${typeQ}`)
+    .then(async (res) => {
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json()
+      if (data.error) throw new Error(data.error)
+      return (data.results ?? []).map(r => ({
+        ...r,
+        confidence: r.confidence ?? r.similarity ?? 0,
+        similarity:  r.similarity  ?? r.confidence ?? 0,
+        segments:    r.segments    ?? [],
+      }))
+    })
+
+  // 도메인 필터가 비어 있을 때(전체 검색)에만 BGM도 병합
+  const bgmP = type === '' ? searchBgm(query, Math.max(5, Math.floor(topK / 2))) : Promise.resolve([])
+
+  const [general, bgm] = await Promise.all([generalP, bgmP.catch(() => [])])
+  // BGM은 confidence 내림차순으로 일반 결과 사이에 자연 병합
+  const merged = [...general, ...bgm]
+  merged.sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))
+  return merged
 }
 
 async function openFile(filePath) {
@@ -127,8 +183,114 @@ function avStreamUrl(result) {
   return `${API_BASE}/api/admin/file?domain=${domain}&id=${encodeURIComponent(result.file_path)}`
 }
 
+// ── 한↔영 양방향 사전 (location_resolver.py 와 동기화) ────
+const KO_EN_BIDICT = {
+  '취업':   ['employment', 'employ', 'job', 'hire', 'career'],
+  '교육':   ['education', 'educational', 'learning', 'training'],
+  '학습':   ['learning', 'study', 'studying'],
+  '분석':   ['analysis', 'analytical'],
+  '통계':   ['statistics', 'statistical'],
+  '보고서': ['report', 'yearbook'],
+  '예산':   ['budget', 'fiscal'],
+  '정책':   ['policy', 'policies'],
+  '기술':   ['technology', 'technical'],
+  '연구':   ['research', 'study'],
+  '회의':   ['meeting', 'conference'],
+  '환경':   ['environment', 'environmental'],
+  '사람':   ['person', 'people'],
+  '정보':   ['information'],
+  '서비스': ['service'],
+  '산업':   ['industry', 'industrial'],
+  '건강':   ['health'],
+  '개발':   ['development', 'develop'],
+  '관리':   ['management', 'manage'],
+  '운영':   ['operation'],
+  '투자':   ['investment', 'invest'],
+  '지원':   ['support', 'subsidy'],
+  '기업':   ['company', 'corporate', 'enterprise'],
+  '시장':   ['market'],
+  '데이터': ['data'],
+  '인공지능': ['ai', 'artificial intelligence'],
+  '보안':   ['security'],
+  '데이터센터': ['data center', 'datacenter'],
+}
+
+function expandQueryTokens(query) {
+  if (!query) return []
+  const raw = (query.match(/[\w가-힣]+/g) || [])
+    .map(t => t.toLowerCase())
+    .filter(t => t.length >= 2)
+  const tokens = [...new Set(raw)]
+  // 양방향 확장
+  const reverse = {}
+  Object.entries(KO_EN_BIDICT).forEach(([ko, ens]) => {
+    ens.forEach(en => {
+      reverse[en.toLowerCase()] = (reverse[en.toLowerCase()] || []).concat(ko)
+    })
+  })
+  const out = new Set(tokens)
+  tokens.forEach(t => {
+    (KO_EN_BIDICT[t] || []).forEach(en => out.add(en.toLowerCase()))
+    ;(reverse[t] || []).forEach(ko => out.add(ko))
+  })
+  return [...out]
+}
+
+// CLAP cosine score → 사용자 친화 정규화 (0.55+ ≈ 100%)
+// CLAP 의 일반적 분포: 0.2~0.55 대부분, 0.6+ 매우 강한 매칭
+function normalizeMatchScore(s) {
+  const x = Math.max(0, Number(s) || 0)
+  if (x <= 0.2)  return (x / 0.2) * 0.30                          // 0~30%
+  if (x <= 0.4)  return 0.30 + (x - 0.2) / 0.2 * 0.35              // 30~65%
+  if (x <= 0.55) return 0.65 + (x - 0.4) / 0.15 * 0.30             // 65~95%
+  return Math.min(1.0, 0.95 + (x - 0.55) / 0.15 * 0.05)             // 95~100%
+}
+
+// 별점 + 백분율 — "★★★★☆ 87%"
+function ScoreStars({ score, className = '' }) {
+  const norm = normalizeMatchScore(score)
+  const pct = Math.round(norm * 100)
+  const fillCount = Math.max(0, Math.min(5, Math.round(norm * 5)))
+  const stars = '★'.repeat(fillCount) + '☆'.repeat(5 - fillCount)
+  return (
+    <span className={`inline-flex items-center gap-1 ${className}`}>
+      <span className="text-yellow-400 font-mono tracking-tighter">{stars}</span>
+      <span className="font-mono text-on-surface-variant">{pct}%</span>
+    </span>
+  )
+}
+
+// 검색어 토큰을 텍스트에서 찾아 <mark> 로 감싸기 (React fragments)
+function HighlightedText({ text, query, className = '' }) {
+  if (!text) return null
+  const tokens = expandQueryTokens(query)
+  if (!tokens.length) return <>{text}</>
+  // 길이 내림차순 (긴 토큰 우선 매칭)
+  const sorted = [...tokens].sort((a, b) => b.length - a.length)
+  const escaped = sorted.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+  const re = new RegExp(`(${escaped.join('|')})`, 'gi')
+  const parts = String(text).split(re)
+  return (
+    <span className={className}>
+      {parts.map((p, i) => {
+        if (!p) return null
+        const lower = p.toLowerCase()
+        const isMatch = tokens.some(t => lower === t)
+        if (isMatch) {
+          return (
+            <mark key={i} className="bg-yellow-400/35 text-yellow-100 px-0.5 rounded font-semibold">
+              {p}
+            </mark>
+          )
+        }
+        return <span key={i}>{p}</span>
+      })}
+    </span>
+  )
+}
+
 // ── 결과 카드 (admin.html card / avCard 구조 대응) ────────
-function ResultCard({ result, rank, onClick, securityMode = false }) {
+function ResultCard({ result, rank, onClick, securityMode = false, query = '' }) {
   const isAV       = result.file_type === 'video' || result.file_type === 'audio'
   const hasPreview = (result.file_type === 'image' || result.file_type === 'doc') && result.preview_url
   const [imgError, setImgError] = useState(false)
@@ -276,7 +438,7 @@ function ResultCard({ result, rank, onClick, securityMode = false }) {
       {/* 바디 */}
       <div className="p-3 flex flex-col gap-2 flex-1 text-[#e2e8f0]">
 
-        {/* 배지 */}
+        {/* 1. 도메인 배지 */}
         <div className="flex gap-1 flex-wrap">
           <span className={`text-[10px] px-2 py-0.5 rounded-full border ${DOMAIN_CLS[domainLabel] ?? 'bg-[#0b1220] text-[#64748b] border-[#334155]'}`}>
             {domainLabel}
@@ -288,16 +450,7 @@ function ResultCard({ result, rank, onClick, securityMode = false }) {
           )}
         </div>
 
-        {/* 파일명 + 위치 배지 (페이지/타임코드) */}
-        <div className="flex items-start gap-1.5">
-          <div className="font-semibold text-[13px] text-[#f1f5f9] break-all flex-1">{result.file_name}</div>
-          <LocationBadge location={result.location} fileType={result.file_type} />
-        </div>
-
-        {/* 경로 */}
-        <div className="text-[11px] text-[#64748b] break-all font-mono">{result.file_path}</div>
-
-        {/* 핵심 3지표 */}
+        {/* 2. 핵심 3지표 (요청에 따라 도메인 배지 바로 아래로 이동) */}
         <div className="grid grid-cols-3 gap-1.5">
           {[
             { label: '신뢰도', value: `${confPct}%`, cls: 'text-[#10b981]' },
@@ -310,6 +463,17 @@ function ResultCard({ result, rank, onClick, securityMode = false }) {
             </div>
           ))}
         </div>
+
+        {/* 3. 파일명 + 위치 배지 (페이지/타임코드) */}
+        <div className="flex items-start gap-1.5">
+          <div className="font-semibold text-[13px] text-[#f1f5f9] break-all flex-1">
+            <HighlightedText text={result.file_name} query={query} />
+          </div>
+          <LocationBadge location={result.location} fileType={result.file_type} />
+        </div>
+
+        {/* 4. 경로 */}
+        <div className="text-[11px] text-[#64748b] break-all font-mono">{result.file_path}</div>
 
         {/* AV: 상위 구간 재생 + 구간 목록 */}
         {isAV && segments.length > 0 && (() => {
@@ -334,8 +498,10 @@ function ResultCard({ result, rank, onClick, securityMode = false }) {
                     <button key={i} onClick={() => seekTo(t0)}
                       className="flex items-center gap-2 px-2 py-1 bg-[#0b1220] border border-[#334155] rounded text-[11px] overflow-hidden hover:border-[#059669] hover:bg-[#0f2040] text-left w-full">
                       <span className="text-[#7dd3fc] font-mono font-semibold whitespace-nowrap min-w-[112px]">{fmtTime(t0)} ~ {fmtTime(t1)}</span>
-                      <span className="text-[#10b981] font-mono whitespace-nowrap">s={sc.toFixed(3)}</span>
-                      <span className="text-[#94a3b8] flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{preview}</span>
+                      <ScoreStars score={sc} className="whitespace-nowrap" />
+                      <span className="text-[#94a3b8] flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
+                        <HighlightedText text={preview} query={query} />
+                      </span>
                     </button>
                   )
                 })}
@@ -344,11 +510,150 @@ function ResultCard({ result, rank, onClick, securityMode = false }) {
           )
         })()}
 
-        {/* 이미지·문서: 스니펫 */}
-        {!isAV && result.snippet && (
-          <div className="text-[12px] text-[#cbd5e1] bg-[#0b1220] px-2 py-2 rounded border border-[#334155] max-h-[120px] overflow-auto whitespace-pre-wrap">
-            {result.snippet}
+        {/* BGM: 미니 플레이어 + 메타 (artist · BPM · tags) + 세그먼트 timestamp */}
+        {result.file_type === 'bgm' && (() => {
+          // useRef 는 hooks 규칙상 컴포넌트 최상단에만 가능 — id 기반 DOM 조회로 우회
+          const audioId = `bgm-audio-${rank}-${(result.bgm_filename || result.file_name || '').replace(/[^\w]/g, '_')}`
+          const seekBgm = (sec) => {
+            const a = document.getElementById(audioId)
+            if (!a) return
+            try {
+              a.currentTime = sec
+              a.play().catch(() => {})
+            } catch (_) {}
+          }
+          return (
+          <div className="space-y-2" onClick={e => e.stopPropagation()}>
+            <div className="bg-pink-500/5 border border-pink-500/20 rounded-md p-2">
+              <audio
+                id={audioId}
+                src={`${API_BASE}/api/bgm/file?id=${encodeURIComponent(result.bgm_filename || result.file_name)}`}
+                controls preload="metadata"
+                className="w-full h-7" style={{ maxHeight: '28px' }}
+              />
+              <div className="flex flex-wrap items-center gap-1.5 mt-1.5 text-[11px]">
+                {result.bgm_artist && (
+                  <span className="text-pink-300 font-bold">
+                    <HighlightedText text={result.bgm_artist} query={query} />
+                  </span>
+                )}
+                {result.bgm_artist && result.bgm_title && (
+                  <span className="text-[#64748b]">·</span>
+                )}
+                {result.bgm_title && (
+                  <span className="text-on-surface">
+                    <HighlightedText text={result.bgm_title} query={query} />
+                  </span>
+                )}
+                {result.bgm_duration > 0 && (
+                  <>
+                    <span className="text-[#64748b]">·</span>
+                    <span className="text-[#94a3b8] font-mono">{Math.round(result.bgm_duration)}s</span>
+                  </>
+                )}
+                {result.bgm_acr && (
+                  <span className="px-1.5 py-0.5 rounded-full text-[9px] bg-emerald-500/20 text-emerald-300 font-bold">
+                    ACR
+                  </span>
+                )}
+              </div>
+              {Array.isArray(result.bgm_tags) && result.bgm_tags.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1.5">
+                  {result.bgm_tags.slice(0, 5).map((t, i) => (
+                    <span key={i} className="text-[10px] px-1.5 py-0.5 rounded-full bg-pink-500/10 text-pink-300/80 border border-pink-500/20">
+                      {t}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {/* 세그먼트 timestamp — 검색어와 부합하는 구간 */}
+              {Array.isArray(result.segments) && result.segments.length > 0 && (
+                <div className="mt-2 pt-2 border-t border-pink-500/15">
+                  <div className="text-[10px] text-pink-300/80 font-bold uppercase tracking-wide mb-1">
+                    검색어 부합 구간
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    {result.segments.slice(0, 5).map((s, i) => (
+                      <button key={i} type="button"
+                        onClick={() => seekBgm(s.start)}
+                        className="flex items-center gap-2 px-2 py-1 bg-pink-500/5 border border-pink-500/20 rounded text-[11px] hover:bg-pink-500/15 hover:border-pink-400/40 transition text-left">
+                        <span className="material-symbols-outlined text-xs text-pink-300">play_arrow</span>
+                        <span className="font-mono font-semibold text-pink-200 min-w-[88px]">{s.label}</span>
+                        <ScoreStars score={s.score} />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
+          )
+        })()}
+
+        {/* 5-A. Doc — 페이지/줄 + 매칭 줄 텍스트 (검색어 하이라이트) */}
+        {!isAV && result.file_type === 'doc' && (result.snippet || result.location?.snippet) && (
+          <div className="text-[12px] text-[#cbd5e1] bg-[#0b1220] px-2 py-2 rounded border border-[#334155] max-h-[160px] overflow-auto whitespace-pre-wrap">
+            <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
+              {result.location?.page_label && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#85adff]/20 text-[#85adff] font-bold">
+                  {result.location.page_label}
+                </span>
+              )}
+              {result.location?.line_label && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#85adff]/20 text-[#85adff] font-bold">
+                  {result.location.line_label}
+                </span>
+              )}
+              {result.location?.caption && !result.location?.line_label && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold">
+                  캡션
+                </span>
+              )}
+            </div>
+            <HighlightedText
+              text={result.location?.snippet || result.snippet}
+              query={query}
+            />
+          </div>
+        )}
+
+        {/* 5-B. Image — 캡션 (한줄 정리/상세 정리) + 검색어 하이라이트 */}
+        {!isAV && result.file_type === 'image' && (
+          (result.snippet || result.location?.caption || result.location?.title || result.location?.tagline || result.location?.synopsis) && (
+            <div className="text-[12px] text-[#cbd5e1] bg-[#0b1220] px-2 py-2 rounded border border-[#334155] max-h-[200px] overflow-auto space-y-1.5">
+              {result.location?.title && (
+                <div>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold mr-1.5">
+                    제목
+                  </span>
+                  <HighlightedText text={result.location.title} query={query} />
+                </div>
+              )}
+              {result.location?.tagline && (
+                <div>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold mr-1.5">
+                    한줄
+                  </span>
+                  <HighlightedText text={result.location.tagline} query={query} />
+                </div>
+              )}
+              {result.location?.synopsis && (
+                <div>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold mr-1.5">
+                    상세
+                  </span>
+                  <HighlightedText text={result.location.synopsis} query={query} />
+                </div>
+              )}
+              {/* fallback — title/tagline/synopsis 없을 때 기존 캡션/스니펫 */}
+              {!result.location?.title && !result.location?.tagline && !result.location?.synopsis && (
+                <HighlightedText
+                  text={result.snippet || result.location?.caption}
+                  query={query}
+                />
+              )}
+            </div>
+          )
         )}
       </div>
     </div>
@@ -491,6 +796,14 @@ export default function MainSearch() {
   const [imageSearchActive, setImageSearchActive] = useState(false)
   const [isDraggingImage, setIsDraggingImage] = useState(false)
 
+  // BGM 식별 — 모달 + 업로드 + 결과
+  const bgmInputRef = useRef(null)
+  const [bgmModalOpen, setBgmModalOpen]     = useState(false)
+  const [bgmFile, setBgmFile]                = useState(null)
+  const [bgmIdentifying, setBgmIdentifying]  = useState(false)
+  const [bgmIdentifyResult, setBgmIdentifyResult] = useState(null)
+  const [isDraggingBgm, setIsDraggingBgm]    = useState(false)
+
   // home → results 애니메이션
   const [flyStyle, setFlyStyle] = useState(null)
   const [homeExiting, setHomeExiting] = useState(false)
@@ -581,6 +894,40 @@ export default function MainSearch() {
       setImageSearchActive(false)
     }
   }, [imageSearchPreviewUrl])
+
+  // ── BGM 식별 (mp4 업로드) ─────────────────────────────────
+  const handleBgmFileSelect = useCallback((file) => {
+    if (!file) return
+    setBgmFile(file)
+    setBgmIdentifyResult(null)
+  }, [])
+
+  const closeBgmModal = useCallback((reset = false) => {
+    setBgmModalOpen(false)
+    if (reset) {
+      setBgmFile(null)
+      setBgmIdentifyResult(null)
+      setIsDraggingBgm(false)
+    }
+  }, [])
+
+  const handleBgmIdentify = useCallback(async (file) => {
+    if (!file) return
+    setBgmIdentifying(true)
+    setBgmIdentifyResult(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('top_k', '5')
+      const res = await fetch(`${API_BASE}/api/bgm/identify`, { method: 'POST', body: fd })
+      const data = await res.json()
+      setBgmIdentifyResult(data)
+    } catch (e) {
+      setBgmIdentifyResult({ error: e.message || 'BGM 식별 실패' })
+    } finally {
+      setBgmIdentifying(false)
+    }
+  }, [])
 
   // 이미지 검색 실행
   const handleImageSearch = useCallback(async (file) => {
@@ -765,7 +1112,10 @@ export default function MainSearch() {
                             if (item.id === 'image-search') {
                               setImageSearchModalOpen(true)
                             } else if (item.id === 'bgm-search') {
-                              setDomainFilter('audio')
+                              // BGM 식별 모달 (mp4 업로드 → 곡 인식)
+                              setBgmModalOpen(true)
+                            } else if (item.id === 'bgm-domain') {
+                              setDomainFilter('bgm')
                             } else {
                               setDomainFilter(item.domain)
                             }
@@ -990,7 +1340,7 @@ export default function MainSearch() {
                 value={domainFilter}
                 onChange={setDomainFilter}
                 counts={(() => {
-                  const c = { _total: results.length, doc: 0, image: 0, video: 0, audio: 0 }
+                  const c = { _total: results.length, doc: 0, image: 0, video: 0, audio: 0, bgm: 0 }
                   results.forEach(r => { c[r.file_type] = (c[r.file_type] ?? 0) + 1 })
                   return c
                 })()}
@@ -1060,7 +1410,7 @@ export default function MainSearch() {
               return (
                 <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
                   {visible.map((r, i) => (
-                    <ResultCard key={r.file_path + i} result={r} rank={i + 1} onClick={() => handleSelectFile(r)} securityMode={securityMode} />
+                    <ResultCard key={r.file_path + i} result={r} rank={i + 1} onClick={() => handleSelectFile(r)} securityMode={securityMode} query={query} />
                   ))}
                 </div>
               )
@@ -1381,6 +1731,165 @@ export default function MainSearch() {
               >
                 <span className="material-symbols-outlined text-base align-middle mr-1">search</span>
                 검색
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── BGM 식별 모달 — 동영상/오디오 업로드 → 곡 인식 ────── */}
+      {bgmModalOpen && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm"
+          onClick={() => closeBgmModal(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative w-full max-w-lg mx-4 bg-surface-container border border-outline-variant/30 rounded-3xl p-8 shadow-2xl animate-in fade-in zoom-in duration-200"
+          >
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-bold text-on-surface flex items-center gap-2">
+                <span className="material-symbols-outlined text-pink-400">music_note</span>
+                BGM 식별
+              </h3>
+              <button
+                type="button"
+                onClick={() => closeBgmModal(true)}
+                className="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center text-on-surface-variant"
+              >
+                <span className="material-symbols-outlined text-lg">close</span>
+              </button>
+            </div>
+
+            <input
+              ref={bgmInputRef}
+              type="file"
+              accept="video/*,audio/*"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0]
+                if (f) handleBgmFileSelect(f)
+                e.target.value = ''
+              }}
+            />
+
+            <div
+              onClick={() => bgmInputRef.current?.click()}
+              onDragOver={(e) => { e.preventDefault(); setIsDraggingBgm(true) }}
+              onDragLeave={() => setIsDraggingBgm(false)}
+              onDrop={(e) => {
+                e.preventDefault()
+                setIsDraggingBgm(false)
+                const f = e.dataTransfer.files?.[0]
+                if (f) handleBgmFileSelect(f)
+              }}
+              className={`relative cursor-pointer rounded-2xl border-2 border-dashed transition-all
+                ${isDraggingBgm
+                  ? 'border-pink-400 bg-pink-400/10 scale-[1.02]'
+                  : 'border-outline-variant/40 hover:border-pink-400/60 hover:bg-white/5'}
+                ${bgmFile ? 'p-4' : 'p-12 text-center'}`}
+            >
+              {bgmFile ? (
+                <div className="flex items-center gap-3">
+                  <span className="material-symbols-outlined text-4xl text-pink-400">audio_file</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-on-surface truncate">{bgmFile.name}</div>
+                    <div className="text-xs text-on-surface-variant">
+                      {(bgmFile.size / (1024 * 1024)).toFixed(1)} MB
+                    </div>
+                  </div>
+                  <span className="text-[11px] text-on-surface-variant/60 whitespace-nowrap">
+                    클릭하면 변경
+                  </span>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-3">
+                  <span className="material-symbols-outlined text-6xl text-on-surface-variant/40">
+                    upload_file
+                  </span>
+                  <div className="text-base font-bold text-on-surface">
+                    동영상 또는 오디오 파일을 끌어놓거나 클릭하여 선택
+                  </div>
+                  <div className="text-xs text-on-surface-variant/60">
+                    MP4 · MP3 · WAV · M4A · WebM (최대 100 MB)
+                  </div>
+                  <div className="text-[11px] text-pink-400/80 mt-1">
+                    Chromaprint(정확매칭) → CLAP(의미매칭) → ACR API(옵션) 순으로 시도
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 식별 결과 */}
+            {bgmIdentifyResult && !bgmIdentifyResult.error && (
+              <div className="mt-5 rounded-2xl bg-white/5 border border-outline-variant/20 p-4 max-h-72 overflow-auto">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs uppercase tracking-wide text-on-surface-variant">
+                    식별 결과 ({bgmIdentifyResult.method || '?'})
+                  </span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-bold
+                    ${bgmIdentifyResult.confidence === 'high'   ? 'bg-emerald-500/20 text-emerald-300' :
+                      bgmIdentifyResult.confidence === 'medium' ? 'bg-amber-500/20 text-amber-300' :
+                                                                  'bg-rose-500/20 text-rose-300'}`}>
+                    {bgmIdentifyResult.confidence}
+                  </span>
+                </div>
+                {(bgmIdentifyResult.results || []).map((r, idx) => (
+                  <div key={idx} className="py-2 border-t first:border-t-0 border-outline-variant/10">
+                    <div className="font-bold text-on-surface flex items-center gap-2">
+                      <span className="text-pink-400">#{r.rank ?? idx + 1}</span>
+                      {r.acr_title || r.guess_title || r.filename || '(이름 없음)'}
+                    </div>
+                    {(r.acr_artist || r.guess_artist) && (
+                      <div className="text-xs text-on-surface-variant">
+                        {r.acr_artist || r.guess_artist}
+                      </div>
+                    )}
+                    <div className="text-[11px] text-on-surface-variant/60 mt-1">
+                      유사도 {((r.confidence ?? 0) * 100).toFixed(1)}%
+                      {r.duration ? ` · ${Math.round(r.duration)}s` : ''}
+                      {r.external ? ' · 외부 API' : ''}
+                    </div>
+                  </div>
+                ))}
+                {(bgmIdentifyResult.results || []).length === 0 && (
+                  <div className="text-sm text-on-surface-variant/70 py-4 text-center">
+                    매칭된 곡이 없습니다.
+                  </div>
+                )}
+              </div>
+            )}
+            {bgmIdentifyResult?.error && (
+              <div className="mt-5 rounded-xl bg-rose-500/10 border border-rose-500/30 p-3 text-sm text-rose-300">
+                {bgmIdentifyResult.error}
+              </div>
+            )}
+
+            <div className="flex gap-3 mt-6 justify-end">
+              <button
+                type="button"
+                onClick={() => closeBgmModal(true)}
+                className="px-5 py-2 rounded-full border border-outline-variant/30 text-on-surface-variant hover:bg-white/5 transition"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                disabled={!bgmFile || bgmIdentifying}
+                onClick={() => bgmFile && handleBgmIdentify(bgmFile)}
+                className="px-6 py-2 rounded-full bg-gradient-to-r from-pink-500 to-rose-500 text-white font-bold disabled:opacity-40 disabled:cursor-not-allowed hover:shadow-lg hover:shadow-pink-500/30 transition"
+              >
+                {bgmIdentifying ? (
+                  <span className="flex items-center gap-1">
+                    <span className="material-symbols-outlined text-base animate-spin">progress_activity</span>
+                    식별 중...
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1">
+                    <span className="material-symbols-outlined text-base">search</span>
+                    이 곡 찾기
+                  </span>
+                )}
               </button>
             </div>
           </div>

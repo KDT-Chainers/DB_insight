@@ -384,15 +384,51 @@ def _read_img_caption(cap_root: Path, key: str) -> str:
 
 
 def _doc_page_to_source(stem_key: str, doc_reg: dict) -> tuple[str, str]:
-    """stem_key → (원본 파일 경로, 파일명)."""
+    """stem_key → (원본 파일 경로, 파일명).
+
+    매칭 우선순위:
+      1. 신포맷: stem_key_for(rel_key) == stem_key  (sanitized + __hash)
+      2. 구포맷 sanitized: _sanitize(Path(rel_key).stem) == stem_key
+      3. 구포맷 raw: Path(rel_key).stem == stem_key
+      4. abs 경로 stem 매칭 (이동된 파일 대응)
+    """
+    if not stem_key:
+        return "", ""
     try:
-        from embedders.trichef.doc_page_render import stem_key_for
-        for rel_key, info in doc_reg.items():
-            if stem_key_for(rel_key) == stem_key:
-                orig = info.get("abs") or info.get("staged", "")
-                return orig, Path(rel_key).name
+        from embedders.trichef.doc_page_render import stem_key_for, _sanitize
     except Exception:
-        pass
+        return "", ""
+
+    # 1. 신포맷 (hash 포함)
+    for rel_key, info in doc_reg.items():
+        if not isinstance(info, dict):
+            continue
+        if stem_key_for(rel_key) == stem_key:
+            orig = info.get("abs") or info.get("staged", "")
+            return orig, Path(rel_key).name
+
+    # 2. 구포맷 — hash 제거된 raw stem_key 일 가능성
+    # (예: "2015 건강보험_국세DB연계_취업통계연보")
+    base_key = stem_key.rsplit("__", 1)[0] if "__" in stem_key else stem_key
+    for rel_key, info in doc_reg.items():
+        if not isinstance(info, dict):
+            continue
+        rel_stem = Path(rel_key).stem
+        if _sanitize(rel_stem) == base_key or rel_stem == base_key:
+            orig = info.get("abs") or info.get("staged", "")
+            return orig, Path(rel_key).name
+
+    # 3. abs 경로 stem 매칭 (registry rel_key 와 abs 가 다른 경우)
+    for rel_key, info in doc_reg.items():
+        if not isinstance(info, dict):
+            continue
+        ap = info.get("abs")
+        if ap and Path(ap).stem == base_key:
+            return ap, Path(ap).name
+        for alias in info.get("abs_aliases") or []:
+            if Path(alias).stem == base_key:
+                return alias, Path(alias).name
+
     return "", ""
 
 

@@ -13,6 +13,76 @@ from routes.setup_deps import setup_deps_bp
 from routes.security_mask import security_mask_bp
 from routes.ai_search import ai_search_bp
 from routes.registry import registry_bp
+from routes.bgm import bp as bgm_bp
+
+
+def _auto_normalize_paths_if_mismatch() -> None:
+    """다른 PC 에서 git pull 후 첫 실행 시 자동 경로 정규화.
+
+    감지 로직: registry.json 의 첫 entry 의 abs 가 현재 RAW_DB 와 다른 prefix 라면
+    PC 가 바뀐 것 → scripts/normalize_registry_paths.py 자동 실행.
+    """
+    try:
+        import json, subprocess, sys
+        from pathlib import Path
+        from config import EMBEDDED_DB, RAW_DB
+
+        # 5개 도메인 중 하나라도 mismatch 가 있으면 normalize 실행
+        sample_paths = [
+            (EMBEDDED_DB / "Doc"   / "registry.json",    "abs",  RAW_DB / "Doc"),
+            (EMBEDDED_DB / "Img"   / "registry.json",    "abs",  RAW_DB / "Img"),
+            (EMBEDDED_DB / "Movie" / "registry.json",    "abs",  RAW_DB / "Movie"),
+            (EMBEDDED_DB / "Rec"   / "registry.json",    "abs",  RAW_DB / "Rec"),
+            (EMBEDDED_DB / "Bgm"   / "audio_meta.json",  "path", RAW_DB / "Movie" / "정혜_BGM_1차"),
+        ]
+        mismatch = False
+        cur_root = str(RAW_DB.resolve()).replace("\\", "/")
+        for p, key, _expected_dir in sample_paths:
+            if not p.is_file():
+                continue
+            try:
+                d = json.loads(p.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            sample_val = ""
+            if isinstance(d, dict):
+                # registry: dict of {key: {"abs": ...}}
+                first_v = next(iter(d.values()), None)
+                if isinstance(first_v, dict):
+                    sample_val = (first_v.get(key) or "").replace("\\", "/")
+            elif isinstance(d, list) and d and isinstance(d[0], dict):
+                # audio_meta.json: list of dicts
+                sample_val = (d[0].get(key) or "").replace("\\", "/")
+            if sample_val and not sample_val.startswith(cur_root):
+                mismatch = True
+                break
+
+        if not mismatch:
+            return  # 이미 정규화됨
+
+        import logging as _lg
+        _lg.getLogger(__name__).warning(
+            "[auto-normalize] PC 경로 mismatch 감지 — normalize_registry_paths.py 자동 실행"
+        )
+        repo_root = Path(__file__).resolve().parents[2]
+        script = repo_root / "scripts" / "normalize_registry_paths.py"
+        if script.is_file():
+            try:
+                r = subprocess.run(
+                    [sys.executable, str(script)],
+                    cwd=str(repo_root), capture_output=True, text=True, timeout=120,
+                )
+                if r.returncode == 0:
+                    _lg.getLogger(__name__).info("[auto-normalize] 완료")
+                else:
+                    _lg.getLogger(__name__).warning(
+                        f"[auto-normalize] 실패 (rc={r.returncode}): {r.stderr[-300:]}"
+                    )
+            except Exception as e:
+                _lg.getLogger(__name__).warning(f"[auto-normalize] 실행 실패: {e}")
+    except Exception:
+        # config 등 미사용 가능 → silent skip
+        pass
 
 
 def create_app() -> Flask:
@@ -20,6 +90,9 @@ def create_app() -> Flask:
     # 개발(localhost:3000) + 패키징 앱(file://) 모두 허용
     CORS(app, resources={r"/api/*": {"origins": "*"}},
          supports_credentials=False)
+
+    # 다른 PC 에서 첫 실행 시 자동 경로 정규화
+    _auto_normalize_paths_if_mismatch()
 
     init_db()
 
@@ -34,6 +107,7 @@ def create_app() -> Flask:
     app.register_blueprint(security_mask_bp)
     app.register_blueprint(ai_search_bp)
     app.register_blueprint(registry_bp)
+    app.register_blueprint(bgm_bp)
 
     # [W5-4] Warmup — 기동 시 TriChefEngine 싱글턴 로드 + dummy 쿼리 1회 실행하여
     # SigLIP2 / BGE-M3 / DINOv2 / Qwen 을 선로딩. 첫 사용자 쿼리 430ms 지연 제거.

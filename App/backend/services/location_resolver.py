@@ -75,30 +75,97 @@ def _query_tokens(q: str) -> list[str]:
     return out
 
 
+# 한↔영 토큰 양방향 매핑 — 다국어 PDF 검색 시 의미 매칭 보강.
+# BGE-M3 가 캡션 레벨에서는 한↔영을 잘 연결하지만, 줄 단위 substring 매칭은
+# 직역 단어를 알아야 하므로 자주 쓰이는 도메인 어휘를 등록.
+_KO_EN_BIDICT: dict[str, list[str]] = {
+    "취업":   ["employment", "employ", "job", "hire", "career"],
+    "교육":   ["education", "educational", "learning", "training"],
+    "학습":   ["learning", "study", "studying"],
+    "분석":   ["analysis", "analytical"],
+    "통계":   ["statistics", "statistical"],
+    "보고서": ["report", "yearbook"],
+    "예산":   ["budget", "fiscal"],
+    "정책":   ["policy", "policies"],
+    "기술":   ["technology", "technical"],
+    "연구":   ["research", "study"],
+    "회의":   ["meeting", "conference"],
+    "환경":   ["environment", "environmental"],
+    "사람":   ["person", "people"],
+    "정보":   ["information"],
+    "서비스": ["service"],
+    "산업":   ["industry", "industrial"],
+    "건강":   ["health"],
+    "개발":   ["development", "develop"],
+    "관리":   ["management", "manage"],
+    "운영":   ["operation"],
+    "투자":   ["investment", "invest"],
+    "지원":   ["support", "subsidy"],
+    "기업":   ["company", "corporate", "enterprise"],
+    "시장":   ["market"],
+    "데이터": ["data"],
+    "인공지능": ["ai", "artificial intelligence"],
+    "보안":   ["security"],
+    "데이터센터": ["data center", "datacenter"],
+}
+
+
+def _expand_tokens_bilingual(tokens: list[str]) -> list[str]:
+    """한↔영 양방향 매핑으로 매칭 후보 토큰 확장 (소문자)."""
+    expanded: list[str] = []
+    seen: set[str] = set()
+    rev: dict[str, list[str]] = {}
+    for ko, ens in _KO_EN_BIDICT.items():
+        for en in ens:
+            rev.setdefault(en.lower(), []).append(ko)
+
+    for t in tokens:
+        if t not in seen:
+            expanded.append(t)
+            seen.add(t)
+        # 한 → 영
+        for en in _KO_EN_BIDICT.get(t, []):
+            el = en.lower()
+            if el not in seen:
+                expanded.append(el)
+                seen.add(el)
+        # 영 → 한 (사용자가 영어로 입력했을 때)
+        for ko in rev.get(t.lower(), []):
+            if ko not in seen:
+                expanded.append(ko)
+                seen.add(ko)
+    return expanded
+
+
 def _find_line_with_query(text: str, query: str, snippet_max: int = 200) -> dict | None:
     """페이지 텍스트에서 query 토큰 매칭 점수가 가장 높은 줄 찾기.
 
-    개선: 줄 안 단어들도 조사 제거 후 token 과 비교 → 어간 매칭.
+    개선:
+      1. 한국어 조사 제거 어간 매칭
+      2. 한↔영 양방향 사전 (취업 ↔ employment 등)
+      3. 모두 0 매칭이면 None
 
     Returns:
-        { line: int(1-indexed), text: str, score: int } 또는 None.
+        { line: int(1-indexed), text: str, score: int, snippet: str } 또는 None.
     """
     tokens = _query_tokens(query)
     if not tokens or not text:
         return None
+    expanded = _expand_tokens_bilingual(tokens)
+
     lines = text.split("\n")
     best_idx = -1
     best_score = 0
     best_line = ""
     for i, line in enumerate(lines):
         ll = line.lower()
-        # 1차: 단순 substring (빠름, 대부분 케이스)
-        score = sum(1 for t in tokens if t in ll)
+        # 1차: 단순 substring (확장 토큰 포함)
+        score = sum(1 for t in expanded if t in ll)
         # 2차: 단어 어간 매칭 (조사 제거된 형태)
         if score < len(tokens):
             line_words = re.findall(r"[\w가-힣]+", ll)
             line_stems = {_strip_josa(w) for w in line_words}
-            stem_score = sum(1 for t in tokens if t in line_stems)
+            stem_score = sum(1 for t in expanded if t in line_stems)
             score = max(score, stem_score)
         if score > best_score:
             best_score = score
@@ -148,6 +215,8 @@ def _doc_location(trichef_id: str, query: str = "") -> dict | None:
 
         # query 가 있을 때만 PDF 텍스트 로드 + 줄 매칭 (비용 회피).
         if query:
+            page_text = ""
+            # 1) PDF 텍스트 로드 (PyMuPDF)
             try:
                 from services.trichef.lexical_rebuild import resolve_doc_pdf_map
                 pdf_map = resolve_doc_pdf_map()
@@ -156,14 +225,46 @@ def _doc_location(trichef_id: str, query: str = "") -> dict | None:
                     import fitz
                     with fitz.open(pdf) as d:
                         if 0 <= idx0 < len(d):
-                            text = d[idx0].get_text("text") or ""
-                    line_match = _find_line_with_query(text, query)
-                    if line_match:
-                        out["line"]       = line_match["line"]
-                        out["line_label"] = f"L.{line_match['line']}"
-                        out["snippet"]    = line_match["snippet"]
+                            page_text = d[idx0].get_text("text") or ""
             except Exception as e:
-                logger.debug(f"[location_resolver] doc PDF/line 추출 실패: {e}")
+                logger.debug(f"[location_resolver] doc PDF 로드 실패: {e}")
+
+            # 2) PDF 텍스트가 비어있으면 OCR 결과 (page_text/<stem>/p####.txt) fallback
+            if not page_text.strip():
+                try:
+                    from config import PATHS
+                    pt_path = (
+                        Path(PATHS["TRICHEF_DOC_EXTRACT"])
+                        / "page_text" / stem / f"p{idx0:04d}.txt"
+                    )
+                    if pt_path.is_file():
+                        page_text = pt_path.read_text(encoding="utf-8")
+                except Exception as e:
+                    logger.debug(f"[location_resolver] page_text fallback 실패: {e}")
+
+            # 3) 줄 매칭 (한↔영 양방향 사전 포함)
+            if page_text:
+                line_match = _find_line_with_query(page_text, query)
+                if line_match:
+                    out["line"]       = line_match["line"]
+                    out["line_label"] = f"L.{line_match['line']}"
+                    out["snippet"]    = line_match["snippet"]
+
+            # 4) 매칭 실패 시 캡션 fallback (BGE-M3 매칭의 핵심 신호)
+            if "snippet" not in out:
+                try:
+                    from config import PATHS
+                    cap_path = (
+                        Path(PATHS["TRICHEF_DOC_EXTRACT"])
+                        / "captions" / stem / f"p{idx0:04d}.txt"
+                    )
+                    if cap_path.is_file():
+                        cap = cap_path.read_text(encoding="utf-8").strip()
+                        if cap:
+                            out["caption"] = cap[:200]
+                            out["snippet"] = cap[:200]
+                except Exception as e:
+                    logger.debug(f"[location_resolver] caption fallback 실패: {e}")
 
         return out
     except Exception as e:
@@ -200,50 +301,88 @@ def _av_location(segments: list[dict]) -> dict | None:
 
 
 def _img_location(trichef_id: str, query: str = "") -> dict | None:
-    """이미지의 캡션 텍스트 + 쿼리 매칭 줄 추출.
+    """이미지의 캡션 텍스트 (Qwen 5-stage 우선) + 쿼리 매칭 줄 추출.
 
-    extracted_DB/Img/captions/<key>.json 또는 .txt 에서 BLIP/Qwen 캡션 로드.
-    캡션 안에 쿼리 토큰 매칭 줄 + 200자 snippet 반환.
+    extracted_DB/Img/captions/ 에서 다음 순으로 시도:
+      1. <key__name>_title.txt    → "쿼리" (1줄 핵심)
+      2. <key__name>_tagline.txt  → "한줄" (분위기·감정)
+      3. <key__name>_synopsis.txt → "상세" (3~5문장 묘사)
+      4. <key__name>_tags_kr.txt  → 한국어 키워드
+      5. <key__name>_tags_en.txt  → 영문 키워드
+      6. (legacy) <key>.caption.json — BLIP L1/L2/L3 형식
+
+    반환 dict 키:
+      title, tagline, synopsis, tags_kr, tags_en — Qwen 5-stage 가 있을 때만
+      caption — 통합 텍스트 (검색 매칭에 사용된 신호)
+      snippet — 쿼리 매칭 줄 (캡션 fallback 포함)
     """
     if not trichef_id:
         return None
+    import json as _json
     try:
         from config import PATHS
         cap_dir = Path(PATHS["TRICHEF_IMG_EXTRACT"]) / "captions"
-        # 매칭: <key>.json (e.g. "staged/abcd1234/foo.jpg.json")
-        # key 의 / → __ 또는 그대로 — 두 형식 모두 시도
-        candidates = [
-            cap_dir / f"{trichef_id}.json",
-            cap_dir / f"{trichef_id.replace('/', '__')}.json",
-            cap_dir / f"{Path(trichef_id).name}.json",
-            cap_dir / f"{trichef_id}.txt",
-            cap_dir / f"{Path(trichef_id).name}.txt",
-        ]
-        cap_text = ""
-        for cp in candidates:
-            if cp.is_file():
+
+        # Qwen 5-stage 형식 — key 의 '/' 를 '__' 로 sanitize
+        key = trichef_id.replace("/", "__").replace("\\", "__")
+        out: dict[str, Any] = {}
+
+        stage_keys = ["title", "tagline", "synopsis", "tags_kr", "tags_en"]
+        for sk in stage_keys:
+            p = cap_dir / f"{key}_{sk}.txt"
+            if p.is_file():
                 try:
-                    if cp.suffix == ".json":
-                        data = json.loads(cp.read_text(encoding="utf-8"))
-                        # caption_3stage 형식 또는 단일 caption 형식
-                        if isinstance(data, dict):
-                            cap_text = " ".join(filter(None, (
-                                data.get("caption", ""),
-                                data.get("L1", ""),
-                                data.get("L2", ""),
-                                data.get("L3", ""),
-                            ))).strip()
-                        else:
-                            cap_text = str(data).strip()
-                    else:
-                        cap_text = cp.read_text(encoding="utf-8").strip()
+                    txt = p.read_text(encoding="utf-8").strip()
+                    if txt:
+                        out[sk] = txt[:500]
                 except Exception:
                     pass
-                if cap_text:
-                    break
+
+        # 통합 캡션 — 검색 매칭 신호 + snippet 추출용
+        cap_text = ""
+        if out:
+            cap_text = " ".join(filter(None, (
+                out.get("title", ""),
+                out.get("tagline", ""),
+                out.get("synopsis", ""),
+                out.get("tags_kr", ""),
+                out.get("tags_en", ""),
+            ))).strip()
+
+        # Legacy fallback — 5-stage 가 없으면 BLIP 형식 시도
+        if not cap_text:
+            candidates = [
+                cap_dir / f"{trichef_id}.json",
+                cap_dir / f"{trichef_id.replace('/', '__')}.json",
+                cap_dir / f"{Path(trichef_id).name}.json",
+                cap_dir / f"{trichef_id}.txt",
+                cap_dir / f"{Path(trichef_id).name}.txt",
+            ]
+            for cp in candidates:
+                if cp.is_file():
+                    try:
+                        if cp.suffix == ".json":
+                            data = _json.loads(cp.read_text(encoding="utf-8"))
+                            if isinstance(data, dict):
+                                cap_text = " ".join(filter(None, (
+                                    data.get("caption", ""),
+                                    data.get("L1", ""),
+                                    data.get("L2", ""),
+                                    data.get("L3", ""),
+                                ))).strip()
+                            else:
+                                cap_text = str(data).strip()
+                        else:
+                            cap_text = cp.read_text(encoding="utf-8").strip()
+                    except Exception:
+                        pass
+                    if cap_text:
+                        break
+
         if not cap_text:
             return None
-        out: dict[str, Any] = {"caption": cap_text[:300]}
+
+        out["caption"] = cap_text[:500]
         if query:
             line_match = _find_line_with_query(cap_text, query)
             if line_match:

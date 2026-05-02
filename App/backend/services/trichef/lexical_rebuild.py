@@ -39,8 +39,14 @@ def _encode_sparse(texts: list[str], batch: int = 32, max_length: int | None = N
 
 
 def resolve_doc_pdf_map() -> dict[str, Path]:
-    """doc registry → {sanitized_stem: resolved_pdf_path} (converted_pdf 우선)."""
+    """doc registry → {sanitized_stem: resolved_pdf_path} (converted_pdf 우선).
+
+    하위 호환: 신포맷(hash suffix)뿐 아니라 구포맷(hash 없는 sanitized stem)·
+    raw stem(공백·한글 그대로)도 키로 등록해 search 단의 stem_key 가 어떤
+    포맷이어도 PDF 를 찾을 수 있게 한다.
+    """
     from embedders.trichef.doc_ingest import converted_pdf_path
+    from embedders.trichef.doc_page_render import _sanitize  # type: ignore
     _CONV_EXT = {".hwp", ".hwpx", ".docx", ".doc", ".pptx", ".ppt",
                  ".xlsx", ".xls", ".odt", ".odp", ".ods", ".rtf"}
     cache = Path(PATHS["TRICHEF_DOC_CACHE"])
@@ -50,18 +56,25 @@ def resolve_doc_pdf_map() -> dict[str, Path]:
     registry = json.loads(reg_path.read_text(encoding="utf-8"))
     out: dict[str, Path] = {}
     for key, meta in registry.items():
-        # 신규 규칙(hash suffix) 우선. 마이그레이션 전 데이터는 레거시 stem 도 fallback.
-        stem = stem_key_for(key)
-        if stem in out:
-            logger.warning(f"[lexical_rebuild] stem 충돌: {stem!r} - {key!r} 무시")
+        if not isinstance(meta, dict) or "abs" not in meta:
             continue
         src = Path(meta["abs"])
+        target = src
         if src.suffix.lower() in _CONV_EXT:
             conv = converted_pdf_path(src)
             if conv is not None:
-                out[stem] = conv
+                target = conv
+
+        rel_stem  = Path(key).stem
+        sanitized = _sanitize(rel_stem)
+        new_stem  = stem_key_for(key)
+
+        # 다중 키 등록 — 신포맷이 우선이지만 구포맷·raw stem 도 동일 PDF로 매핑.
+        # 충돌 시 신포맷이 이긴다 (신포맷이 마지막에 덮어쓰지 않게 setdefault).
+        for k in (rel_stem, sanitized, new_stem):
+            if not k:
                 continue
-        out[stem] = src
+            out.setdefault(k, target)
     return out
 
 
