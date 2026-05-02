@@ -49,20 +49,25 @@ venv/
 env/
 
 # ============================================================
-# 임베딩 데이터 — 용량이 크므로 git에 포함하지 않음
+# Data/ — raw_DB 팀원 로컬 공유, embedded_DB 메타만 push
 # ============================================================
 
-# 텍스트 캐시 (BLIP 캡션, Whisper STT, 청크 JSON)
-Data/extracted_DB/
-
-# 벡터 캐시 (.npy) + ChromaDB (chroma.sqlite3)
-Data/embedded_DB/
-
-# 원본 파일 메타데이터
+# raw_DB — 원본 데이터 (팀원과 로컬 공유, push 안 함)
 Data/raw_DB/
 
-# 혹시 Data/ 하위에 뭔가 추가되더라도 전체 제외
-Data/
+# extracted_DB — 추출 산출물 (페이지 텍스트, 캡션 등 — 재생성 가능)
+Data/extracted_DB/
+
+# embedded_DB — 큰 .npy / .npz / ChromaDB 만 제외 (Releases zip 으로 공유)
+# 메타 JSON (registry, ids, segments, vocab, token_sets) 은 push
+Data/embedded_DB/**/*.npy
+Data/embedded_DB/**/*.npz
+Data/embedded_DB/**/*.bak.*
+Data/embedded_DB/trichef/
+Data/embedded_DB/trichef_chroma/
+Data/embedded_DB/*_backup_v*/
+Data/embedded_DB/Movie_backup_v*/
+Data/embedded_DB/Rec_backup_*/
 
 # ============================================================
 # 임베딩 관련 파일 패턴 (Data/ 밖에 생성될 경우 대비)
