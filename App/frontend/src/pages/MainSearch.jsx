@@ -236,19 +236,22 @@ function expandQueryTokens(query) {
   return [...out]
 }
 
-// CLAP cosine score → 사용자 친화 정규화 (0.55+ ≈ 100%)
-// CLAP 의 일반적 분포: 0.2~0.55 대부분, 0.6+ 매우 강한 매칭
-function normalizeMatchScore(s) {
+// 별점 + 백분율 — "★★★★☆ 87%"
+// 백엔드가 confidence (이미 z-score CDF normalize) 를 줄 때는 그대로 사용,
+// 없으면 raw score 를 보수적 정규화 (legacy fallback).
+function _legacyNormalize(s) {
   const x = Math.max(0, Number(s) || 0)
-  if (x <= 0.2)  return (x / 0.2) * 0.30                          // 0~30%
-  if (x <= 0.4)  return 0.30 + (x - 0.2) / 0.2 * 0.35              // 30~65%
-  if (x <= 0.55) return 0.65 + (x - 0.4) / 0.15 * 0.30             // 65~95%
-  return Math.min(1.0, 0.95 + (x - 0.55) / 0.15 * 0.05)             // 95~100%
+  if (x <= 0.2)  return (x / 0.2) * 0.30
+  if (x <= 0.4)  return 0.30 + (x - 0.2) / 0.2 * 0.35
+  if (x <= 0.55) return 0.65 + (x - 0.4) / 0.15 * 0.30
+  return Math.min(1.0, 0.95 + (x - 0.55) / 0.15 * 0.05)
 }
 
-// 별점 + 백분율 — "★★★★☆ 87%"
-function ScoreStars({ score, className = '' }) {
-  const norm = normalizeMatchScore(score)
+function ScoreStars({ score, confidence, className = '' }) {
+  // confidence (backend z-score CDF) 우선 — 5도메인 통합 % 표시
+  const norm = (confidence != null && Number.isFinite(Number(confidence)))
+    ? Math.max(0, Math.min(1, Number(confidence)))
+    : _legacyNormalize(score)
   const pct = Math.round(norm * 100)
   const fillCount = Math.max(0, Math.min(5, Math.round(norm * 5)))
   const stars = '★'.repeat(fillCount) + '☆'.repeat(5 - fillCount)
@@ -579,7 +582,7 @@ function ResultCard({ result, rank, onClick, securityMode = false, query = '' })
                         className="flex items-center gap-2 px-2 py-1 bg-pink-500/5 border border-pink-500/20 rounded text-[11px] hover:bg-pink-500/15 hover:border-pink-400/40 transition text-left">
                         <span className="material-symbols-outlined text-xs text-pink-300">play_arrow</span>
                         <span className="font-mono font-semibold text-pink-200 min-w-[88px]">{s.label}</span>
-                        <ScoreStars score={s.score} />
+                        <ScoreStars score={s.score} confidence={s.confidence} />
                       </button>
                     ))}
                   </div>

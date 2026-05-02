@@ -1776,5 +1776,11 @@
     "abs": "C:/yssong/KDT-FT-team3-Chainers/DB_insight/Data/raw_DB/Doc/staged/ae576e5b/주민등록증.png",
     "staged": "C:\\yssong\\KDT-FT-team3-Chainers\\DB_insight\\Data\\raw_DB\\Doc\\staged\\ae576e5b\\주민등록증.png",
     "pages": 1
+  },
+  "staged/e740eb59/운전면허증.png": {
+    "sha": "e740eb59f907c14271faf5384d628b2a3c6aff620cb5678de0ac01ebd6edaa04",
+    "abs": "C:\\yssong\\KDT-FT-team3-Chainers\\Data\\raw_DB\\Img\\운전면허증.png",
+    "staged": "C:\\yssong\\KDT-FT-team3-Chainers\\DB_insight\\Data\\raw_DB\\Doc\\staged\\e740eb59\\운전면허증.png",
+    "pages": 1
   }
 }

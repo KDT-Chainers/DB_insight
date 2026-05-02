@@ -7,6 +7,7 @@
 """
 from __future__ import annotations
 
+import json
 import logging
 import math
 import threading
@@ -36,10 +37,51 @@ def _confidence_from_margin(margin: float) -> str:
     return "low"
 
 
+# ── Null distribution calibration (다른 도메인과 동일한 통계 매핑) ──────────
+# Doc/Img/Movie/Rec 와 동일하게 z-score CDF 기반:
+#   confidence = Φ((cosine - μ_null) / σ_null)
+# scripts/bgm_calibrate.py 가 생성한 calibration.json 로드.
+_CAL_CACHE: dict = {}
+
+
+def _load_calibration() -> dict:
+    """BGM null distribution (μ, σ) 로드. 없으면 보수적 기본값."""
+    global _CAL_CACHE
+    if _CAL_CACHE:
+        return _CAL_CACHE
+    cal_path = bgm_config.INDEX_DIR / "calibration.json"
+    if cal_path.is_file():
+        try:
+            d = json.loads(cal_path.read_text(encoding="utf-8"))
+            _CAL_CACHE = {
+                "mu_null":    float(d.get("mu_null", 0.1)),
+                "sigma_null": float(d.get("sigma_null", 0.15)),
+            }
+        except Exception:
+            _CAL_CACHE = {"mu_null": 0.1, "sigma_null": 0.15}
+    else:
+        # 기본값 — calibration 없을 때 (단순 0.5+0.5*s 와 비슷한 효과)
+        _CAL_CACHE = {"mu_null": 0.1, "sigma_null": 0.15}
+    return _CAL_CACHE
+
+
 def _normalize_score(s: float) -> float:
-    """IP cosine [-1, 1] → confidence-like [0, 1] (보수적 매핑)."""
-    # CLAP IP cosine은 보통 [0.0, 0.6] 범위에 분포
-    return max(0.0, min(1.0, 0.5 + 0.5 * s))
+    """CLAP cosine → 통계적 confidence [0, 1] (Doc/Img/Movie/Rec 와 동일 매핑).
+
+    Null distribution 기반 z-score CDF:
+      z = (s − μ_null) / σ_null
+      confidence = Φ(z) = 0.5 * (1 + erf(z / √2))
+
+    의미:
+      50% = 무관 쿼리·문서 평균
+      85% = 1σ 위 (의미 있는 매칭)
+      97.5% = 2σ 위 (강한 매칭)
+      99.7% = 3σ 위 (매우 강한 매칭)
+    """
+    cal = _load_calibration()
+    sigma = max(cal["sigma_null"], 1e-6)
+    z = (float(s) - cal["mu_null"]) / sigma
+    return max(0.0, min(1.0, 0.5 * (1.0 + math.erf(z / math.sqrt(2.0)))))
 
 
 def _fmt_time_range(start: float, end: float) -> str:
@@ -160,13 +202,15 @@ class BGMEngine:
         for rank, (i, fused, boost) in enumerate(ranked, 1):
             m = items[i]
             file_segments = seg_by_file.get(m.get("filename", ""), [])
-            # 정규화된 segment 정보 (start, end, score, label)
+            # 정규화된 segment 정보 (start, end, score, confidence, label)
+            # confidence: file-level 과 동일한 calibration 매핑 (모든 도메인 통합 % 표시)
             segs = [
                 {
-                    "start": s["start"],
-                    "end":   s["end"],
-                    "score": round(s["score"], 4),
-                    "label": _fmt_time_range(s["start"], s["end"]),
+                    "start":      s["start"],
+                    "end":        s["end"],
+                    "score":      round(s["score"], 4),
+                    "confidence": round(_normalize_score(s["score"]), 4),
+                    "label":      _fmt_time_range(s["start"], s["end"]),
                 }
                 for s in file_segments
             ]

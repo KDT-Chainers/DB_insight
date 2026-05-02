@@ -69,11 +69,8 @@ Data/embedded_DB/*_backup_v*/
 Data/embedded_DB/Movie_backup_v*/
 Data/embedded_DB/Rec_backup_*/
 
-# BGM 인덱스는 작음 (~5MB) — 다른 PC pull 즉시 검색 가능하도록 git 에 포함
-!Data/embedded_DB/Bgm/clap_emb.npy
-!Data/embedded_DB/Bgm/cache_seg_emb.npy
-!Data/embedded_DB/Bgm/clap_index.faiss
-!Data/embedded_DB/Bgm/cache_seg_faiss.faiss
+# BGM 인덱스도 다른 도메인처럼 git 제외 (USB 복사로 공유)
+Data/embedded_DB/Bgm/
 
 # ============================================================
 # 임베딩 관련 파일 패턴 (Data/ 밖에 생성될 경우 대비)

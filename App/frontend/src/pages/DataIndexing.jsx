@@ -381,9 +381,14 @@ function IndexingModal({ rootPath, selectedCount, jobStatus, jobId, onClose, onS
     onStop?.()
   }
 
-  const statusColor = isDone ? 'text-emerald-400' : isError ? 'text-red-400' : isStopped ? 'text-amber-400' : 'text-[#85adff]'
-  const statusLabel = isDone ? '인덱싱 완료' : isError ? '오류 발생' : isStopped ? '중단됨' : isStopping ? '중단 중...' : '인덱싱 중...'
-  const borderGlow  = isDone
+  // 100% 인데 백엔드 status 가 아직 'done' 으로 전환 안 된 상태도 완료로 간주
+  // (모든 파일 처리 끝 + running 상태 파일 없음 → 사실상 완료)
+  const isProgressComplete = progress >= 100 && !runningResult && !isError && !isStopped && !isStopping
+  const isEffectivelyDone  = isDone || isProgressComplete
+
+  const statusColor = isEffectivelyDone ? 'text-emerald-400' : isError ? 'text-red-400' : isStopped ? 'text-amber-400' : 'text-[#85adff]'
+  const statusLabel = isEffectivelyDone ? '인덱싱 완료' : isError ? '오류 발생' : isStopped ? '중단됨' : isStopping ? '중단 중...' : '인덱싱 중...'
+  const borderGlow  = isEffectivelyDone
     ? 'border-emerald-500/30 shadow-[0_0_60px_rgba(52,211,153,0.15)]'
     : isError ? 'border-red-500/30 shadow-[0_0_60px_rgba(248,113,113,0.15)]'
     : isStopped ? 'border-amber-500/30 shadow-[0_0_60px_rgba(251,191,36,0.15)]'
@@ -451,13 +456,13 @@ function IndexingModal({ rootPath, selectedCount, jobStatus, jobId, onClose, onS
         {/* ── 헤더 ── */}
         <div className="flex items-center justify-between px-7 pt-6 pb-4 border-b border-white/5 shrink-0">
           <div className="flex items-center gap-3">
-            {isRunning
-              ? <span className="material-symbols-outlined text-[#85adff] text-2xl animate-spin">progress_activity</span>
-              : isDone
-                ? <span className="material-symbols-outlined text-emerald-400 text-2xl" style={{ fontVariationSettings: '"FILL" 1' }}>check_circle</span>
-                : isError
-                  ? <span className="material-symbols-outlined text-red-400 text-2xl" style={{ fontVariationSettings: '"FILL" 1' }}>error</span>
-                  : <span className="material-symbols-outlined text-amber-400 text-2xl" style={{ fontVariationSettings: '"FILL" 1' }}>stop_circle</span>
+            {isEffectivelyDone
+              ? <span className="material-symbols-outlined text-emerald-400 text-2xl" style={{ fontVariationSettings: '"FILL" 1' }}>check_circle</span>
+              : isError
+                ? <span className="material-symbols-outlined text-red-400 text-2xl" style={{ fontVariationSettings: '"FILL" 1' }}>error</span>
+                : isStopped
+                  ? <span className="material-symbols-outlined text-amber-400 text-2xl" style={{ fontVariationSettings: '"FILL" 1' }}>stop_circle</span>
+                  : <span className="material-symbols-outlined text-[#85adff] text-2xl animate-spin">progress_activity</span>
             }
             <h2 className={`text-xl font-black tracking-tight ${statusColor}`}>{statusLabel}</h2>
             {rootPath && (
@@ -467,7 +472,7 @@ function IndexingModal({ rootPath, selectedCount, jobStatus, jobId, onClose, onS
             )}
           </div>
           <div className="flex items-center gap-2">
-            {isRunning && (
+            {isRunning && !isEffectivelyDone && (
               <button onClick={handleStop} disabled={isStopping}
                 className="flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 text-base font-bold transition-all disabled:opacity-40">
                 <span className="material-symbols-outlined text-lg">stop</span>
@@ -489,7 +494,7 @@ function IndexingModal({ rootPath, selectedCount, jobStatus, jobId, onClose, onS
 
             {/* 원형 링 + 숫자 */}
             <div className="relative flex items-center justify-center">
-              <RingProgress pct={progress} isDone={isDone} isError={isError} isStopped={isStopped} />
+              <RingProgress pct={progress} isDone={isEffectivelyDone} isError={isError} isStopped={isStopped} />
               <div className="absolute flex flex-col items-center">
                 <span className={`text-4xl font-black tabular-nums leading-none ${statusColor}`}>{progress}</span>
                 <span className="text-xs text-on-surface-variant/50 mt-1">%</span>
@@ -500,21 +505,21 @@ function IndexingModal({ rootPath, selectedCount, jobStatus, jobId, onClose, onS
             <div className="w-full space-y-2">
               <div className="h-2 bg-white/6 rounded-full overflow-hidden">
                 <div className={`h-full rounded-full transition-all duration-500 ${
-                  isDone ? 'bg-emerald-500' : isError ? 'bg-red-500' : isStopped ? 'bg-amber-500'
+                  isEffectivelyDone ? 'bg-emerald-500' : isError ? 'bg-red-500' : isStopped ? 'bg-amber-500'
                   : 'bg-gradient-to-r from-[#85adff] to-[#ac8aff]'
                 }`} style={{ width: `${progress}%` }} />
               </div>
               <p className="text-sm text-center text-on-surface-variant/50 tabular-nums">
                 {processed} / {total} 파일
               </p>
-              {/* [ETA] 잔여 시간 — 진행률 기반 실시간 추정 (1초 tick) */}
-              {remainingSec != null && (
+              {/* [ETA] 잔여 시간 — 진행률 기반 실시간 추정 (1초 tick). 100% 도달 시 표시 안 함. */}
+              {remainingSec != null && !isEffectivelyDone && (
                 <p className="text-xs text-center text-on-surface-variant/60 tabular-nums">
                   <span className="text-on-surface-variant/40">잔여 약</span>{' '}
                   <span className="font-bold text-[#85adff]">{_fmtDuration(remainingSec)}</span>
                 </p>
               )}
-              {isDone && (
+              {isEffectivelyDone && (
                 <p className="text-xs text-center text-emerald-400/80 tabular-nums">
                   완료
                 </p>
