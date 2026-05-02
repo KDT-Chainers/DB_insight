@@ -116,7 +116,11 @@ def asf_scores(query: str, doc_token_sets: list[dict[str, float]],
                     q_set.add(vt)
     if not q_set:
         return np.zeros(n, dtype=np.float32)
-    q_norm = math.sqrt(sum(vocab[t]["idf"] ** 2 for t in q_set)) or 1.0
+    # vocab 형식 양립: {token: {"idf": float}} (legacy) vs {token: float} (rebuild_asf_vocab.py)
+    def _idf(t):
+        v = vocab[t]
+        return float(v) if isinstance(v, (int, float)) else float(v.get("idf", 1.0))
+    q_norm = math.sqrt(sum(_idf(t) ** 2 for t in q_set)) or 1.0
 
     scores = np.zeros(n, dtype=np.float32)
     for i, d in enumerate(doc_token_sets):

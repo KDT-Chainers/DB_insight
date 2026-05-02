@@ -337,7 +337,10 @@ class TriChefEngine:
         # confidence 를 정규화 → 모든 도메인이 동일 공식으로 비교 가능해진다.
         # sigma 하한: q_mu * 0.8 (점수가 몰려 있어도 z-score 폭발 방지).
         q_mu  = float(np.mean(dense_scores))
-        q_sig = max(float(np.std(dense_scores)), q_mu * 0.8, 1e-6)
+        # sigma 하한 — AV (search_av) 와 통일. 이전 q_mu*0.8 은 Hermitian 점수
+        # 분포 (0.2~0.4) 에서 과도하게 커서 z-score 폭발 차단 외에 conf 압축 부작용.
+        # 0.05 고정 하한 — 정답 매칭 시 conf 80~99% 로 정상 분포.
+        q_sig = max(float(np.std(dense_scores)), 0.05, 1e-6)
 
         out: list[TriChefResult] = []
         for i in combined_order[: topk * 3]:
@@ -448,7 +451,10 @@ class TriChefEngine:
         abs_thr = cal["abs_threshold"]
 
         q_mu  = float(np.mean(dense_scores))
-        q_sig = max(float(np.std(dense_scores)), q_mu * 0.8, 1e-6)
+        # sigma 하한 — AV (search_av) 와 통일. 이전 q_mu*0.8 은 Hermitian 점수
+        # 분포 (0.2~0.4) 에서 과도하게 커서 z-score 폭발 차단 외에 conf 압축 부작용.
+        # 0.05 고정 하한 — 정답 매칭 시 conf 80~99% 로 정상 분포.
+        q_sig = max(float(np.std(dense_scores)), 0.05, 1e-6)
 
         out: list[TriChefResult] = []
         for i in combined_order[: topk * 3]:
