@@ -60,6 +60,36 @@ function useSpeechRecognition({ onFinal }) {
   return { listening, interim, toggle }
 }
 
+// ── 이미지 업로드 → 이미지 검색 (TRI-CHEF) ────────────
+async function searchByImage(file, topK = 30) {
+  const formData = new FormData()
+  formData.append('image', file)
+  formData.append('domain', 'image')
+  formData.append('topk', String(topK))
+  const res = await fetch(`${API_BASE}/api/trichef/search_by_image`, {
+    method: 'POST',
+    body: formData,
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.error || `HTTP ${res.status}`)
+  }
+  const data = await res.json()
+  return (data.top ?? []).map(r => ({
+    file_path:      r.source_path || r.id,
+    file_name:      r.file_name || (r.id || '').split('/').pop(),
+    file_type:      'image',
+    confidence:     r.confidence ?? 0,
+    similarity:     r.confidence ?? 0,
+    dense:          r.dense ?? 0,
+    snippet:        r.caption ?? '',
+    preview_url:    r.preview_url ?? null,
+    segments:       [],
+    trichef_id:     r.id,
+    trichef_domain: 'image',
+  }))
+}
+
 // ── 검색 API ────────────────────────────────────────────
 async function searchFiles(query, topK = 20, type = '') {
   const typeQ = type ? `&type=${encodeURIComponent(type)}` : ''
@@ -394,6 +424,15 @@ export default function MainSearch() {
   const [domainFilter, setDomainFilter] = useState('')
   // [노이즈 제거] 저신뢰도 결과 숨김 (기본 ON). 사용자가 토글로 모두 표시 가능.
   const [hideLowConf, setHideLowConf] = useState(true)
+  // + 버튼 멀티 메뉴
+  const [plusMenuOpen, setPlusMenuOpen] = useState(false)
+  // 이미지 검색 — 입력 모달 + 업로드 파일 + 미리보기
+  const imageInputRef = useRef(null)
+  const [imageSearchFile, setImageSearchFile] = useState(null)
+  const [imageSearchModalOpen, setImageSearchModalOpen] = useState(false)
+  const [imageSearchPreviewUrl, setImageSearchPreviewUrl] = useState(null)
+  const [imageSearchActive, setImageSearchActive] = useState(false)
+  const [isDraggingImage, setIsDraggingImage] = useState(false)
 
   // home → results 애니메이션
   const [flyStyle, setFlyStyle] = useState(null)
@@ -456,8 +495,56 @@ export default function MainSearch() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [domainFilter])
 
+  // 모달에서 파일 선택 (드래그앤드롭 또는 클릭)
+  const handleImageFileSelect = useCallback((file) => {
+    if (!file || !file.type.startsWith('image/')) return
+    setImageSearchFile(file)
+    if (imageSearchPreviewUrl) URL.revokeObjectURL(imageSearchPreviewUrl)
+    setImageSearchPreviewUrl(URL.createObjectURL(file))
+  }, [imageSearchPreviewUrl])
+
+  // 이미지 모달 닫기 (preview 정리)
+  const closeImageModal = useCallback((clearPreview = false) => {
+    setImageSearchModalOpen(false)
+    if (clearPreview) {
+      setImageSearchFile(null)
+      if (imageSearchPreviewUrl) URL.revokeObjectURL(imageSearchPreviewUrl)
+      setImageSearchPreviewUrl(null)
+      setImageSearchActive(false)
+    }
+  }, [imageSearchPreviewUrl])
+
+  // 이미지 검색 실행
+  const handleImageSearch = useCallback(async (file) => {
+    if (!file) return
+    setImageSearchActive(true)
+    setQuery(`[이미지 검색] ${file.name}`)
+    setInputValue(file.name)
+    setView('results')
+    setResultsReady(true)
+    setSearching(true)
+    setSearchError('')
+    setImageSearchModalOpen(false)
+    try {
+      const data = await searchByImage(file, 30)
+      setResults(data)
+    } catch (e) {
+      setSearchError(e.message)
+      setResults([])
+    } finally {
+      setSearching(false)
+    }
+  }, [])
+
   const doSearch = (q) => {
     if (!q.trim() || aiTransitioning) return
+    // 텍스트 검색 시작 → 이미지 검색 모드 해제 + preview 정리
+    if (imageSearchActive) {
+      setImageSearchActive(false)
+      if (imageSearchPreviewUrl) URL.revokeObjectURL(imageSearchPreviewUrl)
+      setImageSearchPreviewUrl(null)
+      setImageSearchFile(null)
+    }
     setQuery(q)
     setInputValue(q)
 
@@ -563,13 +650,80 @@ export default function MainSearch() {
                 </p>
               </div>
 
+              {/* 이미지 검색용 hidden file input — 모달의 클릭 영역에서 트리거 */}
+              <input
+                ref={imageInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (file) handleImageFileSelect(file)
+                  e.target.value = ''
+                }}
+              />
               <form ref={formRef} onSubmit={handleSearch} className="w-full relative group"
                 style={homeExiting ? { visibility: 'hidden' } : {}}>
                 <div className={`glass-effect rounded-full p-2 flex items-center gap-4 shadow-[0_0_50px_rgba(133,173,255,0.1)] transition-all duration-300
                   ${listening ? 'border border-red-400/60 shadow-[0_0_30px_rgba(248,113,113,0.2)]' : 'border border-outline-variant/20 hover:border-primary/40'}`}>
-                  <button type="button" className="w-12 h-12 rounded-full bg-gradient-to-r from-primary to-secondary flex items-center justify-center text-on-primary-fixed shadow-lg active:scale-90 transition-transform shrink-0">
-                    <span className="material-symbols-outlined font-bold">add</span>
-                  </button>
+                  <div className="relative shrink-0">
+                    <button type="button"
+                      onClick={() => setPlusMenuOpen(v => !v)}
+                      className={`w-12 h-12 rounded-full bg-gradient-to-r from-primary to-secondary flex items-center justify-center text-on-primary-fixed shadow-lg active:scale-90 transition-all duration-300
+                        ${plusMenuOpen ? 'rotate-45' : ''}`}>
+                      <span className="material-symbols-outlined font-bold">add</span>
+                    </button>
+                    {/* 멀티 입력 메뉴 — + 버튼 클릭 시 애니메이션 펼침 */}
+                    {[
+                      { id: 'image-search', label: '이미지 검색', icon: 'image_search', domain: 'image', color: 'from-emerald-500 to-teal-500' },
+                      { id: 'bgm-search',   label: 'BGM 검색',   icon: 'music_note',   domain: 'audio', color: 'from-amber-500 to-orange-500' },
+                      { id: 'doc',          label: '문서',       icon: 'description',  domain: 'doc',   color: 'from-blue-500 to-indigo-500' },
+                      { id: 'image',        label: '이미지',     icon: 'image',        domain: 'image', color: 'from-emerald-500 to-green-500' },
+                      { id: 'audio',        label: '음성',       icon: 'mic',          domain: 'audio', color: 'from-amber-500 to-yellow-500' },
+                      { id: 'video',        label: '동영상',     icon: 'movie',        domain: 'video', color: 'from-purple-500 to-pink-500' },
+                    ].map((item, i) => {
+                      // 원형 배치 — 6개 항목 60도 간격, -90도(상단) 시작 시계방향
+                      const total = 6
+                      const angle = -90 + (i * (360 / total))   // -90, -30, 30, 90, 150, 210
+                      const radius = 110
+                      const rad = angle * Math.PI / 180
+                      const tx = Math.cos(rad) * radius
+                      const ty = Math.sin(rad) * radius
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => {
+                            if (item.id === 'image-search') {
+                              setImageSearchModalOpen(true)
+                            } else if (item.id === 'bgm-search') {
+                              setDomainFilter('audio')
+                            } else {
+                              setDomainFilter(item.domain)
+                            }
+                            setPlusMenuOpen(false)
+                          }}
+                          title={item.label}
+                          style={{
+                            // + 버튼 (48x48) 정중앙 기준 이동: 좌상단(0,0) → 중앙으로 이동 후 원형 분포
+                            transform: plusMenuOpen
+                              ? `translate(${tx}px, ${ty}px) scale(1)`
+                              : 'translate(0, 0) scale(0)',
+                            transitionDelay: plusMenuOpen ? `${i * 30}ms` : `${(total - 1 - i) * 20}ms`,
+                            zIndex: 30,
+                          }}
+                          className={`absolute top-0 left-0 w-12 h-12 rounded-full bg-gradient-to-br ${item.color}
+                            flex flex-col items-center justify-center text-white text-[9px] font-bold
+                            shadow-lg shadow-black/30 active:scale-90
+                            transition-all duration-400 ease-out hover:scale-110
+                            ${plusMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+                        >
+                          <span className="material-symbols-outlined text-base leading-none">{item.icon}</span>
+                          <span className="mt-0.5 leading-none">{item.label}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
                   <div className="flex-1 relative">
                     <input
                       type="text"
@@ -695,9 +849,39 @@ export default function MainSearch() {
 
             {/* 헤더 */}
             <div className="flex justify-between items-end mb-10">
-              <div className="space-y-2">
+              <div className="space-y-2 flex-1 min-w-0">
                 <span className="px-2 py-0.5 rounded text-lg font-bold bg-primary/10 text-primary uppercase tracking-widest border border-primary/20">현재 쿼리</span>
-                <h1 className="text-4xl font-extrabold tracking-tighter text-on-surface">{query}</h1>
+                {/* 이미지 검색 시 — 미리보기 + 파일명 표시 */}
+                {imageSearchActive && imageSearchPreviewUrl ? (
+                  <div className="flex items-start gap-4">
+                    <div className="relative shrink-0 group">
+                      <img
+                        src={imageSearchPreviewUrl}
+                        alt="검색 이미지"
+                        className="w-28 h-28 object-cover rounded-xl border-2 border-emerald-500/40 shadow-lg shadow-emerald-500/10"
+                      />
+                      <span className="absolute -top-2 -left-2 px-1.5 py-0.5 rounded-md bg-emerald-500 text-white text-[10px] font-bold shadow">
+                        이미지 검색
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setImageSearchModalOpen(true)}
+                        title="이미지 변경"
+                        className="absolute -bottom-2 -right-2 w-7 h-7 rounded-full bg-primary text-on-primary-fixed shadow-lg flex items-center justify-center hover:scale-110 transition"
+                      >
+                        <span className="material-symbols-outlined text-sm">edit</span>
+                      </button>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h1 className="text-2xl font-extrabold tracking-tight text-on-surface truncate">
+                        {imageSearchFile?.name || '이미지 검색'}
+                      </h1>
+                      <p className="text-xs text-on-surface-variant/60 mt-1">시각 임베딩 (SigLIP2) 기반 유사도 검색</p>
+                    </div>
+                  </div>
+                ) : (
+                  <h1 className="text-4xl font-extrabold tracking-tighter text-on-surface">{query}</h1>
+                )}
                 {searching
                   ? <p className="text-on-surface-variant flex items-center gap-2">
                       <span className="material-symbols-outlined text-primary text-lg animate-spin">progress_activity</span>검색 중...
@@ -1022,6 +1206,100 @@ export default function MainSearch() {
           </main>
         )
       })()}
+
+      {/* ── 이미지 검색 입력 모달 ─────────────────────────── */}
+      {imageSearchModalOpen && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm"
+          onClick={() => closeImageModal(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative w-full max-w-lg mx-4 bg-surface-container border border-outline-variant/30 rounded-3xl p-8 shadow-2xl animate-in fade-in zoom-in duration-200"
+          >
+            {/* 헤더 */}
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-bold text-on-surface flex items-center gap-2">
+                <span className="material-symbols-outlined text-primary">image_search</span>
+                이미지 검색
+              </h3>
+              <button
+                type="button"
+                onClick={() => closeImageModal(true)}
+                className="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center text-on-surface-variant"
+              >
+                <span className="material-symbols-outlined text-lg">close</span>
+              </button>
+            </div>
+
+            {/* 드래그앤드롭 + 파일 선택 영역 */}
+            <div
+              onClick={() => imageInputRef.current?.click()}
+              onDragOver={(e) => { e.preventDefault(); setIsDraggingImage(true) }}
+              onDragLeave={() => setIsDraggingImage(false)}
+              onDrop={(e) => {
+                e.preventDefault()
+                setIsDraggingImage(false)
+                const file = e.dataTransfer.files?.[0]
+                if (file && file.type.startsWith('image/')) handleImageFileSelect(file)
+              }}
+              className={`relative cursor-pointer rounded-2xl border-2 border-dashed transition-all
+                ${isDraggingImage
+                  ? 'border-primary bg-primary/10 scale-[1.02]'
+                  : 'border-outline-variant/40 hover:border-primary/60 hover:bg-white/5'}
+                ${imageSearchPreviewUrl ? 'p-3' : 'p-12 text-center'}`}
+            >
+              {imageSearchPreviewUrl ? (
+                <div className="flex flex-col items-center gap-3">
+                  <img
+                    src={imageSearchPreviewUrl}
+                    alt="검색 이미지 미리보기"
+                    className="max-h-64 max-w-full rounded-xl shadow-lg object-contain"
+                  />
+                  <div className="text-xs text-on-surface-variant truncate max-w-full">
+                    {imageSearchFile?.name}
+                  </div>
+                  <div className="text-[11px] text-on-surface-variant/60">
+                    클릭하면 다른 이미지로 변경
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-3">
+                  <span className="material-symbols-outlined text-6xl text-on-surface-variant/40">
+                    add_photo_alternate
+                  </span>
+                  <div className="text-base font-bold text-on-surface">
+                    여기에 이미지를 끌어놓거나 클릭하여 선택하세요
+                  </div>
+                  <div className="text-xs text-on-surface-variant/60">
+                    JPG · PNG · WebP · GIF 등 (최대 50 MB)
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 액션 버튼 */}
+            <div className="flex gap-3 mt-6 justify-end">
+              <button
+                type="button"
+                onClick={() => closeImageModal(true)}
+                className="px-5 py-2 rounded-full border border-outline-variant/30 text-on-surface-variant hover:bg-white/5 transition"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                disabled={!imageSearchFile}
+                onClick={() => imageSearchFile && handleImageSearch(imageSearchFile)}
+                className="px-6 py-2 rounded-full bg-gradient-to-r from-primary to-secondary text-on-primary-fixed font-bold disabled:opacity-40 disabled:cursor-not-allowed hover:shadow-lg hover:shadow-primary/30 transition"
+              >
+                <span className="material-symbols-outlined text-base align-middle mr-1">search</span>
+                검색
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
