@@ -1,6 +1,17 @@
 {
   "name": "db-insight-frontend",
   "version": "0.1.0",
+  "description": "DB_insight — 5-domain local multimodal search (Doc/Img/Movie/Rec/BGM) with TriCHEF + CLAP. Chromaprint, BGE-M3, SigLIP2 powered.",
+  "author": {
+    "name": "KDT-FT-team3-Chainers",
+    "url": "https://github.com/KDT-Chainers/DB_insight"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/KDT-Chainers/DB_insight",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/KDT-Chainers/DB_insight.git"
+  },
   "private": true,
   "type": "module",
   "main": "electron/main.cjs",
