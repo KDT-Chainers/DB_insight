@@ -82,17 +82,30 @@ def _get_kr_bigram_index(vocab: dict) -> dict[str, list[str]]:
     return idx
 
 
+def _bilingual_expand(query: str) -> str:
+    """query_expand.expand_bilingual() 로 한↔영 확장. 실패 시 원본 반환."""
+    try:
+        from services.query_expand import expand_bilingual
+        return expand_bilingual(query)
+    except Exception:
+        return query
+
+
 def asf_scores(query: str, doc_token_sets: list[dict[str, float]],
                vocab: dict) -> np.ndarray:
     """쿼리 토큰 ∩ 문서 토큰의 IDF 합을 문서별로 계산, 정규화.
 
     score_i = Σ_{t ∈ Q ∩ D_i} idf(t)   → min-max 정규화 → [0, 1]
+
+    쿼리는 bilingual 확장 후 토크나이징 → 한↔영 크로스랭귀지 매칭 지원.
     """
     n = len(doc_token_sets)
     if n == 0:
         return np.zeros(0, dtype=np.float32)
 
-    raw = _tokenize(query)
+    # 한↔영 확장으로 크로스랭귀지 토큰 추가
+    expanded_query = _bilingual_expand(query)
+    raw = _tokenize(expanded_query)
     if not raw:
         return np.zeros(n, dtype=np.float32)
     # 한글은 조사 결합으로 compound 형태로만 vocab 에 존재하는 경우가 많음.
