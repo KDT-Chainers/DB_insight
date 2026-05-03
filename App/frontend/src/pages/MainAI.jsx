@@ -23,6 +23,27 @@ function fmtTime(sec) {
   return `${m}:${String(s % 60).padStart(2, '0')}`
 }
 
+// AI 답변 안전장치 — 시스템 프롬프트로 마크다운 금지했지만,
+// LLM 이 이를 어길 경우를 대비한 프론트엔드 폴리필.
+// 별표/헤딩/백틱/인용/하이픈 불릿 → 평문 변환
+function stripMarkdown(text) {
+  if (!text) return text
+  return text
+    // **bold** / *italic* → 따옴표 스타일
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/(?<![*\w])\*(.+?)\*(?!\*)/g, '$1')
+    // ### / ## / # 헤딩 → 일반 텍스트
+    .replace(/^#{1,6}\s+/gm, '')
+    // `code` → 일반 텍스트
+    .replace(/`([^`\n]+)`/g, '$1')
+    // > 인용 → 일반 텍스트
+    .replace(/^>\s+/gm, '')
+    // --- 가로선 → 빈 줄
+    .replace(/^[-*_]{3,}\s*$/gm, '')
+    // - / * 불릿 → • 점
+    .replace(/^(\s*)[-*]\s+/gm, '$1• ')
+}
+
 function avStreamUrl(result) {
   const domain = result.trichef_domain ?? (result.file_type === 'video' ? 'movie' : 'music')
   return `${API_BASE}/api/admin/file?domain=${domain}&id=${encodeURIComponent(result.file_path)}`
@@ -1411,7 +1432,7 @@ export default function MainAI() {
                     )}
                   </div>
                   <div className="px-6 py-5 leading-relaxed text-on-surface text-base whitespace-pre-wrap min-h-[80px]">
-                    {aimodeAnswer || (
+                    {aimodeAnswer ? stripMarkdown(aimodeAnswer) : (
                       <span className="text-on-surface-variant/40 italic">본문을 분석해 답변을 정리하는 중입니다...</span>
                     )}
                     {!aimodeDone && aimodeAnswer && (
