@@ -9,7 +9,7 @@ export default function TeamLogoMark({ className = "" }) {
       width={32}
       height={32}
       draggable={false}
-      className={`h-8 w-8 shrink-0 rounded-lg bg-black object-contain ring-1 ring-white/10 ${className}`}
+      className={`h-8 w-8 shrink-0 rounded-lg bg-transparent object-contain ${className}`}
     />
   );
 }

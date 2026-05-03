@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom'
 import WindowControls from '../components/WindowControls'
 import AnimatedOrb from '../components/AnimatedOrb'
 import AmbientPageBackdrop from '../components/AmbientPageBackdrop'
+import TeamLogoMark from '../components/TeamLogoMark'
 
 /**
  * v0 AIHero 스타일 인트로 (히어로 + 오브).
@@ -24,13 +25,7 @@ export default function LandingHome() {
       </div>
 
       <header className="relative z-10 flex items-center justify-between px-6 pb-2 pt-10 md:px-8">
-        <div className="flex items-center gap-2 rounded-full border border-white/10 bg-surface-container-high/50 px-4 py-2 backdrop-blur-md">
-          <span className="material-symbols-outlined text-xl text-primary" style={{ fontVariationSettings: '"FILL" 1' }}>
-            auto_awesome
-          </span>
-          <span className="font-semibold text-on-surface">DB_insight</span>
-          <span className="hidden text-xs text-on-surface-variant sm:inline">Local AI</span>
-        </div>
+        <TeamLogoMark className="!h-9 !w-9 rounded-xl md:!h-10 md:!w-10" />
         <nav className="flex items-center gap-2">
           <button
             type="button"
