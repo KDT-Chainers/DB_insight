@@ -92,6 +92,66 @@ body {
   background-color: rgba(28, 37, 62, 0.6);
 }
 
+/* 데이터 인덱싱 — 메인 팔레트(surface/primary) + 결정질 글래스 */
+.di-glass-shell {
+  background: linear-gradient(
+    155deg,
+    rgba(28, 37, 62, 0.58) 0%,
+    rgba(7, 13, 31, 0.4) 48%,
+    rgba(12, 19, 38, 0.52) 100%
+  );
+  backdrop-filter: blur(44px) saturate(1.45);
+  -webkit-backdrop-filter: blur(44px) saturate(1.45);
+  border-right: 1px solid rgba(133, 173, 255, 0.14);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+    16px 0 56px rgba(0, 0, 0, 0.32);
+}
+
+.di-glass-card {
+  background: linear-gradient(
+    168deg,
+    rgba(28, 37, 62, 0.5) 0%,
+    rgba(17, 25, 46, 0.38) 42%,
+    rgba(7, 13, 31, 0.36) 100%
+  );
+  backdrop-filter: blur(36px) saturate(1.38);
+  -webkit-backdrop-filter: blur(36px) saturate(1.38);
+  border: 1px solid rgba(133, 173, 255, 0.14);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.18),
+    0 10px 42px rgba(0, 0, 0, 0.28);
+}
+
+.di-glass-card--accent {
+  border-color: rgba(133, 173, 255, 0.26);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.14),
+    0 10px 42px rgba(0, 0, 0, 0.28),
+    0 0 36px rgba(133, 173, 255, 0.12);
+}
+
+.di-nav-active {
+  background: rgba(28, 37, 62, 0.88);
+  border: 1px solid rgba(133, 173, 255, 0.32);
+  color: #dfe4fe;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 0 28px rgba(133, 173, 255, 0.14);
+}
+
+.di-section-title {
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  background: linear-gradient(105deg, #85adff 0%, #b4c8ff 38%, #dfe4fe 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
 .grid-bg {
   background-image:
     linear-gradient(rgba(133, 173, 255, 0.03) 1px, transparent 1px),
@@ -214,4 +274,91 @@ body {
 }
 .portal-text {
   animation: portal-text-fade 0.85s ease-out forwards;
+}
+
+/* AI 홈 — 곡선 띠 첫 진입: 위에서 아래로 내려옴 */
+@keyframes ai-home-glow-slide-in {
+  from {
+    transform: translate3d(0, -26vh, 0);
+    opacity: 0.25;
+  }
+  to {
+    transform: translate3d(0, 0, 0);
+    opacity: 1;
+  }
+}
+.ai-home-glow-slide-in {
+  transform-origin: 50% 45%;
+  animation: ai-home-glow-slide-in 2.65s cubic-bezier(0.22, 0.99, 0.26, 1) forwards;
+}
+
+/* AI 홈 — 곡선 그라데이션 띠 부드러운 드리프트 */
+@keyframes ai-home-glow-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1.02);
+  }
+  33% {
+    transform: translate3d(1.25%, -0.9%, 0) scale(1.04);
+  }
+  66% {
+    transform: translate3d(-1.1%, 0.75%, 0) scale(1.03);
+  }
+}
+.ai-home-glow-drift {
+  transform-origin: 50% 50%;
+  animation: ai-home-glow-drift 24s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-home-glow-slide-in {
+    animation: none;
+    transform: none;
+    opacity: 1;
+  }
+  .ai-home-glow-drift {
+    animation: none;
+    transform: none;
+  }
+}
+
+/* MainSearch 홈 — 마운트 시(보안 인증 후 등) 짧은 stagger 등장 */
+@keyframes main-search-entrance-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.main-search-entrance-off .mse-stagger {
+  opacity: 0;
+  transform: translateY(14px);
+}
+.main-search-entrance-on .mse-stagger {
+  animation: main-search-entrance-in 0.52s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.main-search-entrance-on .mse-d0 {
+  animation-delay: 0.05s;
+}
+.main-search-entrance-on .mse-d1 {
+  animation-delay: 0.11s;
+}
+.main-search-entrance-on .mse-d2 {
+  animation-delay: 0.17s;
+}
+.main-search-entrance-on .mse-d3 {
+  animation-delay: 0.23s;
+}
+.main-search-entrance-on .mse-d4 {
+  animation-delay: 0.29s;
+}
+@media (prefers-reduced-motion: reduce) {
+  .main-search-entrance-off .mse-stagger,
+  .main-search-entrance-on .mse-stagger {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
 }

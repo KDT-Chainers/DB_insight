@@ -16,11 +16,61 @@ const CAM_Z_BASE = 2.85;
  *   size?: number
  *   className?: string
  *   interactive?: boolean
+ *   colorMode?: 'default' | 'ai' — ai: 네트워크 그래프 톤(블루·핑크·민트·코랄) 점 색
+ *   hideCenterUI?: boolean — true면 중앙 마이크/캡션 오버레이 숨김
+ *   pointScaleMul?: number — 점 픽셀 크기 배율(기본 1). 존재감 올릴 때 1.15~1.35
  *   particleCount?: number
  *   onMicClick?: () => void
  *   listening?: boolean
+ *   assembleIntro?: boolean — true면 점이 바깥에서 구면으로 모이는 인트로
+ *   assembleDuration?: number — 인트로 길이(초), 기본 ~8
+ *   layout?: 'fixed' | 'fill' — fill이면 부모 전체를 캔버스로 채움(AI 홈 전역 오브 등)
  * }} [props]
  */
+
+function smoothstep(edge0, edge1, x) {
+  const t = Math.min(1, Math.max(0, (x - edge0) / (Math.abs(edge1 - edge0) < 1e-8 ? 1e-8 : edge1 - edge0)));
+  return t * t * (3 - 2 * t);
+}
+
+/** AI 모드: 신경망 톤 — 허브(격자) vs 노드(스캐터) + 전기 시안 통로 하이라이트 */
+function aiPointColor(nx, ny, nz, rnd, isScatter) {
+  const navy = [0.18, 0.42, 1.0];
+  const pink = [1.0, 0.35, 0.88];
+  const mint = [0.32, 0.98, 0.78];
+  const coral = [1.0, 0.38, 0.26];
+  const electric = [0.55, 0.95, 1.0];
+  const lerp3 = (a, b, t) => [
+    a[0] + (b[0] - a[0]) * t,
+    a[1] + (b[1] - a[1]) * t,
+    a[2] + (b[2] - a[2]) * t,
+  ];
+  if (isScatter) {
+    const roll = rnd();
+    const base = roll < 0.3 ? mint : roll < 0.62 ? pink : roll < 0.88 ? navy : electric;
+    const hot = rnd() < 0.22 ? 1.12 : 1.0;
+    return [
+      Math.min(1, base[0] * (0.9 + rnd() * 0.18) * hot),
+      Math.min(1, base[1] * (0.9 + rnd() * 0.18) * hot),
+      Math.min(1, base[2] * (0.9 + rnd() * 0.18) * hot),
+    ];
+  }
+  let c = [...navy];
+  const wTop = smoothstep(0.12, 0.82, ny) * 0.78;
+  const wRight = smoothstep(0.18, 0.72, nx) * (0.45 + 0.55 * smoothstep(-0.35, 0.45, nz));
+  const wLeft = smoothstep(-0.72, -0.18, nx) * 0.72;
+  c = lerp3(c, pink, wTop);
+  c = lerp3(c, mint, wRight * 0.62);
+  c = lerp3(c, coral, wLeft * 0.55);
+  const corridor = Math.abs(Math.sin(nx * 7.2 + nz * 5.1 + ny * 3.3));
+  c = lerp3(c, electric, smoothstep(0.55, 0.98, corridor) * 0.28);
+  const n = (rnd() - 0.5) * 0.09;
+  return [
+    Math.min(1, Math.max(0, c[0] + n)),
+    Math.min(1, Math.max(0, c[1] + n)),
+    Math.min(1, Math.max(0, c[2] + n)),
+  ];
+}
 
 const VERT = /* glsl */ `
 uniform float uTime;
@@ -28,25 +78,41 @@ uniform float uPointScale;
 uniform float uPixelRatio;
 uniform vec3 uAimDir;
 uniform float uStretch;
+uniform float uAssemble;
+uniform float uNeural;
+attribute vec3 aSpread;
 attribute float aJitter;
 attribute float aPhase;
 attribute float aScatter;
+attribute vec3 aColor;
 varying float vRim;
 varying float vPhase;
 varying float vScatter;
 varying float vJitter;
+varying vec3 vColor;
 
 void main() {
-  vec3 dir = normalize(position);
+  vec3 S = position;
+  vec3 dir = normalize(S);
   float breathe = sin(uTime * 1.15 + dot(dir, vec3(2.1, 0.7, 1.3))) * 0.018;
   breathe += sin(uTime * 2.4 - dot(dir, vec3(-1.2, 1.9, 0.5))) * 0.01;
-  vec3 pos = position * (1.0 + breathe);
+  breathe += uNeural * sin(uTime * 2.9 + dot(dir, vec3(4.2, -2.1, 1.7)) * 3.0) * 0.017;
+  breathe += uNeural * sin(aPhase * 4.0 + uTime * 4.35) * 0.01 * (0.55 + 0.45 * aScatter);
+  vec3 Sb = S * (1.0 + breathe);
+  float t0 = clamp(uAssemble, 0.0, 1.0);
+  float te = 1.0 - pow(1.0 - t0, 4.0);
+  vec3 pos = mix(aSpread, Sb, te);
 
   vec3 A = normalize(uAimDir + vec3(0.0001));
   float align = max(dot(dir, A), 0.0);
   float pull = pow(align, 2.2) * (1.0 - 0.1 * aScatter);
   pos += A * uStretch * pull * 0.68;
   pos -= dir * uStretch * pull * 0.14;
+
+  vec3 ax = normalize(cross(dir, vec3(0.12, 0.93, 0.1)) + vec3(0.0001));
+  vec3 bi = normalize(cross(dir, ax));
+  float syn = sin(uTime * 3.25 + aPhase * 7.5 + dot(dir, vec3(5.1, 2.2, -3.4)));
+  pos += uNeural * (ax * syn + bi * cos(syn * 1.35)) * 0.0135 * (0.42 + 0.58 * aScatter);
 
   vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
   vec3 nView = normalize((modelViewMatrix * vec4(dir, 0.0)).xyz);
@@ -56,22 +122,27 @@ void main() {
   vPhase = aPhase;
   vScatter = aScatter;
   vJitter = aJitter;
+  vColor = aColor;
 
   float z = max(-mvPosition.z, 0.32);
   float basePx = uPointScale * uPixelRatio / z;
   float szVar = mix(0.78, 1.22, aJitter * 0.5 + 0.5);
   if (aScatter > 0.5) szVar *= 0.88;
-  gl_PointSize = clamp(basePx * szVar * (0.92 + vRim * 0.55), 1.0, 5.85);
+  float ps = clamp(basePx * szVar * (0.92 + vRim * 0.55), 1.0, 7.2);
+  ps *= 1.0 + uNeural * (0.06 + 0.1 * aScatter) * (0.5 + 0.5 * sin(uTime * 2.1 + aPhase * 6.0));
+  gl_PointSize = ps;
   gl_Position = projectionMatrix * mvPosition;
 }
 `;
 
 const FRAG = /* glsl */ `
 uniform float uTime;
+uniform float uNeural;
 varying float vRim;
 varying float vPhase;
 varying float vScatter;
 varying float vJitter;
+varying vec3 vColor;
 
 void main() {
   vec2 q = gl_PointCoord - vec2(0.5);
@@ -81,28 +152,36 @@ void main() {
   float dotMask = 1.0 - smoothstep(0.0, 0.88, r);
   dotMask *= 1.0 - smoothstep(0.55, 0.95, r) * 0.35;
 
-  float spd = mix(4.2, 8.5, vScatter);
+  float spd = mix(4.2, 8.5, vScatter) * (1.0 + uNeural * 0.55);
   float tw1 = 0.5 + 0.5 * sin(uTime * spd + vPhase);
   float tw2 = 0.5 + 0.5 * sin(uTime * 6.8 - vPhase * 1.9 + vJitter * 6.28318);
+  float tw3 = 0.5 + 0.5 * sin(uTime * 11.2 + vPhase * 9.0 + vJitter * 12.56);
   float sparkle = 0.58 + 0.42 * tw1 * mix(0.75, 1.0, tw2);
-  sparkle = clamp(pow(sparkle, 0.9), 0.38, 1.45);
+  sparkle += uNeural * (0.12 + 0.22 * vScatter) * tw3 * tw3;
+  sparkle = clamp(pow(sparkle, 0.88), 0.35, 1.58);
 
   float rimBoost = mix(0.48, 1.38, vRim);
   float halo = mix(0.65, 1.15, vScatter);
 
+  float wave = sin(uTime * 2.65 + vPhase * 13.0 + dot(vColor, vec3(4.2, 2.7, 1.9)));
+  float fire = uNeural * smoothstep(0.45, 0.98, wave * 0.5 + 0.5) * mix(0.35, 0.95, vScatter);
+  float burst = uNeural * pow(max(0.0, sin(uTime * 4.35 + vPhase * 17.0 + vJitter * 9.0)), 12.0) * 0.95;
+
   float alpha = dotMask * rimBoost * sparkle * halo * 0.82;
+  alpha *= 1.0 + 0.42 * fire + 0.65 * burst;
   alpha = clamp(alpha, 0.0, 1.0);
 
-  vec3 col = vec3(1.0);
+  vec3 col = vColor * (1.0 + 0.28 * fire + 0.75 * burst);
   gl_FragColor = vec4(col, alpha);
 }
 `;
 
 /** 격자 구면 + 스캐터 셸 */
-function buildWhiteOrbPoints(total, radius) {
-  const scatterN = Math.min(Math.floor(total * 0.32), 10000);
+function buildWhiteOrbPoints(total, radius, palette = "default") {
+  const scatterFrac = palette === "ai" ? 0.38 : 0.32;
+  const scatterN = Math.min(Math.floor(total * scatterFrac), 10000);
   let gridN = total - scatterN;
-  const lonBands = Math.max(32, Math.ceil(Math.sqrt(gridN * 1.85)));
+  const lonBands = Math.max(36, Math.ceil(Math.sqrt(gridN * 2.05)));
   const latBands = Math.max(16, Math.ceil(gridN / lonBands));
   gridN = latBands * lonBands;
 
@@ -111,6 +190,8 @@ function buildWhiteOrbPoints(total, radius) {
   const jitter = new Float32Array(count);
   const phase = new Float32Array(count);
   const scatter = new Float32Array(count);
+  const colors = new Float32Array(count * 3);
+  const spread = new Float32Array(count * 3);
 
   let seed = 9.876;
   const rnd = () => {
@@ -126,9 +207,9 @@ function buildWhiteOrbPoints(total, radius) {
     const cosT = Math.cos(theta);
     for (let lon = 0; lon < lonBands; lon++) {
       const phi = (lon / lonBands) * Math.PI * 2;
-      const jx = (rnd() - 0.5) * 0.012;
-      const jy = (rnd() - 0.5) * 0.012;
-      const jz = (rnd() - 0.5) * 0.012;
+      const jx = (rnd() - 0.5) * 0.004;
+      const jy = (rnd() - 0.5) * 0.004;
+      const jz = (rnd() - 0.5) * 0.004;
       const x = radius * sinT * Math.cos(phi) + jx;
       const y = radius * cosT + jy;
       const z = radius * sinT * Math.sin(phi) + jz;
@@ -139,6 +220,30 @@ function buildWhiteOrbPoints(total, radius) {
       jitter[idx] = rnd();
       phase[idx] = rnd() * Math.PI * 2;
       scatter[idx] = 0;
+      const nx = positions[idx * 3] / radius;
+      const ny = positions[idx * 3 + 1] / radius;
+      const nz = positions[idx * 3 + 2] / radius;
+      if (palette === "ai") {
+        const rgb = aiPointColor(nx, ny, nz, rnd, false);
+        colors[idx * 3] = rgb[0];
+        colors[idx * 3 + 1] = rgb[1];
+        colors[idx * 3 + 2] = rgb[2];
+      } else {
+        colors[idx * 3] = 1;
+        colors[idx * 3 + 1] = 1;
+        colors[idx * 3 + 2] = 1;
+      }
+      const vx = (rnd() - 0.5) * 1.05;
+      const vy = (rnd() - 0.5) * 1.05;
+      const vz = (rnd() - 0.5) * 1.05;
+      const px = positions[idx * 3] + vx;
+      const py = positions[idx * 3 + 1] + vy;
+      const pz = positions[idx * 3 + 2] + vz;
+      const plen = Math.hypot(px, py, pz) || 1;
+      const spreadR = radius * (3.35 + rnd() * 1.25);
+      spread[idx * 3] = (px / plen) * spreadR;
+      spread[idx * 3 + 1] = (py / plen) * spreadR;
+      spread[idx * 3 + 2] = (pz / plen) * spreadR;
       idx++;
     }
   }
@@ -150,17 +255,114 @@ function buildWhiteOrbPoints(total, radius) {
     const sx = rr * Math.sin(v) * Math.cos(u);
     const sy = rr * Math.cos(v);
     const sz = rr * Math.sin(v) * Math.sin(u);
+    const slen = Math.hypot(sx, sy, sz) || 1;
+    const snx = sx / slen;
+    const sny = sy / slen;
+    const snz = sz / slen;
     positions[idx * 3] = sx;
     positions[idx * 3 + 1] = sy;
     positions[idx * 3 + 2] = sz;
     jitter[idx] = rnd();
     phase[idx] = rnd() * Math.PI * 2;
     scatter[idx] = 1;
+    if (palette === "ai") {
+      const nx = sx / (rr || 1);
+      const ny = sy / (rr || 1);
+      const nz = sz / (rr || 1);
+      const rgb = aiPointColor(nx, ny, nz, rnd, true);
+      colors[idx * 3] = rgb[0];
+      colors[idx * 3 + 1] = rgb[1];
+      colors[idx * 3 + 2] = rgb[2];
+    } else {
+      colors[idx * 3] = 1;
+      colors[idx * 3 + 1] = 1;
+      colors[idx * 3 + 2] = 1;
+    }
+    const jx = (rnd() - 0.5) * 0.95;
+    const jy = (rnd() - 0.5) * 0.95;
+    const jz = (rnd() - 0.5) * 0.95;
+    const qx = snx + jx;
+    const qy = sny + jy;
+    const qz = snz + jz;
+    const qlen = Math.hypot(qx, qy, qz) || 1;
+    const sOuter = radius * (3.2 + rnd() * 1.15);
+    spread[idx * 3] = (qx / qlen) * sOuter;
+    spread[idx * 3 + 1] = (qy / qlen) * sOuter;
+    spread[idx * 3 + 2] = (qz / qlen) * sOuter;
     idx++;
   }
 
-  return { positions, jitter, phase, scatter, count: idx };
+  return { positions, jitter, phase, scatter, colors, spread, count: idx };
 }
+
+/** AI 모드: 격자 이웃만 연결하는 얇은 시냅스 선(과하지 않게 stride로 희소) */
+function buildNeuralSynapseLines(particleCount, radius, palette) {
+  if (palette !== "ai") return null;
+  const scatterFrac = 0.38;
+  const scatterN = Math.min(Math.floor(particleCount * scatterFrac), 10000);
+  let gridN = particleCount - scatterN;
+  const lonBands = Math.max(36, Math.ceil(Math.sqrt(gridN * 2.05)));
+  const latBands = Math.max(16, Math.ceil(gridN / lonBands));
+  gridN = latBands * lonBands;
+
+  const strideLon = 5;
+  const strideLat = 4;
+  const tuck = 0.996;
+
+  const vert = (lat, lon) => {
+    const L = ((lon % lonBands) + lonBands) % lonBands;
+    const la = Math.min(Math.max(0, lat), latBands - 1);
+    const tv = latBands > 1 ? la / (latBands - 1) : 0.5;
+    const theta = tv * Math.PI;
+    const phi = (L / lonBands) * Math.PI * 2;
+    const sinT = Math.sin(theta);
+    const cosT = Math.cos(theta);
+    let x = radius * sinT * Math.cos(phi);
+    let y = radius * cosT;
+    let z = radius * sinT * Math.sin(phi);
+    const len = Math.hypot(x, y, z) || 1;
+    return [
+      (x / len) * radius * tuck,
+      (y / len) * radius * tuck,
+      (z / len) * radius * tuck,
+    ];
+  };
+
+  const segments = [];
+  for (let lat = 0; lat < latBands - strideLat; lat += strideLat) {
+    for (let lon = 0; lon < lonBands; lon += strideLon) {
+      const a = vert(lat, lon);
+      const b = vert(lat, lon + strideLon);
+      segments.push(a[0], a[1], a[2], b[0], b[1], b[2]);
+      const c = vert(lat + strideLat, lon);
+      segments.push(a[0], a[1], a[2], c[0], c[1], c[2]);
+    }
+  }
+  if (segments.length === 0) return null;
+  return new Float32Array(segments);
+}
+
+const LINE_VERT = /* glsl */ `
+attribute float aPhase;
+varying float vPulse;
+void main() {
+  vPulse = aPhase;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`;
+
+const LINE_FRAG = /* glsl */ `
+uniform float uTime;
+uniform float uAssemble;
+varying float vPulse;
+void main() {
+  float vis = smoothstep(0.88, 1.0, uAssemble);
+  float pulse = 0.55 + 0.45 * sin(uTime * 1.65 + vPulse);
+  float a = 0.065 * pulse * vis;
+  vec3 col = vec3(0.48, 0.62, 0.98);
+  gl_FragColor = vec4(col, a);
+}
+`;
 
 export default function AnimatedOrb({
   text = "",
@@ -169,9 +371,18 @@ export default function AnimatedOrb({
   size = 320,
   className = "",
   interactive = true,
+  colorMode = "default",
+  hideCenterUI = false,
+  pointScaleMul = 1,
   particleCount = 9000,
   onMicClick,
   listening = false,
+  /** true면 첫 진입 시 점이 바깥에서 구면으로 모임 (AI 홈 등) */
+  assembleIntro = false,
+  /** assembleIntro 진행 시간(초) */
+  assembleDuration = 8,
+  /** fixed: size×size 박스. fill: 부모 100%×100% (min 크기는 size로 uPointScale 폴백) */
+  layout = "fixed",
 }) {
   const [progress, setProgress] = useState(initialProgress);
   const containerRef = useRef(null);
@@ -224,14 +435,26 @@ export default function AnimatedOrb({
 
     const n = Math.max(2500, Math.min(16000, Math.floor(particleCount)));
     const radius = 1.0;
-    const { positions, jitter, phase, scatter } = buildWhiteOrbPoints(n, radius);
+    const palette = colorMode === "ai" ? "ai" : "default";
+    const { positions, jitter, phase, scatter, colors, spread } =
+      buildWhiteOrbPoints(n, radius, palette);
+
+    const reduceMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const introActive = assembleIntro && !reduceMotion;
+    const introDur = Math.max(0.4, assembleDuration);
+    let introT0 = -1;
 
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    geo.setAttribute("aSpread", new THREE.BufferAttribute(spread, 3));
     geo.setAttribute("aJitter", new THREE.BufferAttribute(jitter, 1));
     geo.setAttribute("aPhase", new THREE.BufferAttribute(phase, 1));
     geo.setAttribute("aScatter", new THREE.BufferAttribute(scatter, 1));
+    geo.setAttribute("aColor", new THREE.BufferAttribute(colors, 3));
 
+    const isNeural = palette === "ai";
     const material = new THREE.ShaderMaterial({
       uniforms: {
         uTime: { value: 0 },
@@ -239,6 +462,8 @@ export default function AnimatedOrb({
         uPixelRatio: { value: dpr },
         uAimDir: { value: new THREE.Vector3(0, 1, 0) },
         uStretch: { value: 0 },
+        uAssemble: { value: introActive ? 0 : 1 },
+        uNeural: { value: isNeural ? 1.0 : 0.0 },
       },
       vertexShader: VERT,
       fragmentShader: FRAG,
@@ -250,7 +475,37 @@ export default function AnimatedOrb({
     });
 
     const points = new THREE.Points(geo, material);
-    scene.add(points);
+    const root = new THREE.Group();
+    root.add(points);
+
+    let lineGeo = null;
+    let lineMat = null;
+    const linePos = buildNeuralSynapseLines(n, radius, palette);
+    if (linePos && linePos.length > 0) {
+      lineGeo = new THREE.BufferGeometry();
+      lineGeo.setAttribute("position", new THREE.BufferAttribute(linePos, 3));
+      const nVerts = linePos.length / 3;
+      const linePhase = new Float32Array(nVerts);
+      for (let i = 0; i < nVerts; i++) {
+        linePhase[i] = Math.random() * Math.PI * 2;
+      }
+      lineGeo.setAttribute("aPhase", new THREE.BufferAttribute(linePhase, 1));
+      lineMat = new THREE.ShaderMaterial({
+        uniforms: {
+          uTime: { value: 0 },
+          uAssemble: { value: introActive ? 0 : 1 },
+        },
+        vertexShader: LINE_VERT,
+        fragmentShader: LINE_FRAG,
+        transparent: true,
+        depthWrite: false,
+        depthTest: true,
+        blending: THREE.NormalBlending,
+      });
+      root.add(new THREE.LineSegments(lineGeo, lineMat));
+    }
+
+    scene.add(root);
 
     const clock = new THREE.Clock();
     const rafRef = { id: 0 };
@@ -259,9 +514,6 @@ export default function AnimatedOrb({
     const invQuat = new THREE.Quaternion();
     const sphereHit = new THREE.Vector3();
     const tmpHit = new THREE.Vector3();
-    const reduceMotion =
-      typeof window !== "undefined" &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
     const onEnter = () => {
       pointerInRef.current = true;
@@ -295,8 +547,11 @@ export default function AnimatedOrb({
       renderer.setSize(w, h, false);
       const pr = Math.min(window.devicePixelRatio || 1, 2);
       material.uniforms.uPixelRatio.value = pr;
-      // Idle 구는 `size` 기준과 동일하게 보이도록: 큰 캔버스 + 뒤로 뺀 카메라에 맞춰 점 스케일만 bleed 보정
-      material.uniforms.uPointScale.value = size * 0.0092 * VIEW_BLEED * 1.4;
+      const effSize =
+        layout === "fill" ? Math.min(w, h) || size : size;
+      // Idle 구는 `effSize` 기준과 동일하게 보이도록: 큰 캔버스 + 뒤로 뺀 카메라에 맞춰 점 스케일만 bleed 보정
+      material.uniforms.uPointScale.value =
+        effSize * 0.0092 * VIEW_BLEED * 1.4 * pointScaleMul;
     };
 
     resize();
@@ -307,18 +562,34 @@ export default function AnimatedOrb({
       const dt = clock.getDelta();
       const t = clock.elapsedTime;
       material.uniforms.uTime.value = t;
+      if (lineMat) {
+        lineMat.uniforms.uTime.value = t;
+      }
+
+      if (introActive) {
+        if (introT0 < 0) introT0 = t;
+        const as = Math.min(1, (t - introT0) / introDur);
+        material.uniforms.uAssemble.value = as;
+        if (lineMat) lineMat.uniforms.uAssemble.value = as;
+      } else {
+        material.uniforms.uAssemble.value = 1;
+        if (lineMat) lineMat.uniforms.uAssemble.value = 1;
+      }
 
       mouseSmoothRef.current.x +=
         (mouseRef.current.x - mouseSmoothRef.current.x) * 0.12;
       mouseSmoothRef.current.y +=
         (mouseRef.current.y - mouseSmoothRef.current.y) * 0.12;
 
-      idleAngleRef.current += dt * 0.38;
+      const neuralSpin = isNeural ? 0.56 : 0.38;
+      idleAngleRef.current += dt * neuralSpin;
       const mx = mouseSmoothRef.current.x;
       const my = mouseSmoothRef.current.y;
-      points.rotation.y = idleAngleRef.current + mx * 0.95;
-      points.rotation.x = my * -0.72;
-      points.rotation.z = mx * my * 0.08;
+      const mxMul = isNeural ? 1.08 : 0.95;
+      const myMul = isNeural ? 0.82 : 0.72;
+      root.rotation.y = idleAngleRef.current + mx * mxMul;
+      root.rotation.x = my * -myMul;
+      root.rotation.z = mx * my * (isNeural ? 0.12 : 0.08);
 
       if (!reduceMotion) {
         const target = pointerInRef.current ? 1 : 0;
@@ -331,7 +602,7 @@ export default function AnimatedOrb({
         if (pointerInRef.current || s > 0.025) {
           raycaster.setFromCamera(new THREE.Vector2(mx, -my), camera);
           if (raycaster.ray.intersectSphere(sphereWorld, sphereHit) !== null) {
-            invQuat.copy(points.quaternion).invert();
+            invQuat.copy(root.quaternion).invert();
             tmpHit.copy(sphereHit).applyQuaternion(invQuat).normalize();
             aimLocalRef.current.copy(tmpHit);
           }
@@ -354,9 +625,19 @@ export default function AnimatedOrb({
       ro.disconnect();
       geo.dispose();
       material.dispose();
+      if (lineGeo) lineGeo.dispose();
+      if (lineMat) lineMat.dispose();
       renderer.dispose();
     };
-  }, [particleCount, size]);
+  }, [
+    particleCount,
+    size,
+    colorMode,
+    pointScaleMul,
+    assembleIntro,
+    assembleDuration,
+    layout,
+  ]);
 
   const displayProgress = Math.min(100, Math.round(progress));
   const captionLines = text
@@ -365,23 +646,30 @@ export default function AnimatedOrb({
     .map((s) => s.trim())
     .filter(Boolean);
 
+  /* 호버 box-shadow는 사각 프레임처럼 보여 제거 — 피드백은 scale/translate만 */
   const shellInteractive =
     interactive &&
-    "group origin-center cursor-pointer transition-[transform,box-shadow,filter] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] hover:scale-[1.05] hover:-translate-y-0.5 hover:shadow-[0_0_28px_rgba(133,173,255,0.18)] active:scale-[1.02] active:translate-y-0 motion-reduce:transition-none motion-reduce:hover:scale-100 motion-reduce:hover:translate-y-0 motion-reduce:hover:shadow-none motion-reduce:active:scale-100";
+    "group origin-center cursor-pointer transition-[transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] hover:scale-[1.05] hover:-translate-y-0.5 active:scale-[1.02] active:translate-y-0 motion-reduce:transition-none motion-reduce:hover:scale-100 motion-reduce:hover:translate-y-0 motion-reduce:active:scale-100";
+
+  const fill = layout === "fill";
 
   return (
     <div
       ref={containerRef}
-      className={`relative inline-block select-none overflow-visible ${shellInteractive || ""} ${className}`}
-      style={{ width: size, height: size }}
+      className={`relative select-none overflow-visible bg-transparent shadow-none ring-0 ${fill ? "h-full w-full min-h-0" : "mx-auto block"} ${shellInteractive || ""} ${className}`}
+      style={fill ? { width: "100%", height: "100%" } : { width: size, height: size }}
     >
       <div
         ref={drawWrapRef}
-        className="pointer-events-auto absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
-        style={{
-          width: size * VIEW_BLEED,
-          height: size * VIEW_BLEED,
-        }}
+        className={`absolute bg-transparent shadow-none ${interactive ? "pointer-events-auto" : "pointer-events-none"} ${fill ? "inset-0 left-0 top-0" : "left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"}`}
+        style={
+          fill
+            ? { width: "100%", height: "100%" }
+            : {
+                width: size * VIEW_BLEED,
+                height: size * VIEW_BLEED,
+              }
+        }
       >
         <canvas
           ref={canvasRef}
@@ -390,6 +678,7 @@ export default function AnimatedOrb({
         />
       </div>
 
+      {!hideCenterUI && (
       <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center">
         {onMicClick ? (
           <button
@@ -443,6 +732,7 @@ export default function AnimatedOrb({
           </p>
         )}
       </div>
+      )}
     </div>
   );
 }

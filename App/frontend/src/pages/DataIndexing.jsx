@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { useState, useCallback, useRef, useEffect } from 'react'
 import WindowControls from '../components/WindowControls'
+import TeamLogoMark from '../components/TeamLogoMark'
 import { API_BASE as API } from '../api'
 const TYPE_ICON  = { doc: 'description', video: 'movie', image: 'image', audio: 'volume_up' }
 const TYPE_LABEL = { doc: '문서', video: '동영상', image: '이미지', audio: '음성' }
@@ -70,7 +71,7 @@ function FileRow({ item, depth, checked, onToggle, jobResult }) {
 
   return (
     <div
-      className={`flex items-center gap-2 py-1 pr-3 rounded-lg hover:bg-white/5 transition-colors group ${!supported ? 'opacity-40' : ''}`}
+      className={`group flex items-center gap-2 rounded-xl py-1 pr-3 transition-colors hover:bg-surface-container-high/40 ${!supported ? 'opacity-40' : ''}`}
       style={{ paddingLeft: `${10 + depth * INDENT}px` }}
     >
       {/* 폴더 화살표 자리 맞춤 */}
@@ -157,7 +158,7 @@ function FolderRow({ item, depth, checkedPaths, onToggle, onSetMany, jobResultMa
     <>
       {/* 폴더 자신 */}
       <div
-        className="flex items-center gap-2 py-1 pr-3 rounded-lg hover:bg-white/5 transition-colors cursor-pointer group"
+        className="group flex cursor-pointer items-center gap-2 rounded-xl py-1 pr-3 transition-colors hover:bg-surface-container-high/40"
         style={{ paddingLeft: `${10 + depth * INDENT}px` }}
       >
         {/* 펼침 화살표 */}
@@ -304,12 +305,11 @@ function IndexingModal({ rootPath, selectedCount, jobStatus, jobId, onClose, onS
       <div className="absolute inset-0 bg-black/70 backdrop-blur-lg" onClick={onClose} />
 
       {/* card — 크게, 두 컬럼 */}
-      <div className={`relative w-full max-w-2xl rounded-3xl overflow-hidden
-        bg-[#080e22]/95 border backdrop-blur-2xl ${borderGlow} flex flex-col`}
+      <div className={`relative flex w-full max-w-2xl flex-col overflow-hidden rounded-3xl border bg-surface-dim/92 backdrop-blur-2xl ${borderGlow}`}
         style={{ maxHeight: '90vh' }}>
 
         {/* ── 헤더 ── */}
-        <div className="flex items-center justify-between px-7 pt-6 pb-4 border-b border-white/5 shrink-0">
+        <div className="flex shrink-0 items-center justify-between border-b border-outline-variant/20 px-7 pb-4 pt-6">
           <div className="flex items-center gap-3">
             {isRunning
               ? <span className="material-symbols-outlined text-[#85adff] text-2xl animate-spin">progress_activity</span>
@@ -335,7 +335,7 @@ function IndexingModal({ rootPath, selectedCount, jobStatus, jobId, onClose, onS
               </button>
             )}
             <button onClick={onClose}
-              className="w-8 h-8 rounded-full bg-white/8 hover:bg-white/15 flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-all">
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-outline-variant/25 bg-surface-container-high/50 text-on-surface-variant transition-all hover:border-outline-variant/40 hover:bg-surface-container-highest/60 hover:text-on-surface">
               <span className="material-symbols-outlined text-sm">close</span>
             </button>
           </div>
@@ -345,7 +345,7 @@ function IndexingModal({ rootPath, selectedCount, jobStatus, jobId, onClose, onS
         <div className="flex gap-0 flex-1 min-h-0 overflow-hidden">
 
           {/* 왼쪽: 원형 프로그레스 + 현재 파일 */}
-          <div className="w-64 shrink-0 flex flex-col items-center justify-start pt-8 pb-6 px-6 border-r border-white/5 gap-6">
+          <div className="flex w-64 shrink-0 flex-col items-center justify-start gap-6 border-r border-outline-variant/20 px-6 pb-6 pt-8">
 
             {/* 원형 링 + 숫자 */}
             <div className="relative flex items-center justify-center">
@@ -358,7 +358,7 @@ function IndexingModal({ rootPath, selectedCount, jobStatus, jobId, onClose, onS
 
             {/* 전체 바 */}
             <div className="w-full space-y-2">
-              <div className="h-2 bg-white/6 rounded-full overflow-hidden">
+              <div className="h-2 overflow-hidden rounded-full bg-outline-variant/25">
                 <div className={`h-full rounded-full transition-all duration-500 ${
                   isDone ? 'bg-emerald-500' : isError ? 'bg-red-500' : isStopped ? 'bg-amber-500'
                   : 'bg-gradient-to-r from-[#85adff] to-[#ac8aff]'
@@ -399,7 +399,7 @@ function IndexingModal({ rootPath, selectedCount, jobStatus, jobId, onClose, onS
 
             {/* 동영상 4단계 스텝 (동영상 처리 중일 때만) */}
             {isRunning && runningResult?.step != null && (
-              <div className="shrink-0 px-6 pt-6 pb-5 border-b border-white/5">
+              <div className="shrink-0 border-b border-outline-variant/20 px-6 pb-5 pt-6">
                 <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/40 mb-4">동영상 처리 단계</p>
                 <div className="grid grid-cols-4 gap-3">
                   {STEPS.map((label, idx) => {
@@ -414,7 +414,7 @@ function IndexingModal({ rootPath, selectedCount, jobStatus, jobId, onClose, onS
                             ? 'bg-[#85adff]/10 border-[#85adff]/40 shadow-[0_0_20px_rgba(133,173,255,0.2)]'
                             : isPast
                               ? 'bg-emerald-500/8 border-emerald-500/20'
-                              : 'bg-white/3 border-white/5'
+                              : 'border border-outline-variant/15 bg-surface-container-high/30'
                         }`}>
                         {/* 번호 / 아이콘 */}
                         <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-black border-2 transition-all ${
@@ -422,7 +422,7 @@ function IndexingModal({ rootPath, selectedCount, jobStatus, jobId, onClose, onS
                             ? 'bg-[#85adff] border-[#85adff] text-[#070d1f] scale-110'
                             : isPast
                               ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400'
-                              : 'bg-white/5 border-white/10 text-on-surface-variant/30'
+                              : 'border border-outline-variant/20 bg-surface-container-high/40 text-on-surface-variant/30'
                         }`}>
                           {isPast
                             ? <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: '"FILL" 1' }}>check</span>
@@ -447,10 +447,10 @@ function IndexingModal({ rootPath, selectedCount, jobStatus, jobId, onClose, onS
 
             {/* 파일 전체 목록 */}
             <div className="flex-1 overflow-y-auto min-h-0">
-              <div className="px-4 pt-4 pb-2 sticky top-0 bg-[#080e22]/95 backdrop-blur-sm z-10 border-b border-white/5">
+              <div className="sticky top-0 z-10 border-b border-outline-variant/20 bg-surface-dim/90 px-4 pb-2 pt-4 backdrop-blur-md">
                 <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/40">파일 목록</p>
               </div>
-              <div className="divide-y divide-white/4 px-2 pb-4">
+              <div className="divide-y divide-outline-variant/12 px-2 pb-4">
                 {allResults.map((r, i) => {
                   const fname = r.path.split('\\').pop() || r.path.split('/').pop()
                   const ext   = fname.split('.').pop()?.toLowerCase()
@@ -465,7 +465,7 @@ function IndexingModal({ rootPath, selectedCount, jobStatus, jobId, onClose, onS
                   return (
                     <div key={i}
                       className={`flex items-center gap-3 px-3 py-2.5 rounded-xl mx-1 my-0.5 transition-all duration-300 ${
-                        isCurrently ? 'bg-[#85adff]/8 border border-[#85adff]/20' : 'border border-transparent hover:bg-white/3'
+                        isCurrently ? 'border border-primary/25 bg-primary/8' : 'border border-transparent hover:bg-surface-container-high/35'
                       }`}>
                       <span className={`material-symbols-outlined text-base shrink-0 ${color}`}>{icon}</span>
                       <div className="flex-1 min-w-0">
@@ -569,7 +569,7 @@ function DataSourcesTab() {
           const label = TYPE_LABEL[t] ?? t
           const color = TYPE_COLOR[t] ?? 'text-on-surface-variant'
           return (
-            <div key={t} className="glass-panel rounded-xl p-4 border border-outline-variant/10">
+            <div key={t} className="di-glass-card rounded-2xl border border-outline-variant/20 p-5">
               <div className="flex items-center gap-2 mb-3">
                 <span className={`material-symbols-outlined text-base ${color}`}>{icon}</span>
                 <span className="text-xs font-bold text-on-surface-variant uppercase tracking-widest">{label}</span>
@@ -584,8 +584,8 @@ function DataSourcesTab() {
       </div>
 
       {/* 파일 목록 */}
-      <div className="glass-panel rounded-xl border border-outline-variant/10 overflow-hidden">
-        <div className="px-4 py-3 border-b border-outline-variant/10 flex items-center justify-between">
+      <div className="di-glass-card overflow-hidden rounded-2xl border border-outline-variant/20">
+        <div className="flex items-center justify-between border-b border-outline-variant/20 px-4 py-3">
           <h3 className="text-sm font-bold text-on-surface">전체 파일 <span className="text-on-surface-variant font-normal">({files.length})</span></h3>
           <button
             onClick={loadFiles}
@@ -595,7 +595,7 @@ function DataSourcesTab() {
             새로고침
           </button>
         </div>
-        <div className="divide-y divide-outline-variant/8 max-h-[calc(100vh-340px)] overflow-y-auto">
+        <div className="max-h-[calc(100vh-340px)] divide-y divide-outline-variant/15 overflow-y-auto">
           {files.map((f, i) => {
             const icon    = TYPE_ICON[f.file_type]  ?? 'insert_drive_file'
             const color   = TYPE_COLOR[f.file_type] ?? 'text-on-surface-variant'
@@ -606,8 +606,8 @@ function DataSourcesTab() {
             return (
               <div
                 key={i}
-                className={`flex items-center gap-3 px-4 py-3 transition-colors group
-                  ${isConfirming ? 'bg-red-500/8' : 'hover:bg-white/3'}
+                className={`group flex items-center gap-3 px-4 py-3 transition-colors
+                  ${isConfirming ? 'bg-red-500/8' : 'hover:bg-surface-container-high/40'}
                   ${!f.exists ? 'opacity-40' : ''}`}
               >
                 <span className={`material-symbols-outlined text-base shrink-0 ${color}`}>{icon}</span>
@@ -641,7 +641,7 @@ function DataSourcesTab() {
                     </button>
                     <button
                       onClick={() => setConfirming(null)}
-                      className="px-2 py-0.5 rounded-full bg-white/10 hover:bg-white/20 text-on-surface-variant text-[10px] font-bold transition-colors"
+                      className="rounded-full bg-surface-container-high/70 px-2 py-0.5 text-[10px] font-bold text-on-surface-variant transition-colors hover:bg-surface-container-highest/80"
                     >
                       취소
                     </button>
@@ -691,9 +691,13 @@ function VectorStoreTab() {
   return (
     <div className="space-y-6">
       {/* 총합 */}
-      <div className="glass-panel rounded-xl p-6 border border-primary/20 bg-primary/5">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-primary mb-2">총 벡터 데이터</p>
-        <div className="flex items-end gap-6">
+      <div className="di-glass-card di-glass-card--accent relative overflow-hidden rounded-2xl border border-outline-variant/20 p-6">
+        <div
+          className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-gradient-to-br from-primary/35 to-secondary/25 blur-3xl"
+          aria-hidden
+        />
+        <p className="relative mb-2 text-[10px] font-bold uppercase tracking-widest text-primary">총 벡터 데이터</p>
+        <div className="relative flex items-end gap-6">
           <div>
             <p className="text-4xl font-black text-on-surface">{stats?.total_chunks?.toLocaleString()}</p>
             <p className="text-xs text-on-surface-variant mt-1">총 청크 (벡터)</p>
@@ -718,13 +722,13 @@ function VectorStoreTab() {
           const label = TYPE_LABEL[key] ?? key
           const color = TYPE_COLOR[key] ?? 'text-on-surface-variant'
           return (
-            <div key={key} className="glass-panel rounded-xl p-5 border border-outline-variant/10 space-y-4">
+            <div key={key} className="di-glass-card space-y-4 rounded-2xl border border-outline-variant/20 p-5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className={`material-symbols-outlined ${color}`}>{icon}</span>
                   <span className="font-bold text-on-surface">{label}</span>
                 </div>
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${color} bg-white/5 border-white/10`}>{dim}</span>
+                <span className={`rounded-full border border-outline-variant/25 bg-surface-container-high/50 px-2 py-0.5 text-[10px] font-bold ${color}`}>{dim}</span>
               </div>
               <div className="space-y-2 text-xs">
                 <div className="flex justify-between">
@@ -749,7 +753,7 @@ function VectorStoreTab() {
                 </div>
               </div>
               {/* 채움 비율 바 */}
-              <div className="h-1 bg-white/8 rounded-full overflow-hidden">
+              <div className="h-1 overflow-hidden rounded-full bg-outline-variant/25">
                 <div className={`h-full rounded-full ${t.chunk_count > 0 ? 'bg-gradient-to-r from-primary to-secondary' : 'bg-transparent'}`}
                   style={{ width: `${Math.min(100, (t.chunk_count / Math.max(stats?.total_chunks, 1)) * 100)}%` }} />
               </div>
@@ -759,8 +763,8 @@ function VectorStoreTab() {
       </div>
 
       {/* ChromaDB 정보 */}
-      <div className="glass-panel rounded-xl p-5 border border-outline-variant/10">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-secondary mb-3">ChromaDB 정보</p>
+      <div className="di-glass-card rounded-2xl border border-outline-variant/20 p-5">
+        <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-secondary">ChromaDB 정보</p>
         <div className="grid grid-cols-3 gap-4 text-xs">
           {[
             ['엔진', 'ChromaDB (PersistentClient)'],
@@ -876,50 +880,52 @@ export default function DataIndexing() {
   const selectedCount = checkedPaths.size
 
   return (
-    <div className="bg-surface text-on-surface flex h-screen overflow-hidden">
+    <div className="app-depth-bg flex h-screen overflow-hidden text-on-surface">
 
       {/* Sidebar */}
-      <aside className="w-64 shrink-0 h-screen bg-[#070d1f]/60 backdrop-blur-xl flex flex-col pt-12 pb-4 border-r border-[#41475b]/15 shadow-[20px_0_40px_rgba(133,173,255,0.05)] z-50">
+      <aside className="di-glass-shell z-50 flex h-screen w-64 shrink-0 flex-col rounded-r-3xl pt-12 pb-4 shadow-[20px_0_48px_rgba(133,173,255,0.06)]">
         <div className="px-4 mb-8 flex items-center gap-3">
-          <div className="w-8 h-8 bg-gradient-to-br from-primary to-secondary rounded-lg flex items-center justify-center shrink-0">
-            <span className="material-symbols-outlined text-on-primary-fixed text-lg" style={{ fontVariationSettings: '"FILL" 1' }}>dataset</span>
-          </div>
+          <TeamLogoMark />
           <div>
             <h1 className="text-xl font-black text-[#dfe4fe] leading-none">DB_insight</h1>
             <p className="text-[0.65rem] uppercase tracking-widest text-[#a5aac2] mt-1">데이터 인덱싱</p>
           </div>
         </div>
 
-        <nav className="flex-1 px-3 space-y-1">
+        <nav className="flex-1 space-y-1.5 px-3">
           {[
             { icon: 'database',      label: '워크스페이스', onClick: () => navigate('/search') },
             { icon: 'hub',           label: '데이터 소스',  tab: 'sources'  },
             { icon: 'account_tree',  label: '인덱싱',       tab: 'indexing' },
             { icon: 'memory',        label: '벡터 저장소',  tab: 'store'    },
-          ].map(item => (
+          ].map(item => {
+            const isCat = item.tab != null
+            const active = isCat && item.tab === tab
+            return (
             <button
               key={item.label}
               onClick={item.onClick ?? (() => setTab(item.tab))}
-              className={`w-full flex items-center gap-3 rounded-xl px-4 py-2.5 text-[0.75rem] font-manrope uppercase tracking-widest transition-all
-                ${item.tab === tab
-                  ? 'text-primary bg-[#1c253e]'
-                  : 'text-[#a5aac2] hover:bg-[#1c253e]/50 hover:text-[#dfe4fe]'}`}
+              className={`flex w-full items-center gap-3 rounded-2xl px-4 py-2.5 text-[0.75rem] font-manrope uppercase tracking-widest transition-all
+                ${active
+                  ? 'di-nav-active text-on-surface'
+                  : 'border border-transparent text-on-surface-variant hover:bg-surface-container-high/70 hover:text-on-surface'}`}
             >
-              <span className="material-symbols-outlined text-base">{item.icon}</span>
+              <span className={`material-symbols-outlined shrink-0 text-base ${active ? 'text-primary' : ''}`}>{item.icon}</span>
               {item.label}
             </button>
-          ))}
+            )
+          })}
         </nav>
 
         {selectedCount > 0 && (
-          <div className="mx-3 mb-3 p-3 rounded-xl bg-primary/10 border border-primary/20">
-            <p className="text-[10px] text-primary font-bold uppercase tracking-widest mb-1">선택됨</p>
-            <p className="text-xl font-black text-primary leading-none">{selectedCount}<span className="text-xs ml-1 font-normal">개 파일</span></p>
+          <div className="di-glass-card di-glass-card--accent mx-3 mb-3 rounded-2xl border border-primary/25 p-3">
+            <p className="mb-1 text-[10px] font-bold uppercase tracking-widest text-primary">선택됨</p>
+            <p className="text-xl font-black leading-none text-on-surface">{selectedCount}<span className="ml-1 text-xs font-normal text-on-surface-variant">개 파일</span></p>
           </div>
         )}
 
-        <div className="px-4 mt-auto pt-4 border-t border-outline-variant/10 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-surface-container-highest flex items-center justify-center shrink-0">
+        <div className="mt-auto flex items-center gap-3 border-t border-outline-variant/20 px-4 pt-4">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-outline-variant/30 bg-surface-container-high/45 backdrop-blur-xl">
             <span className="material-symbols-outlined text-primary">account_circle</span>
           </div>
           <div className="overflow-hidden">
@@ -932,8 +938,9 @@ export default function DataIndexing() {
       </aside>
 
       {/* Main */}
-      <main className="flex-1 flex flex-col overflow-hidden bg-surface-dim relative">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-primary/10 rounded-full blur-[120px] pointer-events-none" />
+      <main className="relative flex flex-1 flex-col overflow-hidden">
+        <div className="pointer-events-none absolute right-0 top-0 h-[min(520px,90vw)] w-[min(520px,90vw)] rounded-full bg-primary/14 blur-[140px]" />
+        <div className="pointer-events-none absolute bottom-0 left-1/4 h-[min(420px,70vw)] w-[min(420px,70vw)] rounded-full bg-secondary/12 blur-[120px]" />
 
         {/* 드래그 타이틀바 */}
         <header
@@ -945,33 +952,34 @@ export default function DataIndexing() {
           </div>
         </header>
 
-        <div className="flex-1 flex flex-col gap-4 p-5 overflow-hidden">
+        <div className="relative z-10 flex flex-1 flex-col gap-4 overflow-hidden p-5">
 
           {/* 탭: 데이터 소스 */}
           {tab === 'sources' && (
-            <div className="flex-1 overflow-y-auto min-h-0">
-              <h2 className="text-lg font-black text-on-surface mb-4">데이터 소스</h2>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <h2 className="di-section-title mb-4 text-lg">데이터 소스</h2>
               <DataSourcesTab />
             </div>
           )}
 
           {/* 탭: 벡터 저장소 */}
           {tab === 'store' && (
-            <div className="flex-1 overflow-y-auto min-h-0">
-              <h2 className="text-lg font-black text-on-surface mb-4">벡터 저장소</h2>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <h2 className="di-section-title mb-4 text-lg">벡터 저장소</h2>
               <VectorStoreTab />
             </div>
           )}
 
           {/* 탭: 인덱싱 (기존 UI) */}
           {tab === 'indexing' && <>
+          <h2 className="di-section-title mb-1 shrink-0 text-lg">인덱싱</h2>
 
           {/* 폴더 선택 바 */}
-          <div className="shrink-0 glass-panel px-4 py-2.5 rounded-xl border border-outline-variant/15 flex items-center gap-3">
+          <div className="di-glass-card flex shrink-0 items-center gap-3 rounded-2xl border border-outline-variant/20 px-4 py-2.5">
             <button
               onClick={handleSelectFolder}
               disabled={loading || indexing}
-              className="shrink-0 px-4 py-2 rounded-full bg-surface-container-high border border-outline-variant/40 hover:bg-surface-container-highest transition-all text-sm font-semibold flex items-center gap-2 disabled:opacity-50"
+              className="flex shrink-0 items-center gap-2 rounded-full border border-outline-variant/35 bg-surface-container-high/55 px-4 py-2 text-sm font-semibold backdrop-blur-md transition-all hover:border-primary/40 hover:bg-surface-container-highest/60 disabled:opacity-50"
             >
               <span className="material-symbols-outlined text-base">folder_shared</span>
               {loading ? '스캔 중...' : '폴더 선택'}
@@ -980,15 +988,15 @@ export default function DataIndexing() {
               {rootPath || '폴더를 선택하세요'}
             </span>
             {rootItems.length > 0 && (
-              <span className="shrink-0 px-2.5 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-bold">
+              <span className="shrink-0 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 text-xs font-bold text-primary">
                 {rootItems.length}개
               </span>
             )}
           </div>
 
           {/* 파일 트리 */}
-          <div className="flex-1 glass-panel rounded-xl border border-outline-variant/15 overflow-hidden flex flex-col min-h-0">
-            <div className="shrink-0 px-4 py-2.5 border-b border-outline-variant/10 flex items-center justify-between">
+          <div className="di-glass-card flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-outline-variant/20">
+            <div className="flex shrink-0 items-center justify-between border-b border-outline-variant/20 px-4 py-2.5">
               <h2 className="text-base font-bold tracking-tight text-on-surface">리소스 탐색기</h2>
               {jobStatus && (
                 <button
@@ -1056,7 +1064,7 @@ export default function DataIndexing() {
               className="relative group disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <div className="absolute -inset-0.5 bg-gradient-to-r from-primary to-secondary rounded-full blur opacity-40 group-hover:opacity-70 transition duration-500" />
-              <div className="relative px-10 py-3.5 bg-[#000000] rounded-full flex items-center divide-x divide-outline-variant/30">
+              <div className="relative flex items-center divide-x divide-outline-variant/25 rounded-2xl border border-outline-variant/25 bg-surface-dim/80 px-10 py-3.5 backdrop-blur-xl">
                 <span className="flex items-center gap-2.5 pr-5">
                   <span
                     className={`material-symbols-outlined text-primary ${indexing ? 'animate-spin' : 'animate-pulse'}`}

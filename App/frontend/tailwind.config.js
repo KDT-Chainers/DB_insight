@@ -68,6 +68,7 @@ export default {
         body: ['Manrope', 'sans-serif'],
         label: ['Manrope', 'sans-serif'],
         manrope: ['Manrope', 'sans-serif'],
+        'space-grotesk': ['"Space Grotesk"', 'Manrope', 'sans-serif'],
       },
       keyframes: {
         'orb-breathe': {

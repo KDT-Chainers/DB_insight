@@ -65,10 +65,16 @@ export default function LandingHome() {
         <button
           type="button"
           onClick={() => navigate('/')}
-          className="mt-6 flex items-center gap-2 rounded-full bg-gradient-to-r from-primary to-secondary px-10 py-3.5 font-bold tracking-tight text-on-primary-fixed shadow-[0_4px_24px_rgba(133,173,255,0.35)] transition-all hover:shadow-[0_4px_32px_rgba(172,138,255,0.45)] active:scale-[0.98]"
+          className="group mt-6 flex items-center gap-3 rounded-full border border-outline-variant/20 bg-surface-container-high px-8 py-3 text-sm font-bold tracking-wide text-on-surface-variant transition-all duration-300 hover:bg-surface-container-highest hover:text-on-surface active:scale-[0.98]"
         >
+          <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-primary" aria-hidden />
           시스템 시작
-          <span className="material-symbols-outlined text-xl">arrow_forward</span>
+          <span
+            className="material-symbols-outlined text-lg transition-transform group-hover:translate-x-1"
+            style={{ fontVariationSettings: '"FILL" 0' }}
+          >
+            arrow_forward
+          </span>
         </button>
       </main>
     </div>

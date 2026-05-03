@@ -200,6 +200,13 @@ export default function MainSearch() {
   const [aiTransitioning, setAiTransitioning] = useState(false)
   const [ripplePos, setRipplePos] = useState({ x: '50%', y: '50%' })
 
+  /** 홈 첫 진입 시 stagger 등장(보안 인증 포털 직후 메인과 이어지게) */
+  const [searchEntranceOn, setSearchEntranceOn] = useState(
+    () =>
+      typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+  )
+
   const btnRef  = useRef(null)
   const formRef = useRef(null)
 
@@ -215,6 +222,22 @@ export default function MainSearch() {
   const ml        = open ? 'ml-64' : 'ml-0'
   const leftEdge  = open ? 'left-64' : 'left-0'
   const sidebarPx = open ? 256 : 0
+
+  useEffect(() => {
+    if (
+      typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    )
+      return
+    let id2
+    const id1 = requestAnimationFrame(() => {
+      id2 = requestAnimationFrame(() => setSearchEntranceOn(true))
+    })
+    return () => {
+      cancelAnimationFrame(id1)
+      if (id2 != null) cancelAnimationFrame(id2)
+    }
+  }, [])
 
   // 뒤로가기
   useEffect(() => {
@@ -334,11 +357,15 @@ export default function MainSearch() {
       {/* ════ HOME — v0 AIHero 레이아웃 + 기존 검색/STT/플라이 로직 ════ */}
       {view === 'home' && (
         <>
-          <main className={`${ml} relative z-10 flex h-full flex-col items-center justify-center overflow-visible px-6 pb-16 pt-14 transition-[margin] duration-300 md:px-8 md:pt-16`}>
+          <main
+            className={`${ml} relative z-10 flex h-full flex-col items-center justify-center overflow-visible px-6 pb-16 pt-14 transition-[margin] duration-300 md:px-8 md:pt-16 ${
+              searchEntranceOn ? 'main-search-entrance-on' : 'main-search-entrance-off'
+            }`}
+          >
             <div className="z-10 flex w-full max-w-xl flex-col items-center">
               {/* Hero (v0) */}
               <div
-                className={`mb-6 text-center transition-all duration-300 ${homeExiting ? 'opacity-0 -translate-y-6' : 'translate-y-0 opacity-100'}`}
+                className={`mse-stagger mse-d0 mb-6 text-center transition-all duration-300 ${homeExiting ? 'opacity-0 -translate-y-6' : ''}`}
               >
                 <h1 className="mb-3 text-3xl font-light tracking-tight text-on-surface text-balance md:text-5xl lg:text-6xl">
                   Local Intelligence
@@ -347,7 +374,9 @@ export default function MainSearch() {
               </div>
 
               {/* Orb (v0) */}
-              <div className={`my-4 overflow-visible md:my-8 ${homeExiting ? 'pointer-events-none opacity-0' : ''}`}>
+              <div
+                className={`mse-stagger mse-d1 my-4 overflow-visible md:my-8 ${homeExiting ? 'pointer-events-none opacity-0' : ''}`}
+              >
                 <AnimatedOrb onMicClick={toggleMic} listening={listening} />
               </div>
 
@@ -355,7 +384,7 @@ export default function MainSearch() {
               <form
                 ref={formRef}
                 onSubmit={handleSearch}
-                className="relative w-full max-w-xl"
+                className="mse-stagger mse-d2 relative w-full max-w-xl"
                 style={homeExiting ? { visibility: 'hidden' } : {}}
               >
                 <div
@@ -418,7 +447,7 @@ export default function MainSearch() {
 
               {/* Quick suggestions (v0) */}
               <div
-                className={`mt-6 flex flex-wrap justify-center gap-2 transition-all duration-300 ${homeExiting ? 'pointer-events-none opacity-0' : 'opacity-100'}`}
+                className={`mse-stagger mse-d3 mt-6 flex flex-wrap justify-center gap-2 transition-all duration-300 ${homeExiting ? 'pointer-events-none opacity-0' : ''}`}
               >
                 {V0_HOME_SUGGESTIONS.map((suggestion) => (
                   <button
@@ -432,7 +461,9 @@ export default function MainSearch() {
                 ))}
               </div>
 
-              <div className={`mt-10 flex justify-center ${homeExiting ? 'pointer-events-none opacity-0' : ''}`}>
+              <div
+                className={`mse-stagger mse-d4 mt-10 flex justify-center ${homeExiting ? 'pointer-events-none opacity-0' : ''}`}
+              >
                 <button
                   ref={btnRef}
                   type="button"
