@@ -118,13 +118,6 @@ function _startPythonBackend() {
           // 이 변수를 truthy 로 판정하면 GPU bf16 으로 BGE-reranker-v2-m3 를
           // lazy 로딩하여 /api/search 결과를 재정렬한다. 첫 호출 ~1s 추가.
           TRICHEF_USE_RERANKER: '1',
-          // HuggingFace 모델 오프라인 모드 — 캐시에 있는 모델은 사용하되
-          // hub 검증 HTTPS 호출을 건너뛴다. faster-whisper / transformers /
-          // huggingface_hub 모두 이 변수를 인식. 네트워크 일시 단절 시
-          // ConnectionError(MaxRetryError) 발생 방지. 캐시 미보유 모델은
-          // 로컬 다운로드가 필요하므로 첫 사용 전 한 번 인터넷 연결 필수.
-          HF_HUB_OFFLINE:        '1',
-          TRANSFORMERS_OFFLINE:  '1',
           // [Electron P1] __pycache__ 디스크 쓰기 방지 → I/O 경쟁 감소.
           PYTHONDONTWRITEBYTECODE: '1',
           // 진행률·에러 로그 즉시 flush → 디버깅 가시성 ↑ (헤드리스 spawn 환경 필수).
