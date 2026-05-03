@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, Fragment } from 'react'
 import { useNavigate } from 'react-router-dom'
 import SearchSidebar from '../components/SearchSidebar'
 import { useSidebar } from '../context/SidebarContext'
@@ -19,6 +19,150 @@ const TYPE_META = {
 }
 const getTypeMeta = (t) =>
   TYPE_META[t] ?? { icon: 'insert_drive_file', color: 'text-on-surface-variant', label: t ?? '파일', grad: 'from-[#1c253e] to-[#263354]' }
+
+// ── 경량 Markdown 렌더러 (## ### **bold** *italic* `code` - bullet > quote --- hr) ──
+// LLM 출력을 추가 의존성 없이 풍부한 UI 로 렌더. 외부 패키지 없음.
+function MarkdownLite({ text }) {
+  if (!text) return null
+  // 인라인 패턴 — bold, italic, code, link
+  const renderInline = (s, baseKey = 'i') => {
+    // 순서 중요: code → bold → italic → link
+    const parts = []
+    let buf = s
+    let key = 0
+    const push = (chunk) => parts.push(<Fragment key={`${baseKey}-${key++}`}>{chunk}</Fragment>)
+    // 단순 토큰 파서 (regex 기반 누적)
+    const re = /(\*\*[^*\n]+\*\*)|(\*[^*\n]+\*)|(`[^`\n]+`)|(\[[^\]]+\]\([^)]+\))/g
+    let last = 0
+    let m
+    while ((m = re.exec(buf)) !== null) {
+      if (m.index > last) push(buf.slice(last, m.index))
+      const tok = m[0]
+      if (tok.startsWith('**'))      push(<strong className="text-white font-bold">{tok.slice(2, -2)}</strong>)
+      else if (tok.startsWith('`'))  push(<code className="px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-200 font-mono text-[0.92em]">{tok.slice(1, -1)}</code>)
+      else if (tok.startsWith('['))  {
+        const mm = /\[([^\]]+)\]\(([^)]+)\)/.exec(tok)
+        if (mm) push(<a href={mm[2]} className="text-purple-300 underline" target="_blank" rel="noreferrer">{mm[1]}</a>)
+        else push(tok)
+      }
+      else if (tok.startsWith('*'))  push(<em className="italic text-purple-100">{tok.slice(1, -1)}</em>)
+      else                            push(tok)
+      last = m.index + tok.length
+    }
+    if (last < buf.length) push(buf.slice(last))
+    return parts
+  }
+
+  // 라인 단위 처리 — heading, list, blockquote, hr, paragraph
+  const lines = text.split('\n')
+  const blocks = []
+  let para = []   // 현재 문단 라인 누적
+  let list = null // {type:'ul'|'ol', items:[[lines]]}
+  const flushPara = () => {
+    if (para.length) {
+      blocks.push(
+        <p key={`p${blocks.length}`} className="leading-[1.85] text-on-surface/95 my-3">
+          {renderInline(para.join(' '), `p${blocks.length}`)}
+        </p>
+      )
+      para = []
+    }
+  }
+  const flushList = () => {
+    if (list && list.items.length) {
+      const Tag = list.type === 'ol' ? 'ol' : 'ul'
+      blocks.push(
+        <Tag key={`l${blocks.length}`} className={`my-3 ml-5 space-y-1.5 ${list.type === 'ol' ? 'list-decimal' : 'list-disc'} marker:text-purple-400`}>
+          {list.items.map((line, i) => (
+            <li key={i} className="leading-[1.7] text-on-surface/95 pl-1">
+              {renderInline(line, `l${blocks.length}-${i}`)}
+            </li>
+          ))}
+        </Tag>
+      )
+      list = null
+    }
+  }
+
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i]
+    const line = raw.trimEnd()
+
+    // 빈 줄 → 문단 종결
+    if (!line.trim()) { flushPara(); flushList(); continue }
+
+    // ### / ## / # 헤딩
+    let m
+    if ((m = /^###\s+(.+)$/.exec(line))) {
+      flushPara(); flushList()
+      blocks.push(
+        <h3 key={`h${blocks.length}`} className="text-base font-bold text-purple-200 mt-5 mb-2 flex items-center gap-2">
+          <span className="w-1 h-4 rounded-full bg-purple-400" />
+          {renderInline(m[1], `h${blocks.length}`)}
+        </h3>
+      )
+      continue
+    }
+    if ((m = /^##\s+(.+)$/.exec(line))) {
+      flushPara(); flushList()
+      blocks.push(
+        <h2 key={`h${blocks.length}`} className="text-lg font-bold text-purple-100 mt-6 mb-3 pb-1 border-b border-purple-500/30">
+          {renderInline(m[1], `h${blocks.length}`)}
+        </h2>
+      )
+      continue
+    }
+    if ((m = /^#\s+(.+)$/.exec(line))) {
+      flushPara(); flushList()
+      blocks.push(
+        <h1 key={`h${blocks.length}`} className="text-xl font-bold text-purple-50 mt-7 mb-3">
+          {renderInline(m[1], `h${blocks.length}`)}
+        </h1>
+      )
+      continue
+    }
+
+    // 수평선 ---
+    if (/^[-*_]{3,}\s*$/.test(line)) {
+      flushPara(); flushList()
+      blocks.push(<hr key={`hr${blocks.length}`} className="my-4 border-purple-500/20" />)
+      continue
+    }
+
+    // 인용문 >
+    if ((m = /^>\s+(.+)$/.exec(line))) {
+      flushPara(); flushList()
+      blocks.push(
+        <blockquote key={`q${blocks.length}`} className="border-l-4 border-purple-400/50 pl-4 my-3 italic text-purple-100/80">
+          {renderInline(m[1], `q${blocks.length}`)}
+        </blockquote>
+      )
+      continue
+    }
+
+    // 순서 있는 리스트  1. xx
+    if ((m = /^\d+\.\s+(.+)$/.exec(line))) {
+      flushPara()
+      if (!list || list.type !== 'ol') { flushList(); list = { type: 'ol', items: [] } }
+      list.items.push(m[1])
+      continue
+    }
+    // 순서 없는 리스트  - xx  / * xx
+    if ((m = /^[-*]\s+(.+)$/.exec(line))) {
+      flushPara()
+      if (!list || list.type !== 'ul') { flushList(); list = { type: 'ul', items: [] } }
+      list.items.push(m[1])
+      continue
+    }
+
+    // 일반 문단 — 줄 누적
+    flushList()
+    para.push(line.trim())
+  }
+  flushPara(); flushList()
+
+  return <div className="markdown-lite">{blocks}</div>
+}
 
 // ── 유틸 ─────────────────────────────────────────────────
 function fmtTime(sec) {
@@ -822,6 +966,14 @@ export default function MainSearch() {
   const [bgmIdentifyResult, setBgmIdentifyResult] = useState(null)
   const [isDraggingBgm, setIsDraggingBgm]    = useState(false)
 
+  // 요약 (Ollama qwen) — SSE 스트리밍
+  const [summarizing,  setSummarizing]  = useState(false)
+  const [summaryText,  setSummaryText]  = useState('')
+  const [summaryDone,  setSummaryDone]  = useState(false)
+  const [summaryError, setSummaryError] = useState('')
+  const [summaryMeta,  setSummaryMeta]  = useState(null) // {model, length, kind}
+  const summaryAbortRef = useRef(null)
+
   // home → results 애니메이션
   const [flyStyle, setFlyStyle] = useState(null)
   const [homeExiting, setHomeExiting] = useState(false)
@@ -927,6 +1079,68 @@ export default function MainSearch() {
       setBgmIdentifyResult(null)
       setIsDraggingBgm(false)
     }
+  }, [])
+
+  // ── 요약 시작 (Ollama qwen 스트리밍) ─────────────────────────
+  const handleSummarize = useCallback(async (file) => {
+    if (!file) return
+    if (summaryAbortRef.current) summaryAbortRef.current.abort()
+    const ctrl = new AbortController()
+    summaryAbortRef.current = ctrl
+    setSummarizing(true)
+    setSummaryText('')
+    setSummaryDone(false)
+    setSummaryError('')
+    setSummaryMeta(null)
+    try {
+      const body = {
+        file_type:  file.file_type,
+        trichef_id: file.trichef_id || file.id || '',
+        file_path:  file.file_path  || '',
+        file_name:  file.file_name  || '',
+        segments:   file.segments   || [],
+      }
+      const res = await fetch(`${API_BASE}/api/aimode/summarize`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: ctrl.signal,
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop()
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          let ev
+          try { ev = JSON.parse(line.slice(6)) } catch { continue }
+          if (ev.type === 'token')          setSummaryText(prev => prev + (ev.text || ''))
+          else if (ev.type === 'content_loaded') setSummaryMeta(m => ({ ...(m||{}), length: ev.length, kind: ev.kind }))
+          else if (ev.type === 'info')      setSummaryMeta(m => ({ ...(m||{}), model: ev.model }))
+          else if (ev.type === 'done')      { setSummaryDone(true); if (ev.summary) setSummaryText(ev.summary) }
+          else if (ev.type === 'error')     setSummaryError(ev.message || '오류')
+        }
+      }
+    } catch (e) {
+      if (e.name !== 'AbortError') setSummaryError(e.message || '요약 실패')
+    } finally {
+      setSummarizing(false)
+    }
+  }, [])
+
+  const closeSummary = useCallback(() => {
+    if (summaryAbortRef.current) summaryAbortRef.current.abort()
+    setSummarizing(false)
+    setSummaryText('')
+    setSummaryDone(false)
+    setSummaryError('')
+    setSummaryMeta(null)
   }, [])
 
   const handleBgmIdentify = useCallback(async (file) => {
@@ -1486,6 +1700,22 @@ export default function MainSearch() {
                 <span className={`px-2 py-0.5 rounded-full text-lg font-bold border shrink-0 ${meta.color} bg-white/5 border-white/10`}>{meta.label}</span>
               </div>
               <div className="flex items-center gap-3 shrink-0">
+                {/* ✨ AI 요약 — Ollama qwen 스트리밍 */}
+                <button
+                  onClick={() => handleSummarize(selectedFile)}
+                  disabled={summarizing}
+                  title="이 파일의 핵심 내용을 AI가 요약합니다"
+                  className="px-5 py-2 text-base font-bold uppercase tracking-widest rounded-full transition-all active:scale-95 flex items-center gap-2 disabled:opacity-60"
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(168,85,247,0.18), rgba(236,72,153,0.12))',
+                    border: '1px solid rgba(168,85,247,0.4)',
+                    color: '#e9d5ff',
+                  }}>
+                  <span className={`material-symbols-outlined text-base ${summarizing ? 'animate-spin' : ''}`}>
+                    {summarizing ? 'progress_activity' : 'auto_awesome'}
+                  </span>
+                  {summarizing ? '요약 중...' : 'AI 요약'}
+                </button>
                 <button
                   onClick={() => openFolder(selectedFile.file_path)}
                   className="px-5 py-2 text-base font-bold uppercase tracking-widest text-primary bg-surface-container-high border border-outline-variant/15 rounded-full hover:bg-surface-variant transition-colors active:scale-95">
@@ -1653,6 +1883,78 @@ export default function MainSearch() {
                   </div>
                 </div>
               </div>
+
+              {/* ── ✨ AI 요약 인라인 패널 (상세 페이지 하단) ──────────────── */}
+              {(summarizing || summaryText || summaryError) && (
+                <div className="rounded-2xl overflow-hidden relative"
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(13,7,24,0.85), rgba(20,12,40,0.85))',
+                    border: '1px solid rgba(168,85,247,0.4)',
+                    boxShadow: '0 0 30px rgba(168,85,247,0.15)',
+                  }}>
+                  {/* 헤더 */}
+                  <div className="px-6 py-4 flex items-center gap-3 border-b border-purple-500/20">
+                    <span className="material-symbols-outlined text-purple-300 animate-pulse">auto_awesome</span>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-base font-bold text-purple-100 tracking-wide">
+                        AI 상세 요약
+                      </h3>
+                      {summaryMeta && (
+                        <p className="text-[11px] text-purple-300/60 mt-0.5">
+                          {summaryMeta.model && <>모델: <span className="font-mono">{summaryMeta.model}</span></>}
+                          {summaryMeta.length != null && <> · 본문 {summaryMeta.length.toLocaleString()}자</>}
+                          {summaryMeta.kind && <> · <span className="opacity-70">{summaryMeta.kind}</span></>}
+                        </p>
+                      )}
+                    </div>
+                    {summaryDone ? (
+                      <span className="flex items-center gap-1 text-emerald-400 text-xs">
+                        <span className="material-symbols-outlined text-base">check_circle</span> 완료
+                      </span>
+                    ) : summaryError ? (
+                      <span className="text-rose-300 text-xs">실패</span>
+                    ) : (
+                      <span className="flex items-center gap-1 text-purple-300 text-xs">
+                        <span className="material-symbols-outlined text-base animate-spin">progress_activity</span>
+                        스트리밍
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={closeSummary}
+                      className="w-7 h-7 rounded-full hover:bg-white/10 flex items-center justify-center text-on-surface-variant ml-2"
+                      title={summarizing ? '중단' : '닫기'}
+                    >
+                      <span className="material-symbols-outlined text-lg">close</span>
+                    </button>
+                  </div>
+
+                  {/* 본문 — Markdown 렌더링 + 스트리밍 커서 */}
+                  <div className="px-7 py-6 text-base">
+                    {summaryError ? (
+                      <div className="rounded-xl bg-rose-500/10 border border-rose-500/30 p-4 text-rose-300">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="material-symbols-outlined text-base">error</span>
+                          <span className="font-bold">요약 실패</span>
+                        </div>
+                        <p className="text-sm">{summaryError}</p>
+                      </div>
+                    ) : summaryText ? (
+                      <div className="relative">
+                        <MarkdownLite text={summaryText} />
+                        {!summaryDone && (
+                          <span className="inline-block w-2 h-4 bg-purple-300 ml-1 animate-pulse align-middle" />
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-3 text-on-surface-variant/50">
+                        <span className="material-symbols-outlined animate-spin">progress_activity</span>
+                        <span>본문 추출 + AI 모델 호출 중... (PDF 18,000자 / 영상·음성 80개 세그먼트까지)</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </section>
 
             <div className="fixed bottom-[-10%] left-[20%] w-[40%] h-[40%] bg-primary/5 blur-[120px] pointer-events-none rounded-full" />
@@ -1913,6 +2215,8 @@ export default function MainSearch() {
           </div>
         </div>
       )}
+
+      {/* (요약 모달 제거됨 — 상세 페이지 하단 인라인 패널로 변경됨) */}
     </div>
   )
 }

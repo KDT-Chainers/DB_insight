@@ -199,7 +199,9 @@ def _ollama_oneshot(prompt: str, model: str) -> str:
         return ""
 
 
-def _ollama_stream(messages: list[dict], model: str) -> Generator[str, None, None]:
+def _ollama_stream(messages: list[dict], model: str,
+                   num_predict: int = 1024,
+                   temperature: float = 0.3) -> Generator[str, None, None]:
     try:
         with _req.post(
             f"{OLLAMA_URL}/api/chat",
@@ -207,9 +209,9 @@ def _ollama_stream(messages: list[dict], model: str) -> Generator[str, None, Non
                 "model":   model,
                 "messages": messages,
                 "stream":  True,
-                "options": {"temperature": 0.3, "num_predict": 1024},
+                "options": {"temperature": temperature, "num_predict": num_predict},
             },
-            stream=True, timeout=180,
+            stream=True, timeout=600,
         ) as resp:
             resp.raise_for_status()
             for line in resp.iter_lines():
@@ -736,3 +738,261 @@ def status():
         "langgraph_ok":     _LANGGRAPH_OK,
         "graph_loaded":     g is not None,
     })
+
+
+# ════════════════════════════════════════════════════════════════════
+# 파일 요약 — 상세 페이지에서 [요약] 버튼 클릭 시 호출
+# ════════════════════════════════════════════════════════════════════
+
+def _load_full_doc_text(rid: str, max_chars: int = 12000) -> tuple[str, str]:
+    """doc_page rid 의 PDF 전체 페이지 텍스트 로드 — 요약용.
+
+    Returns: (combined_text, stem)
+    page_images/<stem>/p####.jpg → page_text/<stem>/p*.txt 모두 결합.
+    """
+    try:
+        from config import PATHS
+        from pathlib import Path
+        import re
+        m = re.match(r"^page_images/(.+)/p(\d+)\.(?:jpg|png)$", rid)
+        if not m:
+            return "", ""
+        stem = m.group(1)
+        page_text_dir = Path(PATHS["TRICHEF_DOC_EXTRACT"]) / "page_text" / stem
+        if not page_text_dir.is_dir():
+            return "", stem
+        pages = sorted(page_text_dir.glob("p*.txt"),
+                       key=lambda p: int(p.stem[1:]))
+        chunks: list[str] = []
+        running = 0
+        truncated = False
+        for tp in pages:
+            try:
+                t = tp.read_text(encoding="utf-8").strip()
+            except Exception:
+                continue
+            if not t:
+                continue
+            page_num = int(tp.stem[1:]) + 1
+            piece = f"[p.{page_num}]\n{t}"
+            if running + len(piece) > max_chars:
+                remain = max(0, max_chars - running - 80)
+                if remain > 200:
+                    chunks.append(piece[:remain] + "\n... [중략]")
+                truncated = True
+                break
+            chunks.append(piece)
+            running += len(piece) + 2
+        out = "\n\n".join(chunks)
+        if truncated:
+            out += f"\n\n[전체 {len(pages)}쪽 중 일부만 표시]"
+        return out, stem
+    except Exception as e:
+        logger.warning(f"[summarize] _load_full_doc_text: {e}")
+        return "", ""
+
+
+def _load_file_content_for_summary(file_type: str, trichef_id: str,
+                                    file_path: str, segments: list | None = None
+                                    ) -> tuple[str, str]:
+    """요약용 파일 본문 로드 — 도메인별로 다른 소스에서 컨텐츠 추출.
+
+    Returns: (content, content_kind)
+      doc      : page_text 전체 결합
+      image    : Qwen 5-stage caption (title + tagline + synopsis + caption)
+      video    : segments STT 텍스트 + 메타
+      audio    : segments STT 텍스트
+    """
+    if file_type in ("doc", "doc_page") and trichef_id:
+        # 상세 요약을 위해 컨텍스트 한도 18000자 (qwen2.5:3b 32K 컨텍스트의 일부)
+        text, _stem = _load_full_doc_text(trichef_id, max_chars=18000)
+        return text, "pdf_pages"
+
+    if file_type == "image" and trichef_id:
+        try:
+            from services.location_resolver import _img_location
+            loc = _img_location(trichef_id) or {}
+            parts = [
+                f"[제목] {loc.get('title','')}",
+                f"[한줄 요약] {loc.get('tagline','')}",
+                f"[줄거리] {loc.get('synopsis','')}",
+                f"[설명] {loc.get('caption','')}",
+            ]
+            txt = "\n".join(p for p in parts if p.strip().endswith("]") is False)
+            return txt.strip(), "image_caption"
+        except Exception as e:
+            logger.warning(f"[summarize] image caption: {e}")
+            return "", "image_caption"
+
+    if file_type in ("video", "movie", "audio", "music"):
+        # segments 가 없으면 file_path 로 lookup 시도
+        segs = segments or []
+        if not segs:
+            try:
+                from routes.search import _search_trichef_av
+                domain = "movie" if file_type in ("video", "movie") else "music"
+                # 빈 쿼리로 lookup 안 되므로, file_path 가 인덱스에 있다고 가정
+                # → 실제로는 frontend 가 segments 를 함께 전달해야 함
+                pass
+            except Exception:
+                pass
+        chunks = []
+        for s in segs[:80]:
+            t0 = s.get("start") or s.get("start_sec") or 0
+            t1 = s.get("end") or s.get("end_sec") or 0
+            txt = (s.get("text") or s.get("label") or "").strip()
+            if txt:
+                chunks.append(f"[{int(t0//60):02d}:{int(t0%60):02d}-{int(t1//60):02d}:{int(t1%60):02d}] {txt}")
+        return ("\n".join(chunks))[:18000], "av_segments"
+
+    return "", "unknown"
+
+
+def _build_summary_prompt(file_type: str, fname: str, content: str) -> str:
+    type_label = {
+        "doc": "PDF 문서", "doc_page": "PDF 문서",
+        "image": "이미지", "video": "동영상", "movie": "동영상",
+        "audio": "음성", "music": "음원",
+    }.get(file_type, "파일")
+    return f"""당신은 로컬 파일 상세 분석·해설 전문 AI 어시스턴트입니다.
+아래 [{type_label}] 의 본문을 한국어 **논문체 보고서** 형식으로 작성하세요.
+단순 요약이 아니라 본문의 흐름·논리·근거를 자연스러운 문단으로 풀어쓰는 것이 목표입니다.
+
+파일명: {fname}
+본문:
+---
+{content if content else '(본문이 추출되지 않았습니다)'}
+---
+
+작성 형식 (반드시 아래 6개 섹션 모두 ## Markdown 헤딩으로 시작):
+
+## 1. 개요
+- 이 파일의 정체·작성주체·목적·작성시기를 **2~4문장의 자연스러운 문단** 으로 작성.
+- 단순한 한 줄 메타데이터 형태 금지 — 문장으로 서술.
+
+## 2. 배경 및 목적
+- 본문이 다루는 배경·맥락·문제의식·필요성을 **3~5문장 1~2개 문단** 으로 서술.
+
+## 3. 주요 내용
+- 본문의 흐름을 따라가면서 **장/절/주제별로 문단 단위로** 서술.
+- 각 주제마다 ### 소제목 + **3~6문장의 문단** (불릿 점만 있는 것 금지).
+- 표·도표·목록은 그 의미를 풀어서 문단에 녹여서 작성.
+- 가능하면 5~8개 소제목으로 구성 (본문 분량에 따라 조정).
+
+## 4. 수치·날짜·고유명사
+- 본문에 등장하는 면적·인원·금액·기간·좌표 등 **숫자를 그대로 인용**.
+- 날짜·연도·기간·인명·기관명·지명·법령명·문헌명을 그대로 보존.
+- 이 섹션만 불릿 사용 가능 (각 항목 끝에 [p.N] 또는 [출처:...] 표기 권장).
+
+## 5. 분석 및 시사점
+- 본문이 도출하는 결론·권고·향후 계획·한계점을 **연결된 문단** 으로 분석.
+- 단순 결론 나열이 아닌, 인과관계·논리적 흐름이 드러나도록 작성.
+
+## 6. 종합
+- 위 내용을 4~6문장으로 통합 정리하는 마무리 문단 1개.
+
+작성 규칙 (엄격 준수):
+- 핵심 키워드는 **굵게** (`**용어**`) 강조.
+- 단순 불릿 나열 지양 — **문단 위주**, 4번 섹션만 예외적으로 불릿 허용.
+- 본문에 없는 정보는 추측 금지 ("본문에 명시되지 않음" 표기).
+- "[중략]" 마커 부분은 "(이하 생략)" 로 표시.
+- 충실하게 작성 — 각 섹션 충분한 분량, 전체 합산 약 4,000~8,000자.
+- 한국어, Markdown (제목 `##`/`###`, 강조 `**`, 인용 `>` 사용)."""
+
+
+def _summarize_sse(file_type: str, trichef_id: str, file_path: str,
+                   segments: list | None, file_name: str | None
+                   ) -> Generator[str, None, None]:
+    """파일 요약 SSE 제너레이터.
+
+    이벤트:
+      info          { model, file_type, file_name }
+      content_loaded{ length, kind }
+      token         { text }
+      done          { summary, model, length }
+      error         { message }
+    """
+    def emit(obj: dict) -> str:
+        return f"data: {json.dumps(obj, ensure_ascii=False)}\n\n"
+
+    model = _get_ollama_model()
+    if not model:
+        yield emit({"type": "error", "message": "Ollama 미연결 또는 모델 없음."})
+        return
+
+    fname = file_name or (file_path or "").rsplit("/", 1)[-1].rsplit("\\", 1)[-1] or "?"
+    yield emit({"type": "info", "model": model, "file_type": file_type, "file_name": fname})
+
+    # 본문 로드
+    content, kind = _load_file_content_for_summary(file_type, trichef_id, file_path, segments)
+    if not content or len(content.strip()) < 20:
+        yield emit({"type": "error",
+                    "message": f"본문을 추출할 수 없습니다 (kind={kind}). 인덱싱 필요."})
+        return
+
+    yield emit({"type": "content_loaded", "length": len(content), "kind": kind})
+
+    # 요약 프롬프트
+    sys_prompt = _build_summary_prompt(file_type, fname, content)
+    messages = [
+        {"role": "system", "content": sys_prompt},
+        {"role": "user", "content": "이 파일을 위 원칙에 따라 요약해줘."},
+    ]
+
+    full = ""
+    t0 = time.time()
+    stream_error: str | None = None
+    try:
+        # 논문체 상세 요약 — num_predict 7500 (한국어 ~12,000자, 약 4~8천자 본문 보장)
+        for tok in _ollama_stream(messages, model, num_predict=7500, temperature=0.25):
+            full += tok
+            yield emit({"type": "token", "text": tok})
+    except Exception as e:
+        stream_error = str(e)
+        logger.warning(f"[summarize] stream 중단: {e}")
+
+    try:
+        logger.info(
+            f"[summarize] file={fname[:40]!r} type={file_type} "
+            f"content_len={len(content)} summary_len={len(full)} "
+            f"dt={time.time()-t0:.2f}s err={stream_error!r}"
+        )
+    except Exception:
+        pass
+
+    yield emit({
+        "type": "done",
+        "summary": full,
+        "model": model,
+        "length": len(content),
+        "kind": kind,
+        "error": stream_error,
+    })
+
+
+@aimode_bp.post("/summarize")
+def summarize():
+    """POST /api/aimode/summarize — 파일 요약 SSE 스트리밍.
+
+    Body:
+      file_type   : "doc" | "image" | "video" | "audio" | "movie" | "music"
+      trichef_id  : str  (doc_page rid 등)
+      file_path   : str  (메타용, 표시 fallback)
+      file_name   : str  (선택)
+      segments    : list (video/audio 전용)
+    """
+    body = request.get_json(silent=True) or {}
+    file_type  = (body.get("file_type") or "").strip()
+    trichef_id = (body.get("trichef_id") or body.get("rid") or "").strip()
+    file_path  = (body.get("file_path") or "").strip()
+    file_name  = (body.get("file_name") or "").strip()
+    segments   = body.get("segments") or []
+
+    if not file_type:
+        return jsonify({"error": "file_type 필수"}), 400
+
+    return Response(
+        _summarize_sse(file_type, trichef_id, file_path, segments, file_name),
+        mimetype="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
