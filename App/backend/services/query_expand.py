@@ -115,11 +115,53 @@ _KO_EN: dict[str, list[str]] = {
     "피아노":   ["piano"],
     "기타":     ["guitar"],
     "드럼":     ["drum", "drums"],
-    "오케스트라": ["orchestra"],
+    "오케스트라": ["orchestra", "orchestral"],
     "발라드":   ["ballad"],
     "댄스":     ["dance"],
     "록":       ["rock"],
     "재즈":     ["jazz"],
+    "클래식":   ["classical"],
+    "전자":     ["electronic"],
+    "악기":     ["instrument", "instrumental"],
+    "보컬":     ["vocal", "vocals"],
+    "분위기":   ["mood", "vibe", "atmosphere"],
+
+    # 미디어 / 방송
+    "라디오":   ["radio", "broadcast"],
+    "방송":     ["broadcast", "broadcasting"],
+    "뉴스":     ["news"],
+    "프로그램": ["program", "show"],
+    "토론":     ["debate", "discussion"],
+    "인터뷰":   ["interview"],
+    "팟캐스트": ["podcast"],
+
+    # 사회 / 정치
+    "정치":     ["politics", "political"],
+    "정부":     ["government"],
+    "선거":     ["election"],
+    "법":       ["law", "legal"],
+    "경제":     ["economy", "economic"],
+    "금융":     ["finance", "financial"],
+    "사회":     ["society", "social"],
+    "문화":     ["culture", "cultural"],
+    "역사":     ["history", "historical"],
+
+    # 생활 / 사물 추가
+    "주민등록증": ["resident registration", "id card", "ID"],
+    "운전면허증": ["driver license", "driver's license"],
+    "신분증":   ["id card", "ID", "identification"],
+    "여권":     ["passport"],
+    "지하":     ["basement", "underground", "subway"],
+    "텍스트":   ["text"],
+    "캡션":     ["caption"],
+
+    # 색상
+    "빨간":     ["red"],
+    "파란":     ["blue"],
+    "노란":     ["yellow"],
+    "초록":     ["green"],
+    "흰":       ["white"],
+    "검은":     ["black"],
 }
 
 # 영 → 한 역방향 lookup (자동 생성)

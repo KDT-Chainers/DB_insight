@@ -123,6 +123,13 @@ def search():
     query = body.get("query", "").strip()
     if not query:
         return jsonify({"error": "query 필수"}), 400
+
+    # 한↔영 양방향 쿼리 확장 (다국어 일관성)
+    try:
+        from services.query_expand import expand_bilingual
+        engine_query = expand_bilingual(query)
+    except Exception:
+        engine_query = query
     topk = int(body.get("topk", 20))
     domains = body.get("domains", ["image", "doc_page"])
     use_lexical = bool(body.get("use_lexical", True))
@@ -140,7 +147,7 @@ def search():
     for d in domains:
         try:
             if d in _AV_DOMAINS:
-                av_res = engine.search_av(query, domain=d, topk=topk)
+                av_res = engine.search_av(engine_query, domain=d, topk=topk)
                 cal = calibration.get_thresholds(d)
                 stats["per_domain"][d] = {
                     "count": len(av_res),
@@ -164,7 +171,7 @@ def search():
                         "preview_url":    None,
                     })
             else:
-                res = engine.search(query, domain=d, topk=topk,
+                res = engine.search(engine_query, domain=d, topk=topk,
                                     use_lexical=use_lexical, use_asf=use_asf,
                                     pool=pool)
                 cal = calibration.get_thresholds(d)

@@ -39,9 +39,19 @@ def search():
         return jsonify({"error": "query 필수"}), 400
     top_k = int(body.get("top_k", body.get("topk", 20)))
 
+    # 한↔영 양방향 쿼리 확장 (다국어 일관성)
+    try:
+        from services.query_expand import expand_bilingual
+        expanded_query = expand_bilingual(query)
+    except Exception:
+        expanded_query = query
+
     engine = get_engine()
     try:
-        result = engine.search(query, top_k=top_k)
+        result = engine.search(expanded_query, top_k=top_k)
+        # 응답 query 필드는 원본 표시
+        result["query"] = query
+        result["expanded_query"] = expanded_query if expanded_query != query else None
     except Exception as e:
         logger.exception("[bgm.search] 실패")
         return jsonify({"query": query, "results": [], "error": str(e)[:300]}), 500
