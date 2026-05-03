@@ -797,7 +797,9 @@ def _load_full_doc_text(rid: str, max_chars: int = 12000) -> tuple[str, str]:
     """doc_page rid 의 PDF 전체 페이지 텍스트 로드 — 요약용.
 
     Returns: (combined_text, stem)
-    page_images/<stem>/p####.jpg → page_text/<stem>/p*.txt 모두 결합.
+    우선순위:
+      1) page_text/<stem>/p*.txt (pre-extracted)
+      2) fitz 로 PDF 직접 읽기 (registry → PDF 경로 조회)
     """
     try:
         from config import PATHS
@@ -807,35 +809,65 @@ def _load_full_doc_text(rid: str, max_chars: int = 12000) -> tuple[str, str]:
         if not m:
             return "", ""
         stem = m.group(1)
+
+        def _build_output(page_texts: list[tuple[int, str]]) -> str:
+            chunks: list[str] = []
+            running = 0
+            truncated = False
+            total = len(page_texts)
+            for page_num, t in page_texts:
+                t = t.strip()
+                if not t:
+                    continue
+                piece = f"[p.{page_num}]\n{t}"
+                if running + len(piece) > max_chars:
+                    remain = max(0, max_chars - running - 80)
+                    if remain > 200:
+                        chunks.append(piece[:remain] + "\n... [중략]")
+                    truncated = True
+                    break
+                chunks.append(piece)
+                running += len(piece) + 2
+            out = "\n\n".join(chunks)
+            if truncated:
+                out += f"\n\n[전체 {total}쪽 중 일부만 표시]"
+            return out
+
+        # ── 1순위: pre-extracted page_text/<stem>/p*.txt ──────────────
         page_text_dir = Path(PATHS["TRICHEF_DOC_EXTRACT"]) / "page_text" / stem
-        if not page_text_dir.is_dir():
-            return "", stem
-        pages = sorted(page_text_dir.glob("p*.txt"),
-                       key=lambda p: int(p.stem[1:]))
-        chunks: list[str] = []
-        running = 0
-        truncated = False
-        for tp in pages:
-            try:
-                t = tp.read_text(encoding="utf-8").strip()
-            except Exception:
-                continue
-            if not t:
-                continue
-            page_num = int(tp.stem[1:]) + 1
-            piece = f"[p.{page_num}]\n{t}"
-            if running + len(piece) > max_chars:
-                remain = max(0, max_chars - running - 80)
-                if remain > 200:
-                    chunks.append(piece[:remain] + "\n... [중략]")
-                truncated = True
-                break
-            chunks.append(piece)
-            running += len(piece) + 2
-        out = "\n\n".join(chunks)
-        if truncated:
-            out += f"\n\n[전체 {len(pages)}쪽 중 일부만 표시]"
-        return out, stem
+        if page_text_dir.is_dir():
+            pages = sorted(page_text_dir.glob("p*.txt"),
+                           key=lambda p: int(p.stem[1:]))
+            page_texts = []
+            for tp in pages:
+                try:
+                    t = tp.read_text(encoding="utf-8").strip()
+                    page_texts.append((int(tp.stem[1:]) + 1, t))
+                except Exception:
+                    continue
+            if page_texts:
+                return _build_output(page_texts), stem
+
+        # ── 2순위: fitz 로 PDF 직접 읽기 ──────────────────────────────
+        try:
+            import fitz
+            import json
+            from services.trichef.lexical_rebuild import resolve_doc_pdf_map
+            stem_to_pdf = resolve_doc_pdf_map()
+            pdf_path = stem_to_pdf.get(stem)
+            if pdf_path and pdf_path.exists() and pdf_path.stat().st_size > 0:
+                page_texts = []
+                with fitz.open(str(pdf_path)) as doc:
+                    for i, page in enumerate(doc):
+                        t = page.get_text("text") or ""
+                        if t.strip():
+                            page_texts.append((i + 1, t))
+                if page_texts:
+                    return _build_output(page_texts), stem
+        except Exception as e:
+            logger.warning(f"[summarize] fitz fallback 실패 stem={stem!r}: {e}")
+
+        return "", stem
     except Exception as e:
         logger.warning(f"[summarize] _load_full_doc_text: {e}")
         return "", ""
