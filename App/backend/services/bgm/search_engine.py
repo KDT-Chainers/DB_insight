@@ -224,6 +224,7 @@ class BGMEngine:
                 "acr_title":    m.get("acr_title", ""),
                 "duration":     m.get("duration", 0.0),
                 "tags":         m.get("tags", []),
+                "source":       m.get("source", "catalog"),
                 "params":       m.get("params", {}),
                 "score":        round(fused, 4),
                 "confidence":   round(_normalize_score(fused), 4),
@@ -355,6 +356,7 @@ class BGMEngine:
                     "acr_title":    m.get("acr_title", ""),
                     "duration":     m.get("duration", 0.0),
                     "tags":         m.get("tags", []),
+                "source":       m.get("source", "catalog"),
                     "score":        round(float(s), 4),
                     "confidence":   round(_normalize_score(float(s)), 4),
                 })

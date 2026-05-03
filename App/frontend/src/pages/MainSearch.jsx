@@ -113,6 +113,7 @@ function _mapBgmRow(r) {
     bgm_duration:   r.duration ?? 0,
     bgm_acr:        Boolean(r.acr_artist || r.acr_title),
     bgm_top_segment: r.top_segment || null,
+    bgm_source:     r.source || 'catalog',        // catalog | movie_lib | rec_lib
     trichef_domain: 'bgm',
   }
 }
@@ -557,6 +558,20 @@ function ResultCard({ result, rank, onClick, securityMode = false, query = '' })
                 {result.bgm_acr && (
                   <span className="px-1.5 py-0.5 rounded-full text-[9px] bg-emerald-500/20 text-emerald-300 font-bold">
                     ACR
+                  </span>
+                )}
+                {result.bgm_source && result.bgm_source !== 'catalog' && (
+                  <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
+                    result.bgm_source === 'movie_lib'
+                      ? 'bg-purple-500/20 text-purple-300'
+                      : 'bg-amber-500/20 text-amber-300'
+                  }`}>
+                    {result.bgm_source === 'movie_lib' ? '🎬 영상 라이브러리' : '🎙 오디오 라이브러리'}
+                  </span>
+                )}
+                {result.bgm_source === 'catalog' && (
+                  <span className="px-1.5 py-0.5 rounded-full text-[9px] bg-pink-500/30 text-pink-200 font-bold">
+                    🎵 카탈로그
                   </span>
                 )}
               </div>
