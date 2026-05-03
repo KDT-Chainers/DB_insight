@@ -54,14 +54,16 @@ def _load_calibration() -> dict:
         try:
             d = json.loads(cal_path.read_text(encoding="utf-8"))
             _CAL_CACHE = {
-                "mu_null":    float(d.get("mu_null", 0.1)),
-                "sigma_null": float(d.get("sigma_null", 0.15)),
+                "mu_null":    float(d.get("mu_null", 0.40)),
+                "sigma_null": float(d.get("sigma_null", 0.08)),
             }
         except Exception:
-            _CAL_CACHE = {"mu_null": 0.1, "sigma_null": 0.15}
+            _CAL_CACHE = {"mu_null": 0.40, "sigma_null": 0.08}
     else:
-        # 기본값 — calibration 없을 때 (단순 0.5+0.5*s 와 비슷한 효과)
-        _CAL_CACHE = {"mu_null": 0.1, "sigma_null": 0.15}
+        # 기본값 — CLAP text-to-audio 실측 null 분포 (비관련 쿼리 평균 ~0.40)
+        # mu=0.40: 비관련 쿼리 기준선, sigma=0.08: 분포 폭
+        # → CLAP 0.45 ≈ 73%, 0.50 ≈ 89%, 0.55 ≈ 97%
+        _CAL_CACHE = {"mu_null": 0.40, "sigma_null": 0.08}
     return _CAL_CACHE
 
 
@@ -100,7 +102,9 @@ class BGMEngine:
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._meta: index_store.MetaStore | None = None
-        self._index = None
+        self._index = None           # CLAP audio 인덱스
+        self._text_index = None      # CLAP text-description 인덱스
+        self._text_ids: list[str] = []  # text 인덱스 순서대로 filename
         self._fp_db: dict[str, dict[str, Any]] = {}
         self._loaded = False
 
@@ -112,11 +116,22 @@ class BGMEngine:
                 return
             self._meta = index_store.MetaStore(bgm_config.META_PATH)
             self._index = index_store.load_index(bgm_config.CLAP_INDEX_PATH)
+            # 텍스트 설명 인덱스 (bgm_enrich_text.py 산출물)
+            if bgm_config.TEXT_INDEX_PATH.is_file():
+                self._text_index = index_store.load_index(bgm_config.TEXT_INDEX_PATH)
+                if bgm_config.TEXT_IDS_PATH.is_file():
+                    try:
+                        d = json.loads(bgm_config.TEXT_IDS_PATH.read_text(encoding="utf-8"))
+                        self._text_ids = d.get("ids", [])
+                    except Exception:
+                        self._text_ids = []
+                logger.info(f"[bgm.engine] text index: {len(self._text_ids)} entries")
             self._fp_db = cp.load_db(bgm_config.CHROMAPRINT_DB)
             self._loaded = True
             logger.info(
                 f"[bgm.engine] loaded: meta={len(self._meta)} "
-                f"index={'OK' if self._index is not None else 'MISS'} "
+                f"audio_idx={'OK' if self._index is not None else 'MISS'} "
+                f"text_idx={'OK' if self._text_index is not None else 'MISS'} "
                 f"fp_db={len(self._fp_db)}"
             )
 
@@ -159,25 +174,126 @@ class BGMEngine:
 
         parsed = nlp_query.parse(query)
 
+        # BGM CLAP query translation:
+        # CLAP is an English-dominant model. For Korean queries, we replace the
+        # original Korean text with ONLY the English translations so that the
+        # CLAP text embedding lives in the same English semantic space as the
+        # audio-text training pairs. Keeping Korean tokens degrades embedding quality.
+        raw_text = parsed.text_for_clap or query
         try:
-            q_vec = clap_encoder.encode_text(parsed.text_for_clap or query)[0]
+            from services.query_expand import _KO_EN
+            import re as _re
+            _has_korean = bool(_re.search(r'[가-힣]', raw_text))
+            if _has_korean:
+                # BGM-domain mood priority map — produces CLAP-friendly English phrases
+                # that stay in the same semantic region as typical English BGM queries.
+                # e.g. "어두운 긴장감" → "dark tense dramatic" (same region as EN query)
+                _BGM_MOOD_PRIORITY: dict[str, list[str]] = {
+                    "어두운":   ["dark", "tense", "dramatic"],
+                    "긴장감":   ["tense", "dramatic", "intense"],
+                    "긴장":     ["tense", "tension", "dramatic"],
+                    "잔잔한":   ["calm", "peaceful", "gentle"],
+                    "신나는":   ["upbeat", "energetic", "lively"],
+                    "빠른":     ["fast", "upbeat", "energetic"],
+                    "느린":     ["slow", "calm", "relaxing"],
+                    "슬픈":     ["sad", "melancholic", "sorrowful"],
+                    "밝은":     ["bright", "cheerful", "upbeat"],
+                    "웅장한":   ["epic", "grand", "orchestral"],
+                    "신비로운": ["mysterious", "ethereal", "ambient"],
+                    "편안한":   ["relaxing", "soothing", "comfortable"],
+                }
+                # Korean query: translate to English ONLY (discard Korean tokens)
+                tokens = raw_text.split()
+                english_parts: list[str] = []
+                seen: set[str] = set()
+                for tok in tokens:
+                    # BGM mood priority > general dictionary
+                    translations = _BGM_MOOD_PRIORITY.get(tok) or _KO_EN.get(tok, [])
+                    if translations:
+                        for en in translations[:3]:  # up to 3 translations per token
+                            if en.lower() not in seen:
+                                english_parts.append(en)
+                                seen.add(en.lower())
+                    # else: no translation, skip Korean token
+                # Fallback: if no translations found, use original
+                clap_query = " ".join(english_parts) if english_parts else raw_text
+            else:
+                # English query: use as-is (CLAP handles English natively)
+                clap_query = raw_text
+        except Exception:
+            clap_query = raw_text
+
+        try:
+            q_vec = clap_encoder.encode_text(clap_query)[0]
         except Exception as e:
             logger.exception("CLAP 텍스트 인코딩 실패")
             return {"query": query, "results": [], "error": str(e)[:300]}
 
-        # 후보 풀 (top_k * 4) → 보강 점수 재정렬
-        pool = max(top_k * 4, 30)
-        scores, idxs = index_store.search(self._index, q_vec, pool)
-
         items = self._meta.all()
+        # filename → meta index
+        fn_to_idx = {m.get("filename", ""): i for i, m in enumerate(items)}
+
+        # ── 오디오 인덱스 검색 (text→audio CLAP) ──────────────────────────────
+        pool = max(top_k * 4, 40)
+        audio_scores: dict[str, float] = {}
+        if self._index is not None:
+            s_arr, i_arr = index_store.search(self._index, q_vec, pool)
+            for s, i in zip(s_arr.tolist(), i_arr.tolist()):
+                if i < 0 or i >= len(items):
+                    continue
+                fn = items[i].get("filename", "")
+                audio_scores[fn] = float(s)
+
+        # ── 텍스트 설명 인덱스 검색 (text→text CLAP) ──────────────────────────
+        text_scores: dict[str, float] = {}
+        if self._text_index is not None and self._text_ids:
+            ts_arr, ti_arr = index_store.search(self._text_index, q_vec, pool)
+            for s, i in zip(ts_arr.tolist(), ti_arr.tolist()):
+                if i < 0 or i >= len(self._text_ids):
+                    continue
+                fn = self._text_ids[i]
+                text_scores[fn] = float(s)
+
+        # ── 두 채널 퓨전: 0.55 * audio + 0.45 * text ─────────────────────────
+        # text 채널이 없으면 audio 100%
+        AUDIO_W = 0.55 if text_scores else 1.0
+        TEXT_W  = 0.45 if text_scores else 0.0
+
+        all_fns = set(audio_scores) | set(text_scores)
         ranked: list[tuple[int, float, dict[str, float]]] = []
-        for s, i in zip(scores.tolist(), idxs.tolist()):
-            if i < 0 or i >= len(items):
+
+        # Pre-compute description keyword list for CLAP semantic gap compensation.
+        # CLAP text encoder sometimes maps mood-antonyms (e.g. "dark tense" vs
+        # "energetic upbeat") too close in embedding space. We add a small explicit
+        # keyword match bonus based on query words found in the description text.
+        import re as _re_dkw
+        _DESC_STOP = {"music", "background", "with", "and", "for", "the",
+                      "very", "tempo", "clip", "that", "this", "from"}
+        _desc_kw: list[str] = list(dict.fromkeys(
+            w for w in _re_dkw.findall(r'[a-z]{4,}', clap_query.lower())
+            if w not in _DESC_STOP
+        )) if clap_query else []
+
+        for fn in all_fns:
+            idx = fn_to_idx.get(fn)
+            if idx is None:
                 continue
-            m = items[i]
-            base = float(s)
+            m = items[idx]
+            a_s = audio_scores.get(fn, 0.0)
+            t_s = text_scores.get(fn, 0.0)
+            fused_base = AUDIO_W * a_s + TEXT_W * t_s
+
+            # Description keyword boost: rewards files whose description explicitly
+            # contains the query mood/style words. Compensates for CLAP blind spots.
+            # e.g. "dark tense dramatic" → dark files (+0.075) vs warm files (+0.0)
+            desc_kw_boost = 0.0
+            if _desc_kw:
+                desc_lower = (m.get("description") or "").lower()
+                matched = sum(1 for w in _desc_kw if w in desc_lower)
+                desc_kw_boost = min(matched * 0.025, 0.10)
+
             boost = self._apply_boosts(parsed, m)
-            ranked.append((i, base + boost["total"], boost))
+            ranked.append((idx, fused_base + boost["total"] + desc_kw_boost, boost))
 
         ranked.sort(key=lambda t: -t[1])
         ranked = ranked[:top_k]
@@ -201,9 +317,9 @@ class BGMEngine:
         results = []
         for rank, (i, fused, boost) in enumerate(ranked, 1):
             m = items[i]
-            file_segments = seg_by_file.get(m.get("filename", ""), [])
+            fn = m.get("filename", "")
+            file_segments = seg_by_file.get(fn, [])
             # 정규화된 segment 정보 (start, end, score, confidence, label)
-            # confidence: file-level 과 동일한 calibration 매핑 (모든 도메인 통합 % 표시)
             segs = [
                 {
                     "start":      s["start"],
@@ -217,16 +333,19 @@ class BGMEngine:
             top_seg = segs[0] if segs else None
             results.append({
                 "rank":         rank,
-                "filename":     m.get("filename", ""),
+                "filename":     fn,
                 "guess_artist": m.get("guess_artist", ""),
                 "guess_title":  m.get("guess_title", ""),
                 "acr_artist":   m.get("acr_artist", ""),
                 "acr_title":    m.get("acr_title", ""),
                 "duration":     m.get("duration", 0.0),
                 "tags":         m.get("tags", []),
+                "description":  m.get("description", ""),
                 "source":       m.get("source", "catalog"),
                 "params":       m.get("params", {}),
                 "score":        round(fused, 4),
+                "audio_score":  round(audio_scores.get(fn, 0.0), 4),
+                "text_score":   round(text_scores.get(fn, 0.0), 4),
                 "confidence":   round(_normalize_score(fused), 4),
                 "boost":        {k: round(v, 4) for k, v in boost.items()},
                 "segments":     segs,
@@ -413,6 +532,9 @@ def get_engine() -> BGMEngine:
 
 def reload_engine() -> None:
     global _engine
+    # 캘리브레이션 캐시도 함께 갱신
+    import services.bgm.search_engine as _self
+    _self._CAL_CACHE.clear()
     with _engine_lock:
         if _engine is not None:
             _engine.reload()

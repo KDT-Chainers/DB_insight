@@ -21,9 +21,14 @@ def get_history():
     with get_connection() as conn:
         rows = conn.execute(
             """
-            SELECT id, query, method, result_count, searched_at
-            FROM search_history
-            ORDER BY searched_at DESC
+            SELECT h.id, h.query, h.method, h.result_count, h.searched_at
+            FROM search_history h
+            INNER JOIN (
+                SELECT query, MAX(searched_at) AS max_at
+                FROM search_history
+                GROUP BY query
+            ) latest ON h.query = latest.query AND h.searched_at = latest.max_at
+            ORDER BY h.searched_at DESC
             LIMIT ?
             """,
             (limit,),
@@ -59,6 +64,8 @@ def add_history():
         return jsonify({"error": "Invalid result_count"}), 400
 
     with get_connection() as conn:
+        # 동일 쿼리 기존 레코드 삭제 → 최신 1건만 유지 (사이드바 중복 방지)
+        conn.execute("DELETE FROM search_history WHERE query = ?", (query,))
         cursor = conn.execute(
             """
             INSERT INTO search_history (query, method, result_count, searched_at)

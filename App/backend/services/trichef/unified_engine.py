@@ -254,8 +254,26 @@ class TriChefEngine:
         모든 도메인 Re = SigLIP2 text (1152d).
         Music Re 축이 SigLIP2 text-encoder 로 통일되어 Movie/Image 와 동일 공간.
         Im = BGE-M3 (1024d) — 언어 의미 채널.
+
+        Bilingual augmentation: Qwen expansion 비활성 시에도 KO↔EN 크로스랭귀지
+        검색 품질 개선을 위해 expand_bilingual 결과를 추가 임베딩 variant 로 포함.
+        variants 평균으로 KO 쿼리 임베딩이 EN 의미 공간으로 당겨지는 효과.
         """
         variants = qwen_expand.expand(query)
+        # Bilingual augmentation (image/doc only): add KO↔EN expanded text as
+        # extra variant to pull KO query embedding toward EN semantic space.
+        # Applied only for image/doc because those domains are dense-only
+        # (sparse/ASF disabled). For movie/music, expand_bilingual is already
+        # used in the sparse + ASF channels and adding it here shifts dense
+        # rankings without net benefit (tested: basketball 1.00→0.50 regression).
+        if domain in ("image", "doc"):
+            try:
+                from services.query_expand import expand_bilingual as _qe_bil
+                _bil = _qe_bil(query)
+                if _bil != query and _bil not in variants:
+                    variants = variants + [_bil]
+            except Exception:
+                pass
         q_Re = qwen_expand.avg_normalize(siglip2_re.embed_texts(variants))
         q_Im = qwen_expand.avg_normalize(e5_caption_im.embed_query(variants))
         return q_Re, q_Im
@@ -286,10 +304,15 @@ class TriChefEngine:
         )[0]
 
         # [substring boost — Doc/Img]
-        # 쿼리 토큰이 id (file_name 또는 페이지 stem) 에 그대로 포함되면 dense 에 가산.
-        # AV 의 동일 boost 로직과 일관. "AI브리프", "IMG_4810" 같은 직접 검색 강화.
+        # 한↔영 bilingual 확장 후 token 매칭 → 크로스랭귀지 파일명 검색 지원.
         try:
-            q_tokens = [t.lower() for t in query.split() if len(t) >= 2]
+            try:
+                from services.query_expand import expand_bilingual as _qe2
+                _expanded2 = _qe2(query)
+            except Exception:
+                _expanded2 = query
+            q_tokens = [t.lower() for t in _expanded2.split() if len(t) >= 2]
+            _orig_tc2 = len([t for t in query.split() if len(t) >= 2])
             if q_tokens:
                 boost = np.zeros(len(d["ids"]), dtype=dense_scores.dtype)
                 for i, rid in enumerate(d["ids"]):
@@ -297,19 +320,24 @@ class TriChefEngine:
                     matched = sum(1 for tok in q_tokens if tok in hay)
                     if matched > 0:
                         boost[i] += 0.05 * matched
-                        if matched == len(q_tokens):
-                            boost[i] += 0.10  # 전체 매칭 보너스
+                        if matched >= _orig_tc2:
+                            boost[i] += 0.10  # 원본 쿼리 전체 매칭 보너스
                 dense_scores = dense_scores + boost
         except Exception as _be:
             logger.debug(f"[engine:{domain}] substring boost 실패: {_be}")
 
         dense_order = np.argsort(-dense_scores)
 
-        # v2 P2: sparse lexical 채널
+        # v2 P2: sparse lexical 채널 (bilingual expanded query → 크로스랭귀지 sparse 매칭)
         sparse_scores = None
         rankings = [dense_order[:pool]]
         if use_lexical and d.get("sparse") is not None:
-            q_sp = bgem3_sparse.embed_query_sparse(query)
+            try:
+                from services.query_expand import expand_bilingual as _qe3
+                _sparse_query = _qe3(query)
+            except Exception:
+                _sparse_query = query
+            q_sp = bgem3_sparse.embed_query_sparse(_sparse_query)
             sparse_scores = bgem3_sparse.lexical_scores(q_sp, d["sparse"])
             rankings.append(np.argsort(-sparse_scores)[:pool])
 
@@ -518,7 +546,16 @@ class TriChefEngine:
         #   → "박태웅 의장" 가 정확히 들어간 segment: +0.10 + +0.10 + +0.20 = +0.40
         #   → "의장" 만 들어간 segment:                     +0.10
         try:
-            q_tokens = [t for t in query.split() if len(t) >= 2]
+            # 한↔영 크로스랭귀지 substring boost:
+            # query_expand 로 bilingual 확장 → 영문 쿼리도 한국어 STT 텍스트와 매칭
+            try:
+                from services.query_expand import expand_bilingual as _qe
+                _expanded = _qe(query)
+            except Exception:
+                _expanded = query
+            q_tokens = [t for t in _expanded.split() if len(t) >= 2]
+            # 원본 쿼리 토큰 수 기준으로 "전체 매칭" 보너스 계산 (확장 토큰 제외)
+            _orig_token_count = len([t for t in query.split() if len(t) >= 2])
             if q_tokens:
                 boost = np.zeros(len(d["segments"]), dtype=seg_scores.dtype)
                 tok_lower = [t.lower() for t in q_tokens]
@@ -529,8 +566,8 @@ class TriChefEngine:
                     matched = sum(1 for tok in tok_lower if tok in hay)
                     if matched > 0:
                         boost[i] += 0.10 * matched
-                        if matched == len(tok_lower):
-                            boost[i] += 0.20  # 전체 매칭 보너스
+                        if matched >= _orig_token_count:
+                            boost[i] += 0.20  # 원본 쿼리 전체 토큰 매칭 보너스
                 seg_scores = seg_scores + boost
         except Exception as _be:
             logger.debug(f"[engine:{domain}] substring boost 실패: {_be}")
@@ -643,6 +680,24 @@ class TriChefEngine:
                     "asf_agg":   round(asf_agg, 4),
                 },
             ))
+
+        # Filter out stub files from non-BGM domain results:
+        #  1. Pure-numeric stems  (001.mp4~102.mp4 = BGM files under Movie dir)
+        #  2. Machine-generated date-code filenames with no readable words
+        #     (e.g. "12-2026-4-27-r-1-o-3-vr.wav", "x-2026-4-27-wpu-43-d.wav")
+        #     These have no meaningful title/STT and pollute search rankings.
+        import re as _re_stub
+        def _is_content_stub(r: TriChefAVResult) -> bool:
+            stem = Path(r.file_name).stem
+            if stem.isdigit():
+                return True  # pure BGM stub (001~102)
+            # Date-code stubs: no Korean word (2+ chars) AND no Latin word (4+ chars)
+            has_korean = bool(_re_stub.search(r'[가-힣]{2,}', stem))
+            has_latin  = bool(_re_stub.search(r'[a-zA-Z]{4,}', stem))
+            return not (has_korean or has_latin)
+
+        if domain in ("movie", "music", "image", "doc"):
+            out = [r for r in out if not _is_content_stub(r)]
 
         out.sort(key=lambda x: -x.score)
         return out[:topk]

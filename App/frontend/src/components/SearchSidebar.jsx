@@ -24,6 +24,13 @@ export default function SearchSidebar() {
     if (open) loadHistory()
   }, [open, loadHistory])
 
+  // 새 검색 완료 시 자동 갱신 (사이드바가 열려있어도 반영)
+  useEffect(() => {
+    const handler = () => loadHistory()
+    window.addEventListener('history-updated', handler)
+    return () => window.removeEventListener('history-updated', handler)
+  }, [loadHistory])
+
   const deleteItem = async (id, e) => {
     e.stopPropagation()
     try {
