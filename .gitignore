@@ -49,28 +49,10 @@ venv/
 env/
 
 # ============================================================
-# Data/ — raw_DB 팀원 로컬 공유, embedded_DB 메타만 push
+# Data/ — 전체 폴더 git 제외 (raw_DB / extracted_DB / embedded_DB / models 등 모두)
+# 데이터·인덱스는 Releases zip 또는 USB 로 공유.
 # ============================================================
-
-# raw_DB — 원본 데이터 (팀원과 로컬 공유, push 안 함)
-Data/raw_DB/
-
-# extracted_DB — 추출 산출물 (페이지 텍스트, 캡션 등 — 재생성 가능)
-Data/extracted_DB/
-
-# embedded_DB — 큰 .npy / .npz / ChromaDB 만 제외 (Releases zip 으로 공유)
-# 메타 JSON (registry, ids, segments, vocab, token_sets) 은 push
-Data/embedded_DB/**/*.npy
-Data/embedded_DB/**/*.npz
-Data/embedded_DB/**/*.bak.*
-Data/embedded_DB/trichef/
-Data/embedded_DB/trichef_chroma/
-Data/embedded_DB/*_backup_v*/
-Data/embedded_DB/Movie_backup_v*/
-Data/embedded_DB/Rec_backup_*/
-
-# BGM 인덱스도 다른 도메인처럼 git 제외 (USB 복사로 공유)
-Data/embedded_DB/Bgm/
+Data/
 
 # ============================================================
 # 임베딩 관련 파일 패턴 (Data/ 밖에 생성될 경우 대비)
@@ -101,11 +83,11 @@ weight_buckets.json
 .cache/
 models/
 model_cache/
-Data/models/
+# (Data/models/ 는 Data/ 전체 ignore 로 이미 커버됨)
 
 # faster-whisper / HF 모델 바이너리
 # ⚠️  config.json, tokenizer.json 등 전역 제외 금지 — 소스 파일과 충돌 위험.
-#     HF 캐시는 .cache/ / models/ / Data/models/ 로 이미 커버됨.
+#     HF 캐시는 .cache/ / models/ 로 이미 커버됨 (Data/ 도 전체 ignore).
 *.pt
 *.bin
 *.safetensors
@@ -169,7 +151,7 @@ App/admin_ui/out/
 
 # 사용자 설정 (BGM ACR API key, 화면 크기 등) — PC 마다 다름
 App/data/
-Data/settings.json
+# (Data/settings.json 은 Data/ 전체 ignore 로 이미 커버됨)
 
 # BGM audio_meta.json 의 path 필드 — PC 마다 다른 abs 경로
 # (감각적 차원에서는 가능하지만 push 시 매번 충돌 → normalize_registry_paths.py 로 PC 별 자동 갱신)

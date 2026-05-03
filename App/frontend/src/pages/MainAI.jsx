@@ -1019,9 +1019,10 @@ export default function MainAI() {
         </main>
       )}
 
-      {/* ════ RESULTS / DETAIL 헤더 ════ */}
+      {/* ════ RESULTS / DETAIL 헤더 ════
+           top-8 (=32px) — 커스텀 타이틀바 영역 확보 (Electron frame:false). MainSearch 와 동일. */}
       {view !== 'home' && (
-        <header className={`fixed top-0 ${leftEdge} right-0 z-40 h-16 backdrop-blur-xl flex items-center px-6 gap-4 border-b transition-[left] duration-300`}
+        <header className={`fixed top-8 ${leftEdge} right-0 z-40 h-16 backdrop-blur-xl flex items-center px-6 gap-4 border-b transition-[left] duration-300`}
           style={{ background: 'rgba(13,7,24,0.8)', borderColor: AI.border,
             boxShadow: '0 4px 30px rgba(109,40,217,0.1)' }}>
 
@@ -1081,7 +1082,7 @@ export default function MainAI() {
       {/* ════ RESULTS VIEW ════ */}
       {view === 'results' && (
         <main className={`${ml} min-h-screen transition-[margin] duration-300`}
-          style={{ paddingTop: '64px', opacity: resultsReady ? 1 : 0, transform: resultsReady ? 'translateY(0)' : 'translateY(24px)',
+          style={{ paddingTop: '96px', opacity: resultsReady ? 1 : 0, transform: resultsReady ? 'translateY(0)' : 'translateY(24px)',
             transition: 'opacity 0.38s ease, transform 0.38s ease, margin 0.3s' }}>
           <div className="px-8 pb-8 pt-5 max-w-[1400px] mx-auto">
 
@@ -1349,7 +1350,7 @@ export default function MainAI() {
               transition: 'opacity 0.35s ease, transform 0.35s ease, margin 0.3s' }}>
 
             {/* 파일 정보 바 */}
-            <div className={`fixed top-16 ${leftEdge} right-0 z-30 backdrop-blur-xl flex items-center justify-between px-8 py-3 border-b transition-[left] duration-300`}
+            <div className={`fixed top-24 ${leftEdge} right-0 z-30 backdrop-blur-xl flex items-center justify-between px-8 py-3 border-b transition-[left] duration-300`}
               style={{ background: 'rgba(13,7,24,0.8)', borderColor: AI.border }}>
               <div className="flex items-center gap-3 min-w-0 flex-1 mr-4">
                 <span className={`material-symbols-outlined ${meta.color} shrink-0`}>{meta.icon}</span>
@@ -1378,7 +1379,7 @@ export default function MainAI() {
               </div>
             </div>
 
-            <section className="pt-36 pb-12 px-8 max-w-7xl mx-auto space-y-8">
+            <section className="pt-44 pb-12 px-8 max-w-7xl mx-auto space-y-8">
               {/* ★ AI 답변 패널 — 상세 페이지 진입 시 가장 위에 streaming 표시 */}
               {(aimodeAnswer || aimodeSteps.find(s => s.step === 4)) && (
                 <div className="rounded-2xl border overflow-hidden relative"
