@@ -25,6 +25,7 @@ const CAM_Z_BASE = 2.85;
  *   assembleIntro?: boolean — true면 점이 바깥에서 구면으로 모이는 인트로
  *   assembleDuration?: number — 인트로 길이(초), 기본 ~8
  *   layout?: 'fixed' | 'fill' — fill이면 부모 전체를 캔버스로 채움(AI 홈 전역 오브 등)
+ *   aiHoverFx?: boolean — colorMode ai 전용: 호버 시 채도 펄스·커서 근처 흡입(셰이더) + 진입 시 짧은 햅틱(지원 기기, interactive 없어도 캔버스만 포인터 허용)
  * }} [props]
  */
 
@@ -80,6 +81,7 @@ uniform vec3 uAimDir;
 uniform float uStretch;
 uniform float uAssemble;
 uniform float uNeural;
+uniform float uHoverVacuum;
 attribute vec3 aSpread;
 attribute float aJitter;
 attribute float aPhase;
@@ -114,6 +116,15 @@ void main() {
   float syn = sin(uTime * 3.25 + aPhase * 7.5 + dot(dir, vec3(5.1, 2.2, -3.4)));
   pos += uNeural * (ax * syn + bi * cos(syn * 1.35)) * 0.0135 * (0.42 + 0.58 * aScatter);
 
+  if (uNeural > 0.5 && uHoverVacuum > 0.001) {
+    vec3 tang = A - dir * dot(A, dir);
+    float tlen = length(tang);
+    vec3 towardA = tlen > 1e-4 ? tang / tlen : vec3(0.0);
+    float cap = pow(max(dot(dir, A), 0.0), 5.2);
+    pos += towardA * uHoverVacuum * cap * 0.09 * (0.65 + 0.35 * aScatter);
+    pos -= dir * uHoverVacuum * cap * 0.034;
+  }
+
   vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
   vec3 nView = normalize((modelViewMatrix * vec4(dir, 0.0)).xyz);
   vec3 vDir = normalize(-mvPosition.xyz);
@@ -138,6 +149,7 @@ void main() {
 const FRAG = /* glsl */ `
 uniform float uTime;
 uniform float uNeural;
+uniform float uHoverPulse;
 varying float vRim;
 varying float vPhase;
 varying float vScatter;
@@ -158,6 +170,8 @@ void main() {
   float tw3 = 0.5 + 0.5 * sin(uTime * 11.2 + vPhase * 9.0 + vJitter * 12.56);
   float sparkle = 0.58 + 0.42 * tw1 * mix(0.75, 1.0, tw2);
   sparkle += uNeural * (0.12 + 0.22 * vScatter) * tw3 * tw3;
+  float hp = uNeural * uHoverPulse;
+  sparkle *= 1.0 + 0.22 * hp * (0.5 + 0.5 * sin(uTime * 9.2 + vPhase * 5.5));
   sparkle = clamp(pow(sparkle, 0.88), 0.35, 1.58);
 
   float rimBoost = mix(0.48, 1.38, vRim);
@@ -172,6 +186,7 @@ void main() {
   alpha = clamp(alpha, 0.0, 1.0);
 
   vec3 col = vColor * (1.0 + 0.28 * fire + 0.75 * burst);
+  col *= 1.0 + 0.14 * hp * (0.5 + 0.5 * sin(uTime * 7.4 + vJitter * 8.0));
   gl_FragColor = vec4(col, alpha);
 }
 `;
@@ -383,6 +398,8 @@ export default function AnimatedOrb({
   assembleDuration = 8,
   /** fixed: size×size 박스. fill: 부모 100%×100% (min 크기는 size로 uPointScale 폴백) */
   layout = "fixed",
+  /** AI 모드 전용 호버: 셰이더 펄스·근처 흡입 + 진입 시 짧은 햅틱(지원 기기) */
+  aiHoverFx = false,
 }) {
   const [progress, setProgress] = useState(initialProgress);
   const containerRef = useRef(null);
@@ -394,6 +411,7 @@ export default function AnimatedOrb({
   const pointerInRef = useRef(false);
   const stretchRef = useRef(0);
   const aimLocalRef = useRef(new THREE.Vector3(0, 1, 0));
+  const hoverAmbRef = useRef(0);
 
   useEffect(() => {
     if (!autoProgress) return;
@@ -455,6 +473,7 @@ export default function AnimatedOrb({
     geo.setAttribute("aColor", new THREE.BufferAttribute(colors, 3));
 
     const isNeural = palette === "ai";
+    const useAiHover = Boolean(aiHoverFx && isNeural);
     const material = new THREE.ShaderMaterial({
       uniforms: {
         uTime: { value: 0 },
@@ -464,6 +483,8 @@ export default function AnimatedOrb({
         uStretch: { value: 0 },
         uAssemble: { value: introActive ? 0 : 1 },
         uNeural: { value: isNeural ? 1.0 : 0.0 },
+        uHoverPulse: { value: 0 },
+        uHoverVacuum: { value: 0 },
       },
       vertexShader: VERT,
       fragmentShader: FRAG,
@@ -515,8 +536,20 @@ export default function AnimatedOrb({
     const sphereHit = new THREE.Vector3();
     const tmpHit = new THREE.Vector3();
 
+    const playHoverHaptic = () => {
+      if (reduceMotion) return;
+      try {
+        if (typeof navigator !== "undefined" && navigator.vibrate) {
+          navigator.vibrate(10);
+        }
+      } catch {
+        /* ignore */
+      }
+    };
+
     const onEnter = () => {
       pointerInRef.current = true;
+      if (useAiHover) playHoverHaptic();
     };
 
     const onMove = (e) => {
@@ -592,14 +625,18 @@ export default function AnimatedOrb({
       root.rotation.z = mx * my * (isNeural ? 0.12 : 0.08);
 
       if (!reduceMotion) {
-        const target = pointerInRef.current ? 1 : 0;
+        const stretchOn = interactive && pointerInRef.current;
+        const target = stretchOn ? 1 : 0;
         let s = stretchRef.current;
-        const rate = pointerInRef.current ? 32 : 6.2;
+        const rate = stretchOn ? 32 : 6.2;
         s += (target - s) * (1 - Math.exp(-dt * rate));
         stretchRef.current = s;
         material.uniforms.uStretch.value = s * s * 0.82;
 
-        if (pointerInRef.current || s > 0.025) {
+        const aimOn =
+          (interactive && (pointerInRef.current || s > 0.025)) ||
+          (useAiHover && pointerInRef.current);
+        if (aimOn) {
           raycaster.setFromCamera(new THREE.Vector2(mx, -my), camera);
           if (raycaster.ray.intersectSphere(sphereWorld, sphereHit) !== null) {
             invQuat.copy(root.quaternion).invert();
@@ -608,8 +645,17 @@ export default function AnimatedOrb({
           }
         }
         material.uniforms.uAimDir.value.copy(aimLocalRef.current);
+
+        let h = hoverAmbRef.current;
+        const hTarget = useAiHover && pointerInRef.current ? 1 : 0;
+        h += (hTarget - h) * (1 - Math.exp(-dt * 9.5));
+        hoverAmbRef.current = h;
+        material.uniforms.uHoverPulse.value = h;
+        material.uniforms.uHoverVacuum.value = h;
       } else {
         material.uniforms.uStretch.value = 0;
+        material.uniforms.uHoverPulse.value = 0;
+        material.uniforms.uHoverVacuum.value = 0;
       }
 
       renderer.render(scene, camera);
@@ -637,6 +683,8 @@ export default function AnimatedOrb({
     assembleIntro,
     assembleDuration,
     layout,
+    aiHoverFx,
+    interactive,
   ]);
 
   const displayProgress = Math.min(100, Math.round(progress));
@@ -661,7 +709,7 @@ export default function AnimatedOrb({
     >
       <div
         ref={drawWrapRef}
-        className={`absolute bg-transparent shadow-none ${interactive ? "pointer-events-auto" : "pointer-events-none"} ${fill ? "inset-0 left-0 top-0" : "left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"}`}
+        className={`absolute bg-transparent shadow-none ${interactive || aiHoverFx ? "pointer-events-auto" : "pointer-events-none"} ${fill ? "inset-0 left-0 top-0" : "left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"}`}
         style={
           fill
             ? { width: "100%", height: "100%" }

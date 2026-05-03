@@ -57,6 +57,11 @@ export default function MainAI() {
   const [searchTransitioning, setSearchTransitioning] = useState(false);
   const [ripplePos, setRipplePos] = useState({ x: "50%", y: "50%" });
   const [homeGlowDrift, setHomeGlowDrift] = useState(false);
+  const [aiHomeEntranceOn, setAiHomeEntranceOn] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+  );
   const btnRef = useRef(null);
   const orbSinkRef = useRef(null);
 
@@ -68,6 +73,20 @@ export default function MainAI() {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       setHomeGlowDrift(true);
     }
+  }, [view]);
+
+  useEffect(() => {
+    if (view !== "home") {
+      setAiHomeEntranceOn(false);
+      return;
+    }
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setAiHomeEntranceOn(true);
+      return;
+    }
+    setAiHomeEntranceOn(false);
+    const t = window.setTimeout(() => setAiHomeEntranceOn(true), 180);
+    return () => clearTimeout(t);
   }, [view]);
 
   const ml = open ? "ml-64" : "ml-0";
@@ -220,7 +239,7 @@ export default function MainAI() {
             {/* Orb: 메인 콘텐츠 영역 전체 캔버스 — 인트로 퍼짐/모임이 작은 박스에 갇히지 않도록 */}
             <div
               ref={orbSinkRef}
-              className="pointer-events-none absolute inset-0 z-0 min-h-0"
+              className="absolute inset-0 z-0 min-h-0"
               aria-hidden
             >
               <AnimatedOrb
@@ -228,6 +247,7 @@ export default function MainAI() {
                 colorMode="ai"
                 hideCenterUI
                 interactive={false}
+                aiHoverFx
                 pointScaleMul={1.45}
                 particleCount={11000}
                 size={720}
@@ -236,29 +256,33 @@ export default function MainAI() {
               />
             </div>
 
-            {/* 중앙: 헤드라인 + 검색창. 하단: 전환 버튼 */}
-            <div className="relative z-10 flex h-full min-h-0 w-full flex-col">
+            {/* 중앙: 헤드라인 + 검색창. 하단: 전환 버튼 — MainSearch와 동일 블러 드러남 (빈 영역은 오브 호버 통과) */}
+            <div
+              className={`pointer-events-none relative z-10 flex h-full min-h-0 w-full flex-col ${
+                aiHomeEntranceOn ? "main-search-entrance-on" : "main-search-entrance-off"
+              }`}
+            >
               <div className="relative z-10 flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-6 py-8 md:px-8">
                 <div className="relative flex w-full max-w-lg flex-col items-center justify-center">
                   <div className="relative z-10 flex w-full flex-col items-center gap-9 text-center md:gap-10">
                     <div
-                      className={`max-w-lg shrink-0 transition-all duration-300 ${homeExiting ? "opacity-0 -translate-y-6" : "opacity-100 translate-y-0"}`}
+                      className={`mse-hero-down pointer-events-auto max-w-lg shrink-0 transition-all duration-300 ${homeExiting ? "opacity-0 -translate-y-6" : ""}`}
                     >
-                      <h2 className="font-space-grotesk inline-flex flex-wrap items-baseline justify-center gap-0 text-4xl font-semibold tracking-tight md:text-5xl lg:text-6xl">
-                        <span className="inline-block bg-gradient-to-r from-[#5e5a52] from-[6%] via-[#b8b0a2] to-[#d4cec2] bg-clip-text text-transparent">
+                      <h2 className="font-headline inline-flex flex-wrap items-baseline justify-center gap-0 text-4xl font-semibold tracking-tight md:text-5xl lg:text-6xl">
+                        <span className="font-headline inline-block bg-gradient-to-r from-[#5e5a52] from-[6%] via-[#b8b0a2] to-[#d4cec2] bg-clip-text text-transparent">
                           B
                         </span>
-                        <span className="text-[#cbc4b6] drop-shadow-[0_1px_5px_rgba(18,16,14,0.18)]">
+                        <span className="font-headline text-[#cbc4b6] drop-shadow-[0_1px_5px_rgba(18,16,14,0.18)]">
                           eyond Smarte
                         </span>
-                        <span className="inline-block bg-gradient-to-r from-[#d4cec2] via-[#9e978a] to-[#45423c] to-[90%] bg-clip-text text-transparent">
+                        <span className="font-headline inline-block bg-gradient-to-r from-[#d4cec2] via-[#9e978a] to-[#45423c] to-[90%] bg-clip-text text-transparent">
                           r
                         </span>
                       </h2>
                     </div>
                     <form
                       onSubmit={handleSearch}
-                      className="group relative z-10 w-full max-w-[min(90vw,22rem)] shrink-0 md:max-w-[24rem]"
+                      className="mse-search-up group pointer-events-auto relative z-10 w-full max-w-[min(90vw,22rem)] shrink-0 md:max-w-[24rem]"
                       style={homeExiting ? { visibility: "hidden" } : {}}
                     >
                       <div className="pointer-events-none absolute -inset-[2px] rounded-full bg-gradient-to-r from-fuchsia-500/0 via-violet-400/25 to-fuchsia-500/0 opacity-0 blur-md transition-opacity duration-500 group-focus-within:opacity-100" />
@@ -293,7 +317,7 @@ export default function MainAI() {
               </div>
 
               <div
-                className="flex shrink-0 flex-col items-center justify-end px-6 pb-10 pt-2 md:px-8"
+                className="mse-search-up mse-search-up-delay-1 pointer-events-auto flex shrink-0 flex-col items-center justify-end px-6 pb-10 pt-2 md:px-8"
                 style={homeExiting ? { visibility: "hidden" } : {}}
               >
                 <button

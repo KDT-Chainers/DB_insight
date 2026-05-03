@@ -229,14 +229,9 @@ export default function MainSearch() {
       window.matchMedia('(prefers-reduced-motion: reduce)').matches
     )
       return
-    let id2
-    const id1 = requestAnimationFrame(() => {
-      id2 = requestAnimationFrame(() => setSearchEntranceOn(true))
-    })
-    return () => {
-      cancelAnimationFrame(id1)
-      if (id2 != null) cancelAnimationFrame(id2)
-    }
+    /* 한 박자 쉬었다가 entrance-on: 블러 초기 상태가 한 번 보이도록 */
+    const t = window.setTimeout(() => setSearchEntranceOn(true), 180)
+    return () => clearTimeout(t)
   }, [])
 
   // 뒤로가기
@@ -365,7 +360,7 @@ export default function MainSearch() {
             <div className="z-10 flex w-full max-w-xl flex-col items-center">
               {/* Hero (v0) */}
               <div
-                className={`mse-stagger mse-d0 mb-6 text-center transition-all duration-300 ${homeExiting ? 'opacity-0 -translate-y-6' : ''}`}
+                className={`mse-hero-down mb-6 text-center transition-all duration-300 ${homeExiting ? 'opacity-0 -translate-y-6' : ''}`}
               >
                 <h1 className="mb-3 text-3xl font-light tracking-tight text-on-surface text-balance md:text-5xl lg:text-6xl">
                   Local Intelligence
@@ -375,7 +370,7 @@ export default function MainSearch() {
 
               {/* Orb (v0) */}
               <div
-                className={`mse-stagger mse-d1 my-4 overflow-visible md:my-8 ${homeExiting ? 'pointer-events-none opacity-0' : ''}`}
+                className={`mse-orb-mid my-4 overflow-visible md:my-8 ${homeExiting ? 'pointer-events-none opacity-0' : ''}`}
               >
                 <AnimatedOrb onMicClick={toggleMic} listening={listening} />
               </div>
@@ -384,7 +379,7 @@ export default function MainSearch() {
               <form
                 ref={formRef}
                 onSubmit={handleSearch}
-                className="mse-stagger mse-d2 relative w-full max-w-xl"
+                className="mse-search-up relative w-full max-w-xl"
                 style={homeExiting ? { visibility: 'hidden' } : {}}
               >
                 <div
@@ -447,7 +442,7 @@ export default function MainSearch() {
 
               {/* Quick suggestions (v0) */}
               <div
-                className={`mse-stagger mse-d3 mt-6 flex flex-wrap justify-center gap-2 transition-all duration-300 ${homeExiting ? 'pointer-events-none opacity-0' : ''}`}
+                className={`mse-search-up mse-search-up-delay-1 mt-6 flex flex-wrap justify-center gap-2 transition-all duration-300 ${homeExiting ? 'pointer-events-none opacity-0' : ''}`}
               >
                 {V0_HOME_SUGGESTIONS.map((suggestion) => (
                   <button
@@ -462,7 +457,7 @@ export default function MainSearch() {
               </div>
 
               <div
-                className={`mse-stagger mse-d4 mt-10 flex justify-center ${homeExiting ? 'pointer-events-none opacity-0' : ''}`}
+                className={`mse-search-up mse-search-up-delay-2 mt-10 flex justify-center ${homeExiting ? 'pointer-events-none opacity-0' : ''}`}
               >
                 <button
                   ref={btnRef}

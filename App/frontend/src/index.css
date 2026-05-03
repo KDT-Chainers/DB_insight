@@ -321,44 +321,86 @@ body {
   }
 }
 
-/* MainSearch 홈 — 마운트 시(보안 인증 후 등) 짧은 stagger 등장 */
-@keyframes main-search-entrance-in {
+/* MainSearch / MainAI 홈 — 마운트: 헤더·검색이 블러+투명으로 묻었다가 서서히 선명해짐 */
+@keyframes main-search-hero-emerge {
   from {
     opacity: 0;
-    transform: translateY(14px);
+    filter: blur(18px);
+    transform: translateY(8px) scale(0.99);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    filter: blur(0);
+    transform: translateY(0) scale(1);
   }
 }
-.main-search-entrance-off .mse-stagger {
+@keyframes main-search-orb-emerge {
+  from {
+    opacity: 0;
+    filter: blur(12px);
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: scale(1);
+  }
+}
+@keyframes main-search-search-emerge {
+  from {
+    opacity: 0;
+    filter: blur(20px);
+    transform: translateY(18px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0) scale(1);
+  }
+}
+.main-search-entrance-off .mse-hero-down {
   opacity: 0;
-  transform: translateY(14px);
+  filter: blur(18px);
+  transform: translateY(8px) scale(0.99);
 }
-.main-search-entrance-on .mse-stagger {
-  animation: main-search-entrance-in 0.52s cubic-bezier(0.22, 1, 0.36, 1) both;
+.main-search-entrance-off .mse-orb-mid {
+  opacity: 0;
+  filter: blur(12px);
+  transform: scale(0.97);
 }
-.main-search-entrance-on .mse-d0 {
-  animation-delay: 0.05s;
+.main-search-entrance-off .mse-search-up {
+  opacity: 0;
+  filter: blur(20px);
+  transform: translateY(18px) scale(0.99);
 }
-.main-search-entrance-on .mse-d1 {
-  animation-delay: 0.11s;
+.main-search-entrance-on .mse-hero-down {
+  animation: main-search-hero-emerge 1.05s cubic-bezier(0.25, 0.85, 0.3, 1) both;
+  animation-delay: 0.08s;
 }
-.main-search-entrance-on .mse-d2 {
-  animation-delay: 0.17s;
+.main-search-entrance-on .mse-orb-mid {
+  animation: main-search-orb-emerge 0.95s cubic-bezier(0.25, 0.85, 0.3, 1) both;
+  animation-delay: 0.16s;
 }
-.main-search-entrance-on .mse-d3 {
-  animation-delay: 0.23s;
+.main-search-entrance-on .mse-search-up {
+  animation: main-search-search-emerge 1.12s cubic-bezier(0.25, 0.85, 0.3, 1) both;
+  animation-delay: 0.28s;
 }
-.main-search-entrance-on .mse-d4 {
-  animation-delay: 0.29s;
+.main-search-entrance-on .mse-search-up-delay-1 {
+  animation-delay: 0.42s;
+}
+.main-search-entrance-on .mse-search-up-delay-2 {
+  animation-delay: 0.54s;
 }
 @media (prefers-reduced-motion: reduce) {
-  .main-search-entrance-off .mse-stagger,
-  .main-search-entrance-on .mse-stagger {
+  .main-search-entrance-off .mse-hero-down,
+  .main-search-entrance-off .mse-orb-mid,
+  .main-search-entrance-off .mse-search-up,
+  .main-search-entrance-on .mse-hero-down,
+  .main-search-entrance-on .mse-orb-mid,
+  .main-search-entrance-on .mse-search-up {
     animation: none;
     opacity: 1;
     transform: none;
+    filter: none;
   }
 }
