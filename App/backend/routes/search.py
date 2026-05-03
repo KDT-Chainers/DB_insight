@@ -37,37 +37,45 @@ def search():
     if top_k <= 0:
         top_k = 10
 
+    # 한↔영 양방향 쿼리 확장 — sparse/ASF 채널이 다국어 토큰 모두 커버
+    # (BGE-M3 dense 는 다국어 OK 지만 sparse 는 정확 토큰 매칭만)
+    try:
+        from services.query_expand import expand_bilingual
+        expanded_query = expand_bilingual(query)
+    except Exception:
+        expanded_query = query
+
     try:
         results: list[dict] = []
 
         if file_type == "image":
-            results = _search_trichef(query, ["image"], top_k)
+            results = _search_trichef(expanded_query, ["image"], top_k)
         elif file_type == "doc":
-            results = _search_trichef(query, ["doc_page"], top_k)
+            results = _search_trichef(expanded_query, ["doc_page"], top_k)
         elif file_type == "video":
             # TRI-CHEF AV 우선 → 캐시 없으면 구형 ChromaDB fallback
-            results = _search_trichef_av(query, ["movie"], top_k)
+            results = _search_trichef_av(expanded_query, ["movie"], top_k)
             if not results:
-                results = _search_legacy_video(query, top_k)
+                results = _search_legacy_video(expanded_query, top_k)
         elif file_type == "audio":
             # TRI-CHEF AV 우선 → 캐시 없으면 구형 ChromaDB fallback
-            results = _search_trichef_av(query, ["music"], top_k)
+            results = _search_trichef_av(expanded_query, ["music"], top_k)
             if not results:
-                results = _search_legacy_audio(query, top_k)
+                results = _search_legacy_audio(expanded_query, top_k)
         else:
             # 전체 검색: 이미지·문서·영상·음원 모두 TRI-CHEF.
             # [v3] 도메인별 최소 보장 비율 — AV conf 가 dense 0.99 로 매우 높고
             # doc/image conf 가 0.4~0.7 로 낮아, 단순 confidence sort 시 doc/image
             # 가 거의 모두 잘려나가는 문제 해결.
             #   각 도메인 top_k/4 보장 (round-robin), 남는 자리는 score sort.
-            img_only  = _search_trichef(query, ["image"], top_k)
-            doc_only  = _search_trichef(query, ["doc_page"], top_k)
-            video     = _search_trichef_av(query, ["movie"], top_k)
+            img_only  = _search_trichef(expanded_query, ["image"], top_k)
+            doc_only  = _search_trichef(expanded_query, ["doc_page"], top_k)
+            video     = _search_trichef_av(expanded_query, ["movie"], top_k)
             if not video:
-                video = _search_legacy_video(query, top_k)
-            audio     = _search_trichef_av(query, ["music"], top_k)
+                video = _search_legacy_video(expanded_query, top_k)
+            audio     = _search_trichef_av(expanded_query, ["music"], top_k)
             if not audio:
-                audio = _search_legacy_audio(query, top_k)
+                audio = _search_legacy_audio(expanded_query, top_k)
 
             # 도메인별 정렬 (각 도메인 내부 confidence 순)
             for lst in (img_only, doc_only, video, audio):
@@ -183,7 +191,9 @@ def _search_trichef(query: str, domains: list[str], top_k: int) -> list[dict]:
                 )
                 file_name   = Path(orig_path).name
                 snippet     = _read_img_caption(Path(PATHS["TRICHEF_IMG_EXTRACT"]) / "captions", rid)
-                preview_url = f"/api/trichef/file?domain=image&path={rid}"
+                # URL encode rid — 한글/공백/특수문자(+,[,] 등) 처리. + 는 공백으로 디코드되어 깨짐.
+                from urllib.parse import quote as _q
+                preview_url = f"/api/trichef/file?domain=image&path={_q(rid, safe='/')}"
             else:
                 file_type = "doc"
                 parts    = Path(rid).parts
@@ -193,7 +203,8 @@ def _search_trichef(query: str, domains: list[str], top_k: int) -> list[dict]:
                     orig_path = str(doc_extract / rid)
                     file_name = Path(rid).name
                 snippet     = ""
-                preview_url = f"/api/trichef/file?domain=doc_page&path={rid}"
+                from urllib.parse import quote as _q
+                preview_url = f"/api/trichef/file?domain=doc_page&path={_q(rid, safe='/')}"
 
             conf     = round(hit.confidence, 4)
             hit_meta = hit.metadata
