@@ -80,16 +80,25 @@ function AiResultCard({ result, rank, onClick }) {
   const sigm    = x => 1 / (1 + Math.exp(-x))
   const sim     = clamp01(dense) != null ? clamp01(dense).toFixed(3) : '—'
 
-  // 정확도 (rerank) — 음수 score 폴백 로직 강화
-  // 1) rerank > 0 (정상 양수): sigmoid 그대로
-  // 2) rerank ≤ 0 (음수): sigm(rerank) 가 < 0.5 → dense×0.7 + rerank_norm×0.3 블렌드
-  // 3) rerank null: dense 또는 lexical 또는 conf 기반 추정
+  // 정확도 산출 — 도메인 인지 폴백:
+  //   doc/audio/video : BGE-reranker (텍스트→텍스트) 가 신뢰할 만함 → sigm 그대로
+  //   image           : BGE-reranker 는 캡션만 보므로 dense (SigLIP2 시각) 가 더 정확
+  // 1) rerank 양수: sigm(rerank) 그대로
+  // 2) rerank 음수: dense 우선 (이미지) / dense 블렌드 (기타)
+  // 3) rerank null: dense or lexical or conf 추정
   const _accFromMix = () => {
     const d = clamp01(dense) ?? 0
+    const ft = result.file_type
     if (rerank != null) {
-      const s = sigm(rerank)              // [0,1] 매핑된 rerank
-      // 음수 rerank (s < 0.5) 일 때, dense 기반으로 보정 — 너무 0 으로 떨어지지 않게
-      return s >= 0.5 ? s : (s * 0.4 + d * 0.6)
+      const s = sigm(rerank)
+      if (s >= 0.5) return s            // 양수 정상 reranker → 그대로 신뢰
+      // 음수 폴백
+      if (ft === 'image') {
+        // 이미지는 BGE-reranker 무력 → dense 우선 (max), 단 reranker 신호도 약하게 반영
+        return Math.max(d * 0.9, s)
+      }
+      // doc/video/audio: dense 와 reranker 블렌드
+      return s * 0.4 + d * 0.6
     }
     if (zScore != null) return Math.max(0, Math.min(1, (zScore + 3) / 6))
     if (lexical != null && d > 0) return d * 0.7 + Math.min(1, lexical * 1.5) * 0.3
@@ -112,14 +121,13 @@ function AiResultCard({ result, rank, onClick }) {
 
   return (
     <div
-      onClick={isAV ? undefined : onClick}
-      className={`rounded-[10px] overflow-hidden flex flex-col relative transition-all duration-200
-        ${isAV ? '' : 'cursor-pointer hover:-translate-y-0.5'}`}
+      onClick={onClick}
+      className="rounded-[10px] overflow-hidden flex flex-col relative transition-all duration-200 cursor-pointer hover:-translate-y-0.5"
       style={{
         background: AI.card,
         border: `1px solid ${AI.border}`,
       }}
-      onMouseEnter={e => { if (!isAV) e.currentTarget.style.borderColor = AI.borderHover; e.currentTarget.style.boxShadow = AI.glow }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = AI.borderHover; e.currentTarget.style.boxShadow = AI.glow }}
       onMouseLeave={e => { e.currentTarget.style.borderColor = AI.border; e.currentTarget.style.boxShadow = 'none' }}
     >
       {/* 랭크 배지 — violet */}
@@ -1409,8 +1417,35 @@ export default function MainAI() {
             </div>
 
             <section className="pt-44 pb-12 px-8 max-w-7xl mx-auto space-y-8">
-              {/* ★ AI 답변 패널 — 상세 페이지 진입 시 가장 위에 streaming 표시 */}
-              {(aimodeAnswer || aimodeSteps.find(s => s.step === 4)) && (
+              {/* ★ AI 답변 패널 — AI 가 자동 선택한 카드와 일치할 때만 표시
+                  (사용자가 다른 카드 클릭 시에는 답변 숨김 — 답변은 AI 가 분석한 카드에만 유효) */}
+              {(() => {
+                const aiPickedFile = aimodeSources[aimodeSelected ?? -1]
+                const isAiPicked = aiPickedFile &&
+                  (aiPickedFile.file_path === selectedFile.file_path ||
+                   aiPickedFile.trichef_id === selectedFile.trichef_id)
+                if (!isAiPicked) {
+                  // 사용자가 다른 카드 클릭 — 답변 대신 안내 메시지 + AI 요약 유도
+                  return aimodeAnswer ? (
+                    <div className="rounded-xl px-6 py-4 border flex items-center gap-3"
+                      style={{ background: AI.card, borderColor: AI.border, color: 'rgba(167,139,250,0.7)' }}>
+                      <span className="material-symbols-outlined text-base">info</span>
+                      <span className="text-sm">
+                        AI 답변은 자동 선택된 <span className="font-mono">"{aiPickedFile?.file_name}"</span> 에 대한 내용입니다.
+                        이 파일에 대한 요약은 <span className="font-bold" style={{ color: AI.accentLight }}>일반 검색의 AI 요약 기능</span> 을 사용하세요.
+                      </span>
+                    </div>
+                  ) : null
+                }
+                return null
+              })()}
+              {(aimodeAnswer || aimodeSteps.find(s => s.step === 4)) && (() => {
+                const aiPickedFile = aimodeSources[aimodeSelected ?? -1]
+                const isAiPicked = aiPickedFile &&
+                  (aiPickedFile.file_path === selectedFile.file_path ||
+                   aiPickedFile.trichef_id === selectedFile.trichef_id)
+                if (!isAiPicked) return null
+                return (
                 <div className="rounded-2xl border overflow-hidden relative"
                   style={{ background: 'linear-gradient(135deg, rgba(109,40,217,0.12), rgba(192,38,211,0.08))',
                     borderColor: AI.borderHover,
@@ -1449,7 +1484,8 @@ export default function MainAI() {
                     </div>
                   )}
                 </div>
-              )}
+                )
+              })()}
 
               <div className="grid grid-cols-12 gap-6">
 
@@ -1511,11 +1547,18 @@ export default function MainAI() {
                     const lexical = selectedFile.lexical
                     const sigm = (x) => 1 / (1 + Math.exp(-x))
                     const d01 = dense != null ? Math.max(0, Math.min(1, dense)) : 0
-                    // 정확도 — rerank 음수 폴백 로직 (카드와 동일)
+                    const ft = selectedFile.file_type
+                    // 정확도 — 도메인 인지 폴백 (카드와 동일)
                     let acc
                     if (rerank != null) {
                       const s = sigm(rerank)
-                      acc = s >= 0.5 ? s : (s * 0.4 + d01 * 0.6)
+                      if (s >= 0.5) {
+                        acc = s
+                      } else if (ft === 'image') {
+                        acc = Math.max(d01 * 0.9, s)  // 이미지는 dense 우선
+                      } else {
+                        acc = s * 0.4 + d01 * 0.6
+                      }
                     } else if (zScore != null) {
                       acc = Math.max(0, Math.min(1, (zScore + 3) / 6))
                     } else if (lexical != null && d01 > 0) {
