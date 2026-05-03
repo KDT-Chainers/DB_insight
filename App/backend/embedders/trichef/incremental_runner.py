@@ -215,10 +215,11 @@ def _purge_doc_page_cache(keys: set[str], cache_dir: Path) -> int:
     stem_keys = {doc_page_render.stem_key_for(k) for k in keys}
     extract = Path(PATHS["TRICHEF_DOC_EXTRACT"])
 
-    # 1) 디렉토리 삭제 (페이지 이미지 + 캡션)
+    # 1) 디렉토리 삭제 (페이지 이미지 + 캡션 + 페이지 텍스트)
     for sk in stem_keys:
         shutil.rmtree(doc_page_render.PAGE_DIR / sk, ignore_errors=True)
-        shutil.rmtree(extract / "captions" / sk, ignore_errors=True)
+        shutil.rmtree(extract / "captions"   / sk, ignore_errors=True)
+        shutil.rmtree(extract / "page_text"  / sk, ignore_errors=True)
 
     # 2) ids.json + .npy rows 필터링
     ids_path = cache_dir / "doc_page_ids.json"

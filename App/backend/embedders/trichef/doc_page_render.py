@@ -10,7 +10,8 @@ import fitz  # PyMuPDF
 from config import PATHS
 
 logger = logging.getLogger(__name__)
-PAGE_DIR = Path(PATHS["TRICHEF_DOC_EXTRACT"]) / "page_images"
+PAGE_DIR      = Path(PATHS["TRICHEF_DOC_EXTRACT"]) / "page_images"
+PAGE_TEXT_DIR = Path(PATHS["TRICHEF_DOC_EXTRACT"]) / "page_text"
 
 # PIL 로 직접 처리 가능한 이미지 확장자
 IMAGE_PAGE_EXTS: frozenset[str] = frozenset({
@@ -62,15 +63,30 @@ def render_pdf(pdf_path: Path, dpi: int = 110,
     except Exception as e:
         logger.warning(f"[render_pdf] open 실패 {pdf_path.name}: {e}")
         return results
+    # page_text/<doc_id>/ 디렉토리 준비 (텍스트 추출 저장용)
+    text_dir = PAGE_TEXT_DIR / doc_id
+    text_dir.mkdir(parents=True, exist_ok=True)
+
     with d_ctx as d:
         for i, page in enumerate(d):
             out = out_dir / f"p{i:04d}.jpg"
             if out.exists():
                 results.append(out)
-                continue
-            pix = page.get_pixmap(dpi=dpi)
-            pix.save(out)
-            results.append(out)
+            else:
+                pix = page.get_pixmap(dpi=dpi)
+                pix.save(out)
+                results.append(out)
+
+            # ── 페이지 텍스트 추출 (이미지 렌더와 동시) ──────────────
+            txt_out = text_dir / f"p{i:04d}.txt"
+            if not txt_out.exists():
+                try:
+                    txt = page.get_text("text").strip()
+                    if txt:
+                        txt_out.write_text(txt, encoding="utf-8")
+                except Exception:
+                    pass
+
     logger.info(f"[render_pdf] {pdf_path.name} → {len(results)}장")
     return results
 

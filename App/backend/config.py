@@ -188,6 +188,7 @@ for _p in (
     EXTRACTED_DB_DOC   / "page_images",
     EXTRACTED_DB_DOC   / "captions",
     EXTRACTED_DB_DOC   / "chunks",
+    EXTRACTED_DB_DOC   / "page_text",
     EMBEDDED_DB        / "trichef",
 ):
     _p.mkdir(parents=True, exist_ok=True)

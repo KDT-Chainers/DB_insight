@@ -730,8 +730,14 @@ export default function MainAI() {
         if (ev.step === 1 && ev.query) setAimodeQuery(ev.query)
         if (ev.step === 3 && typeof ev.selected_idx === 'number') {
           setAimodeSelected(ev.selected_idx)
-          // 자동 클릭 비활성화 — 사용자가 직접 카드 선택
-          // (이전에는 1.4s 후 handleSelectFile 자동 호출)
+          // Step 3 완료 — LangGraph 가 선택한 카드 자동 클릭 (1.4s 딜레이 후)
+          setAimodeSources(prev => {
+            const file = prev[ev.selected_idx]
+            if (file) {
+              setTimeout(() => handleSelectFile(file), 1400)
+            }
+            return prev
+          })
         }
         break
 
