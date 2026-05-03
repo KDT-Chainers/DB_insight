@@ -583,8 +583,14 @@ export default function MainAI() {
     const endpoint = useAimode
       ? `${API_BASE}/api/aimode/chat`
       : `${API_BASE}/api/ai/search`
+    // LangGraph thread_id — 세션별 멀티턴 대화 (브라우저 lifecycle)
+    let tid = window.__aimodeThreadId
+    if (!tid) {
+      tid = `thread_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+      window.__aimodeThreadId = tid
+    }
     const body = useAimode
-      ? { query: q, topk: topK }
+      ? { query: q, topk: topK, thread_id: tid }
       : { query: q, topk: topK, max_iterations: maxIter }
 
     try {

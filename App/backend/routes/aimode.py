@@ -19,7 +19,7 @@ import json
 import logging
 import threading
 import time
-from typing import Generator
+from typing import Annotated, Generator, TypedDict
 
 from flask import Blueprint, Response, jsonify, request
 import requests as _req
@@ -29,6 +29,143 @@ aimode_bp = Blueprint("aimode", __name__, url_prefix="/api/aimode")
 
 OLLAMA_URL = "http://localhost:11434"
 STEP_DELAY = 1.5   # 각 시각화 단계 사이 (초)
+
+
+# ── LangGraph 통합 — 4-node 그래프 + MemorySaver (thread_id 별 대화 이력) ──
+_LANGGRAPH_OK = False
+_graph = None
+_graph_lock = threading.Lock()
+
+
+def _add_messages(left: list, right: list) -> list:
+    """append-only 누적 reducer."""
+    return (left or []) + (right or [])
+
+
+try:
+    from langgraph.graph import StateGraph, START, END
+    from langgraph.checkpoint.memory import MemorySaver
+    from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
+
+    class AImodeState(TypedDict):
+        user_question: str
+        extracted:     str
+        topk:          int
+        sources:       list[dict]
+        selected_idx:  int
+        answer:        str
+        messages:      Annotated[list[BaseMessage], _add_messages]
+
+    _LANGGRAPH_OK = True
+except Exception as _e:
+    logger.warning(f"[aimode] LangGraph 미사용 (폴백 모드): {_e}")
+
+
+def _get_graph():
+    """LangGraph 4-node 싱글턴.
+
+    중요: graph.stream() 절대 사용 금지 (체크포인트 손상 위험).
+    이 그래프는 MemorySaver 메모리 저장소로만 사용 — 노드는 schema용.
+    실제 흐름은 _aimode_sse() 에서 직접 제어.
+    """
+    global _graph
+    if not _LANGGRAPH_OK:
+        return None
+    if _graph is not None:
+        return _graph
+    with _graph_lock:
+        if _graph is not None:
+            return _graph
+
+        def parse_intent_node(state):  # Step 1
+            return {"extracted": state.get("extracted", "")}
+
+        def retrieve_node(state):       # Step 2
+            return {"sources": state.get("sources", [])}
+
+        def select_node(state):         # Step 3
+            return {"selected_idx": state.get("selected_idx", 0)}
+
+        def generate_node(state):       # Step 4
+            return {"answer": state.get("answer", "")}
+
+        builder = StateGraph(AImodeState)
+        builder.add_node("parse_intent", parse_intent_node)
+        builder.add_node("retrieve",     retrieve_node)
+        builder.add_node("select",       select_node)
+        builder.add_node("generate",     generate_node)
+        builder.add_edge(START, "parse_intent")
+        builder.add_edge("parse_intent", "retrieve")
+        builder.add_edge("retrieve",     "select")
+        builder.add_edge("select",       "generate")
+        builder.add_edge("generate", END)
+        _graph = builder.compile(checkpointer=MemorySaver())
+    return _graph
+
+
+# ── 대화 이력 (LangGraph thread_id 기반, 폴백 dict) ─────────────────
+_fallback_history: dict[str, list[dict]] = {}
+_fallback_lock = threading.Lock()
+
+
+def _load_history(thread_id: str) -> list[dict]:
+    g = _get_graph()
+    if g is not None:
+        try:
+            cfg = {"configurable": {"thread_id": thread_id}}
+            st = g.get_state(cfg)
+            if st and st.values:
+                msgs = st.values.get("messages") or []
+                out = []
+                for m in msgs:
+                    role = "user" if m.__class__.__name__ == "HumanMessage" else "assistant"
+                    out.append({"role": role, "content": getattr(m, "content", "")})
+                return out
+        except Exception as e:
+            logger.debug(f"[aimode] history load 실패: {e}")
+    with _fallback_lock:
+        return list(_fallback_history.get(thread_id, []))
+
+
+def _save_state(thread_id: str, user_q: str, extracted: str,
+                sources: list[dict], selected_idx: int, answer: str):
+    g = _get_graph()
+    if g is not None and _LANGGRAPH_OK:
+        try:
+            from langchain_core.messages import HumanMessage, AIMessage
+            cfg = {"configurable": {"thread_id": thread_id}}
+            g.update_state(cfg, {
+                "user_question": user_q,
+                "extracted":     extracted,
+                "sources":       sources,
+                "selected_idx":  selected_idx,
+                "answer":        answer,
+                "messages":      [HumanMessage(content=user_q), AIMessage(content=answer)],
+            })
+            return
+        except Exception as e:
+            logger.debug(f"[aimode] state save 실패, 폴백: {e}")
+    with _fallback_lock:
+        h = _fallback_history.setdefault(thread_id, [])
+        h.append({"role": "user", "content": user_q})
+        h.append({"role": "assistant", "content": answer})
+        if len(h) > 40:
+            _fallback_history[thread_id] = h[-40:]
+
+
+def _clear_history(thread_id: str):
+    g = _get_graph()
+    if g is not None:
+        try:
+            cfg = {"configurable": {"thread_id": thread_id}}
+            g.update_state(cfg, {
+                "user_question": "", "extracted": "", "sources": [],
+                "selected_idx": 0, "answer": "", "messages": [],
+            })
+        except Exception:
+            pass
+    with _fallback_lock:
+        _fallback_history.pop(thread_id, None)
 
 
 # ── Ollama 모델 자동 선택 ──────────────────────────────────────────
@@ -178,8 +315,16 @@ def _build_system_prompt(selected: dict, all_sources: list[dict]) -> str:
 - 한국어로 간결·명확하게."""
 
 
-# ── 메인 SSE 제너레이터 ─────────────────────────────────────────────
-def _aimode_sse(query: str, topk: int) -> Generator[str, None, None]:
+# ── 메인 SSE 제너레이터 (LangGraph 통합) ───────────────────────────
+def _aimode_sse(query: str, topk: int, thread_id: str) -> Generator[str, None, None]:
+    """
+    흐름 (LangGraph thread_id 별 대화 이력 + 검색 sources 함께 LLM 에 전달):
+      1. 검색어 추출 (LLM)
+      2. 검색 → sources
+      3. confidence 최상위 카드 선택
+      4. system_prompt(sources + 이전 대화) + user_question → Ollama 스트리밍
+      5. state 저장 (thread_id 별 히스토리)
+    """
     def emit(obj: dict) -> str:
         return f"data: {json.dumps(obj, ensure_ascii=False)}\n\n"
 
@@ -188,7 +333,15 @@ def _aimode_sse(query: str, topk: int) -> Generator[str, None, None]:
         yield emit({"type": "error", "message": "Ollama 미연결 또는 모델 없음. ollama pull qwen2.5:3b 필요."})
         return
 
-    # ── Step 1: 검색어 추출 (LLM) ─────────────────────────────────────
+    # 시작 — LangGraph 상태 + thread_id 알림
+    yield emit({
+        "type": "info",
+        "thread_id": thread_id,
+        "langgraph": _LANGGRAPH_OK,
+        "model": model,
+    })
+
+    # ── Step 1: 검색어 추출 ────────────────────────────────────────
     yield emit({"type": "step", "step": 1, "label": "🔍 질문에서 검색어 추출 중...",
                 "model": model, "user_question": query})
     extracted = _extract_query(query, model)
@@ -196,7 +349,7 @@ def _aimode_sse(query: str, topk: int) -> Generator[str, None, None]:
                 "query": extracted, "done": True})
     time.sleep(STEP_DELAY)
 
-    # ── Step 2: 검색 ─────────────────────────────────────────────────
+    # ── Step 2: 검색 ─────────────────────────────────────────────
     yield emit({"type": "step", "step": 2, "label": f"📚 데이터베이스에서 {extracted!r} 검색 중...",
                 "query": extracted})
     sources = _do_search(extracted, topk=topk)
@@ -209,8 +362,8 @@ def _aimode_sse(query: str, topk: int) -> Generator[str, None, None]:
         yield emit({"type": "error", "message": "검색 결과 없음 — 다른 질문을 시도해보세요."})
         return
 
-    # ── Step 3: 가장 관련 카드 자동 선택 ──────────────────────────────
-    selected_idx = 0  # confidence 최상위
+    # ── Step 3: 가장 관련 카드 자동 선택 ──────────────────────────
+    selected_idx = 0
     selected = sources[selected_idx]
     yield emit({
         "type": "step", "step": 3,
@@ -220,18 +373,27 @@ def _aimode_sse(query: str, topk: int) -> Generator[str, None, None]:
     })
     time.sleep(STEP_DELAY)
 
-    # ── Step 4: 답변 생성 (Ollama 스트리밍) ───────────────────────────
+    # ── Step 4: 답변 생성 — LangGraph 이전 대화 + 검색 sources 함께 ──
     yield emit({"type": "step", "step": 4, "label": "✨ 답변 정리 중...",
                 "selected_idx": selected_idx})
+
+    # 이전 대화 이력 로드 (LangGraph thread_id 기반)
+    prior_history = _load_history(thread_id)
+
     sys_prompt = _build_system_prompt(selected, sources)
-    messages = [
-        {"role": "system", "content": sys_prompt},
-        {"role": "user",   "content": query},
-    ]
+    messages = [{"role": "system", "content": sys_prompt}]
+    # 최근 5턴 (user+assistant = 10 메시지)
+    if prior_history:
+        messages.extend(prior_history[-10:])
+    messages.append({"role": "user", "content": query})
+
     full_answer = ""
     for tok in _ollama_stream(messages, model):
         full_answer += tok
         yield emit({"type": "token", "text": tok})
+
+    # ── State 저장 (LangGraph MemorySaver) ───────────────────────
+    _save_state(thread_id, query, extracted, sources, selected_idx, full_answer)
 
     yield emit({
         "type":         "done",
@@ -239,6 +401,9 @@ def _aimode_sse(query: str, topk: int) -> Generator[str, None, None]:
         "selected_idx": selected_idx,
         "model":        model,
         "extracted":    extracted,
+        "thread_id":    thread_id,
+        "history_used": len(prior_history),
+        "langgraph":    _LANGGRAPH_OK,
     })
 
 
@@ -248,21 +413,44 @@ def chat():
     body = request.get_json(silent=True) or {}
     query = (body.get("query") or "").strip()
     topk = max(1, min(int(body.get("topk", 5)), 10))
+    thread_id = (body.get("thread_id") or "default").strip()
     if not query:
         return jsonify({"error": "query 필수"}), 400
 
     return Response(
-        _aimode_sse(query, topk),
+        _aimode_sse(query, topk, thread_id),
         mimetype="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 
+@aimode_bp.delete("/chat/<thread_id>")
+def clear_thread(thread_id: str):
+    """대화 이력 초기화 — LangGraph state + 폴백 dict 모두 비움."""
+    _clear_history(thread_id)
+    return jsonify({"ok": True, "thread_id": thread_id})
+
+
+@aimode_bp.get("/history/<thread_id>")
+def history(thread_id: str):
+    """LangGraph thread_id 기반 대화 이력 조회 (디버깅용)."""
+    h = _load_history(thread_id)
+    return jsonify({
+        "thread_id": thread_id,
+        "history":   h,
+        "count":     len(h),
+        "langgraph": _LANGGRAPH_OK,
+    })
+
+
 @aimode_bp.get("/status")
 def status():
     model = _get_ollama_model()
+    g = _get_graph()
     return jsonify({
         "ollama_model":     model,
         "ollama_available": model is not None,
         "step_delay_sec":   STEP_DELAY,
+        "langgraph_ok":     _LANGGRAPH_OK,
+        "graph_loaded":     g is not None,
     })
