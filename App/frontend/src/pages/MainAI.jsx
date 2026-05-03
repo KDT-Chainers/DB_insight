@@ -583,12 +583,24 @@ export default function MainAI() {
     const endpoint = useAimode
       ? `${API_BASE}/api/aimode/chat`
       : `${API_BASE}/api/ai/search`
-    // LangGraph thread_id — 세션별 멀티턴 대화 (브라우저 lifecycle)
-    let tid = window.__aimodeThreadId
+    // LangGraph thread_id — localStorage 영속 (24h TTL)
+    let tid = null
+    try {
+      const raw = localStorage.getItem('aimode_thread_id')
+      if (raw) {
+        const obj = JSON.parse(raw)
+        if (obj?.id && obj?.expires > Date.now()) tid = obj.id
+      }
+    } catch {}
     if (!tid) {
-      tid = `thread_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-      window.__aimodeThreadId = tid
+      tid = `t_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+      try {
+        localStorage.setItem('aimode_thread_id', JSON.stringify({
+          id: tid, expires: Date.now() + 24 * 3600 * 1000,
+        }))
+      } catch {}
     }
+    window.__aimodeThreadId = tid
     const body = useAimode
       ? { query: q, topk: topK, thread_id: tid }
       : { query: q, topk: topK, max_iterations: maxIter }
@@ -656,7 +668,6 @@ export default function MainAI() {
       // ── AIMODE 시각화 이벤트 (/api/aimode/chat) ─────────────
       case 'step':
         setAimodeSteps(prev => {
-          // 같은 step 이 두 번 (시작 + done) 들어옴 — 마지막 것으로 갱신
           const idx = prev.findIndex(s => s.step === ev.step)
           const entry = {
             step: ev.step,
@@ -675,13 +686,26 @@ export default function MainAI() {
         if (ev.step === 1 && ev.query) setAimodeQuery(ev.query)
         if (ev.step === 3 && typeof ev.selected_idx === 'number') {
           setAimodeSelected(ev.selected_idx)
+          // ★ AI 자동 클릭 — 시각적으로 카드 강조 후 1.4s 뒤 상세 페이지로 자동 이동
+          const tgtIdx = ev.selected_idx
+          setTimeout(() => {
+            setResults(prev => {
+              const tgt = prev[tgtIdx]
+              if (tgt) handleSelectFile(tgt)
+              return prev
+            })
+          }, 1400)
         }
         break
 
-      case 'sources':
-        // AIMODE 검색 결과 카드 — sources 형식 (rid 없음, 그대로 사용)
-        setAimodeSources(ev.items || [])
+      case 'sources': {
+        // AIMODE 검색 결과 — 작은 단계 패널용 + MainSearch 와 동일한 큰 카드 그리드용
+        const items = ev.items || []
+        setAimodeSources(items)
+        // ★ 동일 데이터를 큰 카드 그리드로도 렌더 (MainSearch 와 동일한 UX)
+        setResults(items)
         break
+      }
 
       case 'token':
         setAimodeAnswer(prev => prev + (ev.text || ''))
@@ -763,10 +787,7 @@ export default function MainAI() {
         }
         break
       }
-
-      case 'error':
-        setAiError(ev.message || '오류 발생')
-        break
+      // case 'error' 는 위쪽에 이미 정의 (AIMODE/legacy 공용)
     }
   }
 
@@ -812,6 +833,30 @@ export default function MainAI() {
   }
 
   const handleBackToResults = () => { setDetailVisible(false); setTimeout(() => setView('results'), 320) }
+
+  // 새 대화 — 서버 history + localStorage thread_id 모두 비움
+  const handleNewConversation = useCallback(async () => {
+    if (abortRef.current) abortRef.current.abort()
+    const tid = window.__aimodeThreadId
+    if (tid) {
+      try { await fetch(`${API_BASE}/api/aimode/chat/${encodeURIComponent(tid)}`, { method: 'DELETE' }) } catch {}
+    }
+    try { localStorage.removeItem('aimode_thread_id') } catch {}
+    window.__aimodeThreadId = null
+    setAimodeSteps([])
+    setAimodeQuery('')
+    setAimodeSources([])
+    setAimodeSelected(null)
+    setAimodeAnswer('')
+    setAimodeDone(false)
+    setResults([])
+    setIterationData([])
+    setSelectedFile(null)
+    setFileDetail(null)
+    setAiError('')
+    setView('home')
+    setInputValue('')
+  }, [])
 
   const handleGoToSearch = () => {
     const rect = btnRef.current?.getBoundingClientRect()
@@ -875,7 +920,7 @@ export default function MainAI() {
                 <span style={{ color: AI.accentLight }}>.</span>
               </h2>
               <p className="text-on-surface-variant/70 text-lg max-w-xl mx-auto font-light">
-                원하는 파일이 <span style={{ color: AI.accentLight, fontWeight: 700 }}>상위 3위</span> 안에 들 때까지 스스로 쿼리를 개선합니다.
+                질문하면 AI가 검색·선택·답변까지 <span style={{ color: AI.accentLight, fontWeight: 700 }}>한 번에</span> 처리합니다.
               </p>
             </div>
 
@@ -935,17 +980,6 @@ export default function MainAI() {
                   {n}
                 </button>
               ))}
-              <div className="w-px h-4 opacity-20" style={{ background: AI.accent }} />
-              <span className="opacity-50">최대 시도</span>
-              {[2, 3, 5].map(n => (
-                <button key={n} type="button" onClick={() => setMaxIter(n)}
-                  className="px-3 py-1 rounded-full border transition-colors"
-                  style={maxIter === n
-                    ? { borderColor: AI.accent, color: AI.accentLight, background: 'rgba(139,92,246,0.1)' }
-                    : { borderColor: 'rgba(109,40,217,0.2)', color: 'inherit' }}>
-                  {n}
-                </button>
-              ))}
             </div>
 
             {/* 검색 모드 전환 버튼 */}
@@ -965,9 +999,9 @@ export default function MainAI() {
             {/* 기능 카드 */}
             <div className={`grid grid-cols-1 md:grid-cols-3 gap-4 mt-24 w-full transition-all duration-300 ${homeExiting ? 'opacity-0 translate-y-4' : 'opacity-100 translate-y-0'}`}>
               {[
-                { icon: 'manage_search', title: '반복 검색', sub: '쿼리 자동 개선' },
-                { icon: 'psychology',   title: 'AI 추론',   sub: '결과 적합성 판단' },
-                { icon: 'auto_awesome', title: 'LLM 연동',  sub: 'Ollama 로컬 LLM' },
+                { icon: 'manage_search', title: '키워드 추출', sub: '질문에서 핵심 추출' },
+                { icon: 'ads_click',     title: '자동 카드 선택', sub: '도메인 의도 인지' },
+                { icon: 'auto_awesome',  title: '본문 답변',   sub: 'Ollama 로컬 LLM' },
               ].map((card) => (
                 <div key={card.title}
                   className="p-6 rounded-xl cursor-pointer transition-all duration-300 group"
@@ -1030,6 +1064,15 @@ export default function MainAI() {
             </button>
           )}
 
+          {/* 🧹 새 대화 — 서버 history + localStorage thread_id 모두 비움 */}
+          <button onClick={handleNewConversation} title="대화 이력 초기화 (새 대화 시작)"
+            className="flex items-center gap-2 px-4 py-2 rounded-full border text-base font-bold transition-all shrink-0 text-on-surface-variant hover:text-on-surface"
+            style={{ background: AI.card, borderColor: AI.border }}
+            onMouseEnter={e => e.currentTarget.style.borderColor = AI.accentLight}
+            onMouseLeave={e => e.currentTarget.style.borderColor = AI.border}>
+            <span className="material-symbols-outlined text-lg">restart_alt</span>새 대화
+          </button>
+
           <div className="absolute bottom-0 left-0 w-full h-[1px] opacity-30"
             style={{ background: `linear-gradient(to right, transparent, ${AI.accent}, transparent)` }} />
         </header>
@@ -1059,21 +1102,56 @@ export default function MainAI() {
                 {streaming
                   ? <p className="text-on-surface-variant flex items-center gap-2">
                       <span className="material-symbols-outlined text-lg animate-spin" style={{ color: AI.accent }}>progress_activity</span>
-                      AI 에이전트 검색 중...
+                      AI가 검색·분석 중...
                     </p>
                   : aiError
                     ? <p className="text-red-400 text-sm">{aiError}</p>
                     : <p className="text-on-surface-variant">
                         <span className="font-bold" style={{ color: AI.accentLight }}>{results.length}건</span>을 찾았습니다.
-                        {iterationData.filter(it=>it.iteration>0).length > 0 && (<span className="ml-2 text-xs opacity-50">({iterationData.filter(it=>it.iteration>0).length}회 시도)</span>
-                        )}
                       </p>
                 }
               </div>
             </div>
 
-            {/* AIMODE 시각화 4-step 패널 */}
-            {useAimode && (aimodeSteps.length > 0 || aimodeAnswer) && (
+            {/* AIMODE 시각화 4-step 패널 — 컴팩트 progress strip */}
+            {useAimode && aimodeSteps.length > 0 && (
+              <div className="mb-6 rounded-2xl border px-5 py-3 flex items-center gap-4 overflow-x-auto"
+                style={{ background: AI.card, borderColor: AI.border }}>
+                <span className="material-symbols-outlined text-lg shrink-0" style={{ color: AI.accentLight }}>auto_awesome</span>
+                <span className="text-[10px] uppercase tracking-widest font-bold shrink-0"
+                  style={{ color: AI.accentLight }}>AI MODE</span>
+                {[1, 2, 3, 4].map(stepNum => {
+                  const s = aimodeSteps.find(s => s.step === stepNum)
+                  const labels = { 1: '추출', 2: '검색', 3: '선택', 4: '답변' }
+                  const active = !!s
+                  const done = s?.done
+                  return (
+                    <div key={stepNum} className="flex items-center gap-1.5 text-[11px] shrink-0">
+                      <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold border ${
+                        done ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300' :
+                        active ? 'border-purple-400 text-purple-300 animate-pulse' :
+                        'border-white/15 text-on-surface-variant/40'
+                      }`}>
+                        {done ? '✓' : stepNum}
+                      </div>
+                      <span className={done ? 'text-emerald-300' : active ? 'text-on-surface' : 'text-on-surface-variant/40'}>
+                        {labels[stepNum]}
+                      </span>
+                      {stepNum < 4 && <span className="text-on-surface-variant/20">→</span>}
+                    </div>
+                  )
+                })}
+                {aimodeQuery && (
+                  <div className="ml-auto flex items-center gap-1.5 text-[11px] font-mono shrink-0"
+                    style={{ color: AI.accentLight }}>
+                    <span className="material-symbols-outlined text-sm">search</span>"{aimodeQuery}"
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* HIDDEN — old detailed panel preserved for backward compat (do not render) */}
+            {false && useAimode && (aimodeSteps.length > 0 || aimodeAnswer) && (
               <div className="mb-6 rounded-2xl border p-5 space-y-4"
                 style={{ background: AI.card, borderColor: AI.border }}>
                 <div className="flex items-center gap-2">
@@ -1184,16 +1262,13 @@ export default function MainAI() {
               </div>
             )}
 
-            {/* AI 탐색 과정 패널 (기존 ai_search) */}
-            {!useAimode && (
-              <AIIterationPanel iterationData={iterationData} domainSelection={domainSelection} streaming={streaming} hasLLM={hasLLM} />
-            )}
-
-            {/* 로딩 */}
+            {/* 로딩 — AIMODE 4단계 진행 중 */}
             {streaming && results.length === 0 && (
               <div className="flex flex-col items-center justify-center py-32 gap-4">
                 <span className="material-symbols-outlined text-5xl animate-spin" style={{ color: AI.accent }}>psychology</span>
-                <p className="text-on-surface-variant">AI 에이전트가 <span style={{ color: AI.accentLight }}>탑 3</span> 목표로 쿼리 최적화 중...</p>
+                <p className="text-on-surface-variant">
+                  <span style={{ color: AI.accentLight, fontWeight: 700 }}>AI</span>가 검색어를 분석하고 결과를 가져오는 중...
+                </p>
               </div>
             )}
 
@@ -1205,12 +1280,29 @@ export default function MainAI() {
               </div>
             )}
 
-            {/* 결과 카드 (스트리밍 중에도 표시) */}
+            {/* 결과 카드 — MainSearch 와 동일한 grid. AI 선택 카드는 펄스 강조 */}
             {results.length > 0 && (
               <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
-                {results.map((r, i) => (
-                  <AiResultCard key={r.file_path + i} result={r} rank={i + 1} onClick={() => handleSelectFile(r)} />
-                ))}
+                {results.map((r, i) => {
+                  const isAiPick = aimodeSelected === i
+                  return (
+                    <div key={r.file_path + i} className="relative">
+                      {/* AI 자동 선택 — 카드 펄스 + 'AI 클릭 중...' 라벨 */}
+                      {isAiPick && (
+                        <>
+                          <div className="absolute -inset-1 rounded-[14px] pointer-events-none animate-pulse z-10"
+                            style={{ background: 'transparent',
+                              boxShadow: `0 0 0 3px ${AI.accentLight}, 0 0 30px 5px rgba(168,85,247,0.6)` }} />
+                          <div className="absolute -top-3 left-3 z-20 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest text-white animate-bounce"
+                            style={{ background: AI.rankBg, boxShadow: AI.glow }}>
+                            🤖 AI 선택중...
+                          </div>
+                        </>
+                      )}
+                      <AiResultCard result={r} rank={i + 1} onClick={() => handleSelectFile(r)} />
+                    </div>
+                  )
+                })}
               </div>
             )}
 
@@ -1225,12 +1317,11 @@ export default function MainAI() {
                     style={{ color: AI.accentLight }}>
                     <span className="material-symbols-outlined text-lg">analytics</span>AI 검색 요약
                   </h3>
-                  <div className="grid grid-cols-4 gap-4">
+                  <div className="grid grid-cols-3 gap-4">
                     {[
                       ['총 결과', `${results.length}건`],
-                      ['시도 횟수', `${iterationData.filter(it=>it.iteration>0).length}회`],
                       ['최고 신뢰도', `${Math.round((results[0]?.confidence ?? 0) * 100)}%`],
-                      ['LLM', hasLLM ? '✓ 사용' : '휴리스틱'],
+                      ['추출 검색어', aimodeQuery ? `"${aimodeQuery}"` : '—'],
                     ].map(([label, val]) => (
                       <div key={label} className="p-4 rounded-2xl border"
                         style={{ background: 'rgba(109,40,217,0.05)', borderColor: AI.border }}>
@@ -1288,6 +1379,48 @@ export default function MainAI() {
             </div>
 
             <section className="pt-36 pb-12 px-8 max-w-7xl mx-auto space-y-8">
+              {/* ★ AI 답변 패널 — 상세 페이지 진입 시 가장 위에 streaming 표시 */}
+              {(aimodeAnswer || aimodeSteps.find(s => s.step === 4)) && (
+                <div className="rounded-2xl border overflow-hidden relative"
+                  style={{ background: 'linear-gradient(135deg, rgba(109,40,217,0.12), rgba(192,38,211,0.08))',
+                    borderColor: AI.borderHover,
+                    boxShadow: '0 0 30px rgba(168,85,247,0.15)' }}>
+                  <div className="px-6 py-3 flex items-center gap-3 border-b"
+                    style={{ borderColor: AI.border, background: 'rgba(13,7,24,0.4)' }}>
+                    <span className="material-symbols-outlined animate-pulse" style={{ color: AI.accentLight }}>auto_awesome</span>
+                    <span className="text-xs uppercase tracking-widest font-bold" style={{ color: AI.accentLight }}>
+                      AI 답변 — 본문에서 찾은 내용
+                    </span>
+                    {aimodeDone ? (
+                      <span className="ml-auto text-[10px] flex items-center gap-1 text-emerald-400">
+                        <span className="material-symbols-outlined text-base">check_circle</span> 완료
+                      </span>
+                    ) : (
+                      <span className="ml-auto text-[10px] flex items-center gap-1" style={{ color: AI.accentLight }}>
+                        <span className="material-symbols-outlined text-base animate-spin">progress_activity</span> 작성 중
+                      </span>
+                    )}
+                  </div>
+                  <div className="px-6 py-5 leading-relaxed text-on-surface text-base whitespace-pre-wrap min-h-[80px]">
+                    {aimodeAnswer || (
+                      <span className="text-on-surface-variant/40 italic">본문을 분석해 답변을 정리하는 중입니다...</span>
+                    )}
+                    {!aimodeDone && aimodeAnswer && (
+                      <span className="inline-block w-2 h-4 ml-1 align-middle animate-pulse"
+                        style={{ background: AI.accentLight }} />
+                    )}
+                  </div>
+                  {aimodeQuery && (
+                    <div className="px-6 py-2 border-t flex items-center gap-2 text-[11px]"
+                      style={{ borderColor: AI.border, background: 'rgba(13,7,24,0.4)' }}>
+                      <span className="material-symbols-outlined text-sm" style={{ color: AI.accentDark }}>search</span>
+                      <span className="text-on-surface-variant/60">추출 검색어:</span>
+                      <span className="font-mono font-bold" style={{ color: AI.accentLight }}>"{aimodeQuery}"</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="grid grid-cols-12 gap-6">
 
                 {/* 메인 컨텐츠 */}
@@ -1377,24 +1510,7 @@ export default function MainAI() {
                     </div>
                   </div>
 
-                  {/* AI 검색 여정 요약 */}
-                  {iterationData.filter(it=>it.iteration>0).length > 0 && (<div className="rounded-xl p-6 border" style={{ background: AI.card, borderColor: AI.border }}>
-                      <h4 className="text-[11px] font-bold tracking-[0.15em] uppercase mb-4" style={{ color: AI.accentLight }}>
-                        검색 여정 ({iterationData.filter(it=>it.iteration>0).length}회 시도)
-                      </h4>
-                      <div className="space-y-2">
-                        {iterationData.filter(it=>it.iteration>0).map((h, i) => (
-                          <div key={i} className="flex items-start gap-2">
-                            <span className="text-[10px] font-bold mt-0.5 shrink-0" style={{ color: AI.accentDark }}>#{i+1}</span>
-                            <div>
-                              <span className="text-[10px] font-mono" style={{ color: AI.accentLight }}>"{h.query}"</span>
-                              <span className="text-[10px] text-on-surface-variant/40 ml-1">{h.count}건</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                  {/* (legacy "검색 여정" 패널 제거 — AIMODE 는 단일 호출이라 의미 없음) */}
                 </div>
               </div>
             </section>
