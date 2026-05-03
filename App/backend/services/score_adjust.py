@@ -57,33 +57,32 @@ def _classify_query(text: str) -> dict:
 
 def _generous_curve(raw: float) -> float:
     """CLIP/SigLIP2/BGE-M3 등 raw cosine [0.0, 0.6] 의 좁은 범위를
-    사용자 친화 [0%, 100%] 로 확장.
+    사용자 친화 [0%, 99%] 로 공격적 확장.
 
-    매핑 (조각별 선형):
+    배경:
+      SigLIP2 image cosine: 강한 매칭도 0.25~0.35 범위 (대부분 0.30 이하)
+      BGE-M3 doc cosine:    강한 매칭 0.40~0.60
+      CLAP audio cosine:    강한 매칭 0.30~0.55
+
+    매핑 (조각별 선형, 모델 분포에 맞춰 공격적):
       0.00 → 0%
-      0.20 → 30%
-      0.40 → 70%
-      0.50 → 85%
-      0.60 → 95%
+      0.10 → 30%
+      0.25 → 70%   ← SigLIP2 보통 매칭
+      0.40 → 90%   ← BGE-M3 의미 매칭
+      0.60 → 98%   ← 매우 강한 매칭
       1.00 → 99%
-
-    효과:
-      cosine 0.30 (보통 매칭) → 50%
-      cosine 0.40 (의미 매칭) → 70%
-      cosine 0.50 (강한 매칭) → 85%
-      cosine 0.60+ (매우 강함) → 95%+
     """
     x = max(0.0, min(1.0, raw))
-    if x < 0.20:
-        return x * 1.50                              # 0~30%
+    if x < 0.10:
+        return x * 3.0                                # 0~30%
+    elif x < 0.25:
+        return 0.30 + (x - 0.10) * (0.40 / 0.15)      # 30~70%
     elif x < 0.40:
-        return 0.30 + (x - 0.20) * 2.00              # 30~70%
-    elif x < 0.50:
-        return 0.70 + (x - 0.40) * 1.50              # 70~85%
+        return 0.70 + (x - 0.25) * (0.20 / 0.15)      # 70~90%
     elif x < 0.60:
-        return 0.85 + (x - 0.50) * 1.00              # 85~95%
+        return 0.90 + (x - 0.40) * (0.08 / 0.20)      # 90~98%
     else:
-        return min(1.0, 0.95 + (x - 0.60) * 0.10)    # 95~99%
+        return min(1.0, 0.98 + (x - 0.60) * 0.025)    # 98~99%
 
 
 def adjust_confidence(raw_conf: float, query: str = "") -> float:
