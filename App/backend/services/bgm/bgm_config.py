@@ -47,7 +47,8 @@ DEVICE             = "cuda" if os.environ.get("FORCE_CPU") != "1" else "cpu"
 # ── Confidence 임계값 ──────────────────────────────────────────────────────
 SCORE_MARGIN_HIGH  = 0.15
 SCORE_MARGIN_MED   = 0.05
-FINGERPRINT_HIGH   = 0.85   # Chromaprint similarity 임계값
+FINGERPRINT_HIGH   = 0.97   # Chromaprint similarity 임계값
+# (self-match=1.0 통과, 무관 트랙 false positive median 0.90 차단)
 
 # ── 설정 파일 ──────────────────────────────────────────────────────────────
 SETTINGS_PATH      = DATA_ROOT / "settings.json"
