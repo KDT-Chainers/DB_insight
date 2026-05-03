@@ -51,15 +51,30 @@ function AiResultCard({ result, rank, onClick }) {
   const conf    = result.confidence ?? result.similarity ?? 0
   const confPct = (conf * 100).toFixed(1)
   const dense   = result.dense ?? null
-  const rerank  = result.rerank ?? null
+  const rerank  = result.rerank_score ?? result.rerank ?? null
   const zScore  = result.z_score ?? null
+  const lexical = result.lexical ?? null
 
   const clamp01 = x => (x == null || isNaN(x)) ? null : Math.max(0, Math.min(1, x))
   const sigm    = x => 1 / (1 + Math.exp(-x))
   const sim     = clamp01(dense) != null ? clamp01(dense).toFixed(3) : '—'
-  const acc     = rerank != null
-    ? sigm(rerank).toFixed(3)
-    : Math.max(0, Math.min(1, ((zScore ?? 0) + 3) / 6)).toFixed(3)
+
+  // 정확도 (rerank) — 음수 score 폴백 로직 강화
+  // 1) rerank > 0 (정상 양수): sigmoid 그대로
+  // 2) rerank ≤ 0 (음수): sigm(rerank) 가 < 0.5 → dense×0.7 + rerank_norm×0.3 블렌드
+  // 3) rerank null: dense 또는 lexical 또는 conf 기반 추정
+  const _accFromMix = () => {
+    const d = clamp01(dense) ?? 0
+    if (rerank != null) {
+      const s = sigm(rerank)              // [0,1] 매핑된 rerank
+      // 음수 rerank (s < 0.5) 일 때, dense 기반으로 보정 — 너무 0 으로 떨어지지 않게
+      return s >= 0.5 ? s : (s * 0.4 + d * 0.6)
+    }
+    if (zScore != null) return Math.max(0, Math.min(1, (zScore + 3) / 6))
+    if (lexical != null && d > 0) return d * 0.7 + Math.min(1, lexical * 1.5) * 0.3
+    return d > 0 ? d * 0.85 : conf * 0.9
+  }
+  const acc = _accFromMix().toFixed(3)
 
   const domainLabel = result.trichef_domain ?? result.file_type ?? 'unknown'
   const segments    = result.segments ?? []
@@ -125,6 +140,21 @@ function AiResultCard({ result, rank, onClick }) {
 
       {/* 바디 */}
       <div className="p-3 flex flex-col gap-2 flex-1 text-[#e2e8f0]">
+        {/* 3지표 — 미리보기 화면 바로 아래 */}
+        <div className="grid grid-cols-3 gap-1.5">
+          {[
+            { label: '신뢰도', value: `${confPct}%`, cls: 'text-[#a78bfa]' },
+            { label: '정확도', value: acc,            cls: 'text-[#60a5fa]' },
+            { label: '유사도', value: sim,            cls: 'text-[#c4b5fd]' },
+          ].map(({ label, value, cls }) => (
+            <div key={label} className="rounded-md p-1.5 text-center border"
+              style={{ background: '#0b0515', borderColor: AI.border }}>
+              <div className="text-[10px] text-[#6b7280] uppercase tracking-wide">{label}</div>
+              <div className={`text-[15px] font-bold mt-0.5 ${cls}`}>{value}</div>
+            </div>
+          ))}
+        </div>
+
         {/* 도메인 배지 */}
         <div className="flex gap-1 flex-wrap">
           <span className={`text-[10px] px-2 py-0.5 rounded-full border ${DOMAIN_CLS[domainLabel] ?? 'bg-[#1e1040] text-[#a78bfa] border-[#7c3aed]'}`}>
@@ -152,21 +182,6 @@ function AiResultCard({ result, rank, onClick }) {
         {/* 경로 */}
         <div className="text-[11px] text-[#6b7280] break-all font-mono">
           {result.file_path || result.trichef_id}
-        </div>
-
-        {/* 3지표 */}
-        <div className="grid grid-cols-3 gap-1.5">
-          {[
-            { label: '신뢰도', value: `${confPct}%`, cls: 'text-[#a78bfa]' },
-            { label: '정확도', value: acc,            cls: 'text-[#60a5fa]' },
-            { label: '유사도', value: sim,            cls: 'text-[#c4b5fd]' },
-          ].map(({ label, value, cls }) => (
-            <div key={label} className="rounded-md p-1.5 text-center border"
-              style={{ background: '#0b0515', borderColor: AI.border }}>
-              <div className="text-[10px] text-[#6b7280] uppercase tracking-wide">{label}</div>
-              <div className={`text-[15px] font-bold mt-0.5 ${cls}`}>{value}</div>
-            </div>
-          ))}
         </div>
 
         {/* AV: 세그먼트 */}
@@ -686,15 +701,8 @@ export default function MainAI() {
         if (ev.step === 1 && ev.query) setAimodeQuery(ev.query)
         if (ev.step === 3 && typeof ev.selected_idx === 'number') {
           setAimodeSelected(ev.selected_idx)
-          // ★ AI 자동 클릭 — 시각적으로 카드 강조 후 1.4s 뒤 상세 페이지로 자동 이동
-          const tgtIdx = ev.selected_idx
-          setTimeout(() => {
-            setResults(prev => {
-              const tgt = prev[tgtIdx]
-              if (tgt) handleSelectFile(tgt)
-              return prev
-            })
-          }, 1400)
+          // 자동 클릭 비활성화 — 사용자가 직접 카드 선택
+          // (이전에는 1.4s 후 handleSelectFile 자동 호출)
         }
         break
 
@@ -1473,23 +1481,77 @@ export default function MainAI() {
 
                 {/* 메타데이터 패널 */}
                 <div className="col-span-4 space-y-5">
-                  {/* 신뢰도 */}
-                  <div className="rounded-xl p-6 border relative overflow-hidden"
-                    style={{ background: AI.card, borderColor: AI.border }}>
-                    <div className="absolute -right-4 -top-4 w-24 h-24 blur-3xl" style={{ background: 'rgba(109,40,217,0.15)' }} />
-                    <h4 className="text-[11px] font-bold tracking-[0.15em] uppercase mb-4" style={{ color: AI.accentLight }}>신뢰도 분석</h4>
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-3">
-                        <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(109,40,217,0.15)' }}>
-                          <div className="h-full rounded-full transition-all duration-700"
-                            style={{ width: `${confPct}%`, background: `linear-gradient(to right, ${AI.accentDark}, ${AI.accentLight})`,
-                              boxShadow: `0 0 8px rgba(139,92,246,0.5)` }} />
+                  {/* 신뢰도 · 정확도 · 유사도 통합 패널 */}
+                  {(() => {
+                    const conf = selectedFile.confidence ?? selectedFile.similarity ?? 0
+                    const dense = selectedFile.dense
+                    const rerank = selectedFile.rerank_score ?? selectedFile.rerank
+                    const zScore = selectedFile.z_score
+                    const lexical = selectedFile.lexical
+                    const sigm = (x) => 1 / (1 + Math.exp(-x))
+                    const d01 = dense != null ? Math.max(0, Math.min(1, dense)) : 0
+                    // 정확도 — rerank 음수 폴백 로직 (카드와 동일)
+                    let acc
+                    if (rerank != null) {
+                      const s = sigm(rerank)
+                      acc = s >= 0.5 ? s : (s * 0.4 + d01 * 0.6)
+                    } else if (zScore != null) {
+                      acc = Math.max(0, Math.min(1, (zScore + 3) / 6))
+                    } else if (lexical != null && d01 > 0) {
+                      acc = d01 * 0.7 + Math.min(1, lexical * 1.5) * 0.3
+                    } else {
+                      acc = d01 > 0 ? d01 * 0.85 : conf * 0.9
+                    }
+                    // 유사도: dense 기반
+                    const sim = d01 > 0 ? d01 : conf
+                    const ROWS = [
+                      {
+                        label: '신뢰도', value: conf, source: rerank != null ? 'Rerank+Calib' : 'Hermitian',
+                        desc: 'Calibration 적용 후 종합 점수',
+                        gradFrom: AI.accentDark, gradTo: AI.accentLight,
+                      },
+                      {
+                        label: '정확도', value: acc, source: rerank != null ? 'BGE-reranker-v2-m3' : (zScore != null ? 'z-score' : 'sparse·lexical'),
+                        desc: 'Cross-encoder 재정렬 확률',
+                        gradFrom: '#10b981', gradTo: '#34d399',
+                      },
+                      {
+                        label: '유사도', value: sim, source: 'SigLIP2 / BGE-M3 dense',
+                        desc: '벡터 임베딩 코사인 유사도 (정규화)',
+                        gradFrom: '#3b82f6', gradTo: '#60a5fa',
+                      },
+                    ]
+                    return (
+                      <div className="rounded-xl p-6 border relative overflow-hidden"
+                        style={{ background: AI.card, borderColor: AI.border }}>
+                        <div className="absolute -right-4 -top-4 w-24 h-24 blur-3xl" style={{ background: 'rgba(109,40,217,0.15)' }} />
+                        <h4 className="text-[11px] font-bold tracking-[0.15em] uppercase mb-4 flex items-center gap-2"
+                          style={{ color: AI.accentLight }}>
+                          <span className="material-symbols-outlined text-sm">analytics</span>
+                          점수 분해
+                        </h4>
+                        {/* 가로 3 컬럼 — 라벨 + % 만, bar 없음 */}
+                        <div className="grid grid-cols-3 gap-2">
+                          {ROWS.map((r) => {
+                            const pct = Math.max(0, Math.min(100, (r.value || 0) * 100))
+                            return (
+                              <div key={r.label} title={`${r.desc} · ${r.source}`}
+                                className="flex flex-col items-center justify-center py-2 px-1 rounded-lg"
+                                style={{ background: 'rgba(255,255,255,0.02)' }}>
+                                <span className="text-[10px] uppercase tracking-widest text-on-surface-variant/60 mb-1">
+                                  {r.label}
+                                </span>
+                                <span className="text-2xl font-extrabold tabular-nums leading-none"
+                                  style={{ color: r.gradTo }}>
+                                  {pct.toFixed(1)}<span className="text-sm font-bold">%</span>
+                                </span>
+                              </div>
+                            )
+                          })}
                         </div>
-                        <span className="text-sm font-bold text-on-surface tabular-nums">{confPct}%</span>
                       </div>
-                      <p className="text-[10px] text-on-surface-variant/50">TRI-CHEF Hermitian 유사도 · AI Calibration</p>
-                    </div>
-                  </div>
+                    )
+                  })()}
 
                   {/* 파일 정보 */}
                   <div className="rounded-xl p-6 border" style={{ background: AI.card, borderColor: AI.border }}>
@@ -1500,8 +1562,6 @@ export default function MainAI() {
                         ['타입', meta.label],
                         selectedFile.page_num != null ? ['페이지', `${selectedFile.page_num}p`] : null,
                         ['경로', selectedFile.file_path],
-                        selectedFile.dense != null ? ['Dense', selectedFile.dense.toFixed(4)] : null,
-                        selectedFile.lexical != null ? ['Lexical', selectedFile.lexical.toFixed(4)] : null,
                       ].filter(Boolean).map(([label, val]) => (
                         <div key={label} className="flex gap-3 py-2 border-b last:border-0" style={{ borderColor: AI.border }}>
                           <span className="text-[10px] uppercase tracking-widest min-w-[60px] shrink-0" style={{ color: 'rgba(167,139,250,0.5)' }}>{label}</span>

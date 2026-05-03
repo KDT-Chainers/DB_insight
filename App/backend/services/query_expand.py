@@ -171,6 +171,10 @@ for _ko, _ens in _KO_EN.items():
         _EN_KO.setdefault(_en.lower(), []).append(_ko)
 
 
+from functools import lru_cache
+
+
+@lru_cache(maxsize=2048)
 def expand_bilingual(query: str, max_extra: int = 8) -> str:
     """쿼리를 한↔영 양방향 사전으로 확장.
 

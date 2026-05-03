@@ -281,17 +281,63 @@ def _extract_query(user_question: str, model: str) -> str:
 
 
 # ── Step 2: 검색 ────────────────────────────────────────────────────
+from functools import lru_cache as _lru_cache
+
+
+@_lru_cache(maxsize=1024)
+def _cached_doc_snippet(rid: str) -> str:
+    """doc_page rid → page_text 첫 800자 캐시 (LRU=1024)."""
+    try:
+        from config import PATHS
+        from pathlib import Path
+        import re
+        m = re.match(r"^page_images/(.+)/p(\d+)\.(?:jpg|png)$", rid)
+        if not m:
+            return ""
+        stem, page_num = m.group(1), int(m.group(2))
+        pt = Path(PATHS["TRICHEF_DOC_EXTRACT"]) / "page_text" / stem / f"p{page_num:04d}.txt"
+        if pt.is_file():
+            return pt.read_text(encoding="utf-8").strip()[:800]
+    except Exception:
+        pass
+    return ""
+
+
+@_lru_cache(maxsize=512)
+def _cached_image_caption(rid: str, query: str = "") -> str:
+    """image rid → Qwen 5-stage caption 결합 캐시."""
+    try:
+        from services.location_resolver import _img_location
+        loc = _img_location(rid, query=query) or {}
+        parts = [loc.get(k, "") for k in ("title", "tagline", "synopsis")]
+        txt = " | ".join(p.strip() for p in parts if p and p.strip())
+        if txt:
+            return txt[:600]
+        return (loc.get("caption") or "")[:600]
+    except Exception:
+        return ""
+
+
 def _enrich_snippet(r: dict, query: str) -> None:
     """LLM 에 전달할 snippet 채우기 — doc_page 는 PDF page text 직접 로드.
 
-    각 도메인:
-      doc_page : extracted_DB/Doc/page_text/<stem>/p####.txt 직접 읽기
-      image    : Qwen 5-stage caption (title + tagline + synopsis)
-      movie/music: AV segment 의 STT 텍스트 (이미 r['snippet'] 에 있음)
+    LRU 캐시 적용 — 같은 rid 반복 호출 시 디스크 I/O / Qwen 호출 중복 제거.
     """
     if r.get("snippet"):
-        return  # 이미 채워짐
+        return
     file_type = r.get("file_type", "")
+    rid = r.get("trichef_id") or ""
+    if file_type == "doc" and rid:
+        t = _cached_doc_snippet(rid)
+        if t:
+            r["snippet"] = t
+            return
+    elif file_type == "image" and rid:
+        t = _cached_image_caption(rid, query)
+        if t:
+            r["snippet"] = t
+            return
+    # 미지원 타입 — 기존 로직 fallback
     rid = r.get("trichef_id") or ""
     try:
         from config import PATHS
@@ -407,9 +453,12 @@ def _do_search(query: str, topk: int = 5) -> list[dict]:
             except Exception:
                 pass
 
-        # ⑧ AIMODE 전용 — LLM 본문 컨텍스트용 snippet 보강
-        for r in results:
-            _enrich_snippet(r, query)
+        # ⑧ AIMODE 전용 — LLM 본문 컨텍스트용 snippet 보강 (병렬 디스크 I/O)
+        with ThreadPoolExecutor(max_workers=8) as ex:
+            futs = [ex.submit(_enrich_snippet, r, query) for r in results]
+            for f in futs:
+                try: f.result(timeout=5)
+                except Exception: pass
 
         return results[:topk]
     except Exception:

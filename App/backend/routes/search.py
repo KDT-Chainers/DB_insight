@@ -486,10 +486,35 @@ def file_open():
 
 @search_bp.post("/files/open-folder")
 def folder_open():
-    """POST /api/files/open-folder  body: { "file_path": "C:/..." }"""
+    """POST /api/files/open-folder  body: { "file_path": "C:/..." }
+
+    탐색기에서 해당 파일을 선택한 상태로 부모 폴더를 엽니다.
+    Windows: `explorer /select,<file>` — 콤마와 경로는 **하나의 인자** 로 전달해야 함.
+      * subprocess.Popen(["explorer", "/select,", path]) ← BAD: 콤마/경로가 분리되어
+        탐색기가 콤마만 받고 path 를 무시 → 기본 폴더(문서 등)로 엽니다.
+      * subprocess.Popen(f'explorer /select,"{path}"', shell=True) ← OK
+    경로가 디렉터리이면 부모 + select 가 의미 없으므로 그냥 디렉터리를 엽니다.
+    """
     data      = request.get_json(silent=True) or {}
     file_path = data.get("file_path", "")
     if not file_path or not os.path.exists(file_path):
         return jsonify({"error": "File not found"}), 404
-    subprocess.Popen(["explorer", "/select,", file_path])
+
+    # Windows 백슬래시 정규화 (forward slash 도 explorer 가 받지만 일관성)
+    norm_path = os.path.normpath(file_path)
+
+    try:
+        if os.path.isdir(norm_path):
+            # 디렉터리면 그대로 열기
+            os.startfile(norm_path)
+        else:
+            # 파일 → 부모 폴더 열고 파일 선택. shell=True 로 단일 명령 문자열 전달
+            # (큰따옴표로 경로 감싸서 공백/한글 지원).
+            subprocess.Popen(f'explorer /select,"{norm_path}"', shell=True)
+    except Exception as e:
+        # 최종 fallback — 부모 폴더만 열기
+        try:
+            os.startfile(os.path.dirname(norm_path))
+        except Exception:
+            return jsonify({"error": str(e)}), 500
     return jsonify({"success": True})
