@@ -117,7 +117,7 @@ export default function SearchSidebar() {
 
       {/* 드래그 가능한 타이틀바 + 윈도우 컨트롤 */}
       <div
-        className="fixed top-0 right-0 h-8 bg-[#070d1f] z-[9999] flex items-center justify-end px-2"
+        className="titlebar-chrome fixed top-0 right-0 h-8 z-[9999] flex items-center justify-end px-2"
         style={{ WebkitAppRegion: 'drag', left: open ? '256px' : '0', transition: 'left 0.3s' }}
       >
         <div style={{ WebkitAppRegion: 'no-drag' }}>

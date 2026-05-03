@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import SearchSidebar from '../components/SearchSidebar'
+import AnimatedOrb from '../components/AnimatedOrb'
+import AmbientPageBackdrop from '../components/AmbientPageBackdrop'
 import { useSidebar } from '../context/SidebarContext'
 import { API_BASE } from '../api'
 
@@ -67,6 +69,9 @@ async function openFolder(filePath) {
     body: JSON.stringify({ file_path: filePath }),
   })
 }
+
+/** v0 AIHero 퀵 서제스트 (동일 문구) */
+const V0_HOME_SUGGESTIONS = ['Write an email', 'Summarize text', 'Translate', 'Generate ideas']
 
 // ── 결과 카드 ────────────────────────────────────────────
 function ResultCard({ result, onClick }) {
@@ -186,6 +191,7 @@ export default function MainSearch() {
   const [flyStyle, setFlyStyle] = useState(null)
   const [homeExiting, setHomeExiting] = useState(false)
   const [resultsReady, setResultsReady] = useState(false)
+  const [searchFocused, setSearchFocused] = useState(false)
 
   // results → detail 슬라이드
   const [detailVisible, setDetailVisible] = useState(false)
@@ -300,8 +306,10 @@ export default function MainSearch() {
   }
 
   return (
-    <div className={view === 'home' ? 'overflow-hidden h-screen grid-bg relative' : 'min-h-screen relative bg-background text-on-surface'}
-      style={view !== 'home' ? { backgroundImage: 'radial-gradient(circle at 2px 2px, rgba(65,71,91,0.15) 1px, transparent 0)', backgroundSize: '32px 32px' } : {}}>
+    <div
+      className={`relative text-on-surface ${view === 'home' ? 'min-h-screen h-screen overflow-x-hidden overflow-y-auto' : 'min-h-screen overflow-x-hidden'}`}
+    >
+      <AmbientPageBackdrop />
 
       {/* AI 포털 전환 오버레이 */}
       {aiTransitioning && (
@@ -323,96 +331,132 @@ export default function MainSearch() {
       {/* 사이드바 */}
       <SearchSidebar />
 
-      {/* ════ HOME ════ */}
+      {/* ════ HOME — v0 AIHero 레이아웃 + 기존 검색/STT/플라이 로직 ════ */}
       {view === 'home' && (
         <>
-          <main className={`${ml} h-full flex flex-col items-center justify-center p-8 pt-16 relative transition-[margin] duration-300`}>
-            <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-[120px] pointer-events-none" />
-            <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-secondary/5 rounded-full blur-[150px] pointer-events-none" />
-
-            <div className="w-full max-w-4xl flex flex-col items-center z-10">
-              <div className={`mb-12 text-center transition-all duration-300 ${homeExiting ? 'opacity-0 -translate-y-6' : 'opacity-100 translate-y-0'}`}>
-                <h2 className="text-5xl md:text-6xl font-black tracking-tighter text-on-surface mb-4">
-                  로컬 인텔리전스<span className="text-primary">.</span>
-                </h2>
-                <p className="text-on-surface-variant text-lg max-w-xl mx-auto font-light">
-                  개인 신경망 엔진이 파일을 인덱싱하고 분석합니다.
-                </p>
+          <main className={`${ml} relative z-10 flex h-full flex-col items-center justify-center overflow-visible px-6 pb-16 pt-14 transition-[margin] duration-300 md:px-8 md:pt-16`}>
+            <div className="z-10 flex w-full max-w-xl flex-col items-center">
+              {/* Hero (v0) */}
+              <div
+                className={`mb-6 text-center transition-all duration-300 ${homeExiting ? 'opacity-0 -translate-y-6' : 'translate-y-0 opacity-100'}`}
+              >
+                <h1 className="mb-3 text-3xl font-light tracking-tight text-on-surface text-balance md:text-5xl lg:text-6xl">
+                  Local Intelligence
+                </h1>
+                <p className="text-lg text-on-surface-variant md:text-xl">Your Data Stays Yours</p>
               </div>
 
-              <form ref={formRef} onSubmit={handleSearch} className="w-full relative group"
-                style={homeExiting ? { visibility: 'hidden' } : {}}>
-                <div className={`glass-effect rounded-full p-2 flex items-center gap-4 shadow-[0_0_50px_rgba(133,173,255,0.1)] transition-all duration-300
-                  ${listening ? 'border border-red-400/60 shadow-[0_0_30px_rgba(248,113,113,0.2)]' : 'border border-outline-variant/20 hover:border-primary/40'}`}>
-                  <button type="button" className="w-12 h-12 rounded-full bg-gradient-to-r from-primary to-secondary flex items-center justify-center text-on-primary-fixed shadow-lg active:scale-90 transition-transform shrink-0">
-                    <span className="material-symbols-outlined font-bold">add</span>
-                  </button>
-                  <div className="flex-1 relative">
+              {/* Orb (v0) */}
+              <div className={`my-4 overflow-visible md:my-8 ${homeExiting ? 'pointer-events-none opacity-0' : ''}`}>
+                <AnimatedOrb onMicClick={toggleMic} listening={listening} />
+              </div>
+
+              {/* 검색 필 (v0 LLM input 스타일) */}
+              <form
+                ref={formRef}
+                onSubmit={handleSearch}
+                className="relative w-full max-w-xl"
+                style={homeExiting ? { visibility: 'hidden' } : {}}
+              >
+                <div
+                  className={`relative flex items-center gap-3 rounded-full border bg-surface-container-high/60 px-1 py-1 pl-2 backdrop-blur-xl transition-all duration-300 md:pl-3
+                    ${
+                      listening
+                        ? 'border-red-400/60 shadow-[0_0_24px_rgba(248,113,113,0.2)]'
+                        : searchFocused
+                          ? 'border-primary/50 shadow-lg shadow-primary/20'
+                          : 'border-white/10 hover:border-white/20'
+                    }`}
+                >
+                  <div className="pl-3 md:pl-4">
+                    <span className={`material-symbols-outlined text-xl ${listening ? 'text-red-400' : 'text-on-surface-variant'}`}>
+                      search
+                    </span>
+                  </div>
+                  <div className="relative min-h-[3.25rem] flex-1">
                     <input
                       type="text"
                       value={listening ? '' : inputValue}
                       onChange={(e) => !listening && setInputValue(e.target.value)}
-                      placeholder={listening ? '' : '로컬 파일에 대해 무엇이든 물어보세요...'}
-                      className="w-full bg-transparent border-none focus:ring-0 text-on-surface placeholder:text-on-surface-variant/40 font-manrope text-lg py-4 outline-none"
+                      onFocus={() => setSearchFocused(true)}
+                      onBlur={() => setSearchFocused(false)}
+                      placeholder={listening ? '' : 'Ask anything...'}
+                      className="h-full w-full bg-transparent py-3 text-base text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none md:py-4 md:text-base"
                       readOnly={listening}
                     />
                     {listening && (
-                      <div className="absolute inset-0 flex items-center gap-3 py-4 pointer-events-none">
-                        <span className="text-red-400 font-manrope text-lg truncate">{interim || <span className="text-on-surface-variant/50">듣는 중...</span>}</span>
-                        <div className="flex items-center gap-[3px] shrink-0">
+                      <div className="absolute inset-0 flex items-center gap-2 py-3 pointer-events-none md:py-4">
+                        <span className="truncate font-manrope text-base text-red-400">
+                          {interim || <span className="text-on-surface-variant/50">듣는 중...</span>}
+                        </span>
+                        <div className="flex shrink-0 items-center gap-[3px]">
                           {[0, 0.15, 0.3, 0.15, 0].map((delay, i) => (
-                            <div key={i} className="w-[3px] bg-red-400 rounded-full animate-bounce"
-                              style={{ height: `${[12,20,28,20,12][i]}px`, animationDelay: `${delay}s`, animationDuration: '0.8s' }} />
+                            <div
+                              key={i}
+                              className="animate-bounce rounded-full bg-red-400"
+                              style={{
+                                width: '3px',
+                                height: `${[10, 16, 22, 16, 10][i]}px`,
+                                animationDelay: `${delay}s`,
+                                animationDuration: '0.8s',
+                              }}
+                            />
                           ))}
                         </div>
                       </div>
                     )}
                   </div>
-                  <button type="button" onClick={toggleMic}
-                    className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 shrink-0
-                      ${listening ? 'bg-red-500/20 text-red-400 animate-pulse' : 'text-on-surface-variant hover:text-primary hover:bg-primary/10'}`}>
-                    <span className="material-symbols-outlined" style={listening ? { fontVariationSettings: '"FILL" 1' } : {}}>mic</span>
+                  <button
+                    type="submit"
+                    disabled={aiTransitioning}
+                    className="mr-2 shrink-0 rounded-full bg-primary p-2 text-on-primary-fixed transition-colors hover:bg-primary-dim disabled:opacity-40 md:mr-3"
+                  >
+                    <span className="material-symbols-outlined text-xl">arrow_forward</span>
                   </button>
                 </div>
               </form>
 
-              <div className="mt-10 flex justify-center" style={homeExiting ? { visibility: 'hidden' } : {}}>
-                <button ref={btnRef} onClick={handleGoToAI} disabled={aiTransitioning}
-                  className="px-8 py-3 rounded-full bg-surface-container-high border border-outline-variant/20 flex items-center gap-3 text-sm font-bold tracking-widest uppercase text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest transition-all duration-300 group glow-primary disabled:pointer-events-none">
-                  <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+              {/* Quick suggestions (v0) */}
+              <div
+                className={`mt-6 flex flex-wrap justify-center gap-2 transition-all duration-300 ${homeExiting ? 'pointer-events-none opacity-0' : 'opacity-100'}`}
+              >
+                {V0_HOME_SUGGESTIONS.map((suggestion) => (
+                  <button
+                    key={suggestion}
+                    type="button"
+                    onClick={() => setInputValue(suggestion)}
+                    className="rounded-full border border-white/5 bg-surface-container-high/40 px-4 py-2 text-sm text-on-surface-variant backdrop-blur-sm transition-all hover:border-white/10 hover:bg-surface-container-high/60 hover:text-on-surface"
+                  >
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
+
+              <div className={`mt-10 flex justify-center ${homeExiting ? 'pointer-events-none opacity-0' : ''}`}>
+                <button
+                  ref={btnRef}
+                  type="button"
+                  onClick={handleGoToAI}
+                  disabled={aiTransitioning}
+                  className="group flex items-center gap-3 rounded-full border border-outline-variant/20 bg-surface-container-high px-8 py-3 text-sm font-bold uppercase tracking-widest text-on-surface-variant transition-all duration-300 hover:bg-surface-container-highest hover:text-on-surface disabled:pointer-events-none glow-primary"
+                >
+                  <span className="h-2 w-2 animate-pulse rounded-full bg-primary" />
                   AI 모드로 전환
-                  <span className="material-symbols-outlined text-lg group-hover:translate-x-1 transition-transform">arrow_forward</span>
+                  <span className="material-symbols-outlined text-lg transition-transform group-hover:translate-x-1">arrow_forward</span>
                 </button>
               </div>
 
               {/* fly 클론 */}
               {flyStyle && (
                 <div style={{ ...flyStyle }}>
-                  <div className="glass-effect rounded-full p-2 border border-primary/40 shadow-[0_0_30px_rgba(133,173,255,0.15)] flex items-center gap-3 px-4 py-3">
+                  <div className="flex items-center gap-3 rounded-full border border-primary/40 bg-surface-container-high/80 px-4 py-3 shadow-[0_0_30px_rgba(133,173,255,0.15)] backdrop-blur-xl">
                     <span className="material-symbols-outlined text-primary">search</span>
-                    <span className="flex-1 text-on-surface font-manrope text-sm truncate">{inputValue}</span>
+                    <span className="flex-1 truncate font-manrope text-sm text-on-surface">{inputValue}</span>
                   </div>
                 </div>
               )}
-
-              <div className={`grid grid-cols-1 md:grid-cols-3 gap-4 mt-24 w-full transition-all duration-300 ${homeExiting ? 'opacity-0 translate-y-4' : 'opacity-100 translate-y-0'}`}>
-                {[
-                  { icon: 'summarize',      color: 'text-primary',   title: 'PDF 요약',     sub: '신경망 처리' },
-                  { icon: 'search_insights',color: 'text-secondary', title: '심층 메타데이터',sub: '속성 분석' },
-                  { icon: 'auto_awesome',   color: 'text-primary',   title: '비주얼 검색',  sub: '비전 엔진' },
-                ].map((card) => (
-                  <div key={card.title} className="glass-effect p-6 rounded-xl border border-outline-variant/15 hover:border-primary/20 transition-all group cursor-pointer">
-                    <span className={`material-symbols-outlined ${card.color} mb-4 block`}>{card.icon}</span>
-                    <h3 className="text-on-surface font-bold mb-1">{card.title}</h3>
-                    <p className="text-on-surface-variant text-xs uppercase tracking-tighter">{card.sub}</p>
-                  </div>
-                ))}
-              </div>
             </div>
-
-            <div className="absolute bottom-0 left-0 w-full h-32 bg-gradient-to-t from-surface-container-low/80 to-transparent pointer-events-none" />
           </main>
-          <div className="fixed top-0 right-0 w-1/3 h-screen bg-gradient-to-l from-primary/5 to-transparent pointer-events-none" />
         </>
       )}
 
@@ -427,7 +471,7 @@ export default function MainSearch() {
           <form onSubmit={handleSearch} className="flex-1">
             <div className={`flex items-center rounded-full border px-4 py-2 gap-3 transition-all
               ${listening ? 'bg-red-500/5 border-red-400/50 shadow-[0_0_15px_rgba(248,113,113,0.15)]' : 'bg-surface-container-high border-outline-variant/20 focus-within:border-primary/50'}`}>
-              <span className={`material-symbols-outlined text-sm ${listening ? 'text-red-400' : 'text-primary'}`}>{listening ? 'mic' : 'search'}</span>
+              <span className={`material-symbols-outlined text-sm ${listening ? 'text-red-400' : 'text-primary'}`}>search</span>
               <div className="flex-1 relative">
                 <input
                   className="bg-transparent border-none focus:ring-0 w-full text-on-surface placeholder-on-surface-variant text-sm outline-none"
@@ -448,10 +492,6 @@ export default function MainSearch() {
                   </div>
                 )}
               </div>
-              <button type="button" onClick={toggleMic}
-                className={`shrink-0 transition-all duration-200 ${listening ? 'text-red-400 animate-pulse' : 'text-on-surface-variant hover:text-primary'}`}>
-                <span className="material-symbols-outlined text-sm" style={listening ? { fontVariationSettings: '"FILL" 1' } : {}}>mic</span>
-              </button>
             </div>
           </form>
 

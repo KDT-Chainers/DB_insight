@@ -95,7 +95,7 @@ export default function Settings() {
         <div className="absolute bottom-0 left-0 w-72 h-72 bg-secondary/5 rounded-full blur-[100px] pointer-events-none" />
 
         {/* 드래그 타이틀바 */}
-        <header className="shrink-0 bg-[#070d1f] flex justify-end items-center px-2 h-8 z-40"
+        <header className="titlebar-chrome shrink-0 flex justify-end items-center px-2 h-8 z-40"
           style={{ WebkitAppRegion: 'drag' }}>
           <div style={{ WebkitAppRegion: 'no-drag' }}><WindowControls /></div>
         </header>

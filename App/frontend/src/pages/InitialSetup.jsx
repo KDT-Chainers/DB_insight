@@ -48,7 +48,7 @@ export default function InitialSetup() {
     <div className="flex items-center justify-center min-h-screen p-4 bg-void">
       {/* 드래그 가능한 타이틀바 */}
       <div
-        className="fixed top-0 left-0 right-0 h-8 bg-[#070d1f] z-[9999] flex items-center justify-end px-2"
+        className="titlebar-chrome fixed top-0 left-0 right-0 h-8 z-[9999] flex items-center justify-end px-2"
         style={{ WebkitAppRegion: 'drag' }}
       >
         <div style={{ WebkitAppRegion: 'no-drag' }}>

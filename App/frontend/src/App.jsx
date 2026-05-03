@@ -3,6 +3,7 @@ import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { SidebarProvider } from './context/SidebarContext'
 import { ScaleProvider, useScale } from './context/ScaleContext'
 import { API_BASE } from './api'
+import LandingHome from './pages/LandingHome'
 import LandingLogin from './pages/LandingLogin'
 import InitialSetup from './pages/InitialSetup'
 import MainSearch from './pages/MainSearch'
@@ -65,6 +66,62 @@ function AuthGate() {
   return <LandingLogin />
 }
 
+/** v0 스타일 인트로(히어로+오브) — 선택 진입용 #/welcome */
+function WelcomeGate() {
+  const [loading, setLoading] = useState(true)
+  const [initialized, setInitialized] = useState(null)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let active = true
+
+    const checkStatus = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/api/auth/status`)
+        const data = await response.json()
+        if (!response.ok) {
+          throw new Error(data?.error || 'Failed to fetch status')
+        }
+        if (active) {
+          setInitialized(Boolean(data?.initialized))
+        }
+      } catch {
+        if (active) {
+          setError('서버에 연결할 수 없습니다')
+        }
+      } finally {
+        if (active) {
+          setLoading(false)
+        }
+      }
+    }
+
+    checkStatus()
+
+    return () => {
+      active = false
+    }
+  }, [])
+
+  if (loading) {
+    return <div />
+  }
+
+  if (error) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-void p-4">
+        <p className="text-center text-sm text-red-400">{error}</p>
+      </div>
+    )
+  }
+
+  if (initialized === false) {
+    return <Navigate to="/setup" replace />
+  }
+
+  return <LandingHome />
+}
+
 function ScaledApp() {
   const { scale } = useScale()
 
@@ -78,6 +135,8 @@ function ScaledApp() {
     <SidebarProvider>
       <Routes>
         <Route path="/" element={<AuthGate />} />
+        <Route path="/welcome" element={<WelcomeGate />} />
+        <Route path="/login" element={<Navigate to="/" replace />} />
         <Route path="/setup" element={<InitialSetup />} />
         <Route path="/search" element={<MainSearch />} />
         <Route path="/search/results" element={<Navigate to="/search" replace />} />

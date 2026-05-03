@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import WindowControls from '../components/WindowControls'
+import AmbientPageBackdrop from '../components/AmbientPageBackdrop'
 import { API_BASE } from '../api'
 
 export default function LandingLogin() {
@@ -37,10 +38,12 @@ export default function LandingLogin() {
   }
 
   return (
-    <div className="bg-surface-dim text-on-surface font-body overflow-hidden min-h-screen">
-      {/* 드래그 가능한 타이틀바 — 어두운 배경으로 glow 투과 방지 */}
+    <div className="relative min-h-screen overflow-hidden font-body text-on-surface">
+      <AmbientPageBackdrop />
+
+      {/* 드래그 가능한 타이틀바 */}
       <div
-        className="fixed top-0 left-0 right-0 h-8 bg-[#070d1f] z-[9999] flex items-center justify-end px-2"
+        className="titlebar-chrome fixed left-0 right-0 top-0 z-[9999] flex h-8 items-center justify-end px-2"
         style={{ WebkitAppRegion: 'drag' }}
       >
         <div style={{ WebkitAppRegion: 'no-drag' }}>
@@ -48,58 +51,64 @@ export default function LandingLogin() {
         </div>
       </div>
 
-      {/* Background */}
-      <div className="fixed inset-0 grid-pattern pointer-events-none"></div>
-      <div className="fixed inset-0 nebula-glow pointer-events-none"></div>
-      <div className="fixed -top-40 -left-40 w-96 h-96 bg-primary/20 blur-[120px] rounded-full"></div>
-      <div className="fixed -bottom-40 -right-40 w-96 h-96 bg-secondary/10 blur-[120px] rounded-full"></div>
-
-      <main className="relative z-10 min-h-screen flex flex-col items-center justify-center p-6">
+      <main className="relative z-10 flex min-h-screen flex-col items-center justify-center p-6">
         {/* Brand header */}
         <div className="absolute top-12 flex flex-col items-center">
-          <h1 className="text-3xl font-black tracking-tighter text-blue-100 font-headline">DB_insight</h1>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-primary mt-2">로컬 인텔리전스 프로토콜</p>
+          <button
+            type="button"
+            onClick={() => navigate('/welcome')}
+            className="font-headline text-3xl font-black tracking-tighter text-blue-100 transition-opacity hover:opacity-80"
+          >
+            DB_insight
+          </button>
+          <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-primary">로컬 인텔리전스 프로토콜</p>
         </div>
 
         {/* Login card */}
-        <div className="glass-panel w-full max-w-md rounded-xl p-10 shadow-[0_0_50px_rgba(0,0,0,0.3)] flex flex-col items-center gap-8 border border-white/5">
+        <div className="glass-panel flex w-full max-w-md flex-col items-center gap-8 rounded-xl border border-white/5 p-10 shadow-[0_0_50px_rgba(0,0,0,0.3)]">
           {/* Avatar */}
           <div className="relative">
-            <div className="w-24 h-24 rounded-full p-1 bg-gradient-to-tr from-primary to-secondary overflow-hidden">
-              <div className="w-full h-full rounded-full bg-surface-container overflow-hidden flex items-center justify-center">
-                <span className="material-symbols-outlined text-primary text-5xl" style={{ fontVariationSettings: '"FILL" 1' }}>account_circle</span>
+            <div className="h-24 w-24 overflow-hidden rounded-full bg-gradient-to-tr from-primary to-secondary p-1">
+              <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-surface-container">
+                <span className="material-symbols-outlined text-5xl text-primary" style={{ fontVariationSettings: '"FILL" 1' }}>
+                  account_circle
+                </span>
               </div>
             </div>
-            <div className="absolute bottom-0 right-0 bg-primary text-on-primary-fixed w-7 h-7 rounded-full flex items-center justify-center shadow-lg border-2 border-surface-container-highest">
-              <span className="material-symbols-outlined text-sm font-bold" style={{ fontVariationSettings: '"FILL" 1' }}>verified</span>
+            <div className="absolute bottom-0 right-0 flex h-7 w-7 items-center justify-center rounded-full border-2 border-surface-container-highest bg-primary text-on-primary-fixed shadow-lg">
+              <span className="material-symbols-outlined text-sm font-bold" style={{ fontVariationSettings: '"FILL" 1' }}>
+                verified
+              </span>
             </div>
           </div>
 
           <div className="text-center">
-            <h2 className="text-xl font-bold text-on-surface tracking-tight">보안 인증이 필요합니다</h2>
-            <p className="text-sm text-on-surface-variant mt-1">신경망 탐색기 접근 인증</p>
+            <h2 className="text-xl font-bold tracking-tight text-on-surface">보안 인증이 필요합니다</h2>
+            <p className="mt-1 text-sm text-on-surface-variant">신경망 탐색기 접근 인증</p>
           </div>
 
           {/* Form */}
           <form onSubmit={handleLogin} className="w-full space-y-6">
-            {error && <p className="text-red-400 text-sm text-center">{error}</p>}
-            <div className="relative group">
-              <label className="text-[10px] uppercase font-bold tracking-widest text-primary mb-2 block ml-1">접근 토큰</label>
+            {error && <p className="text-center text-sm text-red-400">{error}</p>}
+            <div className="group relative">
+              <label className="mb-2 ml-1 block text-[10px] font-bold uppercase tracking-widest text-primary">접근 토큰</label>
               <div className="relative">
-                <span className="material-symbols-outlined absolute left-0 top-1/2 -translate-y-1/2 text-on-surface-variant group-focus-within:text-primary transition-colors">key</span>
+                <span className="material-symbols-outlined absolute left-0 top-1/2 -translate-y-1/2 text-on-surface-variant transition-colors group-focus-within:text-primary">
+                  key
+                </span>
                 <input
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••••••"
-                  className="w-full bg-transparent border-b border-outline-variant py-3 pl-8 text-on-surface focus:outline-none focus:border-primary transition-all placeholder:text-outline/40"
+                  className="w-full border-b border-outline-variant bg-transparent py-3 pl-8 text-on-surface placeholder:text-outline/40 transition-all focus:border-primary focus:outline-none"
                 />
-                <div className="absolute bottom-0 left-0 w-0 h-[2px] bg-primary transition-all duration-500 group-focus-within:w-full"></div>
+                <div className="absolute bottom-0 left-0 h-[2px] w-0 bg-primary transition-all duration-500 group-focus-within:w-full" />
               </div>
             </div>
             <button
               type="submit"
-              className="w-full h-14 rounded-full bg-gradient-to-r from-primary to-secondary text-on-primary-fixed font-bold tracking-tight shadow-[0_4px_20px_rgba(133,173,255,0.3)] hover:shadow-[0_4px_30px_rgba(172,138,255,0.5)] transition-all active:scale-95 flex items-center justify-center gap-2 group"
+              className="group flex h-14 w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-primary to-secondary font-bold tracking-tight text-on-primary-fixed shadow-[0_4px_20px_rgba(133,173,255,0.3)] transition-all hover:shadow-[0_4px_30px_rgba(172,138,255,0.5)] active:scale-95"
             >
               시스템 시작
               <span className="material-symbols-outlined transition-transform group-hover:translate-x-1">arrow_forward</span>
@@ -107,55 +116,62 @@ export default function LandingLogin() {
           </form>
 
           {/* Secondary actions */}
-          <div className="flex justify-between w-full px-1">
+          <div className="flex w-full justify-between px-1">
             <button
+              type="button"
               onClick={() => navigate('/setup')}
-              className="text-xs text-on-surface-variant hover:text-primary transition-colors font-medium"
+              className="text-xs font-medium text-on-surface-variant transition-colors hover:text-primary"
             >
               인증 정보 초기화
             </button>
-            <button className="text-xs text-on-surface-variant hover:text-primary transition-colors font-medium">
-              프로토콜 문서
+            <button
+              type="button"
+              onClick={() => navigate('/welcome')}
+              className="text-xs font-medium text-on-surface-variant transition-colors hover:text-primary"
+            >
+              소개 화면
             </button>
           </div>
         </div>
 
         {/* Status footer */}
         <div className="mt-12 flex items-center gap-4">
-          <div className="glass-panel px-4 py-2 rounded-full border border-white/5 flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-primary animate-pulse"></div>
+          <div className="glass-panel flex items-center gap-2 rounded-full border border-white/5 px-4 py-2">
+            <div className="h-2 w-2 animate-pulse rounded-full bg-primary" />
             <span className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
               노드 상태: <span className="text-primary">정상</span>
             </span>
           </div>
-          <div className="glass-panel px-4 py-2 rounded-full border border-white/5 flex items-center gap-2">
-            <span className="material-symbols-outlined text-xs text-secondary" style={{ fontVariationSettings: '"FILL" 1' }}>verified_user</span>
+          <div className="glass-panel flex items-center gap-2 rounded-full border border-white/5 px-4 py-2">
+            <span className="material-symbols-outlined text-xs text-secondary" style={{ fontVariationSettings: '"FILL" 1' }}>
+              verified_user
+            </span>
             <span className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">암호화됨</span>
           </div>
         </div>
       </main>
 
       {/* Side status */}
-      <div className="fixed right-6 top-1/2 -translate-y-1/2 flex flex-col gap-8 opacity-20 hover:opacity-50 transition-opacity">
+      <div className="fixed right-6 top-1/2 z-10 flex -translate-y-1/2 flex-col gap-8 opacity-20 transition-opacity hover:opacity-50">
         <div className="flex flex-col items-center gap-1">
-          <div className="w-[1px] h-12 bg-outline-variant"></div>
-          <span className="text-[10px] font-mono text-primary">04ms</span>
+          <div className="h-12 w-[1px] bg-outline-variant" />
+          <span className="font-mono text-[10px] text-primary">04ms</span>
         </div>
         <div className="flex flex-col items-center gap-1">
-          <div className="w-[1px] h-12 bg-outline-variant"></div>
-          <span className="text-[10px] font-mono text-primary">99.9%</span>
+          <div className="h-12 w-[1px] bg-outline-variant" />
+          <span className="font-mono text-[10px] text-primary">99.9%</span>
         </div>
       </div>
 
       {/* Corner accent */}
-      <div className="fixed bottom-0 left-0 p-8">
+      <div className="fixed bottom-0 left-0 z-10 p-8">
         <div className="flex items-center gap-4">
-          <div className="w-8 h-8 rounded-lg bg-surface-container-highest border border-white/5 flex items-center justify-center">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/5 bg-surface-container-highest">
             <span className="material-symbols-outlined text-sm text-primary">terminal</span>
           </div>
           <div className="hidden md:block">
-            <p className="text-[8px] font-bold text-outline uppercase tracking-widest">활성 시퀀스</p>
-            <p className="text-[10px] font-mono text-on-surface-variant">LOG_AUTH_INIT_PRIME</p>
+            <p className="text-[8px] font-bold uppercase tracking-widest text-outline">활성 시퀀스</p>
+            <p className="font-mono text-[10px] text-on-surface-variant">LOG_AUTH_INIT_PRIME</p>
           </div>
         </div>
       </div>

@@ -136,7 +136,7 @@ function waitForBackend(maxRetries = 100, interval = 500) {
 
 const SPLASH_HTML = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:#070d1f;color:#dfe4fe;font-family:'Segoe UI',sans-serif;
+body{background:radial-gradient(ellipse 100% 88% at -4% 106%,rgba(37,99,235,0.72) 0%,rgba(59,130,246,0.38) 32%,rgba(5,16,79,0.35) 58%,transparent 76%),radial-gradient(ellipse 100% 88% at 104% 106%,rgba(56,189,248,0.65) 0%,rgba(96,165,250,0.35) 34%,rgba(5,16,79,0.28) 58%,transparent 76%),linear-gradient(to top,rgba(77,212,232,0.55) 0%,rgba(77,212,232,0.22) 12%,rgba(59,130,246,0.1) 28%,transparent 48%),linear-gradient(to bottom,#020510 0%,#05104f 42%,#040c35 78%,#030818 100%);color:#dfe4fe;font-family:'Segoe UI',sans-serif;
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   height:100vh;overflow:hidden;user-select:none;-webkit-app-region:drag}
 .glow{position:fixed;width:280px;height:280px;border-radius:50%;
@@ -176,7 +176,7 @@ function createSplash() {
     resizable: false,
     center: true,
     alwaysOnTop: true,
-    backgroundColor: '#070d1f', // HTML 로드 전 즉시 이 색으로 표시
+    backgroundColor: '#020510', /* index.css --app-bg-top 과 동일 */
     show: true,                 // 생성 즉시 표시
     webPreferences: { nodeIntegration: false, contextIsolation: true },
   })
@@ -202,6 +202,7 @@ function createWindow() {
     minWidth: 900,
     minHeight: 600,
     frame: false,
+    backgroundColor: '#020510', /* index.css --app-bg-top 과 동일 */
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,

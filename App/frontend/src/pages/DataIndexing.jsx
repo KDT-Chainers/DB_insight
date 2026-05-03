@@ -937,7 +937,7 @@ export default function DataIndexing() {
 
         {/* 드래그 타이틀바 */}
         <header
-          className="shrink-0 bg-[#070d1f] flex justify-end items-center px-2 h-8 z-40"
+          className="titlebar-chrome shrink-0 flex justify-end items-center px-2 h-8 z-40"
           style={{ WebkitAppRegion: 'drag' }}
         >
           <div style={{ WebkitAppRegion: 'no-drag' }}>

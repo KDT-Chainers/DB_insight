@@ -2,9 +2,69 @@
 @tailwind components;
 @tailwind utilities;
 
+/* 베이스(④)와 동일 팔레트 — 타이틀바·Electron 크롬은 --app-bg-top 과 맞출 것 */
+:root {
+  --app-bg-top: #020510;
+  --app-bg-mid: #020510;
+  --app-bg-low-mid: #040c35;
+  --app-bg-bottom: #030818;
+}
+
+/* 상단 h-8 타이틀바 = 화면 맨 위 베이스 톤과 동일 */
+.titlebar-chrome {
+  background-color: var(--app-bg-top);
+}
+
+/*
+ * 색은 “파일명”이 아니라 스포이드로 찍은 값으로 맞춤 (예: RGB 5,16,79 = #05104F).
+ * 중요 — 브라우저는 위에서 아래로 “겹쳐 그림”. 첫 번째 그라데이션이 맨 앞 레이어.
+ *   ① 좌하 radial → ② 우하 radial → ③ 하단 시안 linear → ④ 전체 베이스 linear
+ */
+.app-depth-bg,
+html.app-depth-bg,
+body.app-depth-bg {
+  background:
+    /* ① 좌측 하단 — 로열 블루 → 샘플 네이비 #05104F 쪽으로 스며듦 */
+    radial-gradient(
+      ellipse 100% 88% at -4% 106%,
+      rgba(37, 99, 235, 0.72) 0%,
+      rgba(59, 130, 246, 0.38) 32%,
+      rgba(5, 11, 48, 0.35) 58%,
+      transparent 76%
+    ),
+    /* ② 우측 하단 */
+    radial-gradient(
+      ellipse 100% 88% at 104% 106%,
+      rgba(177, 216, 222, 0.55) 0%,
+      rgba(47, 118, 205, 0.468) 34%,
+      rgba(5, 16, 79, 0.834) 58%,
+      transparent 76%
+    ),
+    /* ③ 맨 아래 가로 — #4dd4e8 시안이 바닥에 깔리도록 */
+    linear-gradient(
+      to top,
+      rgba(177, 216, 222, 0.55) 0%,
+      rgba(77, 212, 232, 0.22) 12%,
+      rgba(59, 130, 246, 0.1) 28%,
+      transparent 48%
+    ),
+    /* ④ 베이스 — :root 팔레트와 동일 */
+    linear-gradient(
+      to bottom,
+      var(--app-bg-top) 0%,
+      var(--app-bg-mid) 42%,
+      var(--app-bg-low-mid) 78%,
+      var(--app-bg-bottom) 100%
+    );
+}
+
+html {
+  min-height: 100%;
+}
+
 body {
   font-family: 'Manrope', sans-serif;
-  background-color: #070d1f;
+  min-height: 100%;
   color: #dfe4fe;
 }
 
