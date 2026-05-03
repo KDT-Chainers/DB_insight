@@ -103,15 +103,18 @@ def search():
     from services.rerank_adapter import maybe_rerank
     results = maybe_rerank(query, results)
 
-    # 5도메인 통합 confidence 조정 (edge case + upper saturate 완화).
-    # raw confidence (z-score CDF) 가 너무 saturate 되어 빈쿼리/짧은쿼리도 90%+
-    # 표시되는 문제 해결.
+    # 5도메인 통합 score 조정 — Edge case 격리 + generous curve.
+    # CLIP/SigLIP2 raw cosine 의 좁은 분포 (0.3~0.6) 를 친화 % 로 확장.
     try:
-        from services.score_adjust import adjust_confidence
+        from services.score_adjust import adjust_confidence, _generous_curve
         for r in results:
+            # confidence/similarity: edge case 페널티 + generous curve
             for f in ("confidence", "similarity"):
                 if f in r and r[f] is not None:
                     r[f] = round(adjust_confidence(r[f], query), 4)
+            # dense (raw cosine): edge case 무관, generous curve 만 적용 (display 친화)
+            if "dense" in r and r["dense"] is not None:
+                r["dense"] = round(_generous_curve(r["dense"]), 4)
     except Exception:
         pass
 

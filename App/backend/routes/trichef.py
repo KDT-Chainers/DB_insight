@@ -229,13 +229,15 @@ def search():
 
     all_items = list(_seen_img.values()) + list(_seen_doc.values()) + _other
 
-    # 5도메인 통합 confidence 조정 (edge case + saturate 완화)
+    # 5도메인 통합 score 조정 — Edge case 격리 + generous curve
     try:
-        from services.score_adjust import adjust_confidence
+        from services.score_adjust import adjust_confidence, _generous_curve
         for it in all_items:
-            for f in ("confidence", "dense"):
-                if f in it and it[f] is not None:
-                    it[f] = round(adjust_confidence(it[f], query), 4)
+            if "confidence" in it and it["confidence"] is not None:
+                it["confidence"] = round(adjust_confidence(it["confidence"], query), 4)
+            # dense (raw cosine): edge case 무관, generous curve 만 적용
+            if "dense" in it and it["dense"] is not None:
+                it["dense"] = round(_generous_curve(it["dense"]), 4)
     except Exception:
         pass
 

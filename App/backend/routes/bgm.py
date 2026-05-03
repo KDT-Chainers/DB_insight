@@ -46,12 +46,17 @@ def search():
         logger.exception("[bgm.search] 실패")
         return jsonify({"query": query, "results": [], "error": str(e)[:300]}), 500
 
-    # 5도메인 통합 confidence 조정 (edge case + saturate 완화)
+    # 5도메인 통합 score 조정 — Edge case 격리 + generous curve
     try:
-        from services.score_adjust import adjust_confidences
+        from services.score_adjust import adjust_confidences, _generous_curve
         adjust_confidences(result.get("results", []), query)
         for r in result.get("results", []):
             adjust_confidences(r.get("segments") or [], query)
+            # dense (raw cosine): generous curve 만 적용 (UI 유사도 표시용)
+            if "dense" in r and r["dense"] is not None:
+                r["dense"] = round(_generous_curve(r["dense"]), 4)
+            if "score" in r and r["score"] is not None:
+                r["score"] = round(_generous_curve(r["score"]), 4)
     except Exception:
         pass
 

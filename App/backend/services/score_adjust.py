@@ -55,48 +55,67 @@ def _classify_query(text: str) -> dict:
     return counts
 
 
+def _generous_curve(raw: float) -> float:
+    """CLIP/SigLIP2/BGE-M3 등 raw cosine [0.0, 0.6] 의 좁은 범위를
+    사용자 친화 [0%, 100%] 로 확장.
+
+    매핑 (조각별 선형):
+      0.00 → 0%
+      0.20 → 30%
+      0.40 → 70%
+      0.50 → 85%
+      0.60 → 95%
+      1.00 → 99%
+
+    효과:
+      cosine 0.30 (보통 매칭) → 50%
+      cosine 0.40 (의미 매칭) → 70%
+      cosine 0.50 (강한 매칭) → 85%
+      cosine 0.60+ (매우 강함) → 95%+
+    """
+    x = max(0.0, min(1.0, raw))
+    if x < 0.20:
+        return x * 1.50                              # 0~30%
+    elif x < 0.40:
+        return 0.30 + (x - 0.20) * 2.00              # 30~70%
+    elif x < 0.50:
+        return 0.70 + (x - 0.40) * 1.50              # 70~85%
+    elif x < 0.60:
+        return 0.85 + (x - 0.50) * 1.00              # 85~95%
+    else:
+        return min(1.0, 0.95 + (x - 0.60) * 0.10)    # 95~99%
+
+
 def adjust_confidence(raw_conf: float, query: str = "") -> float:
     """raw_conf (0~1) → 사용자 친화 confidence (0~1).
 
-    Edge case 페널티 매트릭스:
-      meaningful=0 + digit=0      → cap 30% (빈 쿼리, 자모/특수문자 only)
+    Edge case 페널티 (의미 없는 쿼리만 격리):
+      meaningful=0 + digit=0      → cap 30% (빈 쿼리, 자모, 특수문자, 이모지)
       meaningful=0 + digit≥1      → cap 40% (숫자만 — '1234')
       meaningful=1                → cap 55%
-      meaningful=2                → ×0.80
-      meaningful=3~4              → ×0.92
-      meaningful=5+               → ×1.0
+      meaningful≥2                → 정상 처리 (한글 2글자 '산업', '교육' 등 의미 완전)
 
-    Upper saturate 압축:
-      raw 0.85+ → 0.85~0.97 범위로 압축 (강한 매칭 사이 차이 가시화)
+    Generous curve:
+      raw 0.30 → 50%, raw 0.40 → 70%, raw 0.50 → 85%, raw 0.60+ → 95%+
+      (CLIP-family 모델의 좁은 cosine 분포를 친화 % 로 확장)
     """
     if raw_conf is None:
         return 0.0
     raw = max(0.0, min(1.0, float(raw_conf)))
 
-    # 1. Edge case penalty (정밀 분류)
+    # 1. Edge case 격리만 — 의미 있는 글자 ≥ 2 면 페널티 없음
     q = _classify_query(query)
     n_meaningful = q["meaningful"]
 
     if n_meaningful == 0:
         if q["digit"] >= 1:
-            return min(0.40, raw)   # 숫자만 ('1234' 등)
-        return min(0.30, raw)        # 빈 쿼리, 자모, 특수문자, 이모지
+            return min(0.40, _generous_curve(raw))
+        return min(0.30, _generous_curve(raw))
     elif n_meaningful == 1:
-        return min(0.55, raw)
-    elif n_meaningful == 2:
-        edge_factor = 0.80
-    elif n_meaningful <= 4:
-        edge_factor = 0.92
-    else:
-        edge_factor = 1.0
+        return min(0.55, _generous_curve(raw))
 
-    # 2. Upper compression — saturate 완화
-    if raw > 0.85:
-        compressed = 0.85 + (raw - 0.85) * (0.97 - 0.85) / (1.0 - 0.85)
-    else:
-        compressed = raw
-
-    return max(0.0, min(1.0, compressed * edge_factor))
+    # 2. 의미 있는 쿼리 (2+ 글자) → generous curve 적용
+    return _generous_curve(raw)
 
 
 def adjust_confidences(items: Iterable[dict], query: str,
