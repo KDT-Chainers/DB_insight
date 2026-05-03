@@ -62,8 +62,10 @@ def search():
             results = _search_trichef_av(expanded_query, ["music"], top_k)
             if not results:
                 results = _search_legacy_audio(expanded_query, top_k)
+        elif file_type == "bgm":
+            results = _search_bgm(expanded_query, top_k)
         else:
-            # 전체 검색: 이미지·문서·영상·음원 모두 TRI-CHEF.
+            # 전체 검색: 이미지·문서·영상·음원·BGM 5도메인 TRI-CHEF + CLAP.
             # [v3] 도메인별 최소 보장 비율 — AV conf 가 dense 0.99 로 매우 높고
             # doc/image conf 가 0.4~0.7 로 낮아, 단순 confidence sort 시 doc/image
             # 가 거의 모두 잘려나가는 문제 해결.
@@ -76,21 +78,22 @@ def search():
             audio     = _search_trichef_av(expanded_query, ["music"], top_k)
             if not audio:
                 audio = _search_legacy_audio(expanded_query, top_k)
+            bgm       = _search_bgm(expanded_query, top_k)
 
             # 도메인별 정렬 (각 도메인 내부 confidence 순)
-            for lst in (img_only, doc_only, video, audio):
+            for lst in (img_only, doc_only, video, audio, bgm):
                 lst.sort(key=lambda r: r.get("confidence", 0), reverse=True)
 
-            # 최소 보장: 각 도메인 quota = max(1, top_k // 4)
-            quota = max(1, top_k // 4)
+            # 최소 보장: 각 도메인 quota = max(1, top_k // 5) — 5도메인 기준
+            quota = max(1, top_k // 5)
             guaranteed: list[dict] = []
-            for lst in (doc_only, img_only, video, audio):
+            for lst in (doc_only, img_only, video, audio, bgm):
                 guaranteed.extend(lst[:quota])
 
-            # 추가 자리: 4 × quota 초과한 부분에 대해 score sort
-            _DOMAIN_W = {"image": 1.0, "doc": 1.0, "video": 0.75, "audio": 0.75}
+            # 추가 자리: 5도메인 quota 초과한 부분에 대해 score sort
+            _DOMAIN_W = {"image": 1.0, "doc": 1.0, "video": 0.75, "audio": 0.75, "bgm": 0.75}
             extras = []
-            for lst in (img_only, doc_only, video, audio):
+            for lst in (img_only, doc_only, video, audio, bgm):
                 extras.extend(lst[quota:])
             extras.sort(
                 key=lambda r: r.get("confidence", 0) *
@@ -111,16 +114,24 @@ def search():
     from services.rerank_adapter import maybe_rerank
     results = maybe_rerank(query, results)
 
-    # 5도메인 통합 score 조정 — Edge case 격리 + generous curve.
-    # CLIP/SigLIP2 raw cosine 의 좁은 분포 (0.3~0.6) 를 친화 % 로 확장.
+    # 5도메인 통합 score 조정
+    # TRI-CHEF(image/doc/video/audio): 엔진이 이미 per-query z-score CDF [0,1] 출력
+    #   → generous_curve 이중 적용 금지. 쿼리 품질 페널티만 적용.
+    # BGM: 엔진 z-score CDF + 0.75 상한 (비음악 쿼리 오버랭크 방지)
+    # dense (raw cosine): generous_curve 적용 (UI 유사도 표시용)
     try:
-        from services.score_adjust import adjust_confidence, _generous_curve
+        from services.score_adjust import apply_query_penalty, _generous_curve
         for r in results:
-            # confidence/similarity: edge case 페널티 + generous curve
+            if r.get("file_type") == "bgm":
+                for f in ("confidence", "similarity"):
+                    if f in r and r[f] is not None:
+                        r[f] = round(min(0.75, float(r[f])), 4)
+                continue
+            # TRI-CHEF 도메인: CDF 값에 쿼리 페널티만
             for f in ("confidence", "similarity"):
                 if f in r and r[f] is not None:
-                    r[f] = round(adjust_confidence(r[f], query), 4)
-            # dense (raw cosine): edge case 무관, generous curve 만 적용 (display 친화)
+                    r[f] = round(apply_query_penalty(float(r[f]), query), 4)
+            # dense: raw cosine → generous_curve
             if "dense" in r and r["dense"] is not None:
                 r["dense"] = round(_generous_curve(r["dense"]), 4)
     except Exception:
@@ -388,6 +399,45 @@ def _search_legacy_audio(query: str, top_k: int) -> list[dict]:
 
 
 # ── 헬퍼 ──────────────────────────────────────────────────────────
+
+def _search_bgm(query: str, top_k: int) -> list[dict]:
+    """BGM CLAP 텍스트 검색 → 통합 스키마로 변환. GPU(RTX 4070) 우선 사용."""
+    try:
+        from services.bgm.search_engine import get_engine
+        from services.bgm import bgm_config as _bgm_cfg
+        engine = get_engine()
+        if not engine.is_ready():
+            return []
+        res = engine.search(query, top_k=top_k)
+        out = []
+        for r in (res.get("results") or []):
+            fn = r.get("filename", "")
+            fpath = str(_bgm_cfg.RAW_BGM_DIR / fn) if fn else ""
+            tags  = r.get("tags") or []
+            title = r.get("acr_title") or r.get("guess_title") or ""
+            artist = r.get("acr_artist") or r.get("guess_artist") or ""
+            snippet = " · ".join(filter(None, [artist, title] + tags[:3]))
+            out.append({
+                "file_path":    fpath,
+                "file_name":    fn,
+                "file_type":    "bgm",
+                "confidence":   round(float(r.get("confidence", 0)), 4),
+                "similarity":   round(float(r.get("confidence", 0)), 4),
+                "dense":        round(float(r.get("score", 0)), 4),
+                "snippet":      snippet,
+                "preview_url":  f"/api/bgm/file?filename={fn}" if fn else None,
+                "segments":     r.get("segments", []),
+                "guess_artist": r.get("guess_artist", ""),
+                "guess_title":  r.get("guess_title", ""),
+                "acr_artist":   r.get("acr_artist", ""),
+                "acr_title":    r.get("acr_title", ""),
+                "duration":     r.get("duration", 0.0),
+                "tags":         tags,
+            })
+        return out
+    except Exception:
+        return []
+
 
 def _read_img_caption(cap_root: Path, key: str) -> str:
     """캡션 파일(json 또는 txt)에서 캡션 텍스트 읽기."""

@@ -388,6 +388,7 @@ def _do_search(query: str, topk: int = 5) -> list[dict]:
         from routes.search import (
             _search_trichef, _search_trichef_av,
             _search_legacy_video, _search_legacy_audio,
+            _search_bgm,
         )
         from services.query_expand import expand_bilingual
         from services.score_adjust import adjust_confidence, _generous_curve
@@ -397,16 +398,18 @@ def _do_search(query: str, topk: int = 5) -> list[dict]:
 
         eq = expand_bilingual(query)
 
-        # ② 도메인별 분리 검색 — 4개 도메인 병렬
-        with ThreadPoolExecutor(max_workers=4) as ex:
+        # ② 도메인별 분리 검색 — 5개 도메인 병렬 (GPU CLAP + CPU 병행)
+        with ThreadPoolExecutor(max_workers=5) as ex:
             f_img = ex.submit(_search_trichef,    eq, ["image"],    topk)
             f_doc = ex.submit(_search_trichef,    eq, ["doc_page"], topk)
             f_mov = ex.submit(_search_trichef_av, eq, ["movie"],    topk)
             f_mus = ex.submit(_search_trichef_av, eq, ["music"],    topk)
+            f_bgm = ex.submit(_search_bgm,        eq, topk)
             img_only = f_img.result() or []
             doc_only = f_doc.result() or []
             video    = f_mov.result() or []
             audio    = f_mus.result() or []
+            bgm      = f_bgm.result() or []
 
         # ③ AV legacy fallback
         if not video:
@@ -417,15 +420,15 @@ def _do_search(query: str, topk: int = 5) -> list[dict]:
             except Exception: pass
 
         # ④ Domain quota — 각 도메인 내부 confidence 정렬
-        for lst in (img_only, doc_only, video, audio):
+        for lst in (img_only, doc_only, video, audio, bgm):
             lst.sort(key=lambda r: r.get("confidence", 0), reverse=True)
         quota = max(1, topk // 4)
         guaranteed: list[dict] = []
-        for lst in (doc_only, img_only, video, audio):
+        for lst in (doc_only, img_only, video, audio, bgm):
             guaranteed.extend(lst[:quota])
-        _DW = {"image": 1.0, "doc": 1.0, "video": 0.75, "audio": 0.75}
+        _DW = {"image": 1.0, "doc": 1.0, "video": 0.75, "audio": 0.75, "bgm": 0.75}
         extras: list[dict] = []
-        for lst in (img_only, doc_only, video, audio):
+        for lst in (img_only, doc_only, video, audio, bgm):
             extras.extend(lst[quota:])
         extras.sort(
             key=lambda r: r.get("confidence", 0) * _DW.get(r.get("file_type", ""), 1.0),
@@ -437,10 +440,18 @@ def _do_search(query: str, topk: int = 5) -> list[dict]:
         results = maybe_rerank(query, results)
 
         # ⑥ Score adjust + dense generous curve
+        # TRI-CHEF: 이미 CDF[0,1] 정규화 완료 → 쿼리 페널티만 적용
+        # BGM: CDF + 0.75 상한
+        from services.score_adjust import apply_query_penalty
         for r in results:
+            if r.get("file_type") == "bgm":
+                for f in ("confidence", "similarity"):
+                    if f in r and r[f] is not None:
+                        r[f] = round(min(0.75, float(r[f])), 4)
+                continue
             for f in ("confidence", "similarity"):
                 if f in r and r[f] is not None:
-                    r[f] = round(adjust_confidence(r[f], query), 4)
+                    r[f] = round(apply_query_penalty(float(r[f]), query), 4)
             if "dense" in r and r["dense"] is not None:
                 r["dense"] = round(_generous_curve(r["dense"]), 4)
 

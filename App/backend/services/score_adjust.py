@@ -117,6 +117,25 @@ def adjust_confidence(raw_conf: float, query: str = "") -> float:
     return _generous_curve(raw)
 
 
+def apply_query_penalty(cdf_conf: float, query: str = "") -> float:
+    """TRI-CHEF처럼 이미 z-score CDF [0,1]로 정규화된 confidence에
+    쿼리 품질 페널티만 적용 (generous_curve 이중 적용 금지).
+
+    의미 없는 쿼리(자모, 특수문자, 짧은 숫자)일 때만 상한을 낮춤.
+    정상 쿼리(의미 있는 글자 ≥2)는 그대로 통과.
+    """
+    if cdf_conf is None:
+        return 0.0
+    raw = max(0.0, min(1.0, float(cdf_conf)))
+    q = _classify_query(query)
+    n = q["meaningful"]
+    if n == 0:
+        return min(0.30 if q["digit"] == 0 else 0.40, raw)
+    elif n == 1:
+        return min(0.55, raw)
+    return raw
+
+
 def adjust_confidences(items: Iterable[dict], query: str,
                        conf_field: str = "confidence") -> None:
     """리스트 내 각 dict 의 confidence 필드를 in-place 갱신.

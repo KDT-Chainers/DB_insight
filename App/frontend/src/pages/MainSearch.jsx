@@ -61,7 +61,7 @@ function MarkdownLite({ text }) {
   const flushPara = () => {
     if (para.length) {
       blocks.push(
-        <p key={`p${blocks.length}`} className="leading-[1.85] text-on-surface/95 my-3">
+        <p key={`p${blocks.length}`} className="leading-[1.85] text-on-surface/95 my-3" style={{ textIndent: '1.5em' }}>
           {renderInline(para.join(' '), `p${blocks.length}`)}
         </p>
       )
@@ -84,6 +84,7 @@ function MarkdownLite({ text }) {
     }
   }
 
+  let h4Count = 0
   for (let i = 0; i < lines.length; i++) {
     const raw = lines[i]
     const line = raw.trimEnd()
@@ -91,8 +92,21 @@ function MarkdownLite({ text }) {
     // 빈 줄 → 문단 종결
     if (!line.trim()) { flushPara(); flushList(); continue }
 
-    // ### / ## / # 헤딩
+    // #### → 번호 내어쓰기 항목 (hanging indent)
     let m
+    if ((m = /^####\s+(.+)$/.exec(line))) {
+      flushPara(); flushList()
+      h4Count++
+      blocks.push(
+        <div key={`h4${blocks.length}`} className="flex gap-3 my-3 items-baseline">
+          <span className="shrink-0 w-6 text-right font-bold text-purple-300 text-sm">{h4Count}.</span>
+          <span className="leading-[1.85] text-on-surface/95">{renderInline(m[1], `h4${blocks.length}`)}</span>
+        </div>
+      )
+      continue
+    }
+
+    // ### / ## / # 헤딩
     if ((m = /^###\s+(.+)$/.exec(line))) {
       flushPara(); flushList()
       blocks.push(
@@ -298,14 +312,10 @@ async function searchFiles(query, topK = 20, type = '') {
       }))
     })
 
-  // 도메인 필터가 비어 있을 때(전체 검색)에만 BGM도 병합
-  const bgmP = type === '' ? searchBgm(query, Math.max(5, Math.floor(topK / 2))) : Promise.resolve([])
-
-  const [general, bgm] = await Promise.all([generalP, bgmP.catch(() => [])])
-  // BGM은 confidence 내림차순으로 일반 결과 사이에 자연 병합
-  const merged = [...general, ...bgm]
-  merged.sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))
-  return merged
+  // BGM은 /api/search 백엔드에서 이미 통합됨 — 직접 호출 제거 (이중 집계 방지)
+  const results = await generalP
+  results.sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))
+  return results
 }
 
 async function openFile(filePath) {
@@ -1032,6 +1042,13 @@ export default function MainSearch() {
     try {
       const data = await searchFiles(q, 20, type)
       setResults(data)
+      // 검색 기록 저장 + 사이드바 갱신 이벤트
+      fetch(`${API_BASE}/api/history`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: q, method: type || 'all', result_count: data.length }),
+      }).catch(() => {})
+      window.dispatchEvent(new Event('history-updated'))
     } catch (e) {
       setSearchError(e.message)
       setResults([])
@@ -1692,13 +1709,7 @@ export default function MainSearch() {
               transition: 'opacity 0.35s ease, transform 0.35s ease, margin 0.3s' }}>
 
             {/* 파일 정보 바 */}
-            <div className={`fixed top-[88px] ${leftEdge} right-0 z-30 bg-[#070d1f]/60 backdrop-blur-xl flex items-center justify-between px-8 py-3 border-b border-outline-variant/10 transition-[left] duration-300`}>
-              <div className="flex items-center gap-3 min-w-0 flex-1 mr-4">
-                <span className={`material-symbols-outlined ${meta.color} shrink-0`}>{meta.icon}</span>
-                <span className="font-manrope text-lg tracking-wide text-[#dfe4fe] font-bold truncate">{selectedFile.file_name}</span>
-                <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-lg font-bold border border-primary/20 shrink-0">{confPct}%</span>
-                <span className={`px-2 py-0.5 rounded-full text-lg font-bold border shrink-0 ${meta.color} bg-white/5 border-white/10`}>{meta.label}</span>
-              </div>
+            <div className={`fixed top-[100px] ${leftEdge} right-0 z-30 bg-[#070d1f]/60 backdrop-blur-xl flex items-center justify-end px-8 py-3 border-b border-outline-variant/10 transition-[left] duration-300`}>
               <div className="flex items-center gap-3 shrink-0">
                 {/* ✨ AI 요약 — Ollama qwen 스트리밍 */}
                 <button
@@ -1730,6 +1741,78 @@ export default function MainSearch() {
             </div>
 
             <section className="pt-44 pb-12 px-8 max-w-7xl mx-auto space-y-8">
+
+              {/* ── ✨ AI 요약 인라인 패널 (상세 페이지 최상단) ──────────────── */}
+              {(summarizing || summaryText || summaryError) && (
+                <div className="rounded-2xl overflow-hidden relative"
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(13,7,24,0.85), rgba(20,12,40,0.85))',
+                    border: '1px solid rgba(168,85,247,0.4)',
+                    boxShadow: '0 0 30px rgba(168,85,247,0.15)',
+                  }}>
+                  {/* 헤더 */}
+                  <div className="px-6 py-4 flex items-center gap-3 border-b border-purple-500/20">
+                    <span className="material-symbols-outlined text-purple-300 animate-pulse">auto_awesome</span>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-base font-bold text-purple-100 tracking-wide">
+                        AI 상세 요약
+                      </h3>
+                      {summaryMeta && (
+                        <p className="text-[11px] text-purple-300/60 mt-0.5">
+                          {summaryMeta.model && <>모델: <span className="font-mono">{summaryMeta.model}</span></>}
+                          {summaryMeta.length != null && <> · 본문 {summaryMeta.length.toLocaleString()}자</>}
+                          {summaryMeta.kind && <> · <span className="opacity-70">{summaryMeta.kind}</span></>}
+                        </p>
+                      )}
+                    </div>
+                    {summaryDone ? (
+                      <span className="flex items-center gap-1 text-emerald-400 text-xs">
+                        <span className="material-symbols-outlined text-base">check_circle</span> 완료
+                      </span>
+                    ) : summaryError ? (
+                      <span className="text-rose-300 text-xs">실패</span>
+                    ) : (
+                      <span className="flex items-center gap-1 text-purple-300 text-xs">
+                        <span className="material-symbols-outlined text-base animate-spin">progress_activity</span>
+                        스트리밍
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={closeSummary}
+                      className="w-7 h-7 rounded-full hover:bg-white/10 flex items-center justify-center text-on-surface-variant ml-2"
+                      title={summarizing ? '중단' : '닫기'}
+                    >
+                      <span className="material-symbols-outlined text-lg">close</span>
+                    </button>
+                  </div>
+                  {/* 본문 */}
+                  <div className="px-7 py-6 text-base">
+                    {summaryError ? (
+                      <div className="rounded-xl bg-rose-500/10 border border-rose-500/30 p-4 text-rose-300">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="material-symbols-outlined text-base">error</span>
+                          <span className="font-bold">요약 실패</span>
+                        </div>
+                        <p className="text-sm">{summaryError}</p>
+                      </div>
+                    ) : summaryText ? (
+                      <div className="relative">
+                        <MarkdownLite text={summaryText} />
+                        {!summaryDone && (
+                          <span className="inline-block w-2 h-4 bg-purple-300 ml-1 animate-pulse align-middle" />
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-3 text-on-surface-variant/50">
+                        <span className="material-symbols-outlined animate-spin">progress_activity</span>
+                        <span>본문 추출 + AI 모델 호출 중... (PDF 18,000자 / 영상·음성 80개 세그먼트까지)</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-12 gap-6">
 
                 {/* 메인 컨텐츠 */}
@@ -1792,29 +1875,26 @@ export default function MainSearch() {
                 {/* 메타데이터 패널 */}
                 <div className="col-span-4 space-y-5">
 
-                  {/* 신뢰도 카드 */}
-                  <div className="bg-surface-container-high rounded-xl p-6 border border-outline-variant/10 relative overflow-hidden group">
-                    <div className="absolute -right-4 -top-4 w-24 h-24 bg-primary/10 blur-3xl group-hover:bg-primary/20 transition-all" />
-                    <h4 className="text-sm font-bold tracking-[0.15em] text-primary mb-4 uppercase">신뢰도 분석</h4>
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-3">
-                        <div className="flex-1 h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
-                          <div className="h-full bg-gradient-to-r from-primary to-secondary shadow-[0_0_8px_rgba(133,173,255,0.5)] transition-all duration-700"
-                            style={{ width: `${confPct}%` }} />
-                        </div>
-                        <span className="text-sm font-bold text-on-surface tabular-nums">{confPct}%</span>
+                  {/* 신뢰도/정확도/유사도 3지표 */}
+                  {(() => {
+                    const accuracyPct = Math.min(100, Math.round(Math.abs(selectedFile.rerank ?? selectedFile.confidence ?? 0) * 100))
+                    const simPct = Math.round((selectedFile.dense ?? selectedFile.similarity ?? selectedFile.confidence ?? 0) * 100)
+                    const bars = [
+                      { label: '신뢰도', pct: confPct,     text: 'text-emerald-400' },
+                      { label: '정확도', pct: accuracyPct, text: 'text-[#85adff]' },
+                      { label: '유사도', pct: simPct,      text: 'text-[#ac8aff]' },
+                    ]
+                    return (
+                      <div className="bg-surface-container-high rounded-xl p-4 border border-outline-variant/10 flex divide-x divide-outline-variant/15">
+                        {bars.map(({ label, pct, text }) => (
+                          <div key={label} className="flex-1 flex flex-col items-center gap-1 px-3">
+                            <span className={`text-2xl font-extrabold tabular-nums leading-none ${text}`}>{pct}<span className="text-sm font-bold">%</span></span>
+                            <span className="text-[11px] font-bold tracking-[0.1em] text-on-surface-variant/60 uppercase">{label}</span>
+                          </div>
+                        ))}
                       </div>
-                      <p className="text-xs text-on-surface-variant/60">
-                        {isAV ? 'BGE-M3 세그먼트 집계 + Calibration' : 'TRI-CHEF Hermitian 유사도 · Calibration'}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* [#9] 점수 분해 — dense/lexical/asf/rerank/z_score 시각화 (admin.html 패리티) */}
-                  <div className="bg-surface-container-low rounded-xl p-5 border border-outline-variant/5">
-                    <h4 className="text-sm font-bold tracking-[0.15em] text-on-surface-variant mb-3 uppercase">점수 분해</h4>
-                    <ScoreBreakdown result={selectedFile} />
-                  </div>
+                    )
+                  })()}
 
                   {/* AV: 세그먼트 요약 */}
                   {isAV && selectedFile.segments?.length > 0 && (
@@ -1854,107 +1934,15 @@ export default function MainSearch() {
                       ].map(([k, v]) => (
                         <div key={k} className="flex justify-between items-start py-2 border-b border-outline-variant/10 last:border-0 gap-2">
                           <span className="text-xs text-on-surface-variant shrink-0">{k}</span>
-                          <span className="text-xs font-bold text-on-surface truncate max-w-[70%] text-right break-all">{v}</span>
+                          <span className="text-xs font-bold text-on-surface text-right break-all">{v}</span>
                         </div>
                       ))}
                     </div>
                   </div>
 
-                  {/* 액션 */}
-                  <div className="space-y-2">
-                    <button
-                      onClick={() => openFile(selectedFile.file_path)}
-                      className="w-full group flex items-center justify-between p-4 rounded-xl bg-primary/10 hover:bg-primary/20 transition-colors border border-primary/20">
-                      <div className="flex items-center gap-3">
-                        <span className={`material-symbols-outlined ${meta.color}`}>{meta.icon}</span>
-                        <span className="text-sm font-semibold text-on-surface">기본 앱으로 열기</span>
-                      </div>
-                      <span className="material-symbols-outlined text-base text-on-surface-variant">open_in_new</span>
-                    </button>
-                    <button
-                      onClick={() => openFolder(selectedFile.file_path)}
-                      className="w-full group flex items-center justify-between p-4 rounded-xl bg-surface-container-highest hover:bg-primary/10 transition-colors border border-transparent hover:border-primary/20">
-                      <div className="flex items-center gap-3">
-                        <span className="material-symbols-outlined text-on-surface-variant group-hover:text-primary">folder_open</span>
-                        <span className="text-sm font-semibold">탐색기에서 보기</span>
-                      </div>
-                      <span className="material-symbols-outlined text-base text-on-surface-variant">chevron_right</span>
-                    </button>
-                  </div>
                 </div>
               </div>
 
-              {/* ── ✨ AI 요약 인라인 패널 (상세 페이지 하단) ──────────────── */}
-              {(summarizing || summaryText || summaryError) && (
-                <div className="rounded-2xl overflow-hidden relative"
-                  style={{
-                    background: 'linear-gradient(135deg, rgba(13,7,24,0.85), rgba(20,12,40,0.85))',
-                    border: '1px solid rgba(168,85,247,0.4)',
-                    boxShadow: '0 0 30px rgba(168,85,247,0.15)',
-                  }}>
-                  {/* 헤더 */}
-                  <div className="px-6 py-4 flex items-center gap-3 border-b border-purple-500/20">
-                    <span className="material-symbols-outlined text-purple-300 animate-pulse">auto_awesome</span>
-                    <div className="min-w-0 flex-1">
-                      <h3 className="text-base font-bold text-purple-100 tracking-wide">
-                        AI 상세 요약
-                      </h3>
-                      {summaryMeta && (
-                        <p className="text-[11px] text-purple-300/60 mt-0.5">
-                          {summaryMeta.model && <>모델: <span className="font-mono">{summaryMeta.model}</span></>}
-                          {summaryMeta.length != null && <> · 본문 {summaryMeta.length.toLocaleString()}자</>}
-                          {summaryMeta.kind && <> · <span className="opacity-70">{summaryMeta.kind}</span></>}
-                        </p>
-                      )}
-                    </div>
-                    {summaryDone ? (
-                      <span className="flex items-center gap-1 text-emerald-400 text-xs">
-                        <span className="material-symbols-outlined text-base">check_circle</span> 완료
-                      </span>
-                    ) : summaryError ? (
-                      <span className="text-rose-300 text-xs">실패</span>
-                    ) : (
-                      <span className="flex items-center gap-1 text-purple-300 text-xs">
-                        <span className="material-symbols-outlined text-base animate-spin">progress_activity</span>
-                        스트리밍
-                      </span>
-                    )}
-                    <button
-                      type="button"
-                      onClick={closeSummary}
-                      className="w-7 h-7 rounded-full hover:bg-white/10 flex items-center justify-center text-on-surface-variant ml-2"
-                      title={summarizing ? '중단' : '닫기'}
-                    >
-                      <span className="material-symbols-outlined text-lg">close</span>
-                    </button>
-                  </div>
-
-                  {/* 본문 — Markdown 렌더링 + 스트리밍 커서 */}
-                  <div className="px-7 py-6 text-base">
-                    {summaryError ? (
-                      <div className="rounded-xl bg-rose-500/10 border border-rose-500/30 p-4 text-rose-300">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="material-symbols-outlined text-base">error</span>
-                          <span className="font-bold">요약 실패</span>
-                        </div>
-                        <p className="text-sm">{summaryError}</p>
-                      </div>
-                    ) : summaryText ? (
-                      <div className="relative">
-                        <MarkdownLite text={summaryText} />
-                        {!summaryDone && (
-                          <span className="inline-block w-2 h-4 bg-purple-300 ml-1 animate-pulse align-middle" />
-                        )}
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-3 text-on-surface-variant/50">
-                        <span className="material-symbols-outlined animate-spin">progress_activity</span>
-                        <span>본문 추출 + AI 모델 호출 중... (PDF 18,000자 / 영상·음성 80개 세그먼트까지)</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
             </section>
 
             <div className="fixed bottom-[-10%] left-[20%] w-[40%] h-[40%] bg-primary/5 blur-[120px] pointer-events-none rounded-full" />

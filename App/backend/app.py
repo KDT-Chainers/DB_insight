@@ -152,6 +152,23 @@ def create_app() -> Flask:
     except Exception:
         pass
 
+    # BGM CLAP 워밍업 — laion/clap-htsat-unfused GPU 선로딩 (첫 검색 ~3s 지연 제거)
+    # background thread → 서버 기동 지연 없음. GPU(RTX 4070 Laptop) 우선 사용.
+    try:
+        import threading, logging as _lg
+        def _prewarm_bgm():
+            try:
+                from services.bgm.search_engine import get_engine as _bgm_engine
+                _e = _bgm_engine()
+                if _e.is_ready():
+                    _e.search("워밍업", top_k=1)
+                    _lg.getLogger(__name__).info("[warmup] bgm CLAP OK (GPU)")
+            except Exception as _ex:
+                _lg.getLogger(__name__).warning(f"[warmup] bgm skip: {_ex}")
+        threading.Thread(target=_prewarm_bgm, daemon=True, name="bgm-clap-prewarm").start()
+    except Exception:
+        pass
+
     # [P0 #D] Qwen-VL 캡션 모델 background prewarm.
     # 인덱싱 시작 시 첫 이미지 파일에서 발생하던 ~15-30s 모델 로드 지연을 제거.
     # 비동기 thread → 검색·UI 응답에는 무영향. 환경변수 OMC_DISABLE_QWEN_PREWARM=1 로 OFF.

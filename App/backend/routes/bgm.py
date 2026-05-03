@@ -56,13 +56,14 @@ def search():
         logger.exception("[bgm.search] 실패")
         return jsonify({"query": query, "results": [], "error": str(e)[:300]}), 500
 
-    # 5도메인 통합 score 조정 — Edge case 격리 + generous curve
+    # BGM: generous_curve 이중 적용 금지 — 엔진이 이미 z-score CDF 정규화 완료
+    # confidence 상한 0.75 적용 (CLAP null 분포 보정 전까지 비음악 쿼리 오버랭크 방지)
     try:
-        from services.score_adjust import adjust_confidences, _generous_curve
-        adjust_confidences(result.get("results", []), query)
+        from services.score_adjust import _generous_curve
         for r in result.get("results", []):
-            adjust_confidences(r.get("segments") or [], query)
-            # dense (raw cosine): generous curve 만 적용 (UI 유사도 표시용)
+            if "confidence" in r and r["confidence"] is not None:
+                # BGM 전용 검색(/api/bgm/search): 상한 0.85 (혼합 검색의 0.75보다 여유)
+                r["confidence"] = round(min(0.85, float(r["confidence"])), 4)
             if "dense" in r and r["dense"] is not None:
                 r["dense"] = round(_generous_curve(r["dense"]), 4)
             if "score" in r and r["score"] is not None:

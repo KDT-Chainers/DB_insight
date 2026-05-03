@@ -54,14 +54,16 @@ def _load_calibration() -> dict:
         try:
             d = json.loads(cal_path.read_text(encoding="utf-8"))
             _CAL_CACHE = {
-                "mu_null":    float(d.get("mu_null", 0.1)),
-                "sigma_null": float(d.get("sigma_null", 0.15)),
+                "mu_null":    float(d.get("mu_null", 0.40)),
+                "sigma_null": float(d.get("sigma_null", 0.08)),
             }
         except Exception:
-            _CAL_CACHE = {"mu_null": 0.1, "sigma_null": 0.15}
+            _CAL_CACHE = {"mu_null": 0.40, "sigma_null": 0.08}
     else:
-        # 기본값 — calibration 없을 때 (단순 0.5+0.5*s 와 비슷한 효과)
-        _CAL_CACHE = {"mu_null": 0.1, "sigma_null": 0.15}
+        # 기본값 — CLAP text-to-audio 실측 null 분포 (비관련 쿼리 평균 ~0.40)
+        # mu=0.40: 비관련 쿼리 기준선, sigma=0.08: 분포 폭
+        # → CLAP 0.45 ≈ 73%, 0.50 ≈ 89%, 0.55 ≈ 97%
+        _CAL_CACHE = {"mu_null": 0.40, "sigma_null": 0.08}
     return _CAL_CACHE
 
 
