@@ -495,6 +495,15 @@ export default function MainAI() {
   const [aiError,        setAiError]        = useState('')
   const [finalQuery,     setFinalQuery]     = useState('')
   const [hasLLM,         setHasLLM]         = useState(undefined)
+
+  // ── AIMODE 시각화 4-step 상태 ─────────────────────────────
+  const [aimodeSteps,    setAimodeSteps]    = useState([])      // [{step, label, done, query, selected_idx}]
+  const [aimodeQuery,    setAimodeQuery]    = useState('')      // 추출된 검색어 (Step 1)
+  const [aimodeSources,  setAimodeSources]  = useState([])      // 검색 결과 카드 (Step 2)
+  const [aimodeSelected, setAimodeSelected] = useState(null)    // 선택된 idx (Step 3)
+  const [aimodeAnswer,   setAimodeAnswer]   = useState('')      // 스트리밍 답변 (Step 4)
+  const [aimodeDone,     setAimodeDone]     = useState(false)
+  const [useAimode,      setUseAimode]      = useState(true)    // AIMODE 시각화 ON/OFF
   const [topK,         setTopK]         = useState(20)
   const [maxIter,      setMaxIter]      = useState(5)
   const abortRef = useRef(null)
@@ -549,9 +558,8 @@ export default function MainAI() {
     if (q) { window.history.replaceState({}, ''); doSearchRef.current?.(q) }
   }, [location.state])
 
-  // ── SSE 에이전트 실행 ────────────────────────────────────────
+  // ── SSE 실행 (AIMODE 시각화 또는 기존 에이전트) ─────────────
   const runAISearch = useCallback(async (q) => {
-    // 이전 요청 취소
     if (abortRef.current) abortRef.current.abort()
     const controller = new AbortController()
     abortRef.current = controller
@@ -564,11 +572,26 @@ export default function MainAI() {
     setFinalQuery(q)
     setHasLLM(undefined)
 
+    // AIMODE 시각화 상태 초기화
+    setAimodeSteps([])
+    setAimodeQuery('')
+    setAimodeSources([])
+    setAimodeSelected(null)
+    setAimodeAnswer('')
+    setAimodeDone(false)
+
+    const endpoint = useAimode
+      ? `${API_BASE}/api/aimode/chat`
+      : `${API_BASE}/api/ai/search`
+    const body = useAimode
+      ? { query: q, topk: topK }
+      : { query: q, topk: topK, max_iterations: maxIter }
+
     try {
-      const res = await fetch(`${API_BASE}/api/ai/search`, {
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: q, topk: topK, max_iterations: maxIter }),
+        body: JSON.stringify(body),
         signal: controller.signal,
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -597,7 +620,7 @@ export default function MainAI() {
     } finally {
       setStreaming(false)
     }
-  }, [topK, maxIter])
+  }, [topK, maxIter, useAimode])
 
   const mapItem = (item) => {
     const isDocPage = item.domain === 'doc_page'
@@ -624,6 +647,51 @@ export default function MainAI() {
 
   const handleSSEEvent = (ev) => {
     switch (ev.type) {
+      // ── AIMODE 시각화 이벤트 (/api/aimode/chat) ─────────────
+      case 'step':
+        setAimodeSteps(prev => {
+          // 같은 step 이 두 번 (시작 + done) 들어옴 — 마지막 것으로 갱신
+          const idx = prev.findIndex(s => s.step === ev.step)
+          const entry = {
+            step: ev.step,
+            label: ev.label,
+            done: ev.done === true,
+            query: ev.query,
+            selected_idx: ev.selected_idx,
+          }
+          if (idx >= 0) {
+            const next = [...prev]
+            next[idx] = { ...next[idx], ...entry }
+            return next
+          }
+          return [...prev, entry]
+        })
+        if (ev.step === 1 && ev.query) setAimodeQuery(ev.query)
+        if (ev.step === 3 && typeof ev.selected_idx === 'number') {
+          setAimodeSelected(ev.selected_idx)
+        }
+        break
+
+      case 'sources':
+        // AIMODE 검색 결과 카드 — sources 형식 (rid 없음, 그대로 사용)
+        setAimodeSources(ev.items || [])
+        break
+
+      case 'token':
+        setAimodeAnswer(prev => prev + (ev.text || ''))
+        break
+
+      case 'done':
+        setAimodeDone(true)
+        if (ev.answer) setAimodeAnswer(ev.answer)
+        if (typeof ev.selected_idx === 'number') setAimodeSelected(ev.selected_idx)
+        break
+
+      case 'error':
+        setAiError(ev.message || '오류')
+        break
+
+      // ── 기존 ai_search 이벤트 (fallback) ─────────────────────
       case 'info':
         setHasLLM(ev.has_llm)
         break
@@ -998,8 +1066,122 @@ export default function MainAI() {
               </div>
             </div>
 
-            {/* AI 탐색 과정 패널 */}
-            <AIIterationPanel iterationData={iterationData} domainSelection={domainSelection} streaming={streaming} hasLLM={hasLLM} />
+            {/* AIMODE 시각화 4-step 패널 */}
+            {useAimode && (aimodeSteps.length > 0 || aimodeAnswer) && (
+              <div className="mb-6 rounded-2xl border p-5 space-y-4"
+                style={{ background: AI.card, borderColor: AI.border }}>
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-lg" style={{ color: AI.accentLight }}>auto_awesome</span>
+                  <span className="text-xs uppercase tracking-widest font-bold"
+                    style={{ color: AI.accentLight }}>AI MODE — 시각화 추적</span>
+                </div>
+
+                {/* 사용자 질문 */}
+                <div className="text-sm">
+                  <span className="text-on-surface-variant text-xs">▼ 사용자 질문</span>
+                  <div className="mt-1 px-3 py-2 rounded-lg bg-white/5 border border-outline-variant/15">
+                    {finalQuery}
+                  </div>
+                </div>
+
+                {/* Step 1: 검색어 추출 */}
+                {aimodeSteps.find(s => s.step === 1) && (
+                  <div>
+                    <div className="text-xs text-on-surface-variant mb-1 flex items-center gap-1">
+                      <span className="material-symbols-outlined text-base" style={{ color: '#fbbf24' }}>search</span>
+                      Step 1 — 검색어 추출
+                      {aimodeSteps.find(s => s.step === 1 && s.done) && (
+                        <span className="material-symbols-outlined text-base text-emerald-400 ml-auto">check_circle</span>
+                      )}
+                    </div>
+                    <div className="px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 font-mono text-sm">
+                      {aimodeQuery || '...'}
+                    </div>
+                  </div>
+                )}
+
+                {/* Step 2: 검색 결과 카드 */}
+                {aimodeSteps.find(s => s.step === 2) && (
+                  <div>
+                    <div className="text-xs text-on-surface-variant mb-2 flex items-center gap-1">
+                      <span className="material-symbols-outlined text-base" style={{ color: '#85adff' }}>folder_open</span>
+                      Step 2 — 데이터베이스 검색 ({aimodeSources.length}건)
+                      {aimodeSteps.find(s => s.step === 2 && s.done) && (
+                        <span className="material-symbols-outlined text-base text-emerald-400 ml-auto">check_circle</span>
+                      )}
+                    </div>
+                    <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
+                      {aimodeSources.slice(0, 6).map((s, i) => {
+                        const isSelected = aimodeSelected === i
+                        return (
+                          <div key={i} className={`rounded-lg p-2 border transition-all ${
+                            isSelected
+                              ? 'bg-gradient-to-br from-purple-500/30 to-pink-500/20 border-purple-400 shadow-[0_0_20px_rgba(168,85,247,0.5)] scale-[1.03]'
+                              : 'bg-white/5 border-outline-variant/15'
+                          }`}>
+                            <div className="flex items-center gap-1 text-[10px] mb-1">
+                              <span className={`px-1.5 py-0.5 rounded font-bold ${isSelected ? 'bg-purple-400 text-white' : 'bg-white/10'}`}>
+                                #{i + 1}
+                              </span>
+                              <span className="text-on-surface-variant uppercase">{s.file_type || s.domain || ''}</span>
+                              <span className="ml-auto text-emerald-400 font-mono font-bold">
+                                {((s.confidence ?? 0) * 100).toFixed(0)}%
+                              </span>
+                            </div>
+                            <div className="text-xs font-semibold truncate">{s.file_name || '?'}</div>
+                            {s.snippet && (
+                              <div className="text-[10px] text-on-surface-variant/70 mt-1 line-clamp-2">
+                                {s.snippet.slice(0, 60)}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Step 3: 카드 선택 */}
+                {aimodeSteps.find(s => s.step === 3) && aimodeSources[aimodeSelected ?? 0] && (
+                  <div>
+                    <div className="text-xs text-on-surface-variant mb-1 flex items-center gap-1">
+                      <span className="material-symbols-outlined text-base text-purple-400">center_focus_strong</span>
+                      Step 3 — #{(aimodeSelected ?? 0) + 1} 자동 선택
+                      <span className="material-symbols-outlined text-base text-emerald-400 ml-auto">check_circle</span>
+                    </div>
+                    <div className="px-3 py-2 rounded-lg bg-purple-500/10 border border-purple-500/30 text-sm">
+                      <span className="text-purple-300 font-bold">선택:</span>{' '}
+                      {aimodeSources[aimodeSelected ?? 0]?.file_name || '?'}
+                    </div>
+                  </div>
+                )}
+
+                {/* Step 4: 답변 */}
+                {(aimodeSteps.find(s => s.step === 4) || aimodeAnswer) && (
+                  <div>
+                    <div className="text-xs text-on-surface-variant mb-1 flex items-center gap-1">
+                      <span className="material-symbols-outlined text-base text-pink-400 animate-pulse">stylus</span>
+                      Step 4 — 답변 정리 {aimodeDone && (
+                        <span className="material-symbols-outlined text-base text-emerald-400 ml-auto">check_circle</span>
+                      )}
+                    </div>
+                    <div className="px-4 py-3 rounded-lg bg-gradient-to-br from-pink-500/10 to-purple-500/10 border border-pink-500/20 text-sm whitespace-pre-wrap leading-relaxed">
+                      {aimodeAnswer || (
+                        <span className="text-on-surface-variant/50 italic">생성 중...</span>
+                      )}
+                      {!aimodeDone && aimodeAnswer && (
+                        <span className="inline-block w-2 h-4 bg-pink-400 ml-1 animate-pulse align-middle"></span>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* AI 탐색 과정 패널 (기존 ai_search) */}
+            {!useAimode && (
+              <AIIterationPanel iterationData={iterationData} domainSelection={domainSelection} streaming={streaming} hasLLM={hasLLM} />
+            )}
 
             {/* 로딩 */}
             {streaming && results.length === 0 && (

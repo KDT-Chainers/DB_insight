@@ -14,6 +14,7 @@ from routes.security_mask import security_mask_bp
 from routes.ai_search import ai_search_bp
 from routes.registry import registry_bp
 from routes.bgm import bp as bgm_bp
+from routes.aimode import aimode_bp
 
 
 def _auto_normalize_paths_if_mismatch() -> None:
@@ -108,6 +109,7 @@ def create_app() -> Flask:
     app.register_blueprint(ai_search_bp)
     app.register_blueprint(registry_bp)
     app.register_blueprint(bgm_bp)
+    app.register_blueprint(aimode_bp)
 
     # [W5-4] Warmup — 기동 시 TriChefEngine 싱글턴 로드 + dummy 쿼리 1회 실행하여
     # SigLIP2 / BGE-M3 / DINOv2 / Qwen 을 선로딩. 첫 사용자 쿼리 430ms 지연 제거.
