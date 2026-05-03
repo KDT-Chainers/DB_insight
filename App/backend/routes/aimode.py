@@ -251,8 +251,52 @@ def _extract_query(user_question: str, model: str) -> str:
 
 
 # ── Step 2: 검색 ────────────────────────────────────────────────────
+def _enrich_snippet(r: dict, query: str) -> None:
+    """LLM 에 전달할 snippet 채우기 — doc_page 는 PDF page text 직접 로드.
+
+    각 도메인:
+      doc_page : extracted_DB/Doc/page_text/<stem>/p####.txt 직접 읽기
+      image    : Qwen 5-stage caption (title + tagline + synopsis)
+      movie/music: AV segment 의 STT 텍스트 (이미 r['snippet'] 에 있음)
+    """
+    if r.get("snippet"):
+        return  # 이미 채워짐
+    file_type = r.get("file_type", "")
+    rid = r.get("trichef_id") or ""
+    try:
+        from config import PATHS
+        from pathlib import Path
+        import re
+
+        if file_type == "doc" and rid:
+            # page_images/<stem>/p####.jpg → page_text/<stem>/p####.txt
+            m = re.match(r"^page_images/(.+)/p(\d+)\.(?:jpg|png)$", rid)
+            if m:
+                stem, page_num = m.group(1), int(m.group(2))
+                pt = Path(PATHS["TRICHEF_DOC_EXTRACT"]) / "page_text" / stem / f"p{page_num:04d}.txt"
+                if pt.is_file():
+                    txt = pt.read_text(encoding="utf-8").strip()
+                    if txt:
+                        # 검색어 매칭 줄 우선 + 인접 컨텍스트 (최대 800자)
+                        r["snippet"] = txt[:800]
+                        return
+        elif file_type == "image":
+            # Qwen 5-stage caption (title + tagline + synopsis 결합)
+            from services.location_resolver import _img_location
+            loc = _img_location(rid, query=query) or {}
+            parts = [loc.get(k, "") for k in ("title", "tagline", "synopsis")]
+            txt = " | ".join(p.strip() for p in parts if p and p.strip())
+            if txt:
+                r["snippet"] = txt[:600]
+                return
+            if loc.get("caption"):
+                r["snippet"] = loc["caption"][:600]
+    except Exception as e:
+        logger.debug(f"[aimode] enrich_snippet 실패: {e}")
+
+
 def _do_search(query: str, topk: int = 5) -> list[dict]:
-    """기존 search.py 엔드포인트 재사용 — 5도메인 통합 검색."""
+    """기존 search.py 재사용 — 5도메인 통합 검색 + snippet 자동 채움."""
     try:
         from routes.search import _search_trichef, _search_trichef_av
         from services.query_expand import expand_bilingual
@@ -269,6 +313,8 @@ def _do_search(query: str, topk: int = 5) -> list[dict]:
                 r["confidence"] = round(adjust_confidence(r["confidence"], query), 4)
             if "dense" in r and r["dense"] is not None:
                 r["dense"] = round(_generous_curve(r["dense"]), 4)
+            # ★ LLM 에 전달할 snippet 채우기 (PDF 본문/Qwen 캡션 등)
+            _enrich_snippet(r, query)
 
         results.sort(key=lambda x: -(x.get("confidence") or 0))
         return results[:topk]
@@ -278,16 +324,56 @@ def _do_search(query: str, topk: int = 5) -> list[dict]:
 
 
 # ── 시스템 프롬프트 ─────────────────────────────────────────────────
+def _doc_neighborhood_text(rid: str, max_chars: int = 2400) -> str:
+    """doc_page rid 의 인접 페이지 (전후 1쪽씩) 텍스트 결합 — 조사개요 등 멀티페이지 컨텍스트.
+
+    page_images/<stem>/p0005.jpg → p0004, p0005, p0006 텍스트 결합.
+    """
+    try:
+        from config import PATHS
+        from pathlib import Path
+        import re
+        m = re.match(r"^page_images/(.+)/p(\d+)\.(?:jpg|png)$", rid)
+        if not m:
+            return ""
+        stem, p = m.group(1), int(m.group(2))
+        page_text_dir = Path(PATHS["TRICHEF_DOC_EXTRACT"]) / "page_text" / stem
+        if not page_text_dir.is_dir():
+            return ""
+        chunks = []
+        for delta in (-1, 0, 1):
+            tp = page_text_dir / f"p{p + delta:04d}.txt"
+            if tp.is_file():
+                t = tp.read_text(encoding="utf-8").strip()
+                if t:
+                    chunks.append(f"[p.{p + delta + 1}]\n{t}")
+        if not chunks:
+            return ""
+        combined = "\n\n".join(chunks)
+        return combined[:max_chars]
+    except Exception:
+        return ""
+
+
 def _build_system_prompt(selected: dict, all_sources: list[dict]) -> str:
     domain_label = {"image": "이미지", "doc": "문서", "video": "동영상", "audio": "음성"}
     fname = selected.get("file_name") or "?"
     domain = domain_label.get(selected.get("file_type", ""), "파일")
-    snippet = (selected.get("snippet") or "")[:600]
     fpath = selected.get("file_path") or ""
 
+    # 선택된 카드가 doc 이면 인접 페이지까지 결합 (조사개요 등 다중 페이지 정보)
+    rid = selected.get("trichef_id") or ""
+    doc_text = ""
+    if selected.get("file_type") == "doc" and rid:
+        doc_text = _doc_neighborhood_text(rid, max_chars=2400)
+    snippet = doc_text or (selected.get("snippet") or "")[:1200]
+
     other_lines = []
+    sel_idx_label = "?"
     for i, s in enumerate(all_sources, 1):
         is_sel = "★" if s is selected else " "
+        if s is selected:
+            sel_idx_label = str(i)
         other_lines.append(
             f"  {is_sel} [{i}] {s.get('file_name', '?')} "
             f"({domain_label.get(s.get('file_type', ''), s.get('file_type', ''))}, "
@@ -295,24 +381,25 @@ def _build_system_prompt(selected: dict, all_sources: list[dict]) -> str:
         )
 
     return f"""당신은 로컬 파일 데이터베이스 전문 AI 어시스턴트입니다.
-사용자의 질문에 가장 관련된 [{domain}] 파일을 찾아서, 그 내용을 기반으로 한국어로 답변하세요.
+사용자의 질문에 가장 관련된 [{domain}] 파일을 찾았으며, 아래 본문 내용을 기반으로 한국어로 답변하세요.
 
-가장 관련된 파일 (★ 선택됨):
+검색된 후보 파일 (★ 선택됨):
 {chr(10).join(other_lines)}
 
-선택 파일 상세:
+★ 선택 파일 상세
   이름: {fname}
   경로: {fpath}
-  내용:
+  본문:
   ---
-  {snippet if snippet else '(snippet 없음)'}
+{snippet if snippet else '(본문 텍스트가 추출되지 않았습니다)'}
   ---
 
 답변 원칙:
-- 선택된 파일의 내용을 우선 참고하여 답변하세요.
-- 인용 시 "[{1 if all_sources and all_sources[0] is selected else '?'}] {fname}" 형식으로 출처 표기.
-- 검색 결과가 질문과 무관하다면 솔직히 말하세요.
-- 한국어로 간결·명확하게."""
+- 위에 제시된 본문 내용을 직접 인용하면서 사용자 질문에 답변하세요.
+- 본문에 사용자 질문에 대한 정보가 있다면 명확히 추출해 정리하세요.
+- 출처는 "[{sel_idx_label}] {fname}" 형식으로 인용하세요.
+- 본문이 비어있거나 질문과 무관하면 솔직히 말하세요.
+- 한국어로 간결·명확하게 작성하세요."""
 
 
 # ── 메인 SSE 제너레이터 (LangGraph 통합) ───────────────────────────
