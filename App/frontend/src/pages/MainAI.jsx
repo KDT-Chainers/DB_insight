@@ -210,7 +210,9 @@ export default function MainAI() {
       )}
 
       {/* 사이드바 — 항상 마운트 유지 */}
-      <SearchSidebar />
+      <SearchSidebar
+        entranceOn={view === "home" ? aiHomeEntranceOn : undefined}
+      />
 
       {/* ════════════════════════════════
           HOME VIEW

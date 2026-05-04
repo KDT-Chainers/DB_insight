@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useSidebar } from '../context/SidebarContext'
 import WindowControls from './WindowControls'
@@ -31,7 +32,11 @@ const SIDEBAR = {
   },
 }
 
-export default function SearchSidebar() {
+/**
+ * @param {{ entranceOn?: boolean }} props
+ * entranceOn: 메인과 동일 타이밍(~180ms 후 true)으로 패널 **전체**가 배경에 묻인 듯했다가 선명해지며 등장. 미전달 시 애니 없음.
+ */
+export default function SearchSidebar({ entranceOn } = {}) {
   const navigate = useNavigate()
   const location = useLocation()
   const { open, toggle } = useSidebar()
@@ -39,12 +44,29 @@ export default function SearchSidebar() {
   const ai = location.pathname === '/ai' || location.pathname.startsWith('/ai/')
   const S = ai ? SIDEBAR.ai : SIDEBAR.search
 
+  const hasEntrance = entranceOn !== undefined
+  const reduceMotion = useMemo(
+    () =>
+      typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+    [],
+  )
+
+  const shellEntranceClass = useMemo(() => {
+    if (!hasEntrance || reduceMotion) return ''
+    return entranceOn ? 'sidebar-shell-entrance-on' : 'sidebar-shell-entrance-off'
+  }, [hasEntrance, reduceMotion, entranceOn])
+
   return (
     <>
-      {/* 사이드바 */}
-      <aside
-        className={`fixed left-0 top-0 z-50 flex h-full w-64 flex-col rounded-r-3xl p-4 pt-10 transition-transform duration-300 ${S.shell} ${open ? 'translate-x-0' : '-translate-x-full'}`}
+      {/* 사이드바 — translate는 래퍼에, 등장 효과는 패널(aside) 전체에 */}
+      <div
+        className={`search-sidebar-aside fixed left-0 top-0 z-50 h-full w-64 transition-transform duration-300 ${open ? 'translate-x-0' : '-translate-x-full'}`}
       >
+        <aside
+          className={`flex h-full w-full flex-col rounded-r-3xl p-4 pt-10 ${S.shell} ${shellEntranceClass}`}
+        >
+        <div className="flex min-h-0 flex-1 flex-col">
         {/* Logo + 토글 버튼 — h-8 드래그 바 아래에서 시작 */}
         <div className="mb-10 flex items-center justify-between px-2">
           <button
@@ -149,8 +171,10 @@ export default function SearchSidebar() {
             <p className={`truncate text-sm font-bold ${ai ? 'text-neutral-100' : 'text-on-surface'}`}>관리자</p>
             <p className={`text-[0.65rem] ${ai ? 'text-neutral-500' : 'text-on-surface-variant'}`}>심층 분석 접근 권한</p>
           </div>
+          </div>
         </div>
-      </aside>
+        </aside>
+      </div>
 
       {/* 사이드바 닫혔을 때 떠있는 토글 버튼 — h-8(32px) 드래그 바 아래 */}
       {!open && (

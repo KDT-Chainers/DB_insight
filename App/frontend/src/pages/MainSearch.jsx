@@ -347,7 +347,7 @@ export default function MainSearch() {
       )}
 
       {/* 사이드바 */}
-      <SearchSidebar />
+      <SearchSidebar entranceOn={searchEntranceOn} />
 
       {/* ════ HOME — v0 AIHero 레이아웃 + 기존 검색/STT/플라이 로직 ════ */}
       {view === 'home' && (
