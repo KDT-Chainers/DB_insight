@@ -3,6 +3,8 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import SearchSidebar from '../components/SearchSidebar'
 import AnimatedOrb from '../components/AnimatedOrb'
 import { useSidebar } from '../context/SidebarContext'
+import { useSpeechRecognition } from '../hooks/useSpeechRecognition'
+import { useMicLevelRef } from '../hooks/useMicLevelRef'
 import { API_BASE } from '../api'
 
 // ── 파일 타입 메타 (MainSearch 동일) ─────────────────────────
@@ -17,20 +19,15 @@ const TYPE_META = {
 const getTypeMeta = (t) =>
   TYPE_META[t] ?? { icon: 'insert_drive_file', color: 'text-on-surface-variant', label: t ?? '파일', grad: 'from-[#1c253e] to-[#263354]' }
 
+/** Orb `assembleIntro` 길이와 헤일로 PNG `ai-orbit-halo-emerge` 동기 (초) */
+const AI_ORB_ASSEMBLE_SECONDS = 8
+
 function fmtTime(sec) {
   if (!sec && sec !== 0) return '0:00'
   const s = Math.floor(sec)
   const m = Math.floor(s / 60)
   return `${m}:${String(s % 60).padStart(2, '0')}`
 }
-
-/** AI 홈 배경 — 중앙 타원 가로 반경을 뷰포트 안에 두어 좌우 끝이 토성 띠처럼 곡선으로 보이게 함 */
-const AI_HOME_BG = [
-  "radial-gradient(ellipse 72% 24% at 50% 50%, rgba(255, 225, 250, 0.12) 0%, rgba(230, 95, 255, 0.28) 34%, rgba(120, 58, 195, 0.24) 56%, rgba(45, 22, 95, 0.14) 74%, rgba(0, 0, 0, 0) 90%)",
-  "radial-gradient(ellipse 40% 16.621% at 34% 50%, rgba(255, 195, 125, 0.16) 0%, rgba(255, 170, 110, 0.05) 45%, rgba(0, 0, 0, 0) 68%)",
-  "radial-gradient(ellipse 40% 16.621% at 66% 50%, rgba(38, 18, 78, 0.38) 0%, rgba(55, 30, 110, 0.1) 42%, rgba(0, 0, 0, 0) 65%)",
-  "#000000",
-].join(", ");
 
 // AI 답변 안전장치 — 시스템 프롬프트로 마크다운 금지했지만,
 // LLM 이 이를 어길 경우를 대비한 프론트엔드 폴리필.
@@ -495,38 +492,6 @@ function AIIterationPanel({ iterationData, domainSelection, streaming, hasLLM })
   )
 }
 
-// ── STT 훅 ───────────────────────────────────────────────────
-function useSpeechRecognition({ onFinal }) {
-  const [listening, setListening] = useState(false)
-  const [interim,   setInterim]   = useState('')
-  const recognitionRef = useRef(null)
-  const latestRef      = useRef('')
-
-  const start = useCallback(() => {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition
-    if (!SR) { alert('음성 인식 미지원'); return }
-    const r = new SR()
-    r.lang = 'ko-KR'; r.continuous = false; r.interimResults = true
-    r.onstart  = () => { setListening(true); setInterim(''); latestRef.current = '' }
-    r.onresult = (e) => {
-      let fin = '', tmp = ''
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        if (e.results[i].isFinal) fin += e.results[i][0].transcript
-        else tmp += e.results[i][0].transcript
-      }
-      if (tmp) { setInterim(tmp); latestRef.current = tmp }
-      if (fin) { setInterim(''); latestRef.current = fin }
-    }
-    r.onend   = () => { setListening(false); setInterim(''); const t = latestRef.current.trim(); latestRef.current = ''; if (t) onFinal(t) }
-    r.onerror = () => { setListening(false); setInterim('') }
-    recognitionRef.current = r; r.start()
-  }, [onFinal])
-
-  const stop   = useCallback(() => recognitionRef.current?.stop(), [])
-  const toggle = useCallback(() => listening ? stop() : start(), [listening, start, stop])
-  return { listening, interim, toggle }
-}
-
 // ── 메인 컴포넌트 ─────────────────────────────────────────────
 export default function MainAI() {
   const navigate  = useNavigate()
@@ -568,8 +533,6 @@ export default function MainAI() {
   const [resultsReady, setResultsReady] = useState(false)
   const [detailVisible,setDetailVisible]= useState(false)
 
-  // UI 홈 배경 애니메이션
-  const [homeGlowDrift,    setHomeGlowDrift]    = useState(false)
   const [aiHomeEntranceOn, setAiHomeEntranceOn] = useState(
     () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
   )
@@ -582,12 +545,6 @@ export default function MainAI() {
   const inputRef    = useRef(null)
   const orbSinkRef  = useRef(null)
   const orbVoiceRef = useRef(0)
-
-  // homeGlowDrift 제어
-  useEffect(() => {
-    if (view !== 'home') { setHomeGlowDrift(false); return }
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { setHomeGlowDrift(true) }
-  }, [view])
 
   // aiHomeEntranceOn 제어
   useEffect(() => {
@@ -612,12 +569,18 @@ export default function MainAI() {
 
   // STT
   const doSearchRef = useRef(null)
-  const { listening, interim, toggle: toggleMic } = useSpeechRecognition({
+  const { listening, interim, toggle: toggleMic, stop: stopMic } = useSpeechRecognition({
     onFinal: useCallback((text) => {
       setInputValue(text)
       setTimeout(() => doSearchRef.current?.(text), 80)
     }, []),
   })
+
+  useMicLevelRef(view === 'home' && listening, orbVoiceRef, { startDelayMs: 420 })
+
+  useEffect(() => {
+    if (view !== 'home') stopMic()
+  }, [view, stopMic])
 
   // 뒤로가기
   useEffect(() => {
@@ -1002,18 +965,10 @@ export default function MainAI() {
       {view === 'home' && (
         <>
           <main className={`${ml} relative flex h-full min-h-0 flex-col overflow-x-hidden overflow-y-auto bg-transparent transition-[margin] duration-300 pt-8`}>
-            {/* PNG 오브 헤일로 배경 (최하단 레이어) */}
-            <div className="ai-home-orbit-bg pointer-events-none absolute inset-0 z-0 min-h-0" aria-hidden />
-            {/* 곡선 띠 배경 (그라데이션 오버레이) */}
             <div
-              className={`pointer-events-none absolute inset-0 z-0 min-h-0 will-change-transform ${homeGlowDrift ? 'ai-home-glow-drift' : 'ai-home-glow-slide-in'}`}
-              style={{ background: AI_HOME_BG }}
+              className="ai-home-orbit-bg pointer-events-none absolute inset-0 z-0 min-h-0"
+              style={{ '--ai-orbit-assemble': `${AI_ORB_ASSEMBLE_SECONDS}s` }}
               aria-hidden
-              onAnimationEnd={(e) => {
-                if (e.animationName === 'ai-home-bg-emerge' || e.animationName === 'ai-home-glow-slide-in' || e.animationName?.endsWith('ai-home-glow-slide-in')) {
-                  setHomeGlowDrift(true)
-                }
-              }}
             />
             {/* Orb */}
             <div ref={orbSinkRef} className="absolute inset-0 z-0 min-h-0" aria-hidden>
@@ -1027,7 +982,7 @@ export default function MainAI() {
                 particleCount={11000}
                 size={720}
                 assembleIntro
-                assembleDuration={8}
+                assembleDuration={AI_ORB_ASSEMBLE_SECONDS}
                 voiceLevelRef={orbVoiceRef}
               />
             </div>

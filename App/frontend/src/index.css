@@ -380,81 +380,47 @@ body {
   animation: slideInRight 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-/* AI 홈 — 곡선 띠 첫 진입: 위에서 아래로 내려옴 */
-@keyframes ai-home-glow-slide-in {
-  from {
-    transform: translate3d(0, -26vh, 0);
-    opacity: 0.25;
-  }
-  to {
-    transform: translate3d(0, 0, 0);
-    opacity: 1;
-    filter: blur(0) saturate(1);
-  }
-}
-/* AI 홈 — PNG 오브 배경 서서히 나타남 (8s 느린 emerge, 블러에서 선명으로) */
-@keyframes ai-home-bg-emerge {
-  0% {
+/*
+ * AI 모드 홈 전용 — Orb 뒤 헤일로 PNG (MainAI 홈 뷰에서만 마운트, 검색/기타 라우트 미사용)
+ * 크기: 화면 짧은 축 기준으로 실제 Orb 가시 구보다 약간 크게 → 감싸는 링 느낌
+ * 등장: MainAI `assembleDuration`(8s)와 동기 — 처음엔 배경에 묻혀 있다가 점 구체화와 함께 선명해짐
+ */
+@keyframes ai-orbit-halo-emerge {
+  /* 전환 직후 ~1/4 구간: 배경에 완전히 묻힘 — PNG/글로우가 보이지 않게 */
+  0%,
+  26% {
     opacity: 0;
-    filter: blur(32px) saturate(0.4);
+    filter: blur(80px) saturate(0);
   }
   40% {
-    opacity: 0.6;
-    filter: blur(8px) saturate(0.8);
+    opacity: 0.35;
+    filter: blur(22px) saturate(0.65);
   }
   100% {
     opacity: 1;
     filter: blur(0) saturate(1);
   }
 }
-/* 클래스명 유지: MainAI에서 assemble 종료 후 drift로 전환 시 사용 */
-.ai-home-glow-slide-in {
-  transform-origin: 50% 50%;
-  animation: ai-home-bg-emerge 8s cubic-bezier(0.12, 0.55, 0.08, 1) forwards;
+
+.ai-home-orbit-bg {
+  background-color: #000000;
+  background-image: url('/ai-home-orbit-bg.png');
+  background-repeat: no-repeat;
+  background-position: 50% 44%;
+  /* Orb 가시 구보다 한 겹 크게 — Orb 컴포넌트 size/카메라는 그대로 */
+  background-size: clamp(280px, calc(min(100vw, 100vh) * 0.82), 900px);
+  opacity: 0;
+  /* both: 첫 프레임 이전에도 0% 적용 → 전환 직후 한동안 헤일로 미노출 */
+  animation: ai-orbit-halo-emerge var(--ai-orbit-assemble, 8s) cubic-bezier(0.12, 0.55, 0.08, 1) both;
   will-change: opacity, filter;
 }
 
-/* AI 홈 — 배경 미세 드리프트 (scale 제거: 등장 직후 원이 커 보이는 현상 방지) */
-@keyframes ai-home-glow-drift {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0);
-  }
-  33% {
-    transform: translate3d(1.25%, -0.9%, 0);
-  }
-  66% {
-    transform: translate3d(-1.1%, 0.75%, 0);
-  }
-}
-.ai-home-glow-drift {
-  transform-origin: 50% 50%;
-  animation: ai-home-glow-drift 24s ease-in-out infinite;
-}
-
-/* AI 홈 — PNG 속 발광 원 지름 ≈ AnimatedOrb(42° FOV, r=1, z≈4.2) 화면 지름 (~0.62×뷰포트 짧은 변) */
-.ai-home-orbit-bg {
-  background-color: #000000;
-  background-image: url('/ai-home-orb-halo-bg.png');
-  background-repeat: no-repeat;
-  background-position: 50% 50%;
-  /*
-   * 한 축만 지정 → 비율 유지. 아트에서 구가 가로의 ~65%라면:
-   * 0.65×이미지너비 ≈ 0.62×min(vw,vh) 이면 너비≈0.95×min — 아트에서 구가 더 크게 그려졌으면 계수를 낮춤(현재 0.88)
-   */
-  background-size: clamp(300px, calc(min(100vw, 100vh) * 0.88), 980px);
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .ai-home-glow-slide-in {
+  .ai-home-orbit-bg {
     animation: none;
-    transform: none;
     opacity: 1;
     filter: none;
-  }
-  .ai-home-glow-drift {
-    animation: none;
-    transform: none;
+    will-change: auto;
   }
 }
 
