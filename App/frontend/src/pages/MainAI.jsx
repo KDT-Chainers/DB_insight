@@ -83,7 +83,7 @@ function AiResultCard({ result, rank, onClick }) {
   const lexical = result.lexical ?? null
 
   const clamp01 = x => (x == null || isNaN(x)) ? null : Math.max(0, Math.min(1, x))
-  const sigm    = x => 1 / (1 + Math.exp(-x))
+  const sigm    = x => 1 / (1 + Math.exp(-((x + 3) / 3)))
   const sim     = clamp01(dense) != null ? clamp01(dense).toFixed(3) : '—'
 
   // 정확도 산출 — 도메인 인지 폴백:

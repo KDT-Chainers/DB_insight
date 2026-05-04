@@ -246,7 +246,7 @@ def _search_trichef(query: str, domains: list[str], top_k: int) -> list[dict]:
                 "dense":          dense_v,
                 "lexical":        lex_v,
                 "asf":            asf_v,
-                "z_score":        None,        # image/doc: engine 내부 계산, 미노출
+                "z_score":        conf,         # image/doc: confidence 값을 z_score 로 노출
             })
 
     results.sort(key=lambda r: r["confidence"], reverse=True)

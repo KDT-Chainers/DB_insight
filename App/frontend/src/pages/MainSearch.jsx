@@ -483,7 +483,7 @@ function ResultCard({ result, rank, onClick, securityMode = false, query = '' })
   const sim     = clamp01(dense) != null ? `${(clamp01(dense) * 100).toFixed(1)}%` : '—'
   const acc     = rerank != null
     ? `${(sigmCalibrated(rerank) * 100).toFixed(1)}%`
-    : `${(Math.max(0, Math.min(1, ((zScore ?? 0) + 3) / 6)) * 100).toFixed(1)}%`
+    : `${(Math.max(0, Math.min(1, conf)) * 100).toFixed(1)}%`
 
   const streamUrl  = isAV ? avStreamUrl(result) : null
   const domainLabel = result.trichef_domain ?? result.file_type ?? 'unknown'

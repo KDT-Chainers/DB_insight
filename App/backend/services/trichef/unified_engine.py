@@ -766,6 +766,8 @@ def _weighted_minmax_fusion(
 
     def _norm(x: np.ndarray) -> np.ndarray:
         mn, mx = float(x.min()), float(x.max())
+        if mx - mn < 1e-6:          # 단일 결과 or 동점 → 0.5 반환
+            return np.full_like(x, 0.5)
         return (x - mn) / (mx - mn + eps)
 
     w_d = w_dense
