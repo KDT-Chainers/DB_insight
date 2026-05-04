@@ -177,7 +177,9 @@ def _get_graph():
             sources = _do_search(query, topk=topk)
             return {"sources": sources, "extracted_query": query}
 
-        # ── Node 3: 전문 키워드 검색 → 미매칭 시 LLM 위임 ─────────
+        # ── Node 3: 2단계 파일 내용 검색 → 실제 내용 있는 파일 선택 ───────
+        # Stage 2a: 각 파일에서 엔티티(파일검색어) 존재 확인  → "김라민 있는 파일 추리기"
+        # Stage 2b: 그 파일에서 내용검색어(상세내용) 확인     → "생년월일 있는 파일 선택"
         def rerank_node(state: AImodeState) -> dict:
             import re as _re2
             from concurrent.futures import ThreadPoolExecutor
@@ -187,40 +189,56 @@ def _get_graph():
             if not sources:
                 return {"selected_idx": -1, "retry_count": retry + 1}
 
-            # ── 1단계: content_keywords (parse_intent 가 분류한 내용검색용 키워드)
-            keywords = state.get("content_keywords") or []
-            # fallback: content_keywords 없으면 원본 질문에서 직접 추출
-            if not keywords:
-                tokens = _re2.findall(r"[가-힣A-Za-z0-9]{2,}", state["user_question"])
-                keywords = [k for k in tokens if len(k) >= 2]
+            # Stage 2a 키워드: extracted_query 에서 추출 (파일검색어 = 엔티티)
+            entity_terms = [
+                w for w in _re2.findall(
+                    r"[가-힣A-Za-z0-9]{2,}",
+                    state.get("extracted_query") or state["user_question"]
+                )
+                if len(w) >= 2
+            ]
 
-            # ── 2단계: 각 후보 원본 파일 직접 로드 + 키워드 카운트 (병렬) ──
-            if keywords:
+            # Stage 2b 키워드: content_keywords (내용검색어 = 찾을 상세 정보)
+            content_kws = state.get("content_keywords") or []
+            # fallback: content_keywords 없으면 원본 질문 토큰 사용
+            if not content_kws:
+                tokens = _re2.findall(r"[가-힣A-Za-z0-9]{2,}", state["user_question"])
+                content_kws = [k for k in tokens if len(k) >= 2]
+
+            if entity_terms or content_kws:
                 def _score(item):
                     i, s = item
-                    # file_path 로 직접 파일 접근 (registry 불필요)
+                    # 실제 파일 경로에서 전체 텍스트 로드 (doc: page_text → fitz)
                     full_text = _read_source_full_text(s, max_chars=60000)
-                    # 텍스트 미추출(이미지·영상 등)은 snippet 기반
+                    # 이미지·영상·음악은 텍스트 미추출 → snippet 기반
                     if not full_text:
                         full_text = s.get("snippet") or ""
-                    hits = sum(1 for kw in keywords if kw in full_text)
-                    return i, hits, s.get("confidence", 0)
+                    text_lower = full_text.lower()
+                    # Stage 2a: 엔티티 히트 (파일에 '김라민' 이 있는가)
+                    entity_hits  = sum(1 for t  in entity_terms if t.lower()  in text_lower)
+                    # Stage 2b: 내용 히트 (파일에 '생년월일' 이 있는가)
+                    content_hits = sum(1 for kw in content_kws  if kw.lower() in text_lower)
+                    return i, entity_hits, content_hits, s.get("confidence", 0)
 
                 with ThreadPoolExecutor(max_workers=4) as _ex:
                     scores = list(_ex.map(_score, enumerate(sources)))
 
-                # 히트 수 내림차순, 동점이면 신뢰도 내림차순
-                scores.sort(key=lambda x: (x[1], x[2]), reverse=True)
-                best_i, best_hits, _ = scores[0]
+                # 우선순위: ① 엔티티 존재, ② 내용검색어 히트, ③ 엔티티 히트 수, ④ 신뢰도
+                scores.sort(
+                    key=lambda x: (x[1] > 0, x[2], x[1], x[3]),
+                    reverse=True,
+                )
+                best_i, best_entity, best_content, _ = scores[0]
 
-                if best_hits > 0:
+                if best_entity > 0 or best_content > 0:
                     logger.info(
-                        f"[rerank] 키워드 매칭 → #{best_i+1} "
-                        f"hits={best_hits} keywords={keywords}"
+                        f"[rerank] 2단계 내용검색 → #{best_i+1} "
+                        f"entity_hits={best_entity} content_hits={best_content} "
+                        f"entity={entity_terms} content={content_kws}"
                     )
                     return {"selected_idx": best_i, "retry_count": retry}
 
-            # ── 3단계: 키워드 미매칭 → LLM 선택 위임 ────────────────
+            # ── 미매칭 → LLM 선택 위임 ───────────────────────────────────
             model = _get_ollama_model()
             if not model:
                 return {"selected_idx": 0, "retry_count": retry}
@@ -891,10 +909,9 @@ def _build_system_prompt(selected: dict, all_sources: list[dict],
                          query: str = "", top_n: int = 3) -> str:
     """다중 source 컨텍스트 시스템 프롬프트.
 
-    개선:
-      - 상위 N건 (기본 3) 의 본문을 모두 포함 → LLM 이 교차 인용/비교 가능
-      - 각 source 마다 본문 길이 제한 (선택=1500자, 보조=600자)
-      - 잘림 표시 일관 적용
+    - 상위 N건 본문을 포함 → LLM 교차 인용 가능
+    - 선택 파일: 3000자 (±2페이지 neighborhood 또는 snippet)
+    - 보조 파일: 각 600자
     """
     domain_label = {"image": "이미지", "doc": "문서", "video": "동영상",
                     "audio": "음성", "bgm": "BGM"}
@@ -992,7 +1009,7 @@ def _aimode_sse(query: str, topk: int, thread_id: str) -> Generator[str, None, N
 
     extracted    = query          # 최종 추출 검색어 (graph 또는 fallback 이 채움)
     sources: list[dict] = []
-    selected_idx  = 0
+    selected_idx   = 0
     _step3_emitted = False        # Step 3 SSE 중복 방지 플래그
 
     if graph is not None:
@@ -1043,9 +1060,16 @@ def _aimode_sse(query: str, topk: int, thread_id: str) -> Generator[str, None, N
                         yield emit({"type": "step", "step": 2,
                                     "label": f"✓ {len(sources)}건 발견", "done": True})
                         time.sleep(STEP_DELAY)
+                        # ── 2단계 내용검색 시작 알림 (rerank node 진입 전) ──
+                        yield emit({
+                            "type":  "step",
+                            "step":  3,
+                            "label": f"🔎 {len(sources)}개 파일 내용에서 키워드 검색 중…",
+                            "phase": "content_search_start",
+                        })
 
                     elif node_name == "rerank":
-                        # ── Node 3 완료: LLM 선택 성공 시 즉시 emit ─────
+                        # ── Node 3 완료: 파일 내용 검색 결과 — 선택 파일 emit ──
                         sel = updates.get("selected_idx", -1)
                         if sel >= 0 and not _step3_emitted:
                             selected_idx   = sel
@@ -1053,10 +1077,11 @@ def _aimode_sse(query: str, topk: int, thread_id: str) -> Generator[str, None, N
                             sname  = sources[sel].get("file_name", "") if sel < len(sources) else ""
                             sftype = sources[sel].get("file_type", "") if sel < len(sources) else ""
                             yield emit({"type": "step", "step": 3,
-                                        "label": f"🎯 가장 관련된 결과 선택 (#{sel+1})",
+                                        "label": f"🎯 내용 검색으로 파일 선택 완료 (#{sel+1})",
                                         "selected_idx": sel,
                                         "selected_name":      sname,
-                                        "selected_file_type": sftype})
+                                        "selected_file_type": sftype,
+                                        "done": True})
                             time.sleep(STEP_DELAY)
                         # sel == -1: retry_count 증가됨 → route_after_rerank 판단
 
@@ -1074,7 +1099,8 @@ def _aimode_sse(query: str, topk: int, thread_id: str) -> Generator[str, None, N
                                         "label": f"🎯 가장 관련된 결과 선택 (#{selected_idx+1})",
                                         "selected_idx": selected_idx,
                                         "selected_name":      sname,
-                                        "selected_file_type": sftype})
+                                        "selected_file_type": sftype,
+                                        "done": True})
                             time.sleep(STEP_DELAY)
 
         except Exception as e:
