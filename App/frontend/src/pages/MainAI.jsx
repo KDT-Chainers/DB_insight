@@ -1212,6 +1212,8 @@ export default function MainAI() {
                         <span className="font-bold" style={{ color: AI.accentLight }}>{results.length}건</span>을 찾았습니다.
                       </p>
                 }
+              </div>
+            </div>
 
             {/* AIMODE 시각화 4-step 패널 — 컴팩트 progress strip */}
             {useAimode && aimodeSteps.length > 0 && (
