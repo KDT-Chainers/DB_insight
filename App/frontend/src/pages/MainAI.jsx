@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import SearchSidebar from '../components/SearchSidebar'
 import AnimatedOrb from '../components/AnimatedOrb'
@@ -7,55 +7,9 @@ import { useSpeechRecognition } from '../hooks/useSpeechRecognition'
 import { useMicLevelRef } from '../hooks/useMicLevelRef'
 import { API_BASE } from '../api'
 
-// ── 파일 타입 메타 (MainSearch 동일) ─────────────────────────
-const TYPE_META = {
-  doc:   { icon: 'description', color: 'text-[#85adff]',   label: '문서',   grad: 'from-[#1e3a8a] to-[#1e40af]' },
-  video: { icon: 'movie',       color: 'text-[#ac8aff]',   label: '동영상', grad: 'from-[#4c1d95] to-[#5b21b6]' },
-  image: { icon: 'image',       color: 'text-emerald-400', label: '이미지', grad: 'from-[#064e3b] to-[#065f46]' },
-  audio: { icon: 'volume_up',   color: 'text-amber-400',   label: '음성',   grad: 'from-[#78350f] to-[#92400e]' },
-  movie: { icon: 'movie',       color: 'text-[#ac8aff]',   label: '동영상', grad: 'from-[#4c1d95] to-[#5b21b6]' },
-  music: { icon: 'volume_up',   color: 'text-amber-400',   label: '음성',   grad: 'from-[#78350f] to-[#92400e]' },
-}
-const getTypeMeta = (t) =>
-  TYPE_META[t] ?? { icon: 'insert_drive_file', color: 'text-on-surface-variant', label: t ?? '파일', grad: 'from-[#1c253e] to-[#263354]' }
-
-/** Orb `assembleIntro` 길이와 헤일로 PNG `ai-orbit-halo-emerge` 동기 (초) */
+// ── 상수 ─────────────────────────────────────────────────────────
 const AI_ORB_ASSEMBLE_SECONDS = 8
 
-function fmtTime(sec) {
-  if (!sec && sec !== 0) return '0:00'
-  const s = Math.floor(sec)
-  const m = Math.floor(s / 60)
-  return `${m}:${String(s % 60).padStart(2, '0')}`
-}
-
-// AI 답변 안전장치 — 시스템 프롬프트로 마크다운 금지했지만,
-// LLM 이 이를 어길 경우를 대비한 프론트엔드 폴리필.
-// 별표/헤딩/백틱/인용/하이픈 불릿 → 평문 변환
-function stripMarkdown(text) {
-  if (!text) return text
-  return text
-    // **bold** / *italic* → 따옴표 스타일
-    .replace(/\*\*(.+?)\*\*/g, '$1')
-    .replace(/(?<![*\w])\*(.+?)\*(?!\*)/g, '$1')
-    // ### / ## / # 헤딩 → 일반 텍스트
-    .replace(/^#{1,6}\s+/gm, '')
-    // `code` → 일반 텍스트
-    .replace(/`([^`\n]+)`/g, '$1')
-    // > 인용 → 일반 텍스트
-    .replace(/^>\s+/gm, '')
-    // --- 가로선 → 빈 줄
-    .replace(/^[-*_]{3,}\s*$/gm, '')
-    // - / * 불릿 → • 점
-    .replace(/^(\s*)[-*]\s+/gm, '$1• ')
-}
-
-function avStreamUrl(result) {
-  const domain = result.trichef_domain ?? (result.file_type === 'video' ? 'movie' : 'music')
-  return `${API_BASE}/api/admin/file?domain=${domain}&id=${encodeURIComponent(result.file_path)}`
-}
-
-// ── AI 색상 상수 ─────────────────────────────────────────────
 const AI = {
   accent:      '#8b5cf6',
   accentLight: '#a78bfa',
@@ -68,199 +22,309 @@ const AI = {
   glow:        '0 0 20px rgba(139,92,246,0.3)',
 }
 
-// ── 결과 카드 (AI 색상) ───────────────────────────────────────
-function AiResultCard({ result, rank, onClick }) {
-  const isAV       = result.file_type === 'video' || result.file_type === 'audio'
-  const hasPreview = (result.file_type === 'image' || result.file_type === 'doc') && result.preview_url
-  const [imgError, setImgError] = useState(false)
-  const playerRef  = useRef(null)
+const TYPE_META = {
+  doc:   { icon: 'description', color: 'text-[#85adff]',   label: '문서',   grad: 'from-[#1e3a8a] to-[#1e40af]' },
+  video: { icon: 'movie',       color: 'text-[#ac8aff]',   label: '동영상', grad: 'from-[#4c1d95] to-[#5b21b6]' },
+  image: { icon: 'image',       color: 'text-emerald-400', label: '이미지', grad: 'from-[#064e3b] to-[#065f46]' },
+  audio: { icon: 'volume_up',   color: 'text-amber-400',   label: '음성',   grad: 'from-[#78350f] to-[#92400e]' },
+  movie: { icon: 'movie',       color: 'text-[#ac8aff]',   label: '동영상', grad: 'from-[#4c1d95] to-[#5b21b6]' },
+  music: { icon: 'volume_up',   color: 'text-amber-400',   label: '음성',   grad: 'from-[#78350f] to-[#92400e]' },
+}
+const getTypeMeta = (t) =>
+  TYPE_META[t] ?? { icon: 'insert_drive_file', color: 'text-on-surface-variant', label: t ?? '파일', grad: 'from-[#1c253e] to-[#263354]' }
 
-  const conf    = result.confidence ?? result.similarity ?? 0
-  const confPct = (conf * 100).toFixed(1)
-  const dense   = result.dense ?? null
-  const rerank  = result.rerank_score ?? result.rerank ?? null
-  const zScore  = result.z_score ?? null
-  const lexical = result.lexical ?? null
+function fmtTime(sec) {
+  if (!sec && sec !== 0) return '0:00'
+  const s = Math.floor(sec)
+  const m = Math.floor(s / 60)
+  return `${m}:${String(s % 60).padStart(2, '0')}`
+}
 
-  const clamp01 = x => (x == null || isNaN(x)) ? null : Math.max(0, Math.min(1, x))
-  const sigm    = x => 1 / (1 + Math.exp(-x))
-  const sim     = clamp01(dense) != null ? clamp01(dense).toFixed(3) : '—'
+function avStreamUrl(result) {
+  const domain = result.trichef_domain ?? (result.file_type === 'video' ? 'movie' : 'music')
+  return `${API_BASE}/api/admin/file?domain=${domain}&id=${encodeURIComponent(result.file_path)}`
+}
 
-  // 정확도 산출 — 도메인 인지 폴백:
-  //   doc/audio/video : BGE-reranker (텍스트→텍스트) 가 신뢰할 만함 → sigm 그대로
-  //   image           : BGE-reranker 는 캡션만 보므로 dense (SigLIP2 시각) 가 더 정확
-  // 1) rerank 양수: sigm(rerank) 그대로
-  // 2) rerank 음수: dense 우선 (이미지) / dense 블렌드 (기타)
-  // 3) rerank null: dense or lexical or conf 추정
-  const _accFromMix = () => {
-    const d = clamp01(dense) ?? 0
-    const ft = result.file_type
-    if (rerank != null) {
-      const s = sigm(rerank)
-      if (s >= 0.5) return s            // 양수 정상 reranker → 그대로 신뢰
-      // 음수 폴백
-      if (ft === 'image') {
-        // 이미지는 BGE-reranker 무력 → dense 우선 (max), 단 reranker 신호도 약하게 반영
-        return Math.max(d * 0.9, s)
-      }
-      // doc/video/audio: dense 와 reranker 블렌드
-      return s * 0.4 + d * 0.6
+// 마크다운 → 평문 (LLM 이 ignore prompt 해서 별표를 쓸 경우 대비)
+function stripMarkdown(text) {
+  if (!text) return text
+  return text
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/(?<![*\w])\*(.+?)\*(?!\*)/g, '$1')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/`([^`\n]+)`/g, '$1')
+    .replace(/^>\s+/gm, '')
+    .replace(/^[-*_]{3,}\s*$/gm, '')
+    .replace(/^(\s*)[-*]\s+/gm, '$1• ')
+}
+
+// 답변 안의 [출처N] 강조
+function renderAnswer(text) {
+  if (!text) return null
+  const parts = text.split(/(\[출처\d+\])/g)
+  return parts.map((part, i) => {
+    if (/^\[출처\d+\]$/.test(part)) {
+      return (
+        <span key={i} className="font-bold text-sm px-1.5 py-0.5 rounded-md mx-0.5 align-middle"
+          style={{ background: 'rgba(139,92,246,0.2)', color: AI.accentLight, border: `1px solid ${AI.border}` }}>
+          {part}
+        </span>
+      )
     }
-    if (zScore != null) return Math.max(0, Math.min(1, (zScore + 3) / 6))
-    if (lexical != null && d > 0) return d * 0.7 + Math.min(1, lexical * 1.5) * 0.3
-    return d > 0 ? d * 0.85 : conf * 0.9
+    return <span key={i}>{part}</span>
+  })
+}
+
+// ── 후보 파일 카드 (스캔 애니메이션 포함) ────────────────────────
+function CandidateCard({ source, index, scanState, chunks, onClick }) {
+  const [imgError, setImgError] = useState(false)
+  const playerRef = useRef(null)
+
+  const fname    = source.file_name || source.trichef_id || '?'
+  const ftype    = source.file_type || ''
+  const conf     = source.confidence ?? 0
+  const isAV     = ftype === 'video' || ftype === 'audio' || ftype === 'movie' || ftype === 'music'
+  const hasThumb = (ftype === 'image' || ftype === 'doc') && source.preview_url
+  const meta     = getTypeMeta(ftype)
+
+  // scanState: 'idle' | 'scanning' | 'found' | 'not_found'
+  const isScanning = scanState === 'scanning'
+  const isFound    = scanState === 'found'
+  const isNotFound = scanState === 'not_found'
+
+  const cardStyle = {
+    background:   AI.card,
+    border:       `1px solid ${isFound ? '#10b981' : isNotFound ? 'rgba(100,116,139,0.2)' : isScanning ? AI.accent : AI.border}`,
+    boxShadow:    isFound ? '0 0 24px rgba(16,185,129,0.35)' : isScanning ? '0 0 16px rgba(139,92,246,0.4)' : 'none',
+    opacity:      isNotFound ? 0.35 : 1,
+    filter:       isNotFound ? 'grayscale(70%)' : 'none',
+    transition:   'all 0.4s ease',
+    cursor:       'pointer',
   }
-  const acc = _accFromMix().toFixed(3)
-
-  const domainLabel = result.trichef_domain ?? result.file_type ?? 'unknown'
-  const segments    = result.segments ?? []
-  const streamUrl   = isAV ? avStreamUrl(result) : null
-
-  const DOMAIN_CLS = {
-    image:    'bg-[#065f46] text-[#d1fae5] border-[#10b981]',
-    doc_page: 'bg-[#5b21b6] text-[#ede9fe] border-[#8b5cf6]',
-    movie:    'bg-[#7c2d12] text-[#ffedd5] border-[#ea580c]',
-    music:    'bg-[#1e40af] text-[#dbeafe] border-[#3b82f6]',
-  }
-
-  const seekTo = (t) => { const p = playerRef.current; if (!p) return; p.currentTime = t; p.play().catch(() => {}) }
 
   return (
     <div
-      onClick={onClick}
-      className="rounded-[10px] overflow-hidden flex flex-col relative transition-all duration-200 cursor-pointer hover:-translate-y-0.5"
-      style={{
-        background: AI.card,
-        border: `1px solid ${AI.border}`,
+      onClick={() => onClick?.(source)}
+      className="rounded-2xl overflow-hidden flex flex-col relative"
+      style={cardStyle}
+      onMouseEnter={e => {
+        if (!isNotFound) {
+          e.currentTarget.style.borderColor = isFound ? '#34d399' : AI.borderHover
+          e.currentTarget.style.boxShadow   = isFound ? '0 0 32px rgba(16,185,129,0.5)' : AI.glow
+        }
       }}
-      onMouseEnter={e => { e.currentTarget.style.borderColor = AI.borderHover; e.currentTarget.style.boxShadow = AI.glow }}
-      onMouseLeave={e => { e.currentTarget.style.borderColor = AI.border; e.currentTarget.style.boxShadow = 'none' }}
+      onMouseLeave={e => {
+        e.currentTarget.style.borderColor = isFound ? '#10b981' : isNotFound ? 'rgba(100,116,139,0.2)' : isScanning ? AI.accent : AI.border
+        e.currentTarget.style.boxShadow   = isFound ? '0 0 24px rgba(16,185,129,0.35)' : isScanning ? '0 0 16px rgba(139,92,246,0.4)' : 'none'
+      }}
     >
-      {/* 랭크 배지 — violet */}
-      <div className="absolute top-2 left-2 z-20 text-white min-w-[32px] h-7 px-2 rounded-full flex items-center justify-center font-bold text-xs"
-        style={{ background: AI.rankBg, boxShadow: '0 0 10px rgba(139,92,246,0.5)' }}>
-        #{rank}
+      {/* 상태 배지 */}
+      {scanState !== 'idle' && (
+        <div className="absolute top-2 right-2 z-30 flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold"
+          style={{
+            background: isScanning ? 'rgba(139,92,246,0.85)' : isFound ? 'rgba(16,185,129,0.85)' : 'rgba(71,85,105,0.85)',
+            color: '#fff',
+          }}>
+          {isScanning && <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>}
+          {isFound    && <span className="material-symbols-outlined text-sm">check_circle</span>}
+          {isNotFound && <span className="material-symbols-outlined text-sm">cancel</span>}
+          <span>{isScanning ? '스캔 중' : isFound ? '발견됨' : '없음'}</span>
+        </div>
+      )}
+
+      {/* 순위 배지 */}
+      <div className="absolute top-2 left-2 z-20 min-w-[28px] h-6 px-1.5 rounded-full flex items-center justify-center font-bold text-[10px] text-white"
+        style={{ background: AI.rankBg, boxShadow: '0 0 8px rgba(139,92,246,0.5)' }}>
+        #{index + 1}
       </div>
 
-      {/* AV: 플레이어 */}
+      {/* AV 플레이어 */}
       {isAV && (
         <div className="px-3 py-2 border-b" style={{ background: '#0b0515', borderColor: AI.border }}
           onClick={e => e.stopPropagation()}>
-          {result.file_type === 'video' ? (
-            <video ref={playerRef} src={streamUrl} controls preload="metadata"
-              className="w-full block outline-none bg-black" style={{ maxHeight: '200px' }} />
+          {ftype === 'video' || ftype === 'movie' ? (
+            <video ref={playerRef} src={avStreamUrl(source)} controls preload="metadata"
+              className="w-full block outline-none bg-black" style={{ maxHeight: '160px' }} />
           ) : (
-            <audio ref={playerRef} src={streamUrl} controls preload="metadata"
+            <audio ref={playerRef} src={avStreamUrl(source)} controls preload="metadata"
               className="w-full block outline-none" />
           )}
         </div>
       )}
 
-      {/* 이미지·문서: 썸네일 */}
+      {/* 이미지/문서 썸네일 */}
       {!isAV && (
-        <div className="relative h-[200px] flex items-center justify-center overflow-hidden"
+        <div className="relative h-[150px] flex items-center justify-center overflow-hidden"
           style={{ background: '#0b0515' }}>
-          {hasPreview && !imgError ? (
-            <img
-              src={`${API_BASE}${result.preview_url}`}
-              alt={result.file_name}
+          {hasThumb && !imgError ? (
+            <img src={`${API_BASE}${source.preview_url}`} alt={fname}
               className="max-w-full max-h-full object-contain"
-              onError={() => setImgError(true)}
-            />
+              onError={() => setImgError(true)} />
           ) : (
-            <span className="text-[#6b21a8] text-xs">{domainLabel}</span>
+            <span className={`material-symbols-outlined text-4xl ${meta.color}`}
+              style={{ fontVariationSettings: '"FILL" 0, "wght" 200' }}>
+              {meta.icon}
+            </span>
+          )}
+          {/* 스캔 오버레이 */}
+          {isScanning && (
+            <div className="absolute inset-0 flex items-center justify-center"
+              style={{ background: 'rgba(109,40,217,0.15)' }}>
+              <div className="absolute inset-0 overflow-hidden">
+                <div className="scan-line" />
+              </div>
+            </div>
           )}
         </div>
       )}
 
       {/* 바디 */}
-      <div className="p-3 flex flex-col gap-2 flex-1 text-[#e2e8f0]">
-        {/* 3지표 — 미리보기 화면 바로 아래 */}
-        <div className="grid grid-cols-3 gap-1.5">
-          {[
-            { label: '신뢰도', value: `${confPct}%`, cls: 'text-[#a78bfa]' },
-            { label: '정확도', value: acc,            cls: 'text-[#60a5fa]' },
-            { label: '유사도', value: sim,            cls: 'text-[#c4b5fd]' },
-          ].map(({ label, value, cls }) => (
-            <div key={label} className="rounded-md p-1.5 text-center border"
-              style={{ background: '#0b0515', borderColor: AI.border }}>
-              <div className="text-[10px] text-[#6b7280] uppercase tracking-wide">{label}</div>
-              <div className={`text-[15px] font-bold mt-0.5 ${cls}`}>{value}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* 도메인 배지 */}
-        <div className="flex gap-1 flex-wrap">
-          <span className={`text-[10px] px-2 py-0.5 rounded-full border ${DOMAIN_CLS[domainLabel] ?? 'bg-[#1e1040] text-[#a78bfa] border-[#7c3aed]'}`}>
-            {domainLabel}
+      <div className="p-3 flex flex-col gap-2 flex-1">
+        {/* 신뢰도 + 타입 */}
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] px-2 py-0.5 rounded-full font-bold border"
+            style={{ background: 'rgba(139,92,246,0.1)', color: AI.accentLight, borderColor: AI.border }}>
+            {ftype || 'file'}
           </span>
-          {isAV && (
-            <span className="text-[10px] px-2 py-0.5 rounded-full border border-[#4c1d95] bg-[#2e1065] text-[#c4b5fd]">
-              세그 {segments.length}
-            </span>
-          )}
+          <span className="text-[11px] font-mono font-bold" style={{ color: AI.accentLight }}>
+            {(conf * 100).toFixed(0)}%
+          </span>
         </div>
 
-        {/* 파일명 + 페이지 */}
-        <div className="flex items-start gap-2 flex-wrap">
-          <div className="font-semibold text-[13px] text-[#f1f5f9] break-all leading-snug flex-1 min-w-0">
-            {result.file_name}
+        {/* 파일명 */}
+        <div className="text-[13px] font-semibold text-[#f1f5f9] leading-snug line-clamp-2" title={fname}>
+          {fname}
+        </div>
+
+        {/* 매칭된 청크 (found 상태일 때) */}
+        {isFound && chunks && chunks.length > 0 && (
+          <div className="mt-1 px-2 py-1.5 rounded-lg text-[10px] text-emerald-300/80 leading-relaxed line-clamp-3"
+            style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)' }}>
+            ...{chunks[0].slice(0, 120)}...
           </div>
-          {result.page_num != null && (
-            <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-[#2e1065] text-[#c4b5fd] border border-[#7c3aed]/40 font-mono whitespace-nowrap">
-              {result.page_num}p
-            </span>
-          )}
-        </div>
-
-        {/* 경로 */}
-        <div className="text-[11px] text-[#6b7280] break-all font-mono">
-          {result.file_path || result.trichef_id}
-        </div>
-
-        {/* AV: 세그먼트 */}
-        {isAV && segments.length > 0 && (() => {
-          const topStart = segments[0]?.start ?? segments[0]?.start_sec ?? null
-          return (
-            <div onClick={e => e.stopPropagation()}>
-              {topStart != null && (
-                <button onClick={() => seekTo(topStart)}
-                  className="text-[11px] px-3 py-1 text-white rounded font-semibold mb-1.5 hover:brightness-110"
-                  style={{ background: AI.accentDark }}>
-                  상위 구간 재생 ▶
-                </button>
-              )}
-              <div className="flex flex-col gap-[3px]">
-                {segments.slice(0, 10).map((s, i) => {
-                  const t0 = s.start ?? s.start_sec ?? 0
-                  const t1 = s.end   ?? s.end_sec   ?? 0
-                  const sc = s.score ?? 0
-                  const preview = (s.text || s.stt_text || s.caption || '').slice(0, 80)
-                  return (
-                    <button key={i} onClick={() => seekTo(t0)}
-                      className="flex items-center gap-2 px-2 py-1 rounded text-[11px] text-left w-full transition-colors"
-                      style={{ background: '#0b0515', border: `1px solid ${AI.border}` }}
-                      onMouseEnter={e => e.currentTarget.style.borderColor = AI.accentLight}
-                      onMouseLeave={e => e.currentTarget.style.borderColor = AI.border}>
-                      <span className="text-[#7dd3fc] font-mono font-semibold whitespace-nowrap min-w-[112px]">{fmtTime(t0)} ~ {fmtTime(t1)}</span>
-                      <span className="text-[#a78bfa] font-mono whitespace-nowrap">s={sc.toFixed(3)}</span>
-                      <span className="text-[#94a3b8] flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{preview}</span>
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          )
-        })()}
+        )}
       </div>
     </div>
   )
 }
 
-// ── AV 상세 플레이어 ─────────────────────────────────────────
+// ── 의도 메시지 박스 ──────────────────────────────────────────────
+function IntentBox({ message, fileKeywords, detailKeywords, visible }) {
+  return (
+    <div className={`mb-5 rounded-2xl border p-4 transition-all duration-500 ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}
+      style={{ background: 'linear-gradient(135deg, rgba(109,40,217,0.12) 0%, rgba(76,29,149,0.08) 100%)', borderColor: AI.border }}>
+      <div className="flex items-start gap-3">
+        <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
+          style={{ background: 'linear-gradient(135deg, #6d28d9, #7c3aed)', boxShadow: '0 0 14px rgba(139,92,246,0.4)' }}>
+          <span className="material-symbols-outlined text-white text-base" style={{ fontVariationSettings: '"FILL" 1' }}>smart_toy</span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm text-[#e2e8f0] leading-relaxed mb-2">{message}</p>
+          <div className="flex flex-wrap gap-2">
+            {fileKeywords.map((kw, i) => (
+              <span key={`f${i}`} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold"
+                style={{ background: 'rgba(139,92,246,0.15)', color: AI.accentLight, border: `1px solid ${AI.border}` }}>
+                <span className="material-symbols-outlined text-[10px]">folder_search</span>
+                {kw}
+              </span>
+            ))}
+            {detailKeywords.map((kw, i) => (
+              <span key={`d${i}`} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold"
+                style={{ background: 'rgba(16,185,129,0.1)', color: '#34d399', border: '1px solid rgba(16,185,129,0.2)' }}>
+                <span className="material-symbols-outlined text-[10px]">manage_search</span>
+                {kw}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── 스캔 진행 헤더 ────────────────────────────────────────────────
+function ScanProgressBar({ total, scanned, found }) {
+  const pct = total > 0 ? Math.round((scanned / total) * 100) : 0
+  return (
+    <div className="mb-4 rounded-xl border px-4 py-3"
+      style={{ background: AI.card, borderColor: AI.border }}>
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2 text-sm font-bold" style={{ color: AI.accentLight }}>
+          <span className="material-symbols-outlined text-base animate-pulse">radar</span>
+          파일 내용 스캔 중...
+        </div>
+        <div className="flex items-center gap-3 text-[11px] text-on-surface-variant">
+          <span className="text-emerald-400 font-bold">{found}개 발견</span>
+          <span>{scanned}/{total}</span>
+        </div>
+      </div>
+      <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(139,92,246,0.1)' }}>
+        <div className="h-full rounded-full transition-all duration-300"
+          style={{ width: `${pct}%`, background: 'linear-gradient(90deg, #6d28d9, #8b5cf6, #a78bfa)' }} />
+      </div>
+    </div>
+  )
+}
+
+// ── 답변 패널 ────────────────────────────────────────────────────
+function AnswerPanel({ answer, streaming, sources, done, onClickSource }) {
+  const clean = stripMarkdown(answer)
+  return (
+    <div className="mt-6 rounded-2xl border overflow-hidden"
+      style={{ background: AI.card, borderColor: AI.border }}>
+      {/* 헤더 */}
+      <div className="flex items-center gap-2.5 px-5 py-3"
+        style={{ background: 'rgba(109,40,217,0.12)', borderBottom: `1px solid ${AI.border}` }}>
+        <div className="w-6 h-6 rounded-full flex items-center justify-center"
+          style={{ background: 'linear-gradient(135deg, #6d28d9, #7c3aed)' }}>
+          <span className="material-symbols-outlined text-white text-sm" style={{ fontVariationSettings: '"FILL" 1' }}>smart_toy</span>
+        </div>
+        <span className="text-sm font-bold" style={{ color: AI.accentLight }}>AI 답변</span>
+        {streaming && (
+          <span className="material-symbols-outlined text-base animate-spin ml-auto" style={{ color: AI.accent }}>progress_activity</span>
+        )}
+        {done && !streaming && (
+          <span className="material-symbols-outlined text-base ml-auto text-emerald-400">check_circle</span>
+        )}
+      </div>
+
+      {/* 답변 본문 */}
+      <div className="px-5 py-4 text-[14px] leading-relaxed text-[#e2e8f0] whitespace-pre-wrap">
+        {renderAnswer(clean)}
+        {streaming && (
+          <span className="inline-block w-0.5 h-4 ml-0.5 animate-pulse align-middle"
+            style={{ background: AI.accentLight }} />
+        )}
+      </div>
+
+      {/* 출처 목록 */}
+      {sources && sources.length > 0 && (
+        <div className="px-5 pb-4 pt-1 border-t" style={{ borderColor: AI.border }}>
+          <p className="text-[10px] uppercase tracking-widest font-bold mb-2" style={{ color: AI.accentLight }}>
+            참고 파일
+          </p>
+          <div className="flex flex-col gap-1.5">
+            {sources.map((src, i) => (
+              <button key={i} onClick={() => onClickSource?.(src)}
+                className="flex items-center gap-2 text-left text-[11px] text-on-surface-variant/70 hover:text-on-surface transition-colors group">
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0"
+                  style={{ background: 'rgba(139,92,246,0.15)', color: AI.accentLight }}>
+                  출처{i + 1}
+                </span>
+                <span className="truncate group-hover:underline">{src.file_name || '?'}</span>
+                <span className="shrink-0 text-[10px] text-on-surface-variant/40">{src.file_type}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── AV 상세 플레이어 ──────────────────────────────────────────────
 function AVDetailContent({ result }) {
-  const isVideo   = result.file_type === 'video'
+  const isVideo   = result.file_type === 'video' || result.file_type === 'movie'
   const playerRef = useRef(null)
   const streamUrl = avStreamUrl(result)
   const segments  = result.segments ?? []
@@ -322,229 +386,59 @@ function AVDetailContent({ result }) {
   )
 }
 
-// ── 도메인 색상/레이블 ─────────────────────────────────────────
-const DOMAIN_META = {
-  image:    { label: '이미지', icon: 'image',       bg: '#064e3b', text: '#d1fae5', border: '#10b981' },
-  doc_page: { label: '문서',   icon: 'description', bg: '#4c1d95', text: '#ede9fe', border: '#8b5cf6' },
-  movie:    { label: '동영상', icon: 'movie',       bg: '#7c2d12', text: '#ffedd5', border: '#ea580c' },
-  music:    { label: '음성',   icon: 'volume_up',   bg: '#1e3a8a', text: '#dbeafe', border: '#3b82f6' },
-  all:      { label: '전체',   icon: 'search',      bg: '#1e1b4b', text: '#c7d2fe', border: '#6366f1' },
-}
-
-// ── 미니 결과 카드 (단계별 미리보기) ──────────────────────────
-function MiniResultPill({ item, rank }) {
-  const fname    = item.file_name || item.id || '?'
-  const conf     = item.confidence ?? 0
-  const dom      = item.domain ?? 'image'
-  const hasThumb = dom === 'image' && item.preview_url
-  const [imgErr, setImgErr] = useState(false)
-  const dc = DOMAIN_META[dom] ?? DOMAIN_META.all
-
-  return (
-    <div className="shrink-0 rounded-lg overflow-hidden flex flex-col transition-all duration-150 hover:brightness-110"
-      style={{ background: '#0b0515', border: `1px solid ${AI.border}`, width: '110px' }}>
-      {/* 썸네일 */}
-      {hasThumb && !imgErr ? (
-        <div className="h-14 flex items-center justify-center bg-black/50 overflow-hidden">
-          <img src={`${API_BASE}${item.preview_url}`} alt={fname}
-            className="max-w-full max-h-full object-contain"
-            onError={() => setImgErr(true)} />
-        </div>
-      ) : (
-        <div className="h-9 flex items-center justify-center" style={{ background: `${dc.bg}55` }}>
-          <span className="material-symbols-outlined text-sm" style={{ color: dc.border }}>{dc.icon}</span>
-        </div>
-      )}
-      {/* 정보 */}
-      <div className="px-2 py-1.5 flex flex-col gap-0.5">
-        <span className="text-[9px] font-bold" style={{ color: AI.accentLight }}>#{rank} · {(conf*100).toFixed(0)}%</span>
-        <span className="text-[9px] text-on-surface-variant/60 truncate" title={fname}>{fname}</span>
-      </div>
-    </div>
-  )
-}
-
-// ── AI 탐색 과정 패널 ─────────────────────────────────────────
-function AIIterationPanel({ iterationData, domainSelection, streaming, hasLLM }) {
-  const [collapsed, setCollapsed] = useState(false)
-
-  if (!iterationData.length && !streaming) return null
-
-  const focusedCount = iterationData.filter(it => it.iteration > 0).length
-
-  return (
-    <div className="mb-6 rounded-xl overflow-hidden" style={{ border: `1px solid ${AI.border}`, background: AI.card }}>
-      {/* 패널 헤더 */}
-      <button
-        onClick={() => setCollapsed(c => !c)}
-        className="w-full flex items-center justify-between px-5 py-3 hover:brightness-110 transition-all"
-        style={{ background: 'rgba(109,40,217,0.15)' }}
-      >
-        <div className="flex items-center gap-2.5">
-          <span className="material-symbols-outlined text-lg" style={{ color: AI.accentLight, fontVariationSettings: '"FILL" 1' }}>
-            {streaming ? 'psychology' : 'auto_awesome'}
-          </span>
-          <span className="text-sm font-bold" style={{ color: AI.accentLight }}>AI 탐색 과정</span>
-          <span className="text-[10px] px-2 py-0.5 rounded-full font-bold"
-            style={{ background: 'rgba(139,92,246,0.15)', color: AI.accentLight, border: `1px solid ${AI.border}` }}>
-            {iterationData.length}단계
-          </span>
-          {hasLLM !== undefined && (
-            <span className="text-[10px] px-2 py-0.5 rounded-full font-bold"
-              style={{ background: hasLLM ? 'rgba(139,92,246,0.1)' : 'rgba(100,116,139,0.1)',
-                       color: hasLLM ? AI.accentLight : '#94a3b8',
-                       border: `1px solid ${hasLLM ? AI.border : 'rgba(100,116,139,0.15)'}` }}>
-              {hasLLM ? '🤖 LLM' : '⚙️ 휴리스틱'}
-            </span>
-          )}
-          {streaming && <span className="material-symbols-outlined text-base animate-spin" style={{ color: AI.accent }}>progress_activity</span>}
-        </div>
-        <span className="material-symbols-outlined text-sm text-on-surface-variant/50">
-          {collapsed ? 'expand_more' : 'expand_less'}
-        </span>
-      </button>
-
-      {!collapsed && (
-        <div className="p-4 space-y-3">
-          {iterationData.map((step, idx) => {
-            const isGlobal = step.iteration === 0
-            const dc = DOMAIN_META[step.domain] ?? DOMAIN_META.all
-
-            return (
-              <div key={idx}>
-                {/* 도메인 선택 안내 배너 (전체→집중 전환 시) */}
-                {!isGlobal && idx > 0 && iterationData[idx - 1]?.iteration === 0 && domainSelection && (
-                  <div className="flex items-start gap-2 mb-2 px-3 py-2 rounded-lg"
-                    style={{ background: 'rgba(109,40,217,0.08)', border: `1px dashed ${AI.border}` }}>
-                    <span className="material-symbols-outlined text-sm shrink-0 mt-0.5" style={{ color: AI.accent }}>arrow_forward</span>
-                    <div>
-                      <span className="text-[11px] font-bold" style={{ color: AI.accentLight }}>
-                        {dc.label} 도메인으로 집중합니다
-                      </span>
-                      <span className="text-[11px] text-on-surface-variant/50 ml-2">{domainSelection.reason}</span>
-                    </div>
-                  </div>
-                )}
-
-                {/* 단계 카드 */}
-                <div className="rounded-xl overflow-hidden"
-                  style={{ border: `1px solid rgba(109,40,217,0.15)`, background: '#080412' }}>
-
-                  {/* 단계 헤더 */}
-                  <div className="flex items-center gap-2 px-3 py-2"
-                    style={{ background: 'rgba(109,40,217,0.07)', borderBottom: '1px solid rgba(109,40,217,0.1)' }}>
-                    <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
-                      style={{ background: step.done ? 'linear-gradient(135deg,#059669,#047857)' : isGlobal ? 'rgba(99,102,241,0.7)' : AI.rankBg }}>
-                      {isGlobal ? '①' : step.iteration}
-                    </div>
-                    <span className="text-[11px] font-mono font-bold text-on-surface/80 flex-1 truncate">
-                      "{step.query}"
-                    </span>
-                    <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold border shrink-0"
-                      style={{ background: dc.bg, color: dc.text, borderColor: dc.border }}>
-                      {dc.label}
-                    </span>
-                    <span className="text-[10px] text-on-surface-variant/40 shrink-0">{step.count ?? step.items?.length ?? 0}건</span>
-                  </div>
-
-                  {/* 결과 미리보기 카드 (top 3) */}
-                  {step.items?.length > 0 && (
-                    <div className="px-3 py-2.5 flex gap-2 overflow-x-auto"
-                      style={{ scrollbarWidth: 'thin', scrollbarColor: `${AI.border} transparent` }}>
-                      {step.items.slice(0, 5).map((item, i) => (
-                        <MiniResultPill key={i} item={item} rank={i + 1} />
-                      ))}
-                      {step.items.length > 5 && (
-                        <div className="shrink-0 flex items-center text-[10px] text-on-surface-variant/30 pl-1 whitespace-nowrap">
-                          +{step.items.length - 5}건
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* AI 사고 */}
-                  {step.thought && (
-                    <div className="px-3 py-2 flex items-start gap-2"
-                      style={{ borderTop: '1px solid rgba(109,40,217,0.08)' }}>
-                      <span className="material-symbols-outlined text-sm shrink-0 mt-0.5"
-                        style={{ color: step.done ? '#10b981' : AI.accent, fontVariationSettings: '"FILL" 1' }}>
-                        {step.done ? 'check_circle' : 'psychology'}
-                      </span>
-                      <p className="text-[11px] text-on-surface-variant/65 leading-relaxed">{step.thought}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )
-          })}
-
-          {/* 스트리밍 대기 표시 */}
-          {streaming && (
-            <div className="flex items-center gap-2 px-3 py-2 rounded-lg"
-              style={{ border: `1px dashed ${AI.border}`, background: 'rgba(109,40,217,0.05)' }}>
-              <span className="material-symbols-outlined text-sm animate-spin" style={{ color: AI.accentLight }}>progress_activity</span>
-              <span className="text-[11px] text-on-surface-variant/40 animate-pulse">AI가 결과를 분석하는 중...</span>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ── 메인 컴포넌트 ─────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────────
+// 메인 컴포넌트
+// ────────────────────────────────────────────────────────────────
 export default function MainAI() {
-  const navigate  = useNavigate()
-  const location  = useLocation()
-  const { open }  = useSidebar()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const { open } = useSidebar()
 
-  const [view,         setView]         = useState('home')
-  const [query,        setQuery]        = useState('')
-  const [inputValue,   setInputValue]   = useState('')
-  const [selectedFile, setSelectedFile] = useState(null)
-  const [fileDetail,   setFileDetail]   = useState(null)
-  const [detailLoading,setDetailLoading]= useState(false)
+  // ── 뷰 상태 ─────────────────────────────────────────────────
+  const [view,          setView]          = useState('home')
+  const [query,         setQuery]         = useState('')
+  const [inputValue,    setInputValue]    = useState('')
+  const [selectedFile,  setSelectedFile]  = useState(null)
+  const [fileDetail,    setFileDetail]    = useState(null)
+  const [detailLoading, setDetailLoading] = useState(false)
 
-  // AI 에이전트 상태
-  const [streaming,      setStreaming]      = useState(false)
-  const [results,        setResults]        = useState([])
-  const [iterationData,  setIterationData]  = useState([])
-  const [domainSelection,setDomainSelection]= useState(null)
-  const [aiError,        setAiError]        = useState('')
-  const [finalQuery,     setFinalQuery]     = useState('')
-  const [hasLLM,         setHasLLM]         = useState(undefined)
+  // ── RAG 파이프라인 상태 ──────────────────────────────────────
+  const [streaming,       setStreaming]       = useState(false)
+  const [ragPhase,        setRagPhase]        = useState('idle')  // idle|intent|candidates|scanning|selected|answering|done
+  const [intentMessage,   setIntentMessage]   = useState('')
+  const [fileKeywords,    setFileKeywords]    = useState([])
+  const [detailKeywords,  setDetailKeywords]  = useState([])
+  const [candidates,      setCandidates]      = useState([])
+  // scanStates: { [file_id]: 'idle'|'scanning'|'found'|'not_found' }
+  const [scanStates,      setScanStates]      = useState({})
+  // scanChunks: { [file_id]: string[] }
+  const [scanChunks,      setScanChunks]      = useState({})
+  const [scannedCount,    setScannedCount]    = useState(0)
+  const [foundCount,      setFoundCount]      = useState(0)
+  const [selectedSources, setSelectedSources] = useState([])
+  const [answer,          setAnswer]          = useState('')
+  const [aiError,         setAiError]         = useState('')
+  const [ragDone,         setRagDone]         = useState(false)
 
-  // ── AIMODE 시각화 4-step 상태 ─────────────────────────────
-  const [aimodeSteps,       setAimodeSteps]       = useState([])
-  const [aimodeQuery,       setAimodeQuery]       = useState('')
-  const [aimodeContentKws,  setAimodeContentKws]  = useState([])
-  const [aimodeDetailKws,   setAimodeDetailKws]   = useState([])
-  const [aimodeSources,     setAimodeSources]     = useState([])
-  const [aimodeSelected,    setAimodeSelected]    = useState(null)
-  const [aimodeAnswer,      setAimodeAnswer]      = useState('')
-  const [aimodeDone,        setAimodeDone]        = useState(false)
-  const [useAimode,         setUseAimode]         = useState(true)
-  const [topK,              setTopK]              = useState(20)
-  const [maxIter,           setMaxIter]           = useState(5)
+  const [topK,     setTopK]     = useState(5)
   const abortRef = useRef(null)
 
-  // 애니메이션
-  const [homeExiting,  setHomeExiting]  = useState(false)
-  const [resultsReady, setResultsReady] = useState(false)
-  const [detailVisible,setDetailVisible]= useState(false)
-
+  // ── 애니메이션 ───────────────────────────────────────────────
+  const [homeExiting,    setHomeExiting]    = useState(false)
+  const [resultsReady,   setResultsReady]   = useState(false)
+  const [detailVisible,  setDetailVisible]  = useState(false)
   const [aiHomeEntranceOn, setAiHomeEntranceOn] = useState(
     () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
   )
-
-  // 포털 전환
   const [searchTransitioning, setSearchTransitioning] = useState(false)
   const [ripplePos, setRipplePos] = useState({ x: '50%', y: '50%' })
-  const btnRef      = useRef(null)
-  const formRef     = useRef(null)
-  const inputRef    = useRef(null)
-  const orbSinkRef  = useRef(null)
+
+  const btnRef     = useRef(null)
+  const inputRef   = useRef(null)
+  const orbSinkRef = useRef(null)
   const orbVoiceRef = useRef(0)
+  const ml        = open ? 'ml-64' : 'ml-0'
+  const leftEdge  = open ? 'left-64' : 'left-0'
 
   // aiHomeEntranceOn 제어
   useEffect(() => {
@@ -555,7 +449,6 @@ export default function MainAI() {
     return () => clearTimeout(t)
   }, [view])
 
-  // 뷰 변경 시 검색창 자동 포커스 (detail 제외 모든 뷰)
   useEffect(() => {
     if (view !== 'detail') {
       const t = setTimeout(() => inputRef.current?.focus(), 150)
@@ -563,13 +456,9 @@ export default function MainAI() {
     }
   }, [view])
 
-  const ml       = open ? 'ml-64' : 'ml-0'
-  const leftEdge = open ? 'left-64' : 'left-0'
-  const sidebarPx= open ? 256 : 0
-
   // STT
   const doSearchRef = useRef(null)
-  const { listening, interim, toggle: toggleMic, stop: stopMic } = useSpeechRecognition({
+  const { listening, toggle: toggleMic, stop: stopMic } = useSpeechRecognition({
     onFinal: useCallback((text) => {
       setInputValue(text)
       setTimeout(() => doSearchRef.current?.(text), 80)
@@ -586,8 +475,8 @@ export default function MainAI() {
   useEffect(() => {
     const handle = () => {
       setDetailVisible(false)
-      if (view === 'detail')        setTimeout(() => setView('results'), 320)
-      else if (view === 'results')  { setResultsReady(false); setView('home') }
+      if (view === 'detail')       setTimeout(() => setView('results'), 320)
+      else if (view === 'results') { setResultsReady(false); setView('home') }
     }
     window.addEventListener('popstate', handle)
     return () => window.removeEventListener('popstate', handle)
@@ -599,34 +488,28 @@ export default function MainAI() {
     if (q) { window.history.replaceState({}, ''); doSearchRef.current?.(q) }
   }, [location.state])
 
-  // ── SSE 실행 (AIMODE 시각화 또는 기존 에이전트) ─────────────
-  const runAISearch = useCallback(async (q) => {
+  // ── RAG SSE 실행 ─────────────────────────────────────────────
+  const runRAG = useCallback(async (q) => {
     if (abortRef.current) abortRef.current.abort()
     const controller = new AbortController()
     abortRef.current = controller
 
     setStreaming(true)
-    setResults([])
-    setIterationData([])
-    setDomainSelection(null)
+    setRagPhase('intent')
+    setIntentMessage('')
+    setFileKeywords([])
+    setDetailKeywords([])
+    setCandidates([])
+    setScanStates({})
+    setScanChunks({})
+    setScannedCount(0)
+    setFoundCount(0)
+    setSelectedSources([])
+    setAnswer('')
     setAiError('')
-    setFinalQuery(q)
-    setHasLLM(undefined)
+    setRagDone(false)
 
-    // AIMODE 시각화 상태 초기화
-    setAimodeSteps([])
-    setAimodeQuery('')
-    setAimodeContentKws([])
-    setAimodeDetailKws([])
-    setAimodeSources([])
-    setAimodeSelected(null)
-    setAimodeAnswer('')
-    setAimodeDone(false)
-
-    const endpoint = useAimode
-      ? `${API_BASE}/api/aimode/chat`
-      : `${API_BASE}/api/ai/search`
-    // LangGraph thread_id — localStorage 영속 (24h TTL)
+    // thread_id (localStorage 영속, 24h TTL)
     let tid = null
     try {
       const raw = localStorage.getItem('aimode_thread_id')
@@ -644,207 +527,117 @@ export default function MainAI() {
       } catch {}
     }
     window.__aimodeThreadId = tid
-    const body = useAimode
-      ? { query: q, topk: topK, thread_id: tid }
-      : { query: q, topk: topK, max_iterations: maxIter }
 
     try {
-      const res = await fetch(endpoint, {
-        method: 'POST',
+      const resp = await fetch(`${API_BASE}/api/aimode/chat`, {
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-        signal: controller.signal,
+        body:    JSON.stringify({ query: q, topk: topK, thread_id: tid }),
+        signal:  controller.signal,
       })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
 
-      const reader  = res.body.getReader()
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+
+      const reader  = resp.body.getReader()
       const decoder = new TextDecoder()
-      let   buffer  = ''
+      let   buf     = ''
 
       while (true) {
-        const { done, value } = await reader.read()
+        const { value, done } = await reader.read()
         if (done) break
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop()
+        buf += decoder.decode(value, { stream: true })
+        const lines = buf.split('\n')
+        buf = lines.pop() ?? ''
 
         for (const line of lines) {
           if (!line.startsWith('data: ')) continue
-          try {
-            const ev = JSON.parse(line.slice(6))
-            handleSSEEvent(ev)
-          } catch {}
+          const raw = line.slice(6).trim()
+          if (!raw) continue
+          let ev
+          try { ev = JSON.parse(raw) } catch { continue }
+
+          switch (ev.type) {
+            case 'info':
+              // 연결 확인 — 아무것도 안 함
+              break
+
+            case 'intent':
+              setIntentMessage(ev.message || '')
+              setFileKeywords(ev.file_keywords || [])
+              setDetailKeywords(ev.detail_keywords || [])
+              setRagPhase('intent')
+              break
+
+            case 'candidates': {
+              const items = ev.items || []
+              setCandidates(items)
+              // 초기 scanState 모두 idle
+              const initStates = {}
+              items.forEach(src => { initStates[src.trichef_id || src.file_name] = 'idle' })
+              setScanStates(initStates)
+              setScanChunks({})
+              setRagPhase('candidates')
+              // 검색 기록 저장
+              fetch(`${API_BASE}/api/history`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query: q, method: 'aimode', result_count: items.length }),
+              }).then(() => window.dispatchEvent(new Event('history-updated'))).catch(() => {})
+              break
+            }
+
+            case 'scanning':
+              setScanStates(prev => ({
+                ...prev,
+                [ev.file_id]: 'scanning',
+              }))
+              setRagPhase('scanning')
+              break
+
+            case 'scan_result':
+              setScanStates(prev => ({
+                ...prev,
+                [ev.file_id]: ev.found ? 'found' : 'not_found',
+              }))
+              if (ev.found && ev.chunks?.length) {
+                setScanChunks(prev => ({ ...prev, [ev.file_id]: ev.chunks }))
+              }
+              setScannedCount(prev => prev + 1)
+              if (ev.found) setFoundCount(prev => prev + 1)
+              break
+
+            case 'selected':
+              setSelectedSources(ev.sources || [])
+              setRagPhase('selected')
+              break
+
+            case 'token':
+              setAnswer(prev => prev + (ev.text || ''))
+              setRagPhase('answering')
+              break
+
+            case 'done':
+              if (ev.answer) setAnswer(ev.answer)
+              setRagDone(true)
+              setRagPhase('done')
+              break
+
+            case 'error':
+              setAiError(ev.message || '오류 발생')
+              break
+          }
         }
       }
     } catch (e) {
-      if (e.name !== 'AbortError') setAiError(e.message)
+      if (e.name !== 'AbortError') {
+        setAiError(e.message || '연결 오류')
+      }
     } finally {
       setStreaming(false)
     }
-  }, [topK, maxIter, useAimode])
+  }, [topK])
 
-  const mapItem = (item) => {
-    const isDocPage = item.domain === 'doc_page'
-    return {
-      file_path:      item.source_path || item.id,
-      trichef_id:     item.id,
-      file_name:      item.file_name || (item.id || '').split(/[/\\]/).pop(),
-      page_num:       item.page_num ?? null,
-      file_type:      item.domain === 'image' ? 'image'
-                    : isDocPage ? 'doc'
-                    : item.domain === 'movie' ? 'video' : 'audio',
-      confidence:     item.confidence ?? 0,
-      similarity:     item.confidence ?? 0,
-      dense:          item.dense ?? 0,
-      lexical:        item.lexical ?? null,
-      asf:            item.asf ?? null,
-      snippet:        '',
-      preview_url:    item.preview_url ?? null,
-      segments:       item.segments ?? [],
-      low_confidence: item.low_confidence ?? false,
-      trichef_domain: item.domain,
-    }
-  }
-
-  const handleSSEEvent = (ev) => {
-    switch (ev.type) {
-      // ── AIMODE 시각화 이벤트 (/api/aimode/chat) ─────────────
-      case 'step':
-        setAimodeSteps(prev => {
-          const idx = prev.findIndex(s => s.step === ev.step)
-          const entry = {
-            step: ev.step,
-            label: ev.label,
-            done: ev.done === true,
-            query: ev.query,
-            selected_idx: ev.selected_idx,
-          }
-          if (idx >= 0) {
-            const next = [...prev]
-            next[idx] = { ...next[idx], ...entry }
-            return next
-          }
-          return [...prev, entry]
-        })
-        if (ev.step === 1 && ev.done) {
-          if (ev.query) setAimodeQuery(ev.query)
-          if (ev.content_keywords) setAimodeContentKws(ev.content_keywords)
-          if (ev.detail_keywords)  setAimodeDetailKws(ev.detail_keywords)
-        }
-        if (ev.step === 3 && typeof ev.selected_idx === 'number') {
-          setAimodeSelected(ev.selected_idx)
-          // Step 3 완료 — LangGraph 가 선택한 카드 자동 클릭 (1.4s 딜레이 후)
-          setAimodeSources(prev => {
-            const file = prev[ev.selected_idx]
-            if (file) {
-              setTimeout(() => handleSelectFile(file), 1400)
-            }
-            return prev
-          })
-        }
-        break
-
-      case 'sources': {
-        // AIMODE 검색 결과 — 작은 단계 패널용 + MainSearch 와 동일한 큰 카드 그리드용
-        const items = ev.items || []
-        setAimodeSources(items)
-        // ★ 동일 데이터를 큰 카드 그리드로도 렌더 (MainSearch 와 동일한 UX)
-        setResults(items)
-        // 검색 기록 저장
-        fetch(`${API_BASE}/api/history`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query: q, method: 'aimode', result_count: items.length }),
-        }).then(() => {
-          window.dispatchEvent(new Event('history-updated'))
-        }).catch(() => {})
-        break
-      }
-
-      case 'token':
-        setAimodeAnswer(prev => prev + (ev.text || ''))
-        break
-
-      case 'done':
-        setAimodeDone(true)
-        if (ev.answer) setAimodeAnswer(ev.answer)
-        if (typeof ev.selected_idx === 'number') setAimodeSelected(ev.selected_idx)
-        break
-
-      case 'error':
-        setAiError(ev.message || '오류')
-        break
-
-      // ── 기존 ai_search 이벤트 (fallback) ─────────────────────
-      case 'info':
-        setHasLLM(ev.has_llm)
-        break
-
-      case 'iteration_results':
-        // 각 단계 결과 카드 저장/업데이트
-        setIterationData(prev => {
-          const idx = prev.findIndex(it => it.iteration === ev.iteration)
-          const entry = {
-            iteration: ev.iteration,
-            query:     ev.query,
-            domain:    ev.domain,
-            items:     ev.items ?? [],
-            count:     ev.items?.length ?? 0,
-            thought:   '',
-            done:      false,
-          }
-          if (idx >= 0) {
-            const next = [...prev]
-            next[idx] = { ...next[idx], ...entry }
-            return next
-          }
-          return [...prev, entry]
-        })
-        break
-
-      case 'domain_selected':
-        setDomainSelection({ domain: ev.domain, reason: ev.reason })
-        break
-
-      case 'thought':
-        // 마지막 focused 단계(iteration>0)의 thought 업데이트
-        setIterationData(prev => {
-          if (!prev.length) return prev
-          const updated = [...prev]
-          // 뒤에서부터 iteration>0인 항목 찾기
-          for (let i = updated.length - 1; i >= 0; i--) {
-            if (updated[i].iteration > 0) {
-              updated[i] = { ...updated[i], thought: ev.text, done: ev.done }
-              return updated
-            }
-          }
-          return prev
-        })
-        break
-
-      case 'results': {
-        const mapped = (ev.items ?? []).map(mapItem)
-        setResults(mapped)
-        setFinalQuery(ev.final_query || ev.query)
-        // 최종 history로 iterationData thought/done 동기화
-        if (ev.history?.length) {
-          setIterationData(prev => {
-            const updated = [...prev]
-            ev.history.forEach((h, hi) => {
-              const idx = updated.findIndex(it => it.iteration === hi + 1)
-              if (idx >= 0) {
-                updated[idx] = { ...updated[idx], thought: h.thought, done: h.done, count: h.count }
-              }
-            })
-            return updated
-          })
-        }
-        break
-      }
-      // case 'error' 는 위쪽에 이미 정의 (AIMODE/legacy 공용)
-    }
-  }
-
+  // ── doSearch ─────────────────────────────────────────────────
   const doSearch = (q) => {
     if (!q.trim() || searchTransitioning) return
     setQuery(q)
@@ -858,20 +651,18 @@ export default function MainAI() {
         setView('results')
         window.history.pushState({ view: 'results' }, '')
         requestAnimationFrame(() => setResultsReady(true))
-        runAISearch(q)
+        runRAG(q)
       }, 420)
     } else {
       setView('results')
-      runAISearch(q)
+      runRAG(q)
     }
   }
 
-  doSearchRef.current = doSearch;
-
+  doSearchRef.current = doSearch
   useEffect(() => { doSearchRef.current = doSearch })
 
-  const handleSearch  = (e) => { e?.preventDefault(); doSearch(inputValue) }
-
+  const handleSearch   = (e) => { e?.preventDefault(); doSearch(inputValue) }
   const handleSelectFile = (file) => {
     setSelectedFile(file)
     setFileDetail(null)
@@ -879,7 +670,7 @@ export default function MainAI() {
     setView('detail')
     window.history.pushState({ view: 'detail' }, '')
     requestAnimationFrame(() => requestAnimationFrame(() => setDetailVisible(true)))
-    const isAV = file.file_type === 'video' || file.file_type === 'audio'
+    const isAV = ['video', 'audio', 'movie', 'music'].includes(file.file_type)
     if (!isAV) {
       setDetailLoading(true)
       fetch(`${API_BASE}/api/files/detail?path=${encodeURIComponent(file.file_path)}`)
@@ -887,10 +678,8 @@ export default function MainAI() {
         .catch(() => setDetailLoading(false))
     }
   }
-
   const handleBackToResults = () => { setDetailVisible(false); setTimeout(() => setView('results'), 320) }
 
-  // 새 대화 — 서버 history + localStorage thread_id 모두 비움
   const handleNewConversation = useCallback(async () => {
     if (abortRef.current) abortRef.current.abort()
     const tid = window.__aimodeThreadId
@@ -899,33 +688,32 @@ export default function MainAI() {
     }
     try { localStorage.removeItem('aimode_thread_id') } catch {}
     window.__aimodeThreadId = null
-    setAimodeSteps([])
-    setAimodeQuery('')
-    setAimodeContentKws([])
-    setAimodeDetailKws([])
-    setAimodeSources([])
-    setAimodeSelected(null)
-    setAimodeAnswer('')
-    setAimodeDone(false)
-    setResults([])
-    setIterationData([])
+    setStreaming(false)
+    setRagPhase('idle')
+    setIntentMessage('')
+    setFileKeywords([])
+    setDetailKeywords([])
+    setCandidates([])
+    setScanStates({})
+    setScanChunks({})
+    setScannedCount(0)
+    setFoundCount(0)
+    setSelectedSources([])
+    setAnswer('')
+    setAiError('')
+    setRagDone(false)
     setSelectedFile(null)
     setFileDetail(null)
-    setAiError('')
     setView('home')
     setInputValue('')
   }, [])
 
   const handleGoToSearch = () => {
-    const rect = btnRef.current?.getBoundingClientRect();
-    if (rect)
-      setRipplePos({
-        x: `${rect.left + rect.width / 2}px`,
-        y: `${rect.top + rect.height / 2}px`,
-      });
-    setSearchTransitioning(true);
-    setTimeout(() => navigate("/search"), 900);
-  };
+    const rect = btnRef.current?.getBoundingClientRect()
+    if (rect) setRipplePos({ x: `${rect.left + rect.width / 2}px`, y: `${rect.top + rect.height / 2}px` })
+    setSearchTransitioning(true)
+    setTimeout(() => navigate('/search'), 900)
+  }
 
   // ── 렌더 ────────────────────────────────────────────────────
   return (
@@ -963,150 +751,88 @@ export default function MainAI() {
 
       {/* ════ HOME VIEW ════ */}
       {view === 'home' && (
-        <>
-          <main className={`${ml} relative flex h-full min-h-0 flex-col overflow-x-hidden overflow-y-auto bg-transparent transition-[margin] duration-300 pt-8`}>
-            <div
-              className="ai-home-orbit-bg pointer-events-none absolute inset-0 z-0 min-h-0"
-              style={{ '--ai-orbit-assemble': `${AI_ORB_ASSEMBLE_SECONDS}s` }}
-              aria-hidden
+        <main className={`${ml} relative flex h-full min-h-0 flex-col overflow-x-hidden overflow-y-auto bg-transparent transition-[margin] duration-300 pt-8`}>
+          <div className="ai-home-orbit-bg pointer-events-none absolute inset-0 z-0 min-h-0"
+            style={{ '--ai-orbit-assemble': `${AI_ORB_ASSEMBLE_SECONDS}s` }} aria-hidden />
+          <div ref={orbSinkRef} className="absolute inset-0 z-0 min-h-0" aria-hidden>
+            <AnimatedOrb
+              layout="fill" colorMode="ai" hideCenterUI interactive={false}
+              aiHoverFx pointScaleMul={1.45} particleCount={11000} size={720}
+              assembleIntro assembleDuration={AI_ORB_ASSEMBLE_SECONDS}
+              voiceLevelRef={orbVoiceRef}
             />
-            {/* Orb */}
-            <div ref={orbSinkRef} className="absolute inset-0 z-0 min-h-0" aria-hidden>
-              <AnimatedOrb
-                layout="fill"
-                colorMode="ai"
-                hideCenterUI
-                interactive={false}
-                aiHoverFx
-                pointScaleMul={1.45}
-                particleCount={11000}
-                size={720}
-                assembleIntro
-                assembleDuration={AI_ORB_ASSEMBLE_SECONDS}
-                voiceLevelRef={orbVoiceRef}
-              />
-            </div>
+          </div>
 
-            <div className={`pointer-events-none relative z-10 flex h-full min-h-0 w-full flex-col ${aiHomeEntranceOn ? 'main-search-entrance-on' : 'main-search-entrance-off'}`}>
-              <div className="relative z-10 flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-6 py-8 md:px-8">
-                <div className="relative flex w-full max-w-lg flex-col items-center justify-center">
-                  <div className="relative z-10 flex w-full flex-col items-center gap-9 text-center md:gap-10">
-                    <div className={`mse-hero-down pointer-events-auto max-w-lg shrink-0 transition-all duration-300 ${homeExiting ? 'opacity-0 -translate-y-6' : ''}`}>
-                      <h2 className="font-headline inline-flex flex-wrap items-baseline justify-center gap-0 text-4xl font-semibold tracking-tight md:text-5xl lg:text-6xl">
-                        <span className="font-headline inline-block bg-gradient-to-r from-[#5e5a52] from-[6%] via-[#b8b0a2] to-[#d4cec2] bg-clip-text text-transparent">B</span>
-                        <span className="font-headline text-[#cbc4b6] drop-shadow-[0_1px_5px_rgba(18,16,14,0.18)]">eyond Smarte</span>
-                        <span className="font-headline inline-block bg-gradient-to-r from-[#d4cec2] via-[#9e978a] to-[#45423c] to-[90%] bg-clip-text text-transparent">r</span>
-                      </h2>
-                    </div>
-                    <form
-                      onSubmit={handleSearch}
-                      className="mse-search-up group pointer-events-auto relative z-10 w-full max-w-[min(90vw,22rem)] shrink-0 md:max-w-[24rem]"
-                      style={homeExiting ? { visibility: 'hidden' } : {}}
-                    >
-                      <div className="pointer-events-none absolute -inset-[2px] rounded-full bg-gradient-to-r from-fuchsia-500/0 via-violet-400/25 to-fuchsia-500/0 opacity-0 blur-md transition-opacity duration-500 group-focus-within:opacity-100" />
-                      <div className="relative flex items-center gap-2 rounded-full border border-violet-200/[0.14] bg-gradient-to-b from-violet-100/[0.09] to-violet-950/[0.28] px-1.5 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.16),inset_0_-1px_0_rgba(0,0,0,0.22),0_10px_44px_rgba(32,12,58,0.5)] backdrop-blur-2xl transition-all duration-300 group-focus-within:border-violet-200/25 group-focus-within:from-violet-100/[0.12] group-focus-within:to-violet-950/[0.34]">
-                        <button
-                          type="button"
-                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-900 to-purple-600 text-violet-50 shadow-[0_0_20px_rgba(124,58,237,0.32),inset_0_1px_0_rgba(255,255,255,0.18)] transition-transform hover:from-violet-800 hover:to-purple-500 active:scale-90"
-                        >
-                          <span className="material-symbols-outlined text-[20px] font-bold">add</span>
-                        </button>
-                        <input
-                          type="text"
-                          value={inputValue}
-                          onChange={(e) => setInputValue(e.target.value)}
-                          placeholder={
-                            listening ? "듣는 중…" : "Anything you need"
-                          }
-                          className="min-w-0 flex-1 border-none bg-transparent py-2 font-manrope text-sm text-violet-100/90 outline-none ring-0 placeholder:text-violet-300/45 md:py-2.5 md:text-base"
-                        />
-                        <button
-                          type="button"
-                          onClick={toggleMic}
-                          aria-pressed={listening}
-                          aria-label={
-                            listening ? "음성 입력 끄기" : "음성 입력"
-                          }
-                          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border backdrop-blur-md transition-colors ${
-                            listening
-                              ? "border-rose-400/35 bg-rose-950/40 text-rose-200 shadow-[0_0_16px_rgba(251,113,133,0.25)]"
-                              : "border-violet-300/18 bg-violet-950/35 text-violet-200/80 hover:border-violet-200/30 hover:bg-violet-900/40 hover:text-violet-100"
-                          }`}
-                        >
-                          <span className="material-symbols-outlined text-[20px]">
-                            mic
-                          </span>
-                        </button>
-                      </div>
-                    </form>
+          <div className={`pointer-events-none relative z-10 flex h-full min-h-0 w-full flex-col ${aiHomeEntranceOn ? 'main-search-entrance-on' : 'main-search-entrance-off'}`}>
+            <div className="relative z-10 flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-6 py-8 md:px-8">
+              <div className="relative flex w-full max-w-lg flex-col items-center justify-center">
+                <div className="relative z-10 flex w-full flex-col items-center gap-9 text-center md:gap-10">
+                  <div className={`mse-hero-down pointer-events-auto max-w-lg shrink-0 transition-all duration-300 ${homeExiting ? 'opacity-0 -translate-y-6' : ''}`}>
+                    <h2 className="font-headline inline-flex flex-wrap items-baseline justify-center gap-0 text-4xl font-semibold tracking-tight md:text-5xl lg:text-6xl">
+                      <span className="font-headline inline-block bg-gradient-to-r from-[#5e5a52] from-[6%] via-[#b8b0a2] to-[#d4cec2] bg-clip-text text-transparent">B</span>
+                      <span className="font-headline text-[#cbc4b6] drop-shadow-[0_1px_5px_rgba(18,16,14,0.18)]">eyond Smarte</span>
+                      <span className="font-headline inline-block bg-gradient-to-r from-[#d4cec2] via-[#9e978a] to-[#45423c] to-[90%] bg-clip-text text-transparent">r</span>
+                    </h2>
                   </div>
+                  <form onSubmit={handleSearch}
+                    className="mse-search-up group pointer-events-auto relative z-10 w-full max-w-[min(90vw,22rem)] shrink-0 md:max-w-[24rem]"
+                    style={homeExiting ? { visibility: 'hidden' } : {}}>
+                    <div className="pointer-events-none absolute -inset-[2px] rounded-full bg-gradient-to-r from-fuchsia-500/0 via-violet-400/25 to-fuchsia-500/0 opacity-0 blur-md transition-opacity duration-500 group-focus-within:opacity-100" />
+                    <div className="relative flex items-center gap-2 rounded-full border border-violet-200/[0.14] bg-gradient-to-b from-violet-100/[0.09] to-violet-950/[0.28] px-1.5 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.16),inset_0_-1px_0_rgba(0,0,0,0.22),0_10px_44px_rgba(32,12,58,0.5)] backdrop-blur-2xl transition-all duration-300 group-focus-within:border-violet-200/25">
+                      <button type="button"
+                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-900 to-purple-600 text-violet-50 shadow-[0_0_20px_rgba(124,58,237,0.32),inset_0_1px_0_rgba(255,255,255,0.18)] transition-transform hover:from-violet-800 hover:to-purple-500 active:scale-90">
+                        <span className="material-symbols-outlined text-[20px] font-bold">add</span>
+                      </button>
+                      <input type="text" value={inputValue} onChange={e => setInputValue(e.target.value)}
+                        placeholder={listening ? '듣는 중…' : 'Anything you need'}
+                        className="min-w-0 flex-1 border-none bg-transparent py-2 font-manrope text-sm text-violet-100/90 outline-none ring-0 placeholder:text-violet-300/45 md:py-2.5 md:text-base" />
+                      <button type="button" onClick={toggleMic} aria-pressed={listening}
+                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border backdrop-blur-md transition-colors ${
+                          listening
+                            ? 'border-rose-400/35 bg-rose-950/40 text-rose-200 shadow-[0_0_16px_rgba(251,113,133,0.25)]'
+                            : 'border-violet-300/18 bg-violet-950/35 text-violet-200/80 hover:border-violet-200/30'
+                        }`}>
+                        <span className="material-symbols-outlined text-[20px]">mic</span>
+                      </button>
+                    </div>
+                  </form>
                 </div>
               </div>
-
-              <div
-                className="mse-search-up mse-search-up-delay-1 pointer-events-auto flex shrink-0 flex-col items-center justify-end px-6 pb-10 pt-2 md:px-8"
-                style={homeExiting ? { visibility: "hidden" } : {}}
-              >
-                <button
-                  ref={btnRef}
-                  onClick={handleGoToSearch}
-                  disabled={searchTransitioning}
-                  className="group flex items-center gap-3 rounded-full border border-white/10 bg-white/[0.06] px-8 py-3 text-sm font-bold uppercase tracking-widest text-neutral-400 transition-all duration-300 hover:border-white/20 hover:text-neutral-200 disabled:pointer-events-none"
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.boxShadow =
-                      "0 0 24px rgba(139, 92, 246, 0.15)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.boxShadow = "none";
-                  }}
-                >
-                  <span
-                    className="h-2 w-2 animate-pulse rounded-full bg-violet-500"
-                    style={{ boxShadow: "0 0 6px rgba(139, 92, 246, 0.9)" }}
-                  />
-                  검색 모드로 전환
-                  <span className="material-symbols-outlined text-lg transition-transform group-hover:translate-x-1">
-                    arrow_forward
-                  </span>
-                </button>
-              </div>
             </div>
-          </main>
-        </>
+
+            <div className="mse-search-up mse-search-up-delay-1 pointer-events-auto flex shrink-0 flex-col items-center justify-end px-6 pb-10 pt-2 md:px-8">
+              <button ref={btnRef} onClick={handleGoToSearch} disabled={searchTransitioning}
+                className="group flex items-center gap-3 rounded-full border border-white/10 bg-white/[0.06] px-8 py-3 text-sm font-bold uppercase tracking-widest text-neutral-400 transition-all duration-300 hover:border-white/20 hover:text-neutral-200 disabled:pointer-events-none"
+                onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 0 24px rgba(139, 92, 246, 0.15)' }}
+                onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none' }}>
+                <span className="h-2 w-2 animate-pulse rounded-full bg-violet-500"
+                  style={{ boxShadow: '0 0 6px rgba(139, 92, 246, 0.9)' }} />
+                검색 모드로 전환
+                <span className="material-symbols-outlined text-lg transition-transform group-hover:translate-x-1">arrow_forward</span>
+              </button>
+            </div>
+          </div>
+        </main>
       )}
 
-      {/* ════════════════════════════════
-          RESULTS / DETAIL 공통 헤더
-      ════════════════════════════════ */}
-      {view !== "home" && (
-        <header
-          className={`fixed top-8 ${leftEdge} right-0 z-40 bg-[#070d1f]/60 backdrop-blur-xl flex items-center px-8 h-16 gap-6 shadow-[0_4px_30px_rgba(172,138,255,0.1)] transition-[left] duration-300`}
-        >
-          <button
-            onClick={() => {
-              setView("home");
-              setInputValue("");
-            }}
-            className={`text-xl font-bold tracking-tighter bg-gradient-to-r from-violet-400 to-fuchsia-400 bg-clip-text text-transparent shrink-0 hover:opacity-70 transition-opacity ${!open ? "ml-10" : ""}`}
-          >
+      {/* ════ 공통 헤더 (results / detail) ════ */}
+      {view !== 'home' && (
+        <header className={`fixed top-8 ${leftEdge} right-0 z-40 bg-[#070d1f]/60 backdrop-blur-xl flex items-center px-8 h-16 gap-6 shadow-[0_4px_30px_rgba(172,138,255,0.1)] transition-[left] duration-300`}>
+          <button onClick={() => { setView('home'); setInputValue('') }}
+            className={`text-xl font-bold tracking-tighter bg-gradient-to-r from-violet-400 to-fuchsia-400 bg-clip-text text-transparent shrink-0 hover:opacity-70 transition-opacity ${!open ? 'ml-10' : ''}`}>
             Obsidian AI
           </button>
 
           <form onSubmit={handleSearch} className="flex-1">
             <div className="relative group flex items-center">
-              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-violet-400/50">
-                search
-              </span>
-              <input
-                ref={inputRef}
-                autoFocus
-                className="bg-transparent border-none focus:ring-0 w-full text-on-surface text-lg outline-none"
+              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-violet-400/50">search</span>
+              <input ref={inputRef} autoFocus
+                className="bg-transparent border-none focus:ring-0 w-full text-on-surface text-lg outline-none pl-9"
                 style={{ caretColor: AI.accentLight }}
-                placeholder="AI에게 검색을 맡기세요..."
+                placeholder="AI에게 질문하세요..."
                 value={listening ? '' : inputValue}
-                onChange={(e) => !listening && setInputValue(e.target.value)}
-                readOnly={listening}
-              />
+                onChange={e => !listening && setInputValue(e.target.value)}
+                readOnly={listening} />
               <button type="button" onClick={toggleMic}
                 className={`shrink-0 transition-all duration-200 ${listening ? 'animate-pulse' : ''}`}
                 style={{ color: listening ? AI.accentLight : 'rgba(139,92,246,0.4)' }}>
@@ -1125,7 +851,7 @@ export default function MainAI() {
             </button>
           )}
 
-          <button onClick={handleNewConversation} title="대화 이력 초기화 (새 대화 시작)"
+          <button onClick={handleNewConversation} title="새 대화 시작"
             className="flex items-center gap-2 px-4 py-2 rounded-full border text-base font-bold transition-all shrink-0 text-on-surface-variant hover:text-on-surface"
             style={{ background: AI.card, borderColor: AI.border }}
             onMouseEnter={e => e.currentTarget.style.borderColor = AI.accentLight}
@@ -1141,572 +867,209 @@ export default function MainAI() {
       {/* ════ RESULTS VIEW ════ */}
       {view === 'results' && (
         <main className={`${ml} min-h-screen transition-[margin] duration-300`}
-          style={{ paddingTop: '128px', opacity: resultsReady ? 1 : 0, transform: resultsReady ? 'translateY(0)' : 'translateY(24px)',
+          style={{ paddingTop: '128px', opacity: resultsReady ? 1 : 0,
+            transform: resultsReady ? 'translateY(0)' : 'translateY(24px)',
             transition: 'opacity 0.38s ease, transform 0.38s ease, margin 0.3s' }}>
-          <div className="px-8 pb-8 pt-5 max-w-[1400px] mx-auto">
+          <div className="px-8 pb-12 pt-5 max-w-[1400px] mx-auto">
 
-            {/* 쿼리 헤더 */}
-            <div className="flex justify-between items-end mb-6">
-              <div className="space-y-2">
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest border"
-                  style={{ background: 'rgba(109,40,217,0.1)', color: AI.accentLight, borderColor: AI.border }}>
-                  AI 쿼리
-                </span>
-                <h1 className="text-4xl font-extrabold tracking-tighter text-on-surface">{query}</h1>
-                {finalQuery && finalQuery !== query && (
-                  <p className="text-xs flex items-center gap-1.5" style={{ color: 'rgba(167,139,250,0.6)' }}>
-                    <span className="material-symbols-outlined text-sm">arrow_forward</span>
-                    최종 쿼리: <span className="font-mono font-bold" style={{ color: AI.accentLight }}>"{finalQuery}"</span>
-                  </p>
-                )}
+            {/* 쿼리 + 상태 */}
+            <div className="mb-5">
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest border"
+                style={{ background: 'rgba(109,40,217,0.1)', color: AI.accentLight, borderColor: AI.border }}>
+                AI RAG
+              </span>
+              <h1 className="text-3xl font-extrabold tracking-tighter text-on-surface mt-1">{query}</h1>
+              <div className="mt-2 flex items-center gap-2 text-sm text-on-surface-variant">
                 {streaming
-                  ? <p className="text-on-surface-variant flex items-center gap-2">
-                      <span className="material-symbols-outlined text-lg animate-spin" style={{ color: AI.accent }}>progress_activity</span>
-                      AI가 검색·분석 중...
-                    </p>
+                  ? <>
+                      <span className="material-symbols-outlined text-base animate-spin" style={{ color: AI.accent }}>progress_activity</span>
+                      <span>
+                        {ragPhase === 'intent'     && 'Qwen이 질문을 분석하는 중...'}
+                        {ragPhase === 'candidates' && `${candidates.length}개 파일 발견 — 내용 스캔 준비 중...`}
+                        {ragPhase === 'scanning'   && `파일 내용 스캔 중... (${scannedCount}/${candidates.length})`}
+                        {ragPhase === 'selected'   && `${selectedSources.length}개 파일에서 관련 내용 발견 — 답변 생성 중...`}
+                        {ragPhase === 'answering'  && '답변 생성 중...'}
+                      </span>
+                    </>
                   : aiError
-                    ? <p className="text-red-400 text-sm">{aiError}</p>
-                    : <p className="text-on-surface-variant">
-                        <span className="font-bold" style={{ color: AI.accentLight }}>{results.length}건</span>을 찾았습니다.
-                      </p>
+                    ? <span className="text-red-400">{aiError}</span>
+                    : ragDone
+                      ? <span><span className="font-bold" style={{ color: AI.accentLight }}>{selectedSources.length}개</span> 파일에서 답변을 생성했습니다.</span>
+                      : null
                 }
               </div>
             </div>
 
-            {/* AIMODE 시각화 4-step 패널 — 컴팩트 progress strip */}
-            {useAimode && aimodeSteps.length > 0 && (
-              <div className="mb-6 rounded-2xl border px-5 py-4 space-y-3"
-                style={{ background: AI.card, borderColor: AI.border }}>
-                {/* 상단: AI MODE + 스텝 인디케이터 */}
-                <div className="flex items-center gap-4 overflow-x-auto">
-                  <span className="material-symbols-outlined text-lg shrink-0" style={{ color: AI.accentLight }}>auto_awesome</span>
-                  <span className="text-[10px] uppercase tracking-widest font-bold shrink-0"
-                    style={{ color: AI.accentLight }}>AI MODE</span>
-                  {[1, 2, 3, 4].map(stepNum => {
-                    const s = aimodeSteps.find(s => s.step === stepNum)
-                    const labels = { 1: '분류', 2: '검색', 3: '선택', 4: '답변' }
-                    const active = !!s
-                    const done = s?.done
-                    return (
-                      <div key={stepNum} className="flex items-center gap-1.5 text-[11px] shrink-0">
-                        <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold border ${
-                          done ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300' :
-                          active ? 'border-purple-400 text-purple-300 animate-pulse' :
-                          'border-white/15 text-on-surface-variant/40'
-                        }`}>
-                          {done ? '✓' : stepNum}
-                        </div>
-                        <span className={done ? 'text-emerald-300' : active ? 'text-on-surface' : 'text-on-surface-variant/40'}>
-                          {labels[stepNum]}
-                        </span>
-                        {stepNum < 4 && <span className="text-on-surface-variant/20">→</span>}
-                      </div>
-                    )
-                  })}
-                </div>
+            {/* 의도 메시지 박스 */}
+            <IntentBox
+              message={intentMessage}
+              fileKeywords={fileKeywords}
+              detailKeywords={detailKeywords}
+              visible={!!intentMessage}
+            />
 
-                {/* 하단: Step 1 완료 후 3종 키워드 표시 */}
-                {aimodeSteps.find(s => s.step === 1 && s.done) && (
-                  <div className="flex flex-wrap gap-3 pt-1 border-t" style={{ borderColor: AI.border }}>
-                    {[
-                      { label: '파일검색', value: aimodeQuery, icon: 'folder_search', color: AI.accentLight },
-                      { label: '내용검색', value: aimodeContentKws.join(' · '), icon: 'manage_search', color: '#34d399' },
-                      { label: '상세내용', value: aimodeDetailKws.join(' · '), icon: 'lightbulb', color: '#f59e0b' },
-                    ].map(({ label, value, icon, color }) => value ? (
-                      <div key={label} className="flex items-center gap-1.5 text-[11px]">
-                        <span className="material-symbols-outlined text-sm" style={{ color }}>{icon}</span>
-                        <span className="text-on-surface-variant/50">{label}:</span>
-                        <span className="font-mono font-semibold" style={{ color }}>"{value}"</span>
-                      </div>
-                    ) : null)}
-                  </div>
-                )}
-              </div>
+            {/* 스캔 진행 바 */}
+            {(ragPhase === 'scanning' || (candidates.length > 0 && scannedCount > 0)) && (
+              <ScanProgressBar
+                total={candidates.length}
+                scanned={scannedCount}
+                found={foundCount}
+              />
             )}
 
-            {/* HIDDEN — old detailed panel preserved for backward compat (do not render) */}
-            {false && useAimode && (aimodeSteps.length > 0 || aimodeAnswer) && (
-              <div className="mb-6 rounded-2xl border p-5 space-y-4"
-                style={{ background: AI.card, borderColor: AI.border }}>
-                <div className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-lg" style={{ color: AI.accentLight }}>auto_awesome</span>
-                  <span className="text-xs uppercase tracking-widest font-bold"
-                    style={{ color: AI.accentLight }}>AI MODE — 시각화 추적</span>
-                </div>
-
-                {/* 사용자 질문 */}
-                <div className="text-sm">
-                  <span className="text-on-surface-variant text-xs">▼ 사용자 질문</span>
-                  <div className="mt-1 px-3 py-2 rounded-lg bg-white/5 border border-outline-variant/15">
-                    {finalQuery}
-                  </div>
-                </div>
-
-                {/* Step 1: 검색어 추출 */}
-                {aimodeSteps.find(s => s.step === 1) && (
-                  <div>
-                    <div className="text-xs text-on-surface-variant mb-1 flex items-center gap-1">
-                      <span className="material-symbols-outlined text-base" style={{ color: '#fbbf24' }}>search</span>
-                      Step 1 — 검색어 추출
-                      {aimodeSteps.find(s => s.step === 1 && s.done) && (
-                        <span className="material-symbols-outlined text-base text-emerald-400 ml-auto">check_circle</span>
-                      )}
-                    </div>
-                    <div className="px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 font-mono text-sm">
-                      {aimodeQuery || '...'}
-                    </div>
-                  </div>
-                )}
-
-                {/* Step 2: 검색 결과 카드 */}
-                {aimodeSteps.find(s => s.step === 2) && (
-                  <div>
-                    <div className="text-xs text-on-surface-variant mb-2 flex items-center gap-1">
-                      <span className="material-symbols-outlined text-base" style={{ color: '#85adff' }}>folder_open</span>
-                      Step 2 — 데이터베이스 검색 ({aimodeSources.length}건)
-                      {aimodeSteps.find(s => s.step === 2 && s.done) && (
-                        <span className="material-symbols-outlined text-base text-emerald-400 ml-auto">check_circle</span>
-                      )}
-                    </div>
-                    <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
-                      {aimodeSources.slice(0, 6).map((s, i) => {
-                        const isSelected = aimodeSelected === i
-                        return (
-                          <div key={i} className={`rounded-lg p-2 border transition-all ${
-                            isSelected
-                              ? 'bg-gradient-to-br from-purple-500/30 to-pink-500/20 border-purple-400 shadow-[0_0_20px_rgba(168,85,247,0.5)] scale-[1.03]'
-                              : 'bg-white/5 border-outline-variant/15'
-                          }`}>
-                            <div className="flex items-center gap-1 text-[10px] mb-1">
-                              <span className={`px-1.5 py-0.5 rounded font-bold ${isSelected ? 'bg-purple-400 text-white' : 'bg-white/10'}`}>
-                                #{i + 1}
-                              </span>
-                              <span className="text-on-surface-variant uppercase">{s.file_type || s.domain || ''}</span>
-                              <span className="ml-auto text-emerald-400 font-mono font-bold">
-                                {((s.confidence ?? 0) * 100).toFixed(0)}%
-                              </span>
-                            </div>
-                            <div className="text-xs font-semibold truncate">{s.file_name || '?'}</div>
-                            {s.snippet && (
-                              <div className="text-[10px] text-on-surface-variant/70 mt-1 line-clamp-2">
-                                {s.snippet.slice(0, 60)}
-                              </div>
-                            )}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Step 3: 카드 선택 */}
-                {aimodeSteps.find(s => s.step === 3) && aimodeSources[aimodeSelected ?? 0] && (
-                  <div>
-                    <div className="text-xs text-on-surface-variant mb-1 flex items-center gap-1">
-                      <span className="material-symbols-outlined text-base text-purple-400">center_focus_strong</span>
-                      Step 3 — #{(aimodeSelected ?? 0) + 1} 자동 선택
-                      <span className="material-symbols-outlined text-base text-emerald-400 ml-auto">check_circle</span>
-                    </div>
-                    <div className="px-3 py-2 rounded-lg bg-purple-500/10 border border-purple-500/30 text-sm">
-                      <span className="text-purple-300 font-bold">선택:</span>{' '}
-                      {aimodeSources[aimodeSelected ?? 0]?.file_name || '?'}
-                    </div>
-                  </div>
-                )}
-
-                {/* Step 4: 답변 */}
-                {(aimodeSteps.find(s => s.step === 4) || aimodeAnswer) && (
-                  <div>
-                    <div className="text-xs text-on-surface-variant mb-1 flex items-center gap-1">
-                      <span className="material-symbols-outlined text-base text-pink-400 animate-pulse">stylus</span>
-                      Step 4 — 답변 정리 {aimodeDone && (
-                        <span className="material-symbols-outlined text-base text-emerald-400 ml-auto">check_circle</span>
-                      )}
-                    </div>
-                    <div className="px-4 py-3 rounded-lg bg-gradient-to-br from-pink-500/10 to-purple-500/10 border border-pink-500/20 text-sm whitespace-pre-wrap leading-relaxed">
-                      {aimodeAnswer || (
-                        <span className="text-on-surface-variant/50 italic">생성 중...</span>
-                      )}
-                      {!aimodeDone && aimodeAnswer && (
-                        <span className="inline-block w-2 h-4 bg-pink-400 ml-1 animate-pulse align-middle"></span>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* 로딩 — AIMODE 4단계 진행 중 */}
-            {streaming && results.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-32 gap-4">
-                <span className="material-symbols-outlined text-5xl animate-spin" style={{ color: AI.accent }}>psychology</span>
-                <p className="text-on-surface-variant">
-                  <span style={{ color: AI.accentLight, fontWeight: 700 }}>AI</span>가 검색어를 분석하고 결과를 가져오는 중...
-                </p>
-              </div>
-            )}
-
-            {/* 결과 없음 */}
-            {!streaming && !aiError && results.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-32 gap-4">
-                <span className="material-symbols-outlined text-on-surface-variant/20 text-6xl">search_off</span>
-                <p className="text-on-surface-variant">일치하는 파일을 찾지 못했습니다.</p>
-              </div>
-            )}
-
-            {/* 결과 카드 — MainSearch 와 동일한 grid. AI 선택 카드는 펄스 강조 */}
-            {results.length > 0 && (
-              <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
-                {results.map((r, i) => {
-                  const isAiPick = aimodeSelected === i
+            {/* 후보 파일 카드 그리드 */}
+            {candidates.length > 0 && (
+              <div className="grid gap-4 mb-6"
+                style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
+                {candidates.map((src, i) => {
+                  const fid   = src.trichef_id || src.file_name || String(i)
+                  const state = scanStates[fid] || 'idle'
+                  const cks   = scanChunks[fid] || []
                   return (
-                    <div key={r.file_path + i} className="relative">
-                      {/* AI 자동 선택 — 카드 펄스 + 'AI 클릭 중...' 라벨 */}
-                      {isAiPick && (
-                        <>
-                          <div className="absolute -inset-1 rounded-[14px] pointer-events-none animate-pulse z-10"
-                            style={{ background: 'transparent',
-                              boxShadow: `0 0 0 3px ${AI.accentLight}, 0 0 30px 5px rgba(168,85,247,0.6)` }} />
-                          <div className="absolute -top-3 left-3 z-20 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest text-white animate-bounce"
-                            style={{ background: AI.rankBg, boxShadow: AI.glow }}>
-                            🤖 AI 선택중...
-                          </div>
-                        </>
-                      )}
-                      <AiResultCard result={r} rank={i + 1} onClick={() => handleSelectFile(r)} />
-                    </div>
+                    <CandidateCard
+                      key={fid}
+                      source={src}
+                      index={i}
+                      scanState={state}
+                      chunks={cks}
+                      onClick={handleSelectFile}
+                    />
                   )
                 })}
               </div>
             )}
 
-            {/* 요약 통계 */}
-            {!streaming && results.length > 0 && (
-              <div className="mt-12 rounded-[1.5rem] p-6 border relative overflow-hidden"
-                style={{ background: AI.card, borderColor: AI.border }}>
-                <div className="absolute -right-20 -top-20 w-64 h-64 rounded-full blur-[80px]"
-                  style={{ background: 'rgba(109,40,217,0.1)' }} />
-                <div className="relative z-10">
-                  <h3 className="text-sm font-bold mb-4 flex items-center gap-2 uppercase tracking-widest"
-                    style={{ color: AI.accentLight }}>
-                    <span className="material-symbols-outlined text-lg">analytics</span>AI 검색 요약
-                  </h3>
-                  <div className="grid grid-cols-2 gap-3 mb-3">
-                    {[
-                      ['총 결과', `${results.length}건`],
-                      ['최고 신뢰도', `${Math.round((results[0]?.confidence ?? 0) * 100)}%`],
-                    ].map(([label, val]) => (
-                      <div key={label} className="p-4 rounded-2xl border"
-                        style={{ background: 'rgba(109,40,217,0.05)', borderColor: AI.border }}>
-                        <p className="text-[10px] uppercase tracking-widest mb-1" style={{ color: 'rgba(167,139,250,0.4)' }}>{label}</p>
-                        <p className="text-xl font-bold text-on-surface">{val}</p>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-3 gap-3">
-                    {[
-                      { label: '파일검색', value: aimodeQuery, icon: 'folder_search', color: AI.accentLight },
-                      { label: '내용검색', value: aimodeContentKws.join(' · '), icon: 'manage_search', color: '#34d399' },
-                      { label: '상세내용', value: aimodeDetailKws.join(' · '), icon: 'lightbulb', color: '#f59e0b' },
-                    ].map(({ label, value, icon, color }) => (
-                      <div key={label} className="p-3 rounded-2xl border"
-                        style={{ background: 'rgba(109,40,217,0.05)', borderColor: AI.border }}>
-                        <div className="flex items-center gap-1 mb-1">
-                          <span className="material-symbols-outlined text-sm" style={{ color }}>{icon}</span>
-                          <p className="text-[10px] uppercase tracking-widest" style={{ color: 'rgba(167,139,250,0.4)' }}>{label}</p>
-                        </div>
-                        <p className="text-sm font-mono font-bold truncate" style={{ color }}>{value || '—'}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
+            {/* 답변 패널 */}
+            {(answer || ragPhase === 'answering' || ragPhase === 'done') && (
+              <AnswerPanel
+                answer={answer}
+                streaming={streaming && ragPhase === 'answering'}
+                sources={selectedSources}
+                done={ragDone}
+                onClickSource={handleSelectFile}
+              />
             )}
+
           </div>
         </main>
       )}
 
       {/* ════ DETAIL VIEW ════ */}
-      {view === 'detail' && selectedFile && (() => {
-        const meta    = getTypeMeta(selectedFile.file_type)
-        const confPct = Math.round((selectedFile.confidence ?? selectedFile.similarity ?? 0) * 100)
-        const isAV    = selectedFile.file_type === 'video' || selectedFile.file_type === 'audio'
-
-        return (
-          <main className={`${ml} min-h-screen relative transition-[margin] duration-300`}
-            style={{ opacity: detailVisible ? 1 : 0, transform: detailVisible ? 'translateX(0)' : 'translateX(36px)',
-              transition: 'opacity 0.35s ease, transform 0.35s ease, margin 0.3s' }}>
-
-            {/* 파일 정보 바 */}
-            <div className={`fixed top-24 ${leftEdge} right-0 z-30 backdrop-blur-xl flex items-center justify-between px-8 py-3 border-b transition-[left] duration-300`}
-              style={{ background: 'rgba(13,7,24,0.8)', borderColor: AI.border }}>
-              <div className="flex items-center gap-3 min-w-0 flex-1 mr-4">
-                <span className={`material-symbols-outlined ${meta.color} shrink-0`}>{meta.icon}</span>
-                <span className="font-manrope text-lg tracking-wide text-[#dfe4fe] font-bold truncate">{selectedFile.file_name}</span>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border shrink-0"
-                  style={{ background: 'rgba(139,92,246,0.15)', color: AI.accentLight, borderColor: AI.border }}>
-                  {confPct}%
-                </span>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border shrink-0 ${meta.color} bg-white/5 border-white/10`}>
-                  {meta.label}
-                </span>
-              </div>
-              <div className="flex items-center gap-3 shrink-0">
-                <button onClick={() => fetch(`${API_BASE}/api/files/open-folder`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ file_path: selectedFile.file_path }) })}
-                  className="px-5 py-2 text-[11px] font-bold uppercase tracking-widest rounded-full border transition-all active:scale-95"
-                  style={{ color: AI.accentLight, background: AI.card, borderColor: AI.border }}
-                  onMouseEnter={e => e.currentTarget.style.borderColor = AI.accentLight}
-                  onMouseLeave={e => e.currentTarget.style.borderColor = AI.border}>
-                  경로 열기
-                </button>
-                <button onClick={() => fetch(`${API_BASE}/api/files/open`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ file_path: selectedFile.file_path }) })}
-                  className="px-5 py-2 text-[11px] font-bold uppercase tracking-widest text-white rounded-full transition-all active:scale-95"
-                  style={{ background: AI.rankBg, boxShadow: '0 0 15px rgba(109,40,217,0.3)' }}>
-                  파일 열기
-                </button>
-              </div>
-            </div>
-
-            <section className="pt-44 pb-12 px-8 max-w-7xl mx-auto space-y-8">
-              {/* ★ AI 답변 패널 — AI 가 자동 선택한 카드와 일치할 때만 표시
-                  (사용자가 다른 카드 클릭 시에는 답변 숨김 — 답변은 AI 가 분석한 카드에만 유효) */}
-              {(() => {
-                const aiPickedFile = aimodeSources[aimodeSelected ?? -1]
-                const isAiPicked = aiPickedFile &&
-                  (aiPickedFile.file_path === selectedFile.file_path ||
-                   aiPickedFile.trichef_id === selectedFile.trichef_id)
-                if (!isAiPicked) {
-                  // 사용자가 다른 카드 클릭 — 답변 대신 안내 메시지 + AI 요약 유도
-                  return aimodeAnswer ? (
-                    <div className="rounded-xl px-6 py-4 border flex items-center gap-3"
-                      style={{ background: AI.card, borderColor: AI.border, color: 'rgba(167,139,250,0.7)' }}>
-                      <span className="material-symbols-outlined text-base">info</span>
-                      <span className="text-sm">
-                        AI 답변은 자동 선택된 <span className="font-mono">"{aiPickedFile?.file_name}"</span> 에 대한 내용입니다.
-                        이 파일에 대한 요약은 <span className="font-bold" style={{ color: AI.accentLight }}>일반 검색의 AI 요약 기능</span> 을 사용하세요.
-                      </span>
-                    </div>
-                  ) : null
-                }
-                return null
-              })()}
-              {(aimodeAnswer || aimodeSteps.find(s => s.step === 4)) && (() => {
-                const aiPickedFile = aimodeSources[aimodeSelected ?? -1]
-                const isAiPicked = aiPickedFile &&
-                  (aiPickedFile.file_path === selectedFile.file_path ||
-                   aiPickedFile.trichef_id === selectedFile.trichef_id)
-                if (!isAiPicked) return null
-                return (
-                <div className="rounded-2xl border overflow-hidden relative"
-                  style={{ background: 'linear-gradient(135deg, rgba(109,40,217,0.12), rgba(192,38,211,0.08))',
-                    borderColor: AI.borderHover,
-                    boxShadow: '0 0 30px rgba(168,85,247,0.15)' }}>
-                  <div className="px-6 py-3 flex items-center gap-3 border-b"
-                    style={{ borderColor: AI.border, background: 'rgba(13,7,24,0.4)' }}>
-                    <span className="material-symbols-outlined animate-pulse" style={{ color: AI.accentLight }}>auto_awesome</span>
-                    <span className="text-xs uppercase tracking-widest font-bold" style={{ color: AI.accentLight }}>
-                      AI 답변 — 본문에서 찾은 내용
-                    </span>
-                    {aimodeDone ? (
-                      <span className="ml-auto text-[10px] flex items-center gap-1 text-emerald-400">
-                        <span className="material-symbols-outlined text-base">check_circle</span> 완료
-                      </span>
-                    ) : (
-                      <span className="ml-auto text-[10px] flex items-center gap-1" style={{ color: AI.accentLight }}>
-                        <span className="material-symbols-outlined text-base animate-spin">progress_activity</span> 작성 중
-                      </span>
-                    )}
-                  </div>
-                  <div className="px-6 py-5 leading-relaxed text-on-surface text-base whitespace-pre-wrap min-h-[80px]">
-                    {aimodeAnswer ? stripMarkdown(aimodeAnswer) : (
-                      <span className="text-on-surface-variant/40 italic">본문을 분석해 답변을 정리하는 중입니다...</span>
-                    )}
-                    {!aimodeDone && aimodeAnswer && (
-                      <span className="inline-block w-2 h-4 ml-1 align-middle animate-pulse"
-                        style={{ background: AI.accentLight }} />
-                    )}
-                  </div>
-                  {(aimodeQuery || aimodeContentKws.length > 0) && (
-                    <div className="px-6 py-2 border-t flex flex-wrap items-center gap-3 text-[11px]"
-                      style={{ borderColor: AI.border, background: 'rgba(13,7,24,0.4)' }}>
-                      {aimodeQuery && <>
-                        <span className="material-symbols-outlined text-sm" style={{ color: AI.accentDark }}>folder_search</span>
-                        <span className="text-on-surface-variant/50">파일검색:</span>
-                        <span className="font-mono font-semibold" style={{ color: AI.accentLight }}>"{aimodeQuery}"</span>
-                      </>}
-                      {aimodeContentKws.length > 0 && <>
-                        <span className="text-on-surface-variant/20">|</span>
-                        <span className="material-symbols-outlined text-sm" style={{ color: '#34d399' }}>manage_search</span>
-                        <span className="text-on-surface-variant/50">내용검색:</span>
-                        <span className="font-mono font-semibold" style={{ color: '#34d399' }}>"{aimodeContentKws.join(' · ')}"</span>
-                      </>}
-                      {aimodeDetailKws.length > 0 && <>
-                        <span className="text-on-surface-variant/20">|</span>
-                        <span className="material-symbols-outlined text-sm" style={{ color: '#f59e0b' }}>lightbulb</span>
-                        <span className="text-on-surface-variant/50">상세내용:</span>
-                        <span className="font-mono font-semibold" style={{ color: '#f59e0b' }}>"{aimodeDetailKws.join(' · ')}"</span>
-                      </>}
-                    </div>
-                  )}
+      {view === 'detail' && selectedFile && (
+        <main className={`${ml} min-h-screen transition-[margin] duration-300`}
+          style={{ paddingTop: '128px' }}>
+          <div className={`max-w-4xl mx-auto px-8 pb-12 transition-all duration-300 ${detailVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
+            {/* 파일 헤더 */}
+            <div className="rounded-2xl border mb-6 overflow-hidden" style={{ background: AI.card, borderColor: AI.border }}>
+              <div className="px-6 py-4 flex items-center gap-4" style={{ background: 'rgba(109,40,217,0.1)' }}>
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center"
+                  style={{ background: 'linear-gradient(135deg, #6d28d9, #7c3aed)' }}>
+                  <span className="material-symbols-outlined text-white text-2xl"
+                    style={{ fontVariationSettings: '"FILL" 1' }}>
+                    {getTypeMeta(selectedFile.file_type).icon}
+                  </span>
                 </div>
-                )
-              })()}
-
-              <div className="grid grid-cols-12 gap-6">
-
-                {/* 메인 컨텐츠 */}
-                <div className="col-span-8 space-y-6">
-                  <div className="rounded-xl min-h-[400px] flex flex-col"
-                    style={{ background: AI.card, border: `1px solid ${AI.border}` }}>
-                    <div className="flex items-center justify-between px-8 pt-7 pb-5 border-b"
-                      style={{ borderColor: AI.border }}>
-                      <span className="text-[11px] font-bold tracking-[0.2em] uppercase" style={{ color: AI.accentLight }}>
-                        {isAV ? '미디어 플레이어 · 세그먼트' : '콘텐츠 미리보기'}
-                      </span>
-                      <div className="flex gap-2 items-center">
-                        {detailLoading && <span className="material-symbols-outlined text-lg animate-spin" style={{ color: AI.accent }}>progress_activity</span>}
-                        <span className="h-2 w-2 rounded-full animate-pulse" style={{ background: AI.accent }} />
-                        <span className="h-2 w-2 rounded-full" style={{ background: 'rgba(139,92,246,0.3)' }} />
-                      </div>
-                    </div>
-
-                    {isAV ? (
-                      <AVDetailContent result={selectedFile} />
-                    ) : (selectedFile.file_type === 'image' || selectedFile.file_type === 'doc') && selectedFile.preview_url ? (
-                      <div className="flex-1 flex items-center justify-center px-8 py-6">
-                        <img
-                          src={`${API_BASE}${selectedFile.preview_url}`}
-                          alt={selectedFile.file_name}
-                          className="max-w-full max-h-[380px] object-contain rounded-xl shadow-2xl border"
-                          style={{ borderColor: AI.border }}
-                        />
-                      </div>
-                    ) : (
-                      <div className="flex-1 px-8 py-6">
-                        {detailLoading ? (
-                          <div className="flex items-center gap-2" style={{ color: 'rgba(139,92,246,0.4)' }}>
-                            <span className="material-symbols-outlined animate-spin text-lg">progress_activity</span>
-                            <span className="text-sm">불러오는 중...</span>
-                          </div>
-                        ) : fileDetail?.full_text ? (
-                          <p className="text-on-surface-variant/90 leading-relaxed text-sm whitespace-pre-wrap">{fileDetail.full_text}</p>
-                        ) : (
-                          <div className="flex flex-col items-center justify-center h-48 gap-3" style={{ color: 'rgba(139,92,246,0.3)' }}>
-                            <span className={`material-symbols-outlined text-5xl ${meta.color}/30`} style={{ fontVariationSettings: '"FILL" 1' }}>{meta.icon}</span>
-                            <p className="text-sm">미리보기 없음</p>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-lg font-bold text-on-surface truncate">{selectedFile.file_name}</h2>
+                  <p className="text-xs text-on-surface-variant/60 font-mono truncate mt-0.5">{selectedFile.file_path}</p>
                 </div>
+                <div className="text-right shrink-0">
+                  <div className="text-xl font-bold" style={{ color: AI.accentLight }}>
+                    {((selectedFile.confidence ?? 0) * 100).toFixed(1)}%
+                  </div>
+                  <div className="text-xs text-on-surface-variant">신뢰도</div>
+                </div>
+              </div>
 
-                {/* 메타데이터 패널 */}
-                <div className="col-span-4 space-y-5">
-                  {/* 신뢰도 · 정확도 · 유사도 통합 패널 */}
-                  {(() => {
-                    const conf = selectedFile.confidence ?? selectedFile.similarity ?? 0
-                    const dense = selectedFile.dense
-                    const rerank = selectedFile.rerank_score ?? selectedFile.rerank
-                    const zScore = selectedFile.z_score
-                    const lexical = selectedFile.lexical
-                    const sigm = (x) => 1 / (1 + Math.exp(-x))
-                    const d01 = dense != null ? Math.max(0, Math.min(1, dense)) : 0
-                    const ft = selectedFile.file_type
-                    // 정확도 — 도메인 인지 폴백 (카드와 동일)
-                    let acc
-                    if (rerank != null) {
-                      const s = sigm(rerank)
-                      if (s >= 0.5) {
-                        acc = s
-                      } else if (ft === 'image') {
-                        acc = Math.max(d01 * 0.9, s)  // 이미지는 dense 우선
-                      } else {
-                        acc = s * 0.4 + d01 * 0.6
-                      }
-                    } else if (zScore != null) {
-                      acc = Math.max(0, Math.min(1, (zScore + 3) / 6))
-                    } else if (lexical != null && d01 > 0) {
-                      acc = d01 * 0.7 + Math.min(1, lexical * 1.5) * 0.3
-                    } else {
-                      acc = d01 > 0 ? d01 * 0.85 : conf * 0.9
-                    }
-                    // 유사도: dense 기반
-                    const sim = d01 > 0 ? d01 : conf
-                    const ROWS = [
-                      {
-                        label: '신뢰도', value: conf, source: rerank != null ? 'Rerank+Calib' : 'Hermitian',
-                        desc: 'Calibration 적용 후 종합 점수',
-                        gradFrom: AI.accentDark, gradTo: AI.accentLight,
-                      },
-                      {
-                        label: '정확도', value: acc, source: rerank != null ? 'BGE-reranker-v2-m3' : (zScore != null ? 'z-score' : 'sparse·lexical'),
-                        desc: 'Cross-encoder 재정렬 확률',
-                        gradFrom: '#10b981', gradTo: '#34d399',
-                      },
-                      {
-                        label: '유사도', value: sim, source: 'SigLIP2 / BGE-M3 dense',
-                        desc: '벡터 임베딩 코사인 유사도 (정규화)',
-                        gradFrom: '#3b82f6', gradTo: '#60a5fa',
-                      },
-                    ]
-                    return (
-                      <div className="rounded-xl p-6 border relative overflow-hidden"
-                        style={{ background: AI.card, borderColor: AI.border }}>
-                        <div className="absolute -right-4 -top-4 w-24 h-24 blur-3xl" style={{ background: 'rgba(109,40,217,0.15)' }} />
-                        <h4 className="text-[11px] font-bold tracking-[0.15em] uppercase mb-4 flex items-center gap-2"
-                          style={{ color: AI.accentLight }}>
-                          <span className="material-symbols-outlined text-sm">analytics</span>
-                          점수 분해
-                        </h4>
-                        {/* 가로 3 컬럼 — 라벨 + % 만, bar 없음 */}
-                        <div className="grid grid-cols-3 gap-2">
-                          {ROWS.map((r) => {
-                            const pct = Math.max(0, Math.min(100, (r.value || 0) * 100))
-                            return (
-                              <div key={r.label} title={`${r.desc} · ${r.source}`}
-                                className="flex flex-col items-center justify-center py-2 px-1 rounded-lg"
-                                style={{ background: 'rgba(255,255,255,0.02)' }}>
-                                <span className="text-[10px] uppercase tracking-widest text-on-surface-variant/60 mb-1">
-                                  {r.label}
-                                </span>
-                                <span className="text-2xl font-extrabold tabular-nums leading-none"
-                                  style={{ color: r.gradTo }}>
-                                  {pct.toFixed(1)}<span className="text-sm font-bold">%</span>
-                                </span>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    )
-                  })()}
+              {/* AV 플레이어 */}
+              {['video', 'audio', 'movie', 'music'].includes(selectedFile.file_type) && (
+                <AVDetailContent result={selectedFile} />
+              )}
 
-                  {/* 파일 정보 */}
-                  <div className="rounded-xl p-6 border" style={{ background: AI.card, borderColor: AI.border }}>
-                    <h4 className="text-[11px] font-bold tracking-[0.15em] uppercase mb-4" style={{ color: AI.accentLight }}>파일 정보</h4>
-                    <div className="space-y-3">
-                      {[
-                        ['파일명', selectedFile.file_name],
-                        ['타입', meta.label],
-                        selectedFile.page_num != null ? ['페이지', `${selectedFile.page_num}p`] : null,
-                        ['경로', selectedFile.file_path],
-                      ].filter(Boolean).map(([label, val]) => (
-                        <div key={label} className="flex gap-3 py-2 border-b last:border-0" style={{ borderColor: AI.border }}>
-                          <span className="text-[10px] uppercase tracking-widest min-w-[60px] shrink-0" style={{ color: 'rgba(167,139,250,0.5)' }}>{label}</span>
-                          <span className="text-[11px] text-on-surface-variant break-all font-mono">{val}</span>
+              {/* 이미지 */}
+              {selectedFile.file_type === 'image' && selectedFile.preview_url && (
+                <div className="flex items-center justify-center p-6" style={{ background: '#0b0515' }}>
+                  <img src={`${API_BASE}${selectedFile.preview_url}`} alt={selectedFile.file_name}
+                    className="max-w-full max-h-[400px] object-contain rounded-xl" />
+                </div>
+              )}
+
+              {/* Doc 정보 */}
+              {selectedFile.file_type === 'doc' && (
+                <div className="px-6 py-4">
+                  {detailLoading ? (
+                    <div className="flex items-center gap-2 text-on-surface-variant">
+                      <span className="material-symbols-outlined animate-spin">progress_activity</span>
+                      상세 정보 로드 중...
+                    </div>
+                  ) : fileDetail ? (
+                    <div className="text-sm text-on-surface-variant space-y-1">
+                      {Object.entries(fileDetail).slice(0, 8).map(([k, v]) => (
+                        <div key={k} className="flex gap-2">
+                          <span className="text-on-surface-variant/50 shrink-0 w-24">{k}</span>
+                          <span className="text-on-surface/80 truncate">{String(v)}</span>
                         </div>
                       ))}
                     </div>
-                  </div>
-
-                  {/* (legacy "검색 여정" 패널 제거 — AIMODE 는 단일 호출이라 의미 없음) */}
+                  ) : (
+                    <p className="text-sm text-on-surface-variant/50">상세 정보 없음</p>
+                  )}
                 </div>
-              </div>
-            </section>
-          </main>
-        )
-      })()}
+              )}
+            </div>
+
+            {/* 매칭 청크 */}
+            {(() => {
+              const fid = selectedFile.trichef_id || selectedFile.file_name
+              const cks = scanChunks[fid]
+              if (!cks || cks.length === 0) return null
+              return (
+                <div className="rounded-2xl border mb-6 overflow-hidden" style={{ background: AI.card, borderColor: '#10b981' }}>
+                  <div className="px-5 py-3 flex items-center gap-2"
+                    style={{ background: 'rgba(16,185,129,0.1)', borderBottom: '1px solid rgba(16,185,129,0.2)' }}>
+                    <span className="material-symbols-outlined text-emerald-400 text-base">find_in_page</span>
+                    <span className="text-sm font-bold text-emerald-400">매칭된 내용 ({cks.length}개)</span>
+                  </div>
+                  <div className="p-4 space-y-3">
+                    {cks.map((chunk, i) => (
+                      <div key={i} className="px-3 py-2 rounded-lg text-sm text-on-surface/80 leading-relaxed"
+                        style={{ background: 'rgba(16,185,129,0.05)', border: '1px solid rgba(16,185,129,0.15)' }}>
+                        ...{chunk}...
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })()}
+
+            {/* 답변 (detail에서도 보여줌) */}
+            {answer && (
+              <AnswerPanel
+                answer={answer}
+                streaming={false}
+                sources={selectedSources}
+                done={ragDone}
+                onClickSource={handleSelectFile}
+              />
+            )}
+          </div>
+        </main>
+      )}
+
+      {/* scan-line CSS */}
+      <style>{`
+        @keyframes scanLine {
+          0%   { transform: translateY(-100%); opacity: 0.8; }
+          100% { transform: translateY(100%);  opacity: 0.3; }
+        }
+        .scan-line {
+          position: absolute;
+          top: 0; left: 0; right: 0;
+          height: 40%;
+          background: linear-gradient(to bottom, transparent, rgba(139,92,246,0.4), transparent);
+          animation: scanLine 1.2s ease-in-out infinite;
+        }
+      `}</style>
     </div>
-  );
+  )
 }
