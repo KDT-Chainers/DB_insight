@@ -27,6 +27,14 @@ export default function TriChefSearch() {
       if (!r.ok) throw new Error(j.error || "검색 실패");
       setResults(j.top);
       setStats(j.stats);
+      // 검색 기록 저장 → 완료 후 사이드바 갱신
+      fetch(`${API_BASE}/api/history`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, method: 'trichef', result_count: (j.top || []).length }),
+      }).then(() => {
+        window.dispatchEvent(new Event('history-updated'))
+      }).catch(() => {})
     } catch (e) {
       setError(e.message);
     } finally {

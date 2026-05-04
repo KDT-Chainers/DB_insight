@@ -1042,13 +1042,14 @@ export default function MainSearch() {
     try {
       const data = await searchFiles(q, 20, type)
       setResults(data)
-      // 검색 기록 저장 + 사이드바 갱신 이벤트
+      // 검색 기록 저장 → 완료 후 사이드바 갱신 이벤트
       fetch(`${API_BASE}/api/history`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: q, method: type || 'all', result_count: data.length }),
+      }).then(() => {
+        window.dispatchEvent(new Event('history-updated'))
       }).catch(() => {})
-      window.dispatchEvent(new Event('history-updated'))
     } catch (e) {
       setSearchError(e.message)
       setResults([])
