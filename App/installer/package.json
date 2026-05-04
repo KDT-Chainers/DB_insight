@@ -16,7 +16,10 @@
     "productName": "DB_insight Setup",
     "npmRebuild":  false,
     "win": {
-      "target": "portable"
+      "target": "portable",
+      "signingHashAlgorithms": null,
+      "sign": null,
+      "signAndEditExecutable": false
     },
     "portable": {
       "artifactName": "DB_insight_Setup.exe"
