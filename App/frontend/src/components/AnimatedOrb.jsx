@@ -26,6 +26,7 @@ const CAM_Z_BASE = 2.85;
  *   assembleDuration?: number — 인트로 길이(초), 기본 ~8
  *   layout?: 'fixed' | 'fill' — fill이면 부모 전체를 캔버스로 채움(AI 홈 전역 오브 등)
  *   aiHoverFx?: boolean — colorMode ai 전용: 호버 시 채도 펄스·커서 근처 흡입(셰이더) + 진입 시 짧은 햅틱(지원 기기, interactive 없어도 캔버스만 포인터 허용)
+ *   voiceLevelRef?: React.MutableRefObject<number> — 0~1 마이크 레벨(ai 모드에서 getUserMedia 분석). 미전달 시 무시.
  * }} [props]
  */
 
@@ -82,6 +83,7 @@ uniform float uStretch;
 uniform float uAssemble;
 uniform float uNeural;
 uniform float uHoverVacuum;
+uniform float uVoice;
 attribute vec3 aSpread;
 attribute float aJitter;
 attribute float aPhase;
@@ -116,6 +118,16 @@ void main() {
   float syn = sin(uTime * 3.25 + aPhase * 7.5 + dot(dir, vec3(5.1, 2.2, -3.4)));
   pos += uNeural * (ax * syn + bi * cos(syn * 1.35)) * 0.0135 * (0.42 + 0.58 * aScatter);
 
+  float vox = clamp(uVoice, 0.0, 1.35);
+  if (vox > 0.002 && uNeural > 0.5) {
+    float rip = sin(uTime * 13.5 + dot(dir, vec3(6.2, -2.8, 1.5)) * 5.0 + aPhase * 14.0);
+    float rip2 = cos(uTime * 10.2 - aPhase * 9.0 + dot(dir, vec3(-3.1, 5.0, 0.8)) * 4.0);
+    float band = 0.5 + 0.5 * sin(dot(dir, vec3(0.7, 2.1, -1.6)) * 14.0 + uTime * 16.0);
+    pos += dir * vox * (0.034 * rip + 0.026 * rip2 + 0.019 * band);
+    pos += ax * vox * rip2 * 0.03;
+    pos += bi * vox * rip * 0.03;
+  }
+
   if (uNeural > 0.5 && uHoverVacuum > 0.001) {
     vec3 tang = A - dir * dot(A, dir);
     float tlen = length(tang);
@@ -141,6 +153,7 @@ void main() {
   if (aScatter > 0.5) szVar *= 0.88;
   float ps = clamp(basePx * szVar * (0.92 + vRim * 0.55), 1.0, 7.2);
   ps *= 1.0 + uNeural * (0.06 + 0.1 * aScatter) * (0.5 + 0.5 * sin(uTime * 2.1 + aPhase * 6.0));
+  ps *= 1.0 + uNeural * vox * (0.1 + 0.06 * sin(uTime * 18.0 + aPhase * 11.0));
   gl_PointSize = ps;
   gl_Position = projectionMatrix * mvPosition;
 }
@@ -150,6 +163,7 @@ const FRAG = /* glsl */ `
 uniform float uTime;
 uniform float uNeural;
 uniform float uHoverPulse;
+uniform float uVoice;
 varying float vRim;
 varying float vPhase;
 varying float vScatter;
@@ -172,6 +186,7 @@ void main() {
   sparkle += uNeural * (0.12 + 0.22 * vScatter) * tw3 * tw3;
   float hp = uNeural * uHoverPulse;
   sparkle *= 1.0 + 0.22 * hp * (0.5 + 0.5 * sin(uTime * 9.2 + vPhase * 5.5));
+  sparkle *= 1.0 + 0.38 * uNeural * clamp(uVoice, 0.0, 1.0);
   sparkle = clamp(pow(sparkle, 0.88), 0.35, 1.58);
 
   float rimBoost = mix(0.48, 1.38, vRim);
@@ -400,6 +415,8 @@ export default function AnimatedOrb({
   layout = "fixed",
   /** AI 모드 전용 호버: 셰이더 펄스·근처 흡입 + 진입 시 짧은 햅틱(지원 기기) */
   aiHoverFx = false,
+  /** @type {React.MutableRefObject<number> | undefined} */
+  voiceLevelRef = undefined,
 }) {
   const [progress, setProgress] = useState(initialProgress);
   const containerRef = useRef(null);
@@ -474,6 +491,8 @@ export default function AnimatedOrb({
 
     const isNeural = palette === "ai";
     const useAiHover = Boolean(aiHoverFx && isNeural);
+    const voiceRef = voiceLevelRef ?? null;
+    let voiceSmoothed = 0;
     const material = new THREE.ShaderMaterial({
       uniforms: {
         uTime: { value: 0 },
@@ -485,6 +504,7 @@ export default function AnimatedOrb({
         uNeural: { value: isNeural ? 1.0 : 0.0 },
         uHoverPulse: { value: 0 },
         uHoverVacuum: { value: 0 },
+        uVoice: { value: 0 },
       },
       vertexShader: VERT,
       fragmentShader: FRAG,
@@ -658,6 +678,17 @@ export default function AnimatedOrb({
         material.uniforms.uHoverVacuum.value = 0;
       }
 
+      const vRaw = voiceRef ? voiceRef.current : 0;
+      const vMul = reduceMotion ? 0.38 : 1;
+      const vTarget = THREE.MathUtils.clamp(vRaw * vMul, 0, 1.25);
+      voiceSmoothed += (vTarget - voiceSmoothed) * (1 - Math.exp(-dt * 10.5));
+      if (!voiceRef) voiceSmoothed *= 0.9;
+      material.uniforms.uVoice.value = voiceSmoothed;
+      if (isNeural) {
+        const sc = 1 + voiceSmoothed * 0.042;
+        root.scale.setScalar(sc);
+      }
+
       renderer.render(scene, camera);
       rafRef.id = requestAnimationFrame(animate);
     };
@@ -685,6 +716,7 @@ export default function AnimatedOrb({
     layout,
     aiHoverFx,
     interactive,
+    voiceLevelRef,
   ]);
 
   const displayProgress = Math.min(100, Math.round(progress));

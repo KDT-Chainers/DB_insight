@@ -1,8 +1,10 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import SearchSidebar from "../components/SearchSidebar";
 import AnimatedOrb from "../components/AnimatedOrb";
 import { useSidebar } from "../context/SidebarContext";
+import { useSpeechRecognition } from "../hooks/useSpeechRecognition";
+import { useMicLevelRef } from "../hooks/useMicLevelRef";
 
 const AI_RESULTS = [
   {
@@ -64,6 +66,27 @@ export default function MainAI() {
   );
   const btnRef = useRef(null);
   const orbSinkRef = useRef(null);
+  const orbVoiceRef = useRef(0);
+  const doSearchRef = useRef(null);
+
+  const onSpeechFinal = useCallback((text) => {
+    const t = text.trim();
+    setInputValue(t);
+    if (t) window.setTimeout(() => doSearchRef.current?.(t), 80);
+  }, []);
+
+  const {
+    listening: micListening,
+    interim: micInterim,
+    toggle: toggleMic,
+    stop: stopMic,
+  } = useSpeechRecognition({ onFinal: onSpeechFinal });
+
+  useMicLevelRef(view === "home" && micListening, orbVoiceRef);
+
+  useEffect(() => {
+    if (view !== "home") stopMic();
+  }, [view, stopMic]);
 
   useEffect(() => {
     if (view !== "home") {
@@ -125,6 +148,8 @@ export default function MainAI() {
       setView("results");
     }
   };
+
+  doSearchRef.current = doSearch;
 
   const handleSearch = (e) => {
     e?.preventDefault();
@@ -255,6 +280,7 @@ export default function MainAI() {
                 size={720}
                 assembleIntro
                 assembleDuration={8}
+                voiceLevelRef={orbVoiceRef}
               />
             </div>
 
@@ -299,14 +325,25 @@ export default function MainAI() {
                         </button>
                         <input
                           type="text"
-                          value={inputValue}
+                          value={micListening && micInterim ? micInterim : inputValue}
                           onChange={(e) => setInputValue(e.target.value)}
-                          placeholder="Anything you need"
+                          placeholder={
+                            micListening ? "듣는 중…" : "Anything you need"
+                          }
                           className="min-w-0 flex-1 border-none bg-transparent py-2 font-manrope text-sm text-violet-100/90 outline-none ring-0 placeholder:text-violet-300/45 md:py-2.5 md:text-base"
                         />
                         <button
                           type="button"
-                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-violet-300/18 bg-violet-950/35 text-violet-200/80 backdrop-blur-md transition-colors hover:border-violet-200/30 hover:bg-violet-900/40 hover:text-violet-100"
+                          onClick={toggleMic}
+                          aria-pressed={micListening}
+                          aria-label={
+                            micListening ? "음성 입력 끄기" : "음성 입력"
+                          }
+                          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border backdrop-blur-md transition-colors ${
+                            micListening
+                              ? "border-rose-400/35 bg-rose-950/40 text-rose-200 shadow-[0_0_16px_rgba(251,113,133,0.25)]"
+                              : "border-violet-300/18 bg-violet-950/35 text-violet-200/80 hover:border-violet-200/30 hover:bg-violet-900/40 hover:text-violet-100"
+                          }`}
                         >
                           <span className="material-symbols-outlined text-[20px]">
                             mic

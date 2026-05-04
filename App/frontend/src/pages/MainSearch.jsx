@@ -4,6 +4,7 @@ import SearchSidebar from '../components/SearchSidebar'
 import AnimatedOrb from '../components/AnimatedOrb'
 import AmbientPageBackdrop from '../components/AmbientPageBackdrop'
 import { useSidebar } from '../context/SidebarContext'
+import { useSpeechRecognition } from '../hooks/useSpeechRecognition'
 import { API_BASE } from '../api'
 
 // ── 파일 타입 메타 ───────────────────────────────────────
@@ -14,38 +15,6 @@ const TYPE_META = {
   audio: { icon: 'volume_up',   color: 'text-amber-400',   label: '음성',   grad: 'from-[#78350f] to-[#92400e]' },
 }
 const getTypeMeta = (t) => TYPE_META[t] ?? { icon: 'insert_drive_file', color: 'text-on-surface-variant', label: t ?? '파일', grad: 'from-[#1c253e] to-[#263354]' }
-
-// ── STT 훅 ───────────────────────────────────────────────
-function useSpeechRecognition({ onFinal }) {
-  const [listening, setListening] = useState(false)
-  const [interim, setInterim] = useState('')
-  const recognitionRef = useRef(null)
-  const latestRef = useRef('')
-
-  const start = useCallback(() => {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition
-    if (!SR) { alert('이 환경에서는 음성 인식이 지원되지 않습니다.'); return }
-    const r = new SR()
-    r.lang = 'ko-KR'; r.continuous = false; r.interimResults = true
-    r.onstart  = () => { setListening(true); setInterim(''); latestRef.current = '' }
-    r.onresult = (e) => {
-      let fin = '', tmp = ''
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        if (e.results[i].isFinal) fin += e.results[i][0].transcript
-        else tmp += e.results[i][0].transcript
-      }
-      if (tmp) { setInterim(tmp); latestRef.current = tmp }
-      if (fin) { setInterim(''); latestRef.current = fin }
-    }
-    r.onend    = () => { setListening(false); setInterim(''); const t = latestRef.current.trim(); latestRef.current = ''; if (t) onFinal(t) }
-    r.onerror  = () => { setListening(false); setInterim('') }
-    recognitionRef.current = r; r.start()
-  }, [onFinal])
-
-  const stop   = useCallback(() => recognitionRef.current?.stop(), [])
-  const toggle = useCallback(() => listening ? stop() : start(), [listening, start, stop])
-  return { listening, interim, toggle }
-}
 
 // ── 검색 API ────────────────────────────────────────────
 async function searchFiles(query, topK = 20) {
