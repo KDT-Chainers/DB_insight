@@ -266,7 +266,7 @@ class TriChefEngine:
         # (sparse/ASF disabled). For movie/music, expand_bilingual is already
         # used in the sparse + ASF channels and adding it here shifts dense
         # rankings without net benefit (tested: basketball 1.00→0.50 regression).
-        if domain in ("image", "doc"):
+        if domain in ("image", "doc", "doc_page"):  # [BUGFIX] doc_page 가 실제 캐시 키
             try:
                 from services.query_expand import expand_bilingual as _qe_bil
                 _bil = _qe_bil(query)

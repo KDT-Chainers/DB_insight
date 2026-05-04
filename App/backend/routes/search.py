@@ -111,8 +111,17 @@ def search():
         return jsonify({"error": str(e)}), 500
 
     # Optional cross-encoder rerank (env-gated, GPU bf16). 비활성/실패 시 원본 유지.
-    from services.rerank_adapter import maybe_rerank
+    from services.rerank_adapter import maybe_rerank, _is_enabled as _rr_enabled
     results = maybe_rerank(query, results)
+
+    # [v5] 재순위 후 관련성 하한 필터 — reranker 활성 시만 작동.
+    # 도메인 보장 쿼터(guaranteed slot)에 의해 포함된 비관련 결과가 상위 노출되는
+    # 문제 해결 (예: '경주 시굴 조사' 검색에 '실크로드 영상' 등장).
+    # rerank_score < -5.0 → sigmoid((-5+3)/3) ≈ 0.25 (관련성 25% 미만) → 제거.
+    # reranker 비활성 또는 rerank_score 없는 항목은 영향 없음 (default=0.0 ≥ -5.0).
+    if _rr_enabled():
+        _RERANK_FLOOR = -5.0
+        results = [r for r in results if r.get("rerank_score", 0.0) >= _RERANK_FLOOR]
 
     # 5도메인 통합 score 조정
     # TRI-CHEF(image/doc/video/audio): 엔진이 이미 per-query z-score CDF [0,1] 출력

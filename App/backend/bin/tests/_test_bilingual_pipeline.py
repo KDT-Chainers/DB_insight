@@ -26,6 +26,17 @@ PAIRS = [
     ("잔잔한 피아노",       "calm piano background music",  "calm_bgm",     ["bgm"]),
     ("신나는 빠른 음악",    "upbeat fast energetic music",  "fast_bgm",     ["bgm"]),
     ("어두운 긴장감",       "dark tense dramatic music",    "dark_bgm",     ["bgm"]),
+    # Image pairs — BLIP 캡션 기반 (영어 캡션, SigLIP2+BGE-M3 검색)
+    ("고양이",             "cat feline",                   "cat_img",      ["image"]),
+    ("강아지 개",           "dog puppy",                    "dog_img",      ["image"]),
+    ("해변 바다",           "beach ocean sea",              "beach_img",    ["image"]),
+    ("노을 일몰",           "sunset",                       "sunset_img",   ["image"]),
+    ("음식 요리",           "food meal dish",               "food_img",     ["image"]),
+    # Doc pairs — 실제 문서 제목 기반 (연도 특정으로 ambiguity 최소화)
+    ("2024 인공지능산업 실태조사",         "2024 AI industry survey report",          "AI_doc",     ["doc_page"]),
+    ("2023년 소프트웨어산업 연간보고서",   "2023 software industry annual report",    "SW_doc",     ["doc_page"]),
+    ("삼성전자 지속가능성",            "Samsung Electronics sustainability",    "samsung_doc",["doc_page"]),
+    ("식량 가격 지수 농업",            "food price index FAO agriculture",      "food_doc",   ["doc_page"]),
 ]
 
 def overlap(a: list[str], b: list[str]) -> float:
@@ -81,8 +92,41 @@ for ko_q, en_q, topic, domains in PAIRS:
                 print(f"    a={r['audio_score']:.3f} t={r['text_score']:.3f} "
                       f"fused={r['score']:.3f} conf={r['confidence']:.2f}  "
                       f"{short(r['filename'])} | {r['description'][:50]}")
+        elif domain in ("image", "doc_page"):
+            # TRI-CHEF Image / Doc — engine.search() 사용 (AV 와 다른 API)
+            # [중요] 라우트(/api/search)와 동일하게 expand_bilingual 적용 후 검색.
+            # 이렇게 해야 KO 쿼리에 EN 토큰이 추가되어 영문 캡션/문서와 매칭 가능.
+            from services.query_expand import expand_bilingual as _ebil
+            ko_exp = _ebil(ko_q)
+            en_exp = _ebil(en_q)
+            try:
+                r_ko = engine.search(ko_exp, domain=domain, topk=TOP_K,
+                                     use_lexical=True, use_asf=True)
+                r_en = engine.search(en_exp, domain=domain, topk=TOP_K,
+                                     use_lexical=True, use_asf=True)
+            except Exception as e:
+                print(f"  [{domain}] ERROR: {e}")
+                continue
+            # doc_page: id = "page_images/문서명/pNNNN.jpg" → 문서명 단위로 overlap
+            def _doc_key(rid: str) -> str:
+                parts = rid.replace("\\", "/").split("/")
+                return parts[1] if len(parts) >= 3 else rid
+            if domain == "doc_page":
+                ko_fns = [_doc_key(r.id) for r in r_ko]
+                en_fns = [_doc_key(r.id) for r in r_en]
+            else:
+                ko_fns = [r.id for r in r_ko]
+                en_fns = [r.id for r in r_en]
+            print(f"  [{domain}] KO top-3:")
+            for r in r_ko[:3]:
+                key = _doc_key(r.id) if domain == "doc_page" else r.id
+                print(f"    score={r.score:.3f} conf={r.confidence:.2f}  {short(key)}")
+            print(f"  [{domain}] EN top-3:")
+            for r in r_en[:3]:
+                key = _doc_key(r.id) if domain == "doc_page" else r.id
+                print(f"    score={r.score:.3f} conf={r.confidence:.2f}  {short(key)}")
         else:
-            # TRI-CHEF AV (movie/music) or image/doc
+            # TRI-CHEF AV (movie/music)
             try:
                 r_ko = engine.search_av(ko_q, domain=domain, topk=TOP_K)
                 r_en = engine.search_av(en_q, domain=domain, topk=TOP_K)

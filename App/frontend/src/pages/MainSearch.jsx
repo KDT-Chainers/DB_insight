@@ -1877,8 +1877,20 @@ export default function MainSearch() {
 
                   {/* 신뢰도/정확도/유사도 3지표 */}
                   {(() => {
-                    const accuracyPct = Math.min(100, Math.round(Math.abs(selectedFile.rerank ?? selectedFile.confidence ?? 0) * 100))
-                    const simPct = Math.round((selectedFile.dense ?? selectedFile.similarity ?? selectedFile.confidence ?? 0) * 100)
+                    // [BUGFIX] search card 와 동일한 sigmCalibrated 사용.
+                    // ① rerank_score (not rerank) 필드 참조
+                    // ② Math.abs()*100 → sigmCalibrated() 변환
+                    // ③ 폴백: confidence 아닌 z_score 기반 formula
+                    const _sigmCal = x => 1 / (1 + Math.exp(-((x + 3) / 3)))
+                    const _rr = selectedFile.rerank_score ?? selectedFile.rerank ?? null
+                    const _z  = selectedFile.z_score ?? null
+                    const accuracyPct = _rr != null
+                      ? Math.round(_sigmCal(_rr) * 100)
+                      : Math.round(Math.max(0, Math.min(1, ((_z ?? 0) + 3) / 6)) * 100)
+                    // [BUGFIX] dense 는 raw cosine → clamp 후 %, 없으면 similarity 폴백
+                    const simPct = selectedFile.dense != null
+                      ? Math.round(Math.max(0, Math.min(1, selectedFile.dense)) * 100)
+                      : Math.round((selectedFile.similarity ?? selectedFile.confidence ?? 0) * 100)
                     const bars = [
                       { label: '신뢰도', pct: confPct,     text: 'text-emerald-400' },
                       { label: '정확도', pct: accuracyPct, text: 'text-[#85adff]' },

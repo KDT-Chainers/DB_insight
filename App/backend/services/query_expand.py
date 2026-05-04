@@ -90,8 +90,8 @@ _KO_EN: dict[str, list[str]] = {
     "버스":         ["bus"],
 
     # ── 동물 / 자연물 ──────────────────────────────────────────────
-    "고양이":       ["cat", "kitten"],
-    "강아지":       ["dog", "puppy"],
+    "고양이":       ["cat", "kitten", "feline"],
+    "강아지":       ["dog", "puppy", "canine"],
     "개":           ["dog"],
     "새":           ["bird"],
     "물고기":       ["fish"],
@@ -112,7 +112,9 @@ _KO_EN: dict[str, list[str]] = {
     "해변":         ["beach", "seashore", "coast"],
     "호수":         ["lake", "pond"],
     "폭포":         ["waterfall", "falls"],
-    "일몰":         ["sunset", "dusk"],
+    "노을":         ["sunset", "dusk", "golden hour", "twilight"],
+    "일몰":         ["sunset", "dusk", "sundown"],
+    "석양":         ["sunset", "dusk", "evening glow"],
     "일출":         ["sunrise", "dawn"],
 
     # ── 사물 ──────────────────────────────────────────────────────
@@ -357,6 +359,8 @@ _KO_EN: dict[str, list[str]] = {
     "개발":         ["development", "develop"],
     "지원":         ["support"],
     "보고서":       ["report", "white paper"],
+    "연간보고서":   ["annual report", "yearly report"],
+    "실태조사":     ["survey", "survey report", "investigation report"],
     "통계":         ["statistics", "statistical"],
     "정책":         ["policy", "policies"],
     "산업":         ["industry", "industrial"],
