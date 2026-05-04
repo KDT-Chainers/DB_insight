@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback, Fragment } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import SearchSidebar from '../components/SearchSidebar'
 import AnimatedOrb from '../components/AnimatedOrb'
@@ -502,9 +503,6 @@ function ResultCard({ result, rank, onClick, securityMode = false, query = '' })
     p.play().catch(() => {})
   }
 
-/** v0 AIHero 퀵 서제스트 (동일 문구) */
-const V0_HOME_SUGGESTIONS = ['Write an email', 'Summarize text', 'Translate', 'Generate ideas']
-
   return (
     <div
       onClick={isAV ? undefined : onClick}
@@ -909,6 +907,9 @@ function AVDetailContent({ result }) {
   )
 }
 
+/** v0 AIHero 퀵 서제스트 */
+const V0_HOME_SUGGESTIONS = ['Write an email', 'Summarize text', 'Translate', 'Generate ideas']
+
 // ── 메인 컴포넌트 ────────────────────────────────────────
 export default function MainSearch() {
   const navigate = useNavigate()
@@ -932,8 +933,10 @@ export default function MainSearch() {
   const [hideLowConf, setHideLowConf] = useState(true)
   // 보안 모드 — 활성 시 결과 미리보기에 PII 마스킹 (주민번호/여권/계좌 등)
   const [securityMode, setSecurityMode] = useState(false)
-  // + 버튼 멀티 메뉴
+  // + 버튼 radial 메뉴
   const [plusMenuOpen, setPlusMenuOpen] = useState(false)
+  const plusBtnRef = useRef(null)
+  const [plusBtnCenter, setPlusBtnCenter] = useState({ x: 0, y: 0 })
   // 이미지 검색 — 입력 모달 + 업로드 파일 + 미리보기
   const imageInputRef = useRef(null)
   const [imageSearchFile, setImageSearchFile] = useState(null)
@@ -1026,6 +1029,7 @@ export default function MainSearch() {
     window.addEventListener('popstate', handlePopState)
     return () => window.removeEventListener('popstate', handlePopState)
   }, [view])
+
 
   // ── 검색 실행 ──────────────────────────────────────────
   // [#2] 도메인 필터를 백엔드에 전달 → 서버 측에서 type 별 top_k 할당.
@@ -1331,6 +1335,47 @@ export default function MainSearch() {
                 <AnimatedOrb onMicClick={toggleMic} listening={listening} />
               </div>
 
+              {/* + 버튼 Radial 메뉴 — portal로 document.body에 렌더 (filter/transform 부모 탈출) */}
+              {plusMenuOpen && createPortal((() => {
+                const items = [
+                  { angle: 270, icon: 'image_search', label: '이미지\n검색',  ic: 'text-emerald-400', bg: 'bg-emerald-500/20 border-emerald-400/30', action: () => setImageSearchModalOpen(true) },
+                  { angle: 318, icon: 'music_note',   label: 'BGM\n검색',     ic: 'text-pink-400',    bg: 'bg-pink-500/20 border-pink-400/30',       action: () => setBgmModalOpen(true) },
+                  { angle: 6,   icon: 'movie',        label: '동영상',         ic: 'text-violet-400',  bg: 'bg-violet-500/20 border-violet-400/30',   action: () => setDomainFilter(f => f === 'video' ? '' : 'video') },
+                  { angle: 54,  icon: 'volume_up',    label: '음성',           ic: 'text-amber-400',   bg: 'bg-amber-500/20 border-amber-400/30',     action: () => setDomainFilter(f => f === 'audio' ? '' : 'audio') },
+                  { angle: 222, icon: 'image',        label: '이미지',         ic: 'text-cyan-400',    bg: 'bg-cyan-500/20 border-cyan-400/30',       action: () => setDomainFilter(f => f === 'image' ? '' : 'image') },
+                  { angle: 174, icon: 'description',  label: '문서',           ic: 'text-blue-400',    bg: 'bg-blue-500/20 border-blue-400/30',       action: () => setDomainFilter(f => f === 'doc' ? '' : 'doc') },
+                ]
+                const R = 105
+                return (
+                  <>
+                    <div className="fixed inset-0 z-[9998]" onMouseDown={() => setPlusMenuOpen(false)} />
+                    <div className="fixed z-[9999] pointer-events-none"
+                      style={{ left: plusBtnCenter.x, top: plusBtnCenter.y }}>
+                      {/* 배경 원 */}
+                      <div className="absolute -translate-x-1/2 -translate-y-1/2 w-[260px] h-[260px] rounded-full border border-white/10 bg-black/55 backdrop-blur-2xl shadow-[0_0_60px_rgba(133,173,255,0.18)]"
+                        style={{ animation: 'radialOpen 0.22s cubic-bezier(0.34,1.56,0.64,1) both' }} />
+                      {/* 아이템들 */}
+                      {items.map((it, idx) => {
+                        const rad = (it.angle * Math.PI) / 180
+                        const x = R * Math.cos(rad)
+                        const y = R * Math.sin(rad)
+                        return (
+                          <button key={idx} type="button" className="pointer-events-auto absolute flex flex-col items-center gap-1 group"
+                            style={{ left: x, top: y, transform: 'translate(-50%,-50%)',
+                              animation: `radialOpen 0.25s cubic-bezier(0.34,1.56,0.64,1) ${idx * 30}ms both` }}
+                            onClick={() => { it.action(); setPlusMenuOpen(false) }}>
+                            <div className={`flex h-11 w-11 items-center justify-center rounded-full border ${it.bg} transition-all duration-150 group-hover:scale-125 group-hover:shadow-lg`}>
+                              <span className={`material-symbols-outlined text-[22px] ${it.ic}`}>{it.icon}</span>
+                            </div>
+                            <span className="text-[10px] font-semibold text-white/80 whitespace-pre-wrap text-center leading-tight drop-shadow">{it.label}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </>
+                )
+              })(), document.body)}
+
               {/* 검색 필 (v0 LLM input 스타일) */}
               <form
                 ref={formRef}
@@ -1348,7 +1393,26 @@ export default function MainSearch() {
                           : 'border-white/10 hover:border-white/20'
                     }`}
                 >
-                  <div className="pl-3 md:pl-4">
+                  {/* + 버튼 */}
+                  <button
+                    ref={plusBtnRef}
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.stopPropagation()
+                      if (!plusMenuOpen && plusBtnRef.current) {
+                        const r = plusBtnRef.current.getBoundingClientRect()
+                        setPlusBtnCenter({ x: r.left + r.width / 2, y: r.top + r.height / 2 })
+                      }
+                      setPlusMenuOpen(v => !v)
+                    }}
+                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-all duration-300 relative z-50
+                      ${plusMenuOpen
+                        ? 'bg-primary text-on-primary shadow-[0_0_20px_rgba(133,173,255,0.5)]'
+                        : 'bg-primary/15 text-primary hover:bg-primary/25'}`}
+                  >
+                    <span className={`material-symbols-outlined text-[20px] font-bold transition-transform duration-300 ${plusMenuOpen ? 'rotate-45' : ''}`}>add</span>
+                  </button>
+                  <div className="pl-1 md:pl-2">
                     <span className={`material-symbols-outlined text-xl ${listening ? 'text-red-400' : 'text-on-surface-variant'}`}>
                       search
                     </span>
@@ -1405,24 +1469,8 @@ export default function MainSearch() {
                 </div>
               </form>
 
-              {/* Quick suggestions (v0) */}
               <div
-                className={`mse-search-up mse-search-up-delay-1 mt-6 flex flex-wrap justify-center gap-2 transition-all duration-300 ${homeExiting ? 'pointer-events-none opacity-0' : ''}`}
-              >
-                {V0_HOME_SUGGESTIONS.map((suggestion) => (
-                  <button
-                    key={suggestion}
-                    type="button"
-                    onClick={() => setInputValue(suggestion)}
-                    className="rounded-full border border-white/5 bg-surface-container-high/40 px-4 py-2 text-sm text-on-surface-variant backdrop-blur-sm transition-all hover:border-white/10 hover:bg-surface-container-high/60 hover:text-on-surface"
-                  >
-                    {suggestion}
-                  </button>
-                ))}
-              </div>
-
-              <div
-                className={`mse-search-up mse-search-up-delay-2 mt-10 flex justify-center ${homeExiting ? 'pointer-events-none opacity-0' : ''}`}
+                className={`mse-search-up mse-search-up-delay-1 mt-10 flex justify-center ${homeExiting ? 'pointer-events-none opacity-0' : ''}`}
               >
                 <button
                   ref={btnRef}
@@ -1447,19 +1495,6 @@ export default function MainSearch() {
                 </div>
               )}
 
-              <div className={`grid grid-cols-1 md:grid-cols-3 gap-4 mt-24 w-full transition-all duration-300 ${homeExiting ? 'opacity-0 translate-y-4' : 'opacity-100 translate-y-0'}`}>
-                {[
-                  { icon: 'summarize',      color: 'text-primary',   title: 'PDF 요약',     sub: '신경망 처리' },
-                  { icon: 'search_insights',color: 'text-secondary', title: '심층 메타데이터',sub: '속성 분석' },
-                  { icon: 'auto_awesome',   color: 'text-primary',   title: '비주얼 검색',  sub: '비전 엔진' },
-                ].map((card) => (
-                  <div key={card.title} className="glass-effect p-6 rounded-xl border border-outline-variant/15 hover:border-primary/20 transition-all group cursor-pointer">
-                    <span className={`material-symbols-outlined ${card.color} mb-4 block`}>{card.icon}</span>
-                    <h3 className="text-on-surface font-bold mb-1">{card.title}</h3>
-                    <p className="text-on-surface-variant text-base uppercase tracking-tighter">{card.sub}</p>
-                  </div>
-                ))}
-              </div>
             </div>
           </main>
         </>

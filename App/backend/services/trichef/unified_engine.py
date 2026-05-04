@@ -238,8 +238,16 @@ class TriChefEngine:
                            f"AV ASF 비활성화 (build_asf_assets 재실행 필요)")
             av_asf_sets = []
 
+        # sparse lexical 채널 — cache_{prefix}_sparse.npz 가 있으면 로드
+        sparse_path = cache_dir / f"cache_{prefix}_sparse.npz"
+        av_sparse = _load_sparse(sparse_path)
+        if av_sparse is not None and av_sparse.shape[0] != N:
+            logger.warning(f"[engine:{kind}] sparse({av_sparse.shape[0]}) != Re({N}); "
+                           f"AV sparse 비활성화 (rebuild_*_lexical 재실행 필요)")
+            av_sparse = None
+
         return {"Re": Re, "Im": Im, "Z": Z, "ids": ids, "segments": segs,
-                "sparse": None, "vocab": av_vocab, "asf_sets": av_asf_sets}
+                "sparse": av_sparse, "vocab": av_vocab, "asf_sets": av_asf_sets}
 
     def _embed_query(self, query: str) -> tuple[np.ndarray, np.ndarray]:
         variants = qwen_expand.expand(query)
@@ -328,23 +336,25 @@ class TriChefEngine:
 
         dense_order = np.argsort(-dense_scores)
 
+        # v2 P2 & P4 공통: bilingual 확장 쿼리 (sparse + ASF 모두 한↔영 크로스랭귀지 매칭)
+        try:
+            from services.query_expand import expand_bilingual as _qe3
+            _expanded_query = _qe3(query)
+        except Exception:
+            _expanded_query = query
+
         # v2 P2: sparse lexical 채널 (bilingual expanded query → 크로스랭귀지 sparse 매칭)
         sparse_scores = None
         rankings = [dense_order[:pool]]
         if use_lexical and d.get("sparse") is not None:
-            try:
-                from services.query_expand import expand_bilingual as _qe3
-                _sparse_query = _qe3(query)
-            except Exception:
-                _sparse_query = query
-            q_sp = bgem3_sparse.embed_query_sparse(_sparse_query)
+            q_sp = bgem3_sparse.embed_query_sparse(_expanded_query)
             sparse_scores = bgem3_sparse.lexical_scores(q_sp, d["sparse"])
             rankings.append(np.argsort(-sparse_scores)[:pool])
 
-        # v3 P4: ASF (Attention-Similarity-Filter) 채널
+        # v3 P4: ASF (Attention-Similarity-Filter) 채널 — bilingual 확장 쿼리 사용
         asf_s = None
         if use_asf and d.get("asf_sets") and d.get("vocab"):
-            asf_s = asf_filter.asf_scores(query, d["asf_sets"], d["vocab"])
+            asf_s = asf_filter.asf_scores(_expanded_query, d["asf_sets"], d["vocab"])
             if asf_s.any():
                 rankings.append(np.argsort(-asf_s)[:pool])
 
@@ -545,6 +555,7 @@ class TriChefEngine:
         #   - 모든 토큰 매칭(=고유명사+직함 정확 일치): 추가 +0.20
         #   → "박태웅 의장" 가 정확히 들어간 segment: +0.10 + +0.10 + +0.20 = +0.40
         #   → "의장" 만 들어간 segment:                     +0.10
+        _expanded = query  # 기본값 — bilingual 확장 실패 시 raw query 사용
         try:
             # 한↔영 크로스랭귀지 substring boost:
             # query_expand 로 bilingual 확장 → 영문 쿼리도 한국어 STT 텍스트와 매칭
@@ -588,9 +599,24 @@ class TriChefEngine:
         asf_seg: np.ndarray | None = None
         if d.get("asf_sets") and d.get("vocab") and len(d["asf_sets"]) == len(d["ids"]):
             try:
-                asf_seg = asf_filter.asf_scores(query, d["asf_sets"], d["vocab"])
+                asf_seg = asf_filter.asf_scores(_expanded, d["asf_sets"], d["vocab"])
             except Exception as _ae:
                 logger.debug(f"[engine:{domain}] ASF 스코어링 실패: {_ae}")
+
+        # v2 P2 AV: sparse lexical 세그먼트 점수 (bilingual 확장 쿼리 사용)
+        # 각 segment 의 sparse 점수를 전체 기준 min-max 정규화 → [0,1]
+        sparse_seg_norm: np.ndarray | None = None
+        if d.get("sparse") is not None:
+            try:
+                q_sp = bgem3_sparse.embed_query_sparse(_expanded)
+                _sp_raw = bgem3_sparse.lexical_scores(q_sp, d["sparse"])
+                s_min, s_max = float(_sp_raw.min()), float(_sp_raw.max())
+                if s_max > s_min + 1e-8:
+                    sparse_seg_norm = (_sp_raw - s_min) / (s_max - s_min)
+                else:
+                    sparse_seg_norm = None
+            except Exception as _spe:
+                logger.debug(f"[engine:{domain}] AV sparse 스코어링 실패: {_spe}")
 
         # 파일별 세그먼트 인덱스 수집
         # AV는 query-vs-segment 점수가 segment-vs-segment null 분포와 달라
@@ -600,8 +626,8 @@ class TriChefEngine:
             fp = meta.get("file_path", d["ids"][i])
             file_idx.setdefault(fp, []).append(i)
 
-        # MR_TriCHEF WEIGHTS: (α dense, β lexical=0, γ asf)
-        _ALPHA, _GAMMA = 0.75, 0.25
+        # MR_TriCHEF WEIGHTS: (α dense, β lexical, γ asf)
+        _ALPHA, _BETA, _GAMMA = 0.60, 0.15, 0.25
 
         # [v3] file 처리 순서를 dense_agg 내림차순으로 사전 정렬.
         # 기존에는 dict insertion order (segment 순) 로 iterate 후 topk*3 break 했는데,
@@ -615,8 +641,11 @@ class TriChefEngine:
             agg = float(np.mean(top3)) if top3 else 0.0
             pre_agg.append((agg, fp))
         pre_agg.sort(reverse=True)
-        # topk*5 까지 후보 확장 (boost reordering 여유)
-        ordered_keys = [fp for _, fp in pre_agg[:max(topk * 5, 50)]]
+        # sparse 채널 추가로 dense 하위권에서 exact-match 파일이 올라올 수 있음.
+        # 데이터셋이 ~400 file 수준이라 전체 후보 사용해도 부담 미미.
+        # 단, 1000 file 초과 시 topk*10 으로 제한 (확장성 고려).
+        _max_cands = len(file_keys) if len(file_keys) <= 1000 else max(topk * 10, 100)
+        ordered_keys = [fp for _, fp in pre_agg[:_max_cands]]
 
         out: list[TriChefAVResult] = []
         for fp in ordered_keys:
@@ -633,10 +662,15 @@ class TriChefEngine:
             if asf_seg is not None:
                 asf_agg = float(max(float(asf_seg[i]) for i in idxs))
 
+            # ── sparse 파일 내 max (min-max 정규화 완료) ───────────────────
+            sparse_agg = 0.0
+            if sparse_seg_norm is not None:
+                sparse_agg = float(max(float(sparse_seg_norm[i]) for i in idxs))
+
             # ── per-query z-score → confidence (이미지/문서와 동일한 공식) ──
             # z > 0: 이 쿼리 대비 평균 이상 관련  z < 0: 평균 이하
             z_dense = (dense_agg - q_mu) / q_sig
-            final   = _ALPHA * z_dense + _GAMMA * asf_agg
+            final   = _ALPHA * z_dense + _BETA * sparse_agg + _GAMMA * asf_agg
             conf    = 0.5 * (1.0 + math.erf(z_dense / (2 ** 0.5)))
 
             # 상위 세그먼트 메타 빌드
@@ -675,9 +709,10 @@ class TriChefEngine:
                 segments=seg_list,
                 metadata={
                     "low_confidence": weak_evidence,
-                    "dense_agg": round(dense_agg, 4),
-                    "z_dense":   round(z_dense, 4),
-                    "asf_agg":   round(asf_agg, 4),
+                    "dense_agg":  round(dense_agg, 4),
+                    "z_dense":    round(z_dense, 4),
+                    "sparse_agg": round(sparse_agg, 4),
+                    "asf_agg":    round(asf_agg, 4),
                 },
             ))
 

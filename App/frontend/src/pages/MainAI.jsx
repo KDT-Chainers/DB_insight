@@ -598,10 +598,10 @@ export default function MainAI() {
     return () => clearTimeout(t)
   }, [view])
 
-  // 뷰 변경 시 검색창 자동 포커스
+  // 뷰 변경 시 검색창 자동 포커스 (detail 제외 모든 뷰)
   useEffect(() => {
-    if (view === 'home' || view === 'results') {
-      const t = setTimeout(() => inputRef.current?.focus(), 120)
+    if (view !== 'detail') {
+      const t = setTimeout(() => inputRef.current?.focus(), 150)
       return () => clearTimeout(t)
     }
   }, [view])
@@ -1001,7 +1001,7 @@ export default function MainAI() {
       {/* ════ HOME VIEW ════ */}
       {view === 'home' && (
         <>
-          <main className={`${ml} relative flex h-full min-h-0 flex-col overflow-x-hidden overflow-y-auto bg-transparent transition-[margin] duration-300`}>
+          <main className={`${ml} relative flex h-full min-h-0 flex-col overflow-x-hidden overflow-y-auto bg-transparent transition-[margin] duration-300 pt-8`}>
             {/* 곡선 띠 배경 */}
             <div
               className={`pointer-events-none absolute inset-0 z-0 min-h-0 will-change-transform ${homeGlowDrift ? 'ai-home-glow-drift' : 'ai-home-glow-slide-in'}`}
@@ -1059,19 +1059,19 @@ export default function MainAI() {
                           value={inputValue}
                           onChange={(e) => setInputValue(e.target.value)}
                           placeholder={
-                            micListening ? "듣는 중…" : "Anything you need"
+                            listening ? "듣는 중…" : "Anything you need"
                           }
                           className="min-w-0 flex-1 border-none bg-transparent py-2 font-manrope text-sm text-violet-100/90 outline-none ring-0 placeholder:text-violet-300/45 md:py-2.5 md:text-base"
                         />
                         <button
                           type="button"
                           onClick={toggleMic}
-                          aria-pressed={micListening}
+                          aria-pressed={listening}
                           aria-label={
-                            micListening ? "음성 입력 끄기" : "음성 입력"
+                            listening ? "음성 입력 끄기" : "음성 입력"
                           }
                           className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border backdrop-blur-md transition-colors ${
-                            micListening
+                            listening
                               ? "border-rose-400/35 bg-rose-950/40 text-rose-200 shadow-[0_0_16px_rgba(251,113,133,0.25)]"
                               : "border-violet-300/18 bg-violet-950/35 text-violet-200/80 hover:border-violet-200/30 hover:bg-violet-900/40 hover:text-violet-100"
                           }`}
@@ -1123,7 +1123,7 @@ export default function MainAI() {
       ════════════════════════════════ */}
       {view !== "home" && (
         <header
-          className={`fixed top-0 ${leftEdge} right-0 z-40 bg-[#070d1f]/60 backdrop-blur-xl flex items-center px-8 h-16 gap-6 shadow-[0_4px_30px_rgba(172,138,255,0.1)] transition-[left] duration-300`}
+          className={`fixed top-8 ${leftEdge} right-0 z-40 bg-[#070d1f]/60 backdrop-blur-xl flex items-center px-8 h-16 gap-6 shadow-[0_4px_30px_rgba(172,138,255,0.1)] transition-[left] duration-300`}
         >
           <button
             onClick={() => {
@@ -1142,6 +1142,7 @@ export default function MainAI() {
               </span>
               <input
                 ref={inputRef}
+                autoFocus
                 className="bg-transparent border-none focus:ring-0 w-full text-on-surface text-lg outline-none"
                 style={{ caretColor: AI.accentLight }}
                 placeholder="AI에게 검색을 맡기세요..."
@@ -1183,7 +1184,7 @@ export default function MainAI() {
       {/* ════ RESULTS VIEW ════ */}
       {view === 'results' && (
         <main className={`${ml} min-h-screen transition-[margin] duration-300`}
-          style={{ paddingTop: '96px', opacity: resultsReady ? 1 : 0, transform: resultsReady ? 'translateY(0)' : 'translateY(24px)',
+          style={{ paddingTop: '128px', opacity: resultsReady ? 1 : 0, transform: resultsReady ? 'translateY(0)' : 'translateY(24px)',
             transition: 'opacity 0.38s ease, transform 0.38s ease, margin 0.3s' }}>
           <div className="px-8 pb-8 pt-5 max-w-[1400px] mx-auto">
 

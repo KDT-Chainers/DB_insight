@@ -277,6 +277,17 @@ body {
 }
 
 /* ── 페이지 전환 입장 애니메이션 ─────────────────────────── */
+@keyframes radialOpen {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.4);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
 @keyframes pageEnter {
   from {
     opacity: 0;

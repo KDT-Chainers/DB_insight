@@ -163,9 +163,9 @@ def search():
                         "file_name":      r.file_name,
                         "score":          r.score,
                         "confidence":     r.confidence,
-                        "dense":          r.score,
-                        "lexical":        0.0,
-                        "asf":            0.0,
+                        "dense":          r.metadata.get("dense_agg", r.score),
+                        "lexical":        r.metadata.get("sparse_agg", 0.0),
+                        "asf":            r.metadata.get("asf_agg", 0.0),
                         "segments":       r.segments,   # 각 세그먼트에 preview 필드 포함
                         "low_confidence": r.metadata.get("low_confidence", False),
                         "preview_url":    None,

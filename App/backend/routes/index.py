@@ -367,9 +367,8 @@ def _run_job(job_id: str, file_paths: list[str], results: list[dict]) -> None:
 
                 # progress_cb: 전 타입 지원 (video=5단계, audio=4단계, image/doc=3단계)
                 kwargs = {"progress_cb": _make_cb(i, job_id)}
-                # [P0 #B] image/doc 은 lexical rebuild 지연 → 배치 끝에 1회.
-                # av_embed(movie/music) 는 lexical_rebuild 미사용이므로 적용 X.
-                if file_type in ("image", "doc"):
+                # [P0 #B] image/doc/movie/music 은 lexical rebuild 지연 → 배치 끝에 1회.
+                if file_type in ("image", "doc", "movie", "music"):
                     kwargs["defer_lexical_rebuild"] = True
                 result = embedder(path, **kwargs)
                 if result.get("status") == "done":
@@ -434,6 +433,12 @@ def _run_job(job_id: str, file_paths: list[str], results: list[dict]) -> None:
             if "doc" in domains_dirty:
                 try: _lex.rebuild_doc_lexical()
                 except Exception as e: print(f"[batch] doc lexical rebuild 실패: {e}", flush=True)
+            if "movie" in domains_dirty:
+                try: _lex.rebuild_movie_lexical()
+                except Exception as e: print(f"[batch] movie lexical rebuild 실패: {e}", flush=True)
+            if "music" in domains_dirty:
+                try: _lex.rebuild_music_lexical()
+                except Exception as e: print(f"[batch] music lexical rebuild 실패: {e}", flush=True)
         except Exception as e:
             print(f"[batch] lexical_rebuild import 실패: {e}", flush=True)
         try:

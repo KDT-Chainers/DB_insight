@@ -1,10 +1,12 @@
 /**
  * 팀 로고(DB 모노그램). 사이드바 등에서 기존 그라데이션+dataset 마크 대신 사용.
  */
+import teamLogoSrc from '../assets/teamlogo.png'
+
 export default function TeamLogoMark({ className = "" }) {
   return (
     <img
-      src="/teamlogo.png"
+      src={teamLogoSrc}
       alt=""
       width={32}
       height={32}

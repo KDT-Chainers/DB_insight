@@ -444,6 +444,57 @@ _KO_EN: dict[str, list[str]] = {
     "배경음악":     ["background music", "BGM"],
     "반주":         ["accompaniment", "background music"],
 
+    # ── 악기 / 음악 상세 ──────────────────────────────────────────────
+    "첼로":         ["cello"],
+    "바이올린":     ["violin"],
+    "플루트":       ["flute"],
+    "색소폰":       ["saxophone", "sax"],
+    "트럼펫":       ["trumpet"],
+    "베이스기타":   ["bass guitar", "bass"],
+    "신디사이저":   ["synthesizer", "synth"],
+    "전자기타":     ["electric guitar"],
+    "어쿠스틱":     ["acoustic"],
+    "현악기":       ["strings", "string instrument"],
+    "관악기":       ["wind instrument", "brass", "woodwind"],
+    "타악기":       ["percussion", "drums"],
+    "앙상블":       ["ensemble"],
+    "협주곡":       ["concerto"],
+    "교향곡":       ["symphony"],
+    "멜로디":       ["melody"],
+    "화음":         ["harmony", "chord"],
+    "박자":         ["rhythm", "tempo", "beat"],
+    "비트":         ["beat", "rhythm", "groove"],
+    "전주":         ["intro", "introduction", "prelude"],
+    "후렴":         ["chorus", "refrain"],
+    "간주":         ["interlude", "bridge"],
+
+    # ── 영화 / 드라마 상세 ────────────────────────────────────────────
+    "출연":         ["starring", "appearance", "cast", "featured"],
+    "주연":         ["lead actor", "starring", "leading role"],
+    "조연":         ["supporting actor", "co-star"],
+    "제목":         ["title"],
+    "개봉":         ["release", "premiere", "opening"],
+    "상영":         ["screening", "showing"],
+    "예고편":       ["trailer", "preview"],
+    "결말":         ["ending", "finale", "conclusion"],
+    "줄거리":       ["plot", "synopsis", "storyline"],
+    "장르":         ["genre"],
+    "감동":         ["touching", "moving", "emotional", "heartwarming"],
+    "명장면":       ["best scene", "iconic scene", "highlight scene"],
+
+    # ── 스포츠 상세 ───────────────────────────────────────────────────
+    "스타":         ["star", "celebrity"],
+    "팀":           ["team", "squad"],
+    "심판":         ["referee", "judge", "umpire"],
+    "코치":         ["coach", "trainer"],
+    "공격":         ["attack", "offense", "offensive"],
+    "수비":         ["defense", "defensive"],
+    "골":           ["goal"],
+    "점수":         ["score", "point", "points"],
+    "우승":         ["championship", "win", "victory", "title"],
+    "준우승":       ["runner-up", "second place"],
+    "기록":         ["record"],
+
     # ── 영상 / 방송 고유명사 ─────────────────────────────────────
     "유퀴즈":       ["You Quiz", "variety show"],
     "다스뵈이다":   ["Das Boot", "political podcast"],
@@ -545,26 +596,31 @@ def expand_bilingual(query: str, max_extra: int = 10) -> str:
     extras: list[str] = []
     seen: set[str] = {t.lower() for t in tokens}
 
+    # 토큰별 최대 추가 수 제한 (per-token cap) — 단일 토큰이 max_extra 를 독점하지 않도록
+    per_token_cap = max(2, max_extra // max(len(tokens), 1))
+
     for t in tokens:
+        added_this_token = 0
         # 한 → 영
         for en in _KO_EN.get(t, []):
             el = en.lower()
             if el not in seen:
                 extras.append(en)
                 seen.add(el)
-                if len(extras) >= max_extra:
+                added_this_token += 1
+                if added_this_token >= per_token_cap:
                     break
-        if len(extras) >= max_extra:
-            break
         # 영 → 한
         for ko in _EN_KO.get(t.lower(), []):
             if ko not in seen:
                 extras.append(ko)
                 seen.add(ko)
-                if len(extras) >= max_extra:
+                added_this_token += 1
+                if added_this_token >= per_token_cap:
                     break
-        if len(extras) >= max_extra:
-            break
+
+    # 전체 상한 준수
+    extras = extras[:max_extra]
 
     if not extras:
         return query

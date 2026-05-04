@@ -171,3 +171,94 @@ def rebuild_doc_lexical() -> dict:
                 f"asf_nonempty={sum(1 for s in sets if s)}/{len(sets)} "
                 f"sparse={mat.shape} nnz={mat.nnz}")
     return {"vocab": len(vocab), "sparse": list(mat.shape), "nnz": int(mat.nnz)}
+
+
+def _clean_filename(fname: str) -> str:
+    """파일명에서 확장자, zip 아티팩트, 채널 태그 제거 → 제목 텍스트만 추출."""
+    import re as _re
+    # 확장자 제거 (.mp4 .mkv .mp3 등)
+    fname = _re.sub(r'\.[a-zA-Z0-9]{2,4}$', '', fname)
+    # .zip 아티팩트 제거 (예: "뉴스.zipMBC뉴스" → "뉴스 MBC뉴스")
+    fname = fname.replace('.zip', ' ')
+    # 대괄호 내용 제거 ([채널명])
+    fname = _re.sub(r'\[.*?\]', '', fname)
+    # 경로 구분자 이후 파일명만 (역슬래시/슬래시)
+    fname = fname.split('/')[-1].split('\\')[-1]
+    # 연속 공백 정리
+    return _re.sub(r'\s+', ' ', fname).strip()
+
+
+def _av_stt_texts(segments: list[dict]) -> list[str]:
+    """AV segments → (파일명 제목 + STT) 결합 텍스트 리스트.
+
+    file_name 에 포함된 영상 제목을 STT 앞에 붙여 lexical 커버리지 향상.
+    STT 없으면 제목만, 둘 다 없으면 빈 문자열.
+    """
+    result = []
+    for s in segments:
+        stt   = str(s.get("stt_text")  or "").strip()
+        fname = str(s.get("file_name") or s.get("file") or "").strip()
+        title = _clean_filename(fname) if fname else ""
+        if title and stt:
+            result.append(f"{title} {stt}")
+        elif title:
+            result.append(title)
+        else:
+            result.append(stt)
+    return result
+
+
+def rebuild_movie_lexical() -> dict:
+    """movie 도메인 vocab + {prefix}_token_sets + sparse (STT 원문) 재빌드.
+
+    Engine._build_av_entry 가 cache_movie_sparse.npz 를 자동 로드하므로
+    이 함수 실행 후 Engine 재기동 또는 _load_all() 재호출이 필요.
+    """
+    cache = Path(PATHS["TRICHEF_MOVIE_CACHE"])
+    segs_path = cache / "segments.json"
+    if not segs_path.exists():
+        return {"skipped": True, "reason": "segments.json 없음"}
+    segments = json.loads(segs_path.read_text(encoding="utf-8"))
+    texts = _av_stt_texts(segments)
+    if not any(texts):
+        return {"skipped": True, "reason": "STT 텍스트 없음"}
+
+    vocab = auto_vocab.build_vocab(texts, min_df=2, max_df_ratio=0.5, top_k=8000)
+    auto_vocab.save_vocab(cache / "vocab_movie.json", vocab)
+
+    sets = asf_filter.build_doc_token_sets(texts, vocab)
+    asf_filter.save_token_sets(cache / "movie_token_sets.json", sets)
+
+    mat = _encode_sparse(texts, max_length=512)
+    sp.save_npz(cache / "cache_movie_sparse.npz", mat)
+
+    logger.info(f"[lexical_rebuild:movie] vocab={len(vocab)} "
+                f"asf_nonempty={sum(1 for s in sets if s)}/{len(sets)} "
+                f"sparse={mat.shape} nnz={mat.nnz}")
+    return {"vocab": len(vocab), "sparse": list(mat.shape), "nnz": int(mat.nnz)}
+
+
+def rebuild_music_lexical() -> dict:
+    """music 도메인 vocab + {prefix}_token_sets + sparse (STT 원문) 재빌드."""
+    cache = Path(PATHS["TRICHEF_MUSIC_CACHE"])
+    segs_path = cache / "segments.json"
+    if not segs_path.exists():
+        return {"skipped": True, "reason": "segments.json 없음"}
+    segments = json.loads(segs_path.read_text(encoding="utf-8"))
+    texts = _av_stt_texts(segments)
+    if not any(texts):
+        return {"skipped": True, "reason": "STT 텍스트 없음"}
+
+    vocab = auto_vocab.build_vocab(texts, min_df=2, max_df_ratio=0.5, top_k=8000)
+    auto_vocab.save_vocab(cache / "vocab_music.json", vocab)
+
+    sets = asf_filter.build_doc_token_sets(texts, vocab)
+    asf_filter.save_token_sets(cache / "music_token_sets.json", sets)
+
+    mat = _encode_sparse(texts, max_length=512)
+    sp.save_npz(cache / "cache_music_sparse.npz", mat)
+
+    logger.info(f"[lexical_rebuild:music] vocab={len(vocab)} "
+                f"asf_nonempty={sum(1 for s in sets if s)}/{len(sets)} "
+                f"sparse={mat.shape} nnz={mat.nnz}")
+    return {"vocab": len(vocab), "sparse": list(mat.shape), "nnz": int(mat.nnz)}
