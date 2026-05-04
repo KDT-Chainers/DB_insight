@@ -1002,13 +1002,15 @@ export default function MainAI() {
       {view === 'home' && (
         <>
           <main className={`${ml} relative flex h-full min-h-0 flex-col overflow-x-hidden overflow-y-auto bg-transparent transition-[margin] duration-300 pt-8`}>
-            {/* 곡선 띠 배경 */}
+            {/* PNG 오브 헤일로 배경 (최하단 레이어) */}
+            <div className="ai-home-orbit-bg pointer-events-none absolute inset-0 z-0 min-h-0" aria-hidden />
+            {/* 곡선 띠 배경 (그라데이션 오버레이) */}
             <div
               className={`pointer-events-none absolute inset-0 z-0 min-h-0 will-change-transform ${homeGlowDrift ? 'ai-home-glow-drift' : 'ai-home-glow-slide-in'}`}
               style={{ background: AI_HOME_BG }}
               aria-hidden
               onAnimationEnd={(e) => {
-                if (e.animationName === 'ai-home-glow-slide-in' || e.animationName?.endsWith('ai-home-glow-slide-in')) {
+                if (e.animationName === 'ai-home-bg-emerge' || e.animationName === 'ai-home-glow-slide-in' || e.animationName?.endsWith('ai-home-glow-slide-in')) {
                   setHomeGlowDrift(true)
                 }
               }}

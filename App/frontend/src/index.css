@@ -392,6 +392,21 @@ body {
     filter: blur(0) saturate(1);
   }
 }
+/* AI 홈 — PNG 오브 배경 서서히 나타남 (8s 느린 emerge, 블러에서 선명으로) */
+@keyframes ai-home-bg-emerge {
+  0% {
+    opacity: 0;
+    filter: blur(32px) saturate(0.4);
+  }
+  40% {
+    opacity: 0.6;
+    filter: blur(8px) saturate(0.8);
+  }
+  100% {
+    opacity: 1;
+    filter: blur(0) saturate(1);
+  }
+}
 /* 클래스명 유지: MainAI에서 assemble 종료 후 drift로 전환 시 사용 */
 .ai-home-glow-slide-in {
   transform-origin: 50% 50%;
