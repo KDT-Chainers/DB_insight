@@ -324,10 +324,10 @@ def _search_trichef_av(query: str, domains: list[str], top_k: int) -> list[dict]
                 "segments":       r.segments,
                 "trichef_domain": av_domain,
                 # 점수 상세 (UI 메트릭 표시용)
-                "dense":          round(float(av_meta.get("dense_agg", 0.0)), 4),
-                "z_score":        round(float(av_meta.get("z_dense",   0.0)), 4),
-                "asf":            round(float(av_meta.get("asf_agg",   0.0)), 4),
-                "lexical":        None,
+                "dense":          round(float(av_meta.get("dense_agg",  0.0)), 4),
+                "z_score":        round(float(av_meta.get("z_dense",    0.0)), 4),
+                "asf":            round(float(av_meta.get("asf_agg",    0.0)), 4),
+                "lexical":        round(float(av_meta.get("sparse_agg", 0.0)), 4),
             })
 
     results.sort(key=lambda x: -x["confidence"])
