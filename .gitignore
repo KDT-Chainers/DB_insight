@@ -1,17 +1,22 @@
 # ============================================================
-# Node / React
+# Node / Vite / React / Electron (App/frontend)
 # ============================================================
 App/frontend/node_modules/
-App/frontend/dist/
-App/frontend/.vite/
-App/frontend/build/
 
-# Electron 빌드 결과물
+# Vite (`npm run build` → 기본 outDir `dist/`)
+App/frontend/dist/
+
+# electron-builder (`package.json` → directories.output `out/`)
 App/frontend/out/
+
+# 그 외 도구/구버전에서 생길 수 있는 산출물
+App/frontend/build/
 App/frontend/dist-electron/
 App/frontend/release/
 App/frontend/builder-debug.yml
 App/frontend/builder-effective-config.yaml
+
+# Vite 의존성 프리번들 캐시는 `node_modules/.vite/` 아래 (위 node_modules/로 제외됨)
 
 # ============================================================
 # Python / Flask
@@ -106,6 +111,7 @@ vocab.json
 # ============================================================
 .env
 .env.local
+.env.*.local
 .env.development.local
 .env.test.local
 .env.production.local
