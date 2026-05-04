@@ -82,7 +82,10 @@ export default function MainAI() {
     stop: stopMic,
   } = useSpeechRecognition({ onFinal: onSpeechFinal });
 
-  useMicLevelRef(view === "home" && micListening, orbVoiceRef);
+  /* Web Speech이 먼저 마이크를 잡도록, 레벨 분석은 약간 지연 (동시 캡처 시 STT 묵음 방지) */
+  useMicLevelRef(view === "home" && micListening, orbVoiceRef, {
+    startDelayMs: 420,
+  });
 
   useEffect(() => {
     if (view !== "home") stopMic();
