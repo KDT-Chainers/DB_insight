@@ -2,9 +2,69 @@
 @tailwind components;
 @tailwind utilities;
 
+/* 베이스(④)와 동일 팔레트 — 타이틀바·Electron 크롬은 --app-bg-top 과 맞출 것 */
+:root {
+  --app-bg-top: #020510;
+  --app-bg-mid: #020510;
+  --app-bg-low-mid: #040c35;
+  --app-bg-bottom: #030818;
+}
+
+/* 상단 h-8 타이틀바 = 화면 맨 위 베이스 톤과 동일 */
+.titlebar-chrome {
+  background-color: var(--app-bg-top);
+}
+
+/*
+ * 색은 “파일명”이 아니라 스포이드로 찍은 값으로 맞춤 (예: RGB 5,16,79 = #05104F).
+ * 중요 — 브라우저는 위에서 아래로 “겹쳐 그림”. 첫 번째 그라데이션이 맨 앞 레이어.
+ *   ① 좌하 radial → ② 우하 radial → ③ 하단 시안 linear → ④ 전체 베이스 linear
+ */
+.app-depth-bg,
+html.app-depth-bg,
+body.app-depth-bg {
+  background:
+    /* ① 좌측 하단 — 로열 블루 → 샘플 네이비 #05104F 쪽으로 스며듦 */
+    radial-gradient(
+      ellipse 100% 88% at -4% 106%,
+      rgba(37, 99, 235, 0.72) 0%,
+      rgba(59, 130, 246, 0.38) 32%,
+      rgba(5, 11, 48, 0.35) 58%,
+      transparent 76%
+    ),
+    /* ② 우측 하단 */
+    radial-gradient(
+      ellipse 100% 88% at 104% 106%,
+      rgba(177, 216, 222, 0.55) 0%,
+      rgba(47, 118, 205, 0.468) 34%,
+      rgba(5, 16, 79, 0.834) 58%,
+      transparent 76%
+    ),
+    /* ③ 맨 아래 가로 — #4dd4e8 시안이 바닥에 깔리도록 */
+    linear-gradient(
+      to top,
+      rgba(177, 216, 222, 0.55) 0%,
+      rgba(77, 212, 232, 0.22) 12%,
+      rgba(59, 130, 246, 0.1) 28%,
+      transparent 48%
+    ),
+    /* ④ 베이스 — :root 팔레트와 동일 */
+    linear-gradient(
+      to bottom,
+      var(--app-bg-top) 0%,
+      var(--app-bg-mid) 42%,
+      var(--app-bg-low-mid) 78%,
+      var(--app-bg-bottom) 100%
+    );
+}
+
+html {
+  min-height: 100%;
+}
+
 body {
   font-family: 'Manrope', sans-serif;
-  background-color: #070d1f;
+  min-height: 100%;
   color: #dfe4fe;
 }
 
@@ -30,6 +90,66 @@ body {
 .glass-effect {
   backdrop-filter: blur(20px);
   background-color: rgba(28, 37, 62, 0.6);
+}
+
+/* 데이터 인덱싱 — 메인 팔레트(surface/primary) + 결정질 글래스 */
+.di-glass-shell {
+  background: linear-gradient(
+    155deg,
+    rgba(28, 37, 62, 0.58) 0%,
+    rgba(7, 13, 31, 0.4) 48%,
+    rgba(12, 19, 38, 0.52) 100%
+  );
+  backdrop-filter: blur(44px) saturate(1.45);
+  -webkit-backdrop-filter: blur(44px) saturate(1.45);
+  border-right: 1px solid rgba(133, 173, 255, 0.14);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+    16px 0 56px rgba(0, 0, 0, 0.32);
+}
+
+.di-glass-card {
+  background: linear-gradient(
+    168deg,
+    rgba(28, 37, 62, 0.5) 0%,
+    rgba(17, 25, 46, 0.38) 42%,
+    rgba(7, 13, 31, 0.36) 100%
+  );
+  backdrop-filter: blur(36px) saturate(1.38);
+  -webkit-backdrop-filter: blur(36px) saturate(1.38);
+  border: 1px solid rgba(133, 173, 255, 0.14);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.18),
+    0 10px 42px rgba(0, 0, 0, 0.28);
+}
+
+.di-glass-card--accent {
+  border-color: rgba(133, 173, 255, 0.26);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.14),
+    0 10px 42px rgba(0, 0, 0, 0.28),
+    0 0 36px rgba(133, 173, 255, 0.12);
+}
+
+.di-nav-active {
+  background: rgba(28, 37, 62, 0.88);
+  border: 1px solid rgba(133, 173, 255, 0.32);
+  color: #dfe4fe;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 0 28px rgba(133, 173, 255, 0.14);
+}
+
+.di-section-title {
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  background: linear-gradient(105deg, #85adff 0%, #b4c8ff 38%, #dfe4fe 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 .grid-bg {
@@ -201,4 +321,168 @@ body {
 }
 .page-enter-right {
   animation: slideInRight 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* AI 홈 — 곡선 띠 첫 진입: 위에서 아래로 내려옴 */
+@keyframes ai-home-glow-slide-in {
+  from {
+    transform: translate3d(0, -26vh, 0);
+    opacity: 0.25;
+  }
+  to {
+    transform: translate3d(0, 0, 0);
+    opacity: 1;
+  }
+}
+.ai-home-glow-slide-in {
+  transform-origin: 50% 45%;
+  animation: ai-home-glow-slide-in 2.65s cubic-bezier(0.22, 0.99, 0.26, 1) forwards;
+}
+
+/* AI 홈 — 곡선 그라데이션 띠 부드러운 드리프트 */
+@keyframes ai-home-glow-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1.02);
+  }
+  33% {
+    transform: translate3d(1.25%, -0.9%, 0) scale(1.04);
+  }
+  66% {
+    transform: translate3d(-1.1%, 0.75%, 0) scale(1.03);
+  }
+}
+.ai-home-glow-drift {
+  transform-origin: 50% 50%;
+  animation: ai-home-glow-drift 24s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-home-glow-slide-in {
+    animation: none;
+    transform: none;
+    opacity: 1;
+  }
+  .ai-home-glow-drift {
+    animation: none;
+    transform: none;
+  }
+}
+
+/* MainSearch / MainAI 홈 — 마운트: 헤더·검색이 블러+투명으로 묻었다가 서서히 선명해짐 */
+@keyframes main-search-hero-emerge {
+  from {
+    opacity: 0;
+    filter: blur(18px);
+    transform: translateY(8px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes main-search-orb-emerge {
+  from {
+    opacity: 0;
+    filter: blur(12px);
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: scale(1);
+  }
+}
+@keyframes main-search-search-emerge {
+  from {
+    opacity: 0;
+    filter: blur(20px);
+    transform: translateY(18px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0) scale(1);
+  }
+}
+.main-search-entrance-off .mse-hero-down {
+  opacity: 0;
+  filter: blur(18px);
+  transform: translateY(8px) scale(0.99);
+}
+.main-search-entrance-off .mse-orb-mid {
+  opacity: 0;
+  filter: blur(12px);
+  transform: scale(0.97);
+}
+.main-search-entrance-off .mse-search-up {
+  opacity: 0;
+  filter: blur(20px);
+  transform: translateY(18px) scale(0.99);
+}
+.main-search-entrance-on .mse-hero-down {
+  animation: main-search-hero-emerge 1.05s cubic-bezier(0.25, 0.85, 0.3, 1) both;
+  animation-delay: 0.08s;
+}
+.main-search-entrance-on .mse-orb-mid {
+  animation: main-search-orb-emerge 0.95s cubic-bezier(0.25, 0.85, 0.3, 1) both;
+  animation-delay: 0.16s;
+}
+.main-search-entrance-on .mse-search-up {
+  animation: main-search-search-emerge 1.12s cubic-bezier(0.25, 0.85, 0.3, 1) both;
+  animation-delay: 0.28s;
+}
+.main-search-entrance-on .mse-search-up-delay-1 {
+  animation-delay: 0.42s;
+}
+.main-search-entrance-on .mse-search-up-delay-2 {
+  animation-delay: 0.54s;
+}
+@media (prefers-reduced-motion: reduce) {
+  .main-search-entrance-off .mse-hero-down,
+  .main-search-entrance-off .mse-orb-mid,
+  .main-search-entrance-off .mse-search-up,
+  .main-search-entrance-on .mse-hero-down,
+  .main-search-entrance-on .mse-orb-mid,
+  .main-search-entrance-on .mse-search-up {
+    animation: none;
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+
+/* SearchSidebar — 카테고리 패널 전체가 배경 깊이에 묻였다가 선명해지며 떠오름 */
+@keyframes sidebar-shell-bg-emerge {
+  from {
+    opacity: 0;
+    filter: blur(22px) saturate(0.82);
+    transform: translateY(12px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0) saturate(1);
+    transform: translateY(0) scale(1);
+  }
+}
+.sidebar-shell-entrance-off {
+  opacity: 0;
+  filter: blur(22px) saturate(0.82);
+  transform: translateY(12px) scale(0.96);
+  pointer-events: none;
+}
+.sidebar-shell-entrance-on {
+  animation: sidebar-shell-bg-emerge 1.05s cubic-bezier(0.25, 0.85, 0.3, 1) both;
+  animation-delay: 0.1s;
+  pointer-events: auto;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-shell-entrance-off,
+  .sidebar-shell-entrance-on {
+    animation: none !important;
+    opacity: 1 !important;
+    filter: none !important;
+    transform: none !important;
+    pointer-events: auto !important;
+  }
 }

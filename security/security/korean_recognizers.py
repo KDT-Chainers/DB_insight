@@ -7,18 +7,23 @@ korean_recognizers.py
   - 주민등록번호 (7자리 앞+7자리 뒤, 체크섬 검증)
   - 여권번호 (M12345678 형식)
   - 운전면허번호 (12-34-567890-01 형식)
-  - 한국 계좌번호 (은행별 길이 패턴)
+  - 한국 계좌번호 (하이픈 포함 숫자 패턴만 1차 후보; 최종 인정은 pii_detector
+    에서 은행명/계좌 키워드 문맥 + 반복 제거 후처리로 수행)
   - 사업자등록번호 (000-00-00000, 체크섬 검증)
-  - 한국 전화번호 (010-XXXX-XXXX, 02-XXXX-XXXX, 0XX-XXX-XXXX 등)
 
-모두 1차 정규식 + 2차 체크섬 검증 방식.
+전화번호(KR_PHONE) Recognizer는 등록하지 않는다.
+이 프로젝트 정책상 전화·이메일은 민감 PII로 취급하지 않음 (pii_detector 엔티티 목록에서도 제외).
+
+모두 1차 정규식 + (해당 시) 체크섬 검증 방식.
 """
 from __future__ import annotations
 
 import re
 from typing import List, Optional
 
-from presidio_analyzer import Pattern, PatternRecognizer, RecognizerResult
+from presidio_analyzer import Pattern, PatternRecognizer
+
+from security.pii_filter_helpers import ACCOUNT_KEYWORDS_FOR_CONTEXT, BANK_NAMES_FOR_CONTEXT
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -136,8 +141,13 @@ class KoreanDriverLicenseRecognizer(PatternRecognizer):
 
 class KoreanBankAccountRecognizer(PatternRecognizer):
     """
-    한국 계좌번호: 10~14자리 숫자, 하이픈 허용.
-    문맥(계좌, 통장, 입금, 출금) 키워드와 함께 등장하면 신뢰도 상승.
+    한국 계좌번호 1차 후보: 하이픈 포함 숫자 블록만.
+
+    연속 10~14자리 숫자만 있는 패턴은 제거했다(보고서·표·발간번호 오탐 다수).
+    최종적으로는 pii_detector 에서
+      - 은행명 또는 계좌 관련 키워드가 주변에 있는지
+      - 동일 값이 과도 반복되는지
+    를 검사해 KR_BANK_ACCOUNT 로 확정한다.
     """
 
     PATTERNS = [
@@ -146,14 +156,10 @@ class KoreanBankAccountRecognizer(PatternRecognizer):
             regex=r"\b\d{3,4}-\d{2,6}-\d{4,7}(?:-\d{1,3})?\b",
             score=0.75,
         ),
-        Pattern(
-            name="account_no_hyphen",
-            regex=r"\b\d{10,14}\b",
-            score=0.4,
-        ),
     ]
 
-    CONTEXT = ["계좌", "통장", "입금", "출금", "account", "bank"]
+    # Presidio 가 주변에서 찾으면 점수를 올려 주는 힌트(후처리 문맥 검사와 별개)
+    CONTEXT = list(BANK_NAMES_FOR_CONTEXT) + list(ACCOUNT_KEYWORDS_FOR_CONTEXT)
 
     def __init__(self) -> None:
         super().__init__(
@@ -192,53 +198,9 @@ class KoreanBRNRecognizer(PatternRecognizer):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 6. 한국 전화번호
+# 6. 한국 전화번호 — 이 프로젝트에서는 Recognizer 로 등록하지 않음
+#    (정책: 전화·이메일은 민감 PII 아님, pii_detector DEFAULT_ENTITIES 에서도 제외)
 # ──────────────────────────────────────────────────────────────────────────────
-
-class KoreanPhoneRecognizer(PatternRecognizer):
-    """
-    한국 전화번호 패턴.
-
-    커버 범위:
-      - 휴대폰:  010-XXXX-XXXX, 011/016/017/018/019-XXX(X)-XXXX
-      - 서울:    02-XXXX-XXXX, 02-XXX-XXXX
-      - 지역:    0XX-XXX(X)-XXXX  (031~099, 예: 064-739-4333)
-      - 대표번호: 1588-XXXX, 1544-XXXX, 1800-XXXX 등
-    """
-
-    PATTERNS = [
-        # 휴대폰 (010, 011, 016, 017, 018, 019)
-        Pattern(
-            name="mobile",
-            regex=r"\b01[0-9]-\d{3,4}-\d{4}\b",
-            score=0.9,
-        ),
-        # 서울 (02)
-        Pattern(
-            name="seoul",
-            regex=r"\b02-\d{3,4}-\d{4}\b",
-            score=0.85,
-        ),
-        # 지역번호 3자리 (031~099, 예: 064-739-4333)
-        Pattern(
-            name="regional",
-            regex=r"\b0[3-9]\d-\d{3,4}-\d{4}\b",
-            score=0.85,
-        ),
-        # 대표번호 (1588, 1544, 1600, 1800, 1899 등)
-        Pattern(
-            name="representative",
-            regex=r"\b1[5-9]\d{2}-\d{4}\b",
-            score=0.75,
-        ),
-    ]
-
-    def __init__(self) -> None:
-        super().__init__(
-            supported_entity="KR_PHONE",
-            patterns=self.PATTERNS,
-            supported_language="ko",
-        )
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -251,5 +213,4 @@ ALL_KOREAN_RECOGNIZERS: List[PatternRecognizer] = [
     KoreanDriverLicenseRecognizer(),
     KoreanBankAccountRecognizer(),
     KoreanBRNRecognizer(),
-    KoreanPhoneRecognizer(),
 ]

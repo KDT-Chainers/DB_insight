@@ -16,9 +16,10 @@ v3 업로드 흐름 변경:
 """
 from __future__ import annotations
 
+import logging
 import traceback
 from pathlib import Path
-from typing import Any, List, Optional, Tuple
+from typing import Any, Iterator, List, Optional, Tuple, Union
 
 import gradio as gr
 
@@ -26,6 +27,8 @@ from agents.orchestrator import Orchestrator
 from audit.logger import AuditLogger
 from security.policy import UploadPolicy
 from ui.components.result_card import build_sources_html, open_file_in_explorer
+
+logger = logging.getLogger(__name__)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # 전역 오케스트레이터 (앱 시작 시 1회 초기화)
@@ -38,10 +41,21 @@ _audit: Optional[AuditLogger] = None
 _pending_scans: Optional[List[Any]] = None  # List[UploadScanResult]
 
 
+def _warmup_embedding_model() -> None:
+    """앱 시작 시 임베딩 모델을 미리 로드해 첫 요청의 콜드 스타트를 줄인다."""
+    try:
+        from vectordb.store import embed_texts
+        embed_texts(["워밍업"])
+        logger.info("[Startup] 임베딩 모델 워밍업 완료")
+    except Exception as exc:
+        logger.warning("[Startup] 임베딩 모델 워밍업 실패 (무시): %s", exc)
+
+
 def _get_orchestrator() -> Orchestrator:
     global _orchestrator
     if _orchestrator is None:
         _orchestrator = Orchestrator.build()
+        _warmup_embedding_model()
     return _orchestrator
 
 
@@ -105,10 +119,10 @@ def _build_file_section(scan: Any) -> str:
     return f"- ✅ `{scan.filename}` — PII 없음 ({summary.get('total_chunks', 0)}청크)"
 
 
-def _do_commit(scans: List[Any], policy_choice: str) -> Tuple[int, int, int, List[str]]:
+def _do_commit(scans: List[Any], policy_choice: str) -> Tuple[int, int, int, List[str], int]:
     """
     스캔 결과 리스트를 주어진 정책으로 임베딩한다.
-    Returns: (ok_files, total_chunks, embedded_chunks, detail_lines)
+    Returns: (ok_files, total_chunks, embedded_chunks, detail_lines, dup_skipped)
     """
     orch = _get_orchestrator()
     choice_map = {
@@ -120,7 +134,7 @@ def _do_commit(scans: List[Any], policy_choice: str) -> Tuple[int, int, int, Lis
     }
     pol = choice_map.get(policy_choice, UploadPolicy.CANCEL)
 
-    ok, total, embedded = 0, 0, 0
+    ok, total, embedded, dup_skipped = 0, 0, 0, 0
     lines: List[str] = []
 
     for scan in scans:
@@ -136,6 +150,14 @@ def _do_commit(scans: List[Any], policy_choice: str) -> Tuple[int, int, int, Lis
             lines.append(f"- `{scan.filename}`: 취소됨")
             continue
 
+        if result["status"] == "duplicate":
+            dup_skipped += 1
+            lines.append(
+                f"- `{scan.filename}`: ⚠️ **동일 파일(내용 해시)** 이 이미 인덱스에 있어 "
+                f"중복 임베딩을 건너뜁니다."
+            )
+            continue
+
         ok += 1
         total    += result["total_chunks"]
         embedded += result["embedded_chunks"]
@@ -146,7 +168,7 @@ def _do_commit(scans: List[Any], policy_choice: str) -> Tuple[int, int, int, Lis
             f"저장 {result['embedded_chunks']}청크 / PII 태그 {pii_tag} / UI 마스킹 {ui_mask}"
         )
 
-    return ok, total, embedded, lines
+    return ok, total, embedded, lines, dup_skipped
 
 
 def on_file_change(file_obj):
@@ -211,13 +233,14 @@ def on_file_change(file_obj):
                 gr.update(visible=False),
                 "⏳ 임베딩 처리 중입니다...",
             )
-            ok, total, embedded, detail = _do_commit(scans, "그대로 임베딩")
+            ok, total, embedded, detail, n_dup = _do_commit(scans, "그대로 임베딩")
             _pending_scans = None
+            dup_note = f" · 중복 건너뜀 **{n_dup}**개" if n_dup else ""
             yield (
-                f"### ✅ {len(paths)}개 파일 완료\n\n{file_lines}",
+                f"### ✅ {len(paths)}개 파일 처리 완료\n\n{file_lines}",
                 gr.update(visible=False),
                 (
-                    f"✅ **임베딩 완료** ({ok}개 파일)\n\n"
+                    f"✅ **신규 임베딩 {ok}개 파일**{dup_note}\n\n"
                     f"- 저장 청크: {embedded} / {total}\n\n"
                     + "\n".join(detail)
                 ),
@@ -262,11 +285,12 @@ def on_upload_commit(user_choice: str):
     yield "⏳ 임베딩 처리 중입니다...", gr.update(visible=False)
 
     try:
-        ok, total, embedded, detail = _do_commit(_pending_scans, user_choice)
+        ok, total, embedded, detail, n_dup = _do_commit(_pending_scans, user_choice)
         _pending_scans = None
 
+        dup_note = f" · 중복 건너뜀 **{n_dup}**개" if n_dup else ""
         yield (
-            f"✅ **임베딩 완료** ({ok}개 파일)\n\n"
+            f"✅ **신규 임베딩 {ok}개 파일**{dup_note}\n\n"
             f"- 저장 청크: {embedded} / {total}\n\n"
             + "\n".join(detail),
             gr.update(visible=False),
@@ -281,15 +305,82 @@ def on_upload_commit(user_choice: str):
 # 탭 2: 질문 & 답변
 # ──────────────────────────────────────────────────────────────────────────────
 
-def on_query(user_query: str, full_view: bool) -> Tuple[str, str, str, str]:
+def _summary_markdown(user_query: str, resp: Any) -> str:
+    """요약 전용 Markdown (요약 요청이 아니면 안내 문구만)."""
+    is_summary_req = Orchestrator.is_summary_request(user_query)
+    sm = getattr(resp, "summary", None)
+    if sm is not None:
+        if sm.is_ok():
+            lines = ["### 📝 요약 결과", ""]
+            # Map-reduce 사용 여부 배너
+            if getattr(sm, "map_reduce_used", False):
+                n = getattr(sm, "source_chunk_count", 0)
+                lines.append(
+                    f"> 📚 **전체 문서 분석** — 검색된 {n}개 청크를 여러 구간으로 나눠 "
+                    f"단계적으로 요약했습니다 (map-reduce)."
+                )
+            else:
+                n = getattr(sm, "source_chunk_count", 0)
+                lines.append(
+                    f"> 💡 검색된 상위 **{n}개** 청크를 기반으로 요약했습니다. "
+                    f"문서 전체가 아닌 관련도 높은 구절 위주로 생성됩니다."
+                )
+            lines.append("")
+            lines.append(sm.text)
+            return "\n".join(lines)
+        err = getattr(sm, "error", None) or "알 수 없음"
+        return f"### 📝 요약\n\n⚠️ 처리 오류: {err}"
+    if is_summary_req:
+        ans = (getattr(resp, "answer", None) or "").strip()
+        if ans:
+            return (
+                f"### 📝 요약\n\n"
+                f"> 💡 검색된 청크 기반 요약입니다. 문서 전체가 아닌 관련 구절 위주입니다.\n\n{ans}"
+            )
+        # 요약 요청인데 summary 객체가 비어 있으면 UI 메시지를 일관되게 고정한다.
+        # (경로별로 빈 박스/기본문구가 섞이는 현상 방지)
+        action = str(getattr(resp, "action", "") or "").lower()
+        reason = str(getattr(resp, "reason", "") or "").strip()
+        if action == "block":
+            return "### 📝 요약\n\n⚠️ 처리 오류: policy_blocked: 보안 정책에 의해 요약이 차단되었습니다."
+        if reason:
+            return f"### 📝 요약\n\n⚠️ 처리 오류: summary_unavailable: {reason}"
+        return "### 📝 요약\n\n⚠️ 처리 오류: summary_unavailable: 요약 결과를 생성하지 못했습니다."
+    return "_요약·줄거리·핵심 정리 등으로 질문하면 이 영역에 요약이 표시됩니다._"
+
+
+def on_query(
+    user_query: str, full_view: bool,
+) -> Union[Tuple[str, str, str, str], Iterator[Tuple[str, str, str, str]]]:
     """
     사용자 질문 처리.
 
-    Returns:
-        (label_badge, policy_info, sources_html)
+    generator 로 한 번 yield 하면 Gradio가 즉시 '처리 중' UI를 그려
+    긴 검색·임베딩·요약 동안 멈춘 것처럼 보이는 문제를 줄인다.
+
+    Yields / Returns:
+        (label_badge, policy_info, summary_md, sources_html)
     """
     if not user_query.strip():
-        return "", "", ""
+        return "", "", "", ""
+
+    want_summary = Orchestrator.is_summary_request(user_query)
+    if want_summary:
+        import config as _cfg
+        _thr = getattr(_cfg, "MAP_REDUCE_THRESHOLD", 6)
+        summary_wait = (
+            f"### 📝 요약\n\n"
+            f"_⏳ 문서를 검색합니다. 검색된 청크가 {_thr}개 이상이면 "
+            f"**map-reduce 요약**으로 자동 전환됩니다 — 시간이 다소 더 걸릴 수 있습니다._"
+        )
+    else:
+        summary_wait = "_요약·줄거리 등으로 질문하면 여기에 결과가 표시됩니다._"
+    yield (
+        "⏳ **처리 중…**",
+        "_질문을 분석하고 문서를 검색합니다. 잠시만 기다려 주세요._",
+        summary_wait,
+        "<div style=\"color:#a0aec0;padding:12px;\">검색·연관도 확인 중…</div>",
+    )
 
     try:
         orch = _get_orchestrator()
@@ -301,18 +392,30 @@ def on_query(user_query: str, full_view: bool) -> Tuple[str, str, str, str]:
         policy_info = f"Action: `{resp.action}`"
         if resp.blocked:
             policy_info += "  |  ⛔ 차단됨 — 검색 결과를 표시할 수 없습니다."
+        ans = (getattr(resp, "answer", None) or "").strip()
+        if ans and not getattr(resp, "summary", None):
+            policy_info += f"\n\n---\n{ans}"
 
-        # 검색 소스 카드 HTML 생성
+        summary_md = _summary_markdown(user_query, resp)
+
         sources_html = build_sources_html(
             chunks=getattr(resp, "retrieved_chunks", []),
             label=resp.label,
         )
+        if not sources_html.strip() and not resp.blocked:
+            sources_html = (
+                "<div style=\"color:#ecc94b;padding:12px;border:1px solid #744210;"
+                "border-radius:8px;background:#1f1a10;\">"
+                "📭 표시할 검색 소스가 없습니다. "
+                "요약·줄거리 질의는 문서에 나오는 이름·키워드를 질문에 넣으면 검색이 잘 됩니다."
+                "</div>"
+            )
 
-        return label_badge, policy_info, sources_html
+        yield label_badge, policy_info, summary_md, sources_html
 
     except Exception as exc:
         traceback.print_exc()
-        return "ERROR", f"❌ 오류: {exc}", ""
+        yield "ERROR", f"❌ 오류: {exc}", "", ""
 
 
 def on_open_path(source_path: str) -> str:
@@ -347,6 +450,61 @@ def on_refresh_log() -> Tuple[str, str]:
         query_lines.append(f"| {q['timestamp']} | {q['query'][:40]}… | {q['label']} | {blocked} |")
 
     return "\n".join(upload_lines), "\n".join(query_lines)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 탭 4: 임베딩 관리(관리자)
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _doc_options_and_table() -> Tuple[List[str], str]:
+    """인덱스 문서 목록을 Dropdown 옵션 + Markdown 표로 변환."""
+    orch = _get_orchestrator()
+    docs = orch.list_indexed_documents()
+    if not docs:
+        return [], "_현재 인덱스에 저장된 문서가 없습니다._"
+
+    options: List[str] = []
+    lines = [
+        "| 문서명 | 청크 수 | PII 청크 | 원본 경로 |",
+        "|------|--------:|---------:|-----------|",
+    ]
+    for d in docs:
+        name = str(d.get("doc_name") or "").strip()
+        if not name:
+            continue
+        options.append(name)
+        chunk_cnt = int(d.get("chunk_count") or 0)
+        pii_cnt = int(d.get("pii_chunk_count") or 0)
+        src = str(d.get("source_path") or d.get("image_path") or "-")
+        lines.append(f"| {name} | {chunk_cnt} | {pii_cnt} | {src} |")
+    return options, "\n".join(lines)
+
+
+def on_refresh_index_docs() -> Tuple[Any, str, str]:
+    """임베딩 문서 목록 새로고침."""
+    options, table_md = _doc_options_and_table()
+    return gr.update(choices=options, value=[]), table_md, ""
+
+
+def on_delete_selected_docs(selected_docs: List[str]) -> Tuple[Any, str, str]:
+    """선택한 문서를 인덱스/메타DB에서 삭제."""
+    targets = [str(x).strip() for x in (selected_docs or []) if str(x).strip()]
+    if not targets:
+        options, table_md = _doc_options_and_table()
+        return gr.update(choices=options, value=[]), table_md, "⚠️ 삭제할 문서를 하나 이상 선택해주세요."
+
+    orch = _get_orchestrator()
+    result = orch.delete_indexed_documents(targets)
+    deleted_docs = int(result.get("deleted_docs", 0))
+    deleted_chunks = int(result.get("deleted_chunks", 0))
+
+    options, table_md = _doc_options_and_table()
+    msg = (
+        f"✅ 삭제 완료: 문서 **{deleted_docs}개**, 청크 **{deleted_chunks}개**\n\n"
+        f"- 삭제 문서: {', '.join(targets)}\n"
+        f"- 원본 파일은 삭제되지 않았습니다. 필요하면 파일은 별도로 지워주세요."
+    )
+    return gr.update(choices=options, value=[]), table_md, msg
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -556,6 +714,13 @@ def build_app() -> gr.Blocks:
             label_output  = gr.Markdown(label="보안 분류", elem_classes=["label-badge"])
             policy_output = gr.Markdown(label="정책 정보")
 
+            gr.Markdown("---")
+            gr.Markdown("#### 📝 요약")
+            summary_output = gr.Markdown(
+                label="요약 결과",
+                value="_요약·줄거리·핵심 정리 등으로 질문하면 이 영역에 표시됩니다._",
+            )
+
             # ── 검색 소스 카드 ──────────────────────────────────────────────
             gr.Markdown("---")
             gr.Markdown("#### 📑 검색 소스")
@@ -589,7 +754,7 @@ def build_app() -> gr.Blocks:
             ask_btn.click(
                 on_query,
                 inputs=[query_input, full_view_checkbox],
-                outputs=[label_output, policy_output, sources_output],
+                outputs=[label_output, policy_output, summary_output, sources_output],
             )
 
         # ── 탭 3: 감사 로그 ───────────────────────────────────────────────────
@@ -608,10 +773,45 @@ def build_app() -> gr.Blocks:
             )
             app.load(on_refresh_log, inputs=[], outputs=[upload_log_out, query_log_out])
 
+        # ── 탭 4: 임베딩 관리(관리자) ───────────────────────────────────────────
+        with gr.Tab("🗂️ 임베딩 관리"):
+            gr.Markdown(
+                "### 인덱스 문서 선택 삭제\n"
+                "- 선택한 문서의 **벡터/메타데이터**만 삭제합니다.\n"
+                "- 원본 파일(`secure_store/images` 등)은 자동 삭제되지 않습니다."
+            )
+            refresh_docs_btn = gr.Button("🔄 목록 새로고침")
+            doc_selector = gr.Dropdown(
+                label="삭제할 임베딩 문서 선택 (복수 가능)",
+                choices=[],
+                multiselect=True,
+                value=[],
+            )
+            delete_docs_btn = gr.Button("🗑️ 선택 문서 삭제", variant="stop")
+            admin_result = gr.Markdown(label="처리 결과", value="")
+            admin_table = gr.Markdown(label="현재 인덱스 문서", value="_로딩 중..._")
+
+            refresh_docs_btn.click(
+                on_refresh_index_docs,
+                inputs=[],
+                outputs=[doc_selector, admin_table, admin_result],
+            )
+            delete_docs_btn.click(
+                on_delete_selected_docs,
+                inputs=[doc_selector],
+                outputs=[doc_selector, admin_table, admin_result],
+            )
+            app.load(
+                on_refresh_index_docs,
+                inputs=[],
+                outputs=[doc_selector, admin_table, admin_result],
+            )
+
     return app
 
 
 def main() -> None:
+    _get_orchestrator()
     app = build_app()
     app.launch(
         server_name="0.0.0.0",

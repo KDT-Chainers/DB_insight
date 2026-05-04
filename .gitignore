@@ -1,12 +1,12 @@
 # ============================================================
-# Node / React
+# Node / Vite / React / Electron (App/frontend)
 # ============================================================
 App/frontend/node_modules/
-App/frontend/dist/
-App/frontend/.vite/
-App/frontend/build/
 
-# Electron 빌드 결과물
+# Vite (`npm run build` → 기본 outDir `dist/`)
+App/frontend/dist/
+
+# electron-builder (`package.json` → directories.output `out/`)
 App/frontend/out/
 App/frontend/out2/
 App/frontend/out3/
@@ -116,6 +116,7 @@ model_cache/
 # ============================================================
 .env
 .env.local
+.env.*.local
 .env.development.local
 .env.test.local
 .env.production.local

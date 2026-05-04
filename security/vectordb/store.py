@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import sqlite3
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -70,17 +71,21 @@ _PII_KR_MAP = {
     "KR_DRIVER_LICENSE": "운전면허 면허증",
     "KR_BANK_ACCOUNT":   "계좌번호 통장 은행",
     "KR_BRN":            "사업자번호 사업자등록증",
-    "KR_PHONE":          "전화번호 연락처 휴대폰",
-    "PERSON":            "이름 성명",
-    "EMAIL_ADDRESS":     "이메일 email",
-    "PHONE_NUMBER":      "전화번호 연락처",
+    "CREDIT_CARD":       "카드번호 신용카드 체크카드 결제",
 }
 
 
 def _pii_types_to_korean(pii_types: List[str]) -> str:
-    """PII 유형 리스트를 한국어 검색 키워드 문자열로 변환한다."""
+    """
+    PII 유형 리스트를 한국어 검색 키워드 문자열로 변환한다.
+    전화·이메일 등은 임베딩 보강에 쓰지 않는다(정책 비대상).
+    """
+    from security.pii_filter_helpers import POLICY_PROTECTED_PII_TYPES
+
     keywords: List[str] = []
     for t in pii_types:
+        if str(t).upper() not in POLICY_PROTECTED_PII_TYPES:
+            continue
         kw = _PII_KR_MAP.get(t)
         if kw:
             keywords.append(kw)
@@ -163,7 +168,14 @@ class VectorStore:
                     display_masked    INTEGER DEFAULT 0,
                     is_image          INTEGER DEFAULT 0,
                     image_path        TEXT    DEFAULT '',
-                    pii_regions       TEXT    DEFAULT '[]'
+                    pii_regions       TEXT    DEFAULT '[]',
+                    content_sha256    TEXT    DEFAULT ''
+                )
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS app_state (
+                    k TEXT PRIMARY KEY,
+                    v TEXT NOT NULL
                 )
             """)
             conn.commit()
@@ -184,6 +196,7 @@ class VectorStore:
             "is_image":          "INTEGER DEFAULT 0",
             "image_path":        "TEXT    DEFAULT ''",
             "pii_regions":       "TEXT    DEFAULT '[]'",
+            "content_sha256":    "TEXT    DEFAULT ''",
         }
         with sqlite3.connect(self._meta_db) as conn:
             existing = {row[1] for row in conn.execute("PRAGMA table_info(chunks)")}
@@ -229,10 +242,56 @@ class VectorStore:
 
     # ── 청크 추가 ─────────────────────────────────────────────────────────────
 
+    def has_content_sha256(self, sha256_hex: str) -> bool:
+        """
+        동일 바이트 내용의 문서가 이미 인덱스에 있는지 확인한다.
+        (각 청크 행에 동일 해시가 저장되므로 한 행만 있어도 True)
+        """
+        if not sha256_hex or not sha256_hex.strip():
+            return False
+        with sqlite3.connect(self._meta_db) as conn:
+            row = conn.execute(
+                "SELECT 1 FROM chunks WHERE content_sha256 = ? LIMIT 1",
+                (sha256_hex.strip(),),
+            ).fetchone()
+        return row is not None
+
+    def set_recent_upload_keys(self, keys: List[str]) -> None:
+        """최근 업로드 문서 식별자 목록을 영구 저장한다."""
+        clean = [k.strip() for k in keys if isinstance(k, str) and k.strip()]
+        val = json.dumps(list(dict.fromkeys(clean)), ensure_ascii=False)
+        with sqlite3.connect(self._meta_db) as conn:
+            conn.execute(
+                """
+                INSERT INTO app_state(k, v) VALUES(?, ?)
+                ON CONFLICT(k) DO UPDATE SET v=excluded.v
+                """,
+                ("recent_upload_keys", val),
+            )
+            conn.commit()
+
+    def get_recent_upload_keys(self) -> List[str]:
+        """영구 저장된 최근 업로드 문서 식별자 목록을 읽는다."""
+        with sqlite3.connect(self._meta_db) as conn:
+            row = conn.execute(
+                "SELECT v FROM app_state WHERE k=?",
+                ("recent_upload_keys",),
+            ).fetchone()
+        if not row or not row[0]:
+            return []
+        try:
+            data = json.loads(row[0])
+            if isinstance(data, list):
+                return [str(x) for x in data if str(x).strip()]
+        except Exception:
+            logger.warning("recent_upload_keys 파싱 실패, 빈 목록으로 처리")
+        return []
+
     def add_chunks(
         self,
         chunks: List[Chunk],
         pii_metadata: Optional[Dict[int, Dict[str, Any]]] = None,
+        content_sha256: str = "",
     ) -> None:
         """
         청크 원문을 그대로 임베딩하여 저장한다.
@@ -243,11 +302,13 @@ class VectorStore:
             pii_metadata: {chunk.index: {"has_pii", "pii_types", "sensitivity_score",
                           "display_masked"}} 형태의 PII 태그 dict.
                           해당 청크가 UI에서 마스킹 표시되어야 하면 display_masked=True.
+            content_sha256: 업로드 원본 파일 SHA-256(hex). 중복 검사·추적용.
         """
         if not chunks:
             return
 
         pii_meta = pii_metadata or {}
+        sha_val = (content_sha256 or "").strip()
 
         # ── 임베딩용 텍스트 보강 ──────────────────────────────────────────────
         # 원문은 그대로 DB에 저장하고, 임베딩에는 파일명·PII유형 키워드를 앞에 붙여
@@ -304,11 +365,11 @@ class VectorStore:
                        (doc_name, source_page, chunk_index, start_char, end_char,
                         text, source_path, file_name, bbox,
                         has_pii, pii_types, sensitivity_score, display_masked,
-                        is_image, image_path, pii_regions)
+                        is_image, image_path, pii_regions, content_sha256)
                        VALUES (?, ?, ?, ?, ?,
                                ?, ?, ?, ?,
                                ?, ?, ?, ?,
-                               ?, ?, ?)""",
+                               ?, ?, ?, ?)""",
                     (
                         chunk.doc_name,
                         chunk.source_page,
@@ -326,6 +387,7 @@ class VectorStore:
                         is_image,
                         image_path,
                         pii_regions_json,
+                        sha_val,
                     ),
                 )
                 self._chunk_ids.append(cursor.lastrowid)
@@ -363,7 +425,7 @@ class VectorStore:
                     continue
                 db_id = self._chunk_ids[int(idx)]
                 row = conn.execute(
-                    """SELECT id, doc_name, source_page, text,
+                    """SELECT id, doc_name, source_page, chunk_index, start_char, text,
                               source_path, file_name, bbox,
                               has_pii, pii_types, sensitivity_score, display_masked,
                               is_image, image_path, pii_regions
@@ -377,20 +439,263 @@ class VectorStore:
                         "id":                row[0],
                         "doc_name":          row[1],
                         "source_page":       row[2],
-                        "text":              row[3],
-                        "source_path":       row[4] or "",
-                        "file_name":         row[5] or row[1] or "",
-                        "bbox":              json.loads(row[6]) if row[6] else None,
-                        "has_pii":           bool(row[7]),
-                        "pii_types":         json.loads(row[8]) if row[8] else [],
-                        "sensitivity_score": float(row[9]),
-                        "display_masked":    bool(row[10]),
-                        "is_image":          bool(row[11]),
-                        "image_path":        row[12] or "",
-                        "pii_regions":       json.loads(row[13]) if row[13] else [],
+                        "chunk_index":       row[3],
+                        "start_char":        row[4],
+                        "text":              row[5],
+                        "source_path":       row[6] or "",
+                        "file_name":         row[7] or row[1] or "",
+                        "bbox":              json.loads(row[8]) if row[8] else None,
+                        "has_pii":           bool(row[9]),
+                        "pii_types":         json.loads(row[10]) if row[10] else [],
+                        "sensitivity_score": float(row[11]),
+                        "display_masked":    bool(row[12]),
+                        "is_image":          bool(row[13]),
+                        "image_path":        row[14] or "",
+                        "pii_regions":       json.loads(row[15]) if row[15] else [],
                         "score":             cosine_sim,
                     })
         return results
+
+    def search_within_doc(
+        self,
+        query: str,
+        doc_name_hint: str,
+        top_k: int = 30,
+    ) -> List[Dict[str, Any]]:
+        """
+        doc_name / file_name / source_path 에 hint 문자열이 포함된
+        청크만 대상으로 검색한다.
+
+        일반 search()와 달리 FAISS 전체 검색 후 SQL 필터로 좁히는 방식.
+        문서명을 질문에서 명시했을 때 다른 문서와 섞이는 것을 방지한다.
+        """
+        if self._index is None or self._index.ntotal == 0:
+            return []
+        hint = doc_name_hint.strip().lower()
+        if not hint:
+            return self.search(query, top_k=top_k)
+
+        # FAISS는 전체 대상으로 넉넉하게 검색 (힌트 문서가 하위에 있을 수 있으므로)
+        search_k = min(self._index.ntotal, max(top_k * 6, 120))
+        query_vec = embed_texts([query])
+        distances, indices = self._index.search(query_vec, search_k)
+
+        results: List[Dict[str, Any]] = []
+        with sqlite3.connect(self._meta_db) as conn:
+            for dist, idx in zip(distances[0], indices[0]):
+                if idx < 0 or idx >= len(self._chunk_ids):
+                    continue
+                db_id = self._chunk_ids[int(idx)]
+                row = conn.execute(
+                    """SELECT id, doc_name, source_page, chunk_index, start_char, text,
+                              source_path, file_name, bbox,
+                              has_pii, pii_types, sensitivity_score, display_masked,
+                              is_image, image_path, pii_regions
+                       FROM chunks WHERE id=?""",
+                    (db_id,),
+                ).fetchone()
+                if not row:
+                    continue
+                # 힌트가 doc_name / file_name / source_path 중 하나에라도 포함되면 포함
+                candidate = " ".join([
+                    (row[1] or ""),
+                    (row[7] or ""),
+                    (row[6] or ""),
+                ]).lower()
+                import re as _re
+                cand_norm = _re.sub(r"[^0-9a-z가-힣]", "", candidate)
+                hint_norm = _re.sub(r"[^0-9a-z가-힣]", "", hint)
+                if hint_norm not in cand_norm:
+                    continue
+                cosine_sim = max(0.0, min(1.0, float(dist)))
+                results.append({
+                    "id":                row[0],
+                    "doc_name":          row[1],
+                    "source_page":       row[2],
+                    "chunk_index":       row[3],
+                    "start_char":        row[4],
+                    "text":              row[5],
+                    "source_path":       row[6] or "",
+                    "file_name":         row[7] or row[1] or "",
+                    "bbox":              json.loads(row[8]) if row[8] else None,
+                    "has_pii":           bool(row[9]),
+                    "pii_types":         json.loads(row[10]) if row[10] else [],
+                    "sensitivity_score": float(row[11]),
+                    "display_masked":    bool(row[12]),
+                    "is_image":          bool(row[13]),
+                    "image_path":        row[14] or "",
+                    "pii_regions":       json.loads(row[15]) if row[15] else [],
+                    "score":             cosine_sim,
+                })
+                if len(results) >= top_k:
+                    break
+        logger.info(
+            "[VectorStore] search_within_doc hint=%r → %d청크", hint, len(results)
+        )
+        return results
+
+    def list_doc_names(self) -> List[str]:
+        """저장된 모든 문서의 doc_name 목록을 반환한다."""
+        with sqlite3.connect(self._meta_db) as conn:
+            rows = conn.execute(
+                "SELECT DISTINCT COALESCE(file_name, doc_name) FROM chunks WHERE COALESCE(file_name, doc_name) != ''"
+            ).fetchall()
+        return [r[0] for r in rows if r[0]]
+
+    def get_doc_pii_signal(self, doc_name_hint: str) -> Dict[str, Any]:
+        """
+        특정 문서 힌트에 대응하는 문서 전체의 PII 신호를 반환한다.
+        검색 상위 청크에 PII가 직접 안 잡혀도 PRS/정책 승격에 쓰기 위한 보강용 API.
+        """
+        from security.pii_filter_helpers import filter_to_protected_pii_types
+
+        hint = str(doc_name_hint or "").strip().lower()
+        if not hint:
+            return {"contains_pii": False, "pii_types": [], "pii_chunk_ratio": 0.0, "matched_chunks": 0}
+
+        hint_norm = re.sub(r"[^0-9a-z가-힣]", "", hint)
+        if not hint_norm:
+            return {"contains_pii": False, "pii_types": [], "pii_chunk_ratio": 0.0, "matched_chunks": 0}
+
+        with sqlite3.connect(self._meta_db) as conn:
+            rows = conn.execute(
+                "SELECT doc_name, file_name, source_path, has_pii, pii_types FROM chunks"
+            ).fetchall()
+
+        matched = []
+        for row in rows:
+            candidate = " ".join([
+                str(row[0] or ""),
+                str(row[1] or ""),
+                str(row[2] or ""),
+            ]).lower()
+            cand_norm = re.sub(r"[^0-9a-z가-힣]", "", candidate)
+            if hint_norm and hint_norm in cand_norm:
+                matched.append(row)
+
+        if not matched:
+            return {"contains_pii": False, "pii_types": [], "pii_chunk_ratio": 0.0, "matched_chunks": 0}
+
+        pii_types: List[str] = []
+        protected_hits = 0
+        for row in matched:
+            has_pii = bool(row[3])
+            types_raw = []
+            if row[4]:
+                try:
+                    parsed = json.loads(row[4])
+                    if isinstance(parsed, list):
+                        types_raw = [str(x) for x in parsed]
+                except Exception:
+                    types_raw = []
+            protected = filter_to_protected_pii_types(types_raw)
+            if has_pii or protected:
+                protected_hits += 1
+            for t in protected:
+                if t not in pii_types:
+                    pii_types.append(t)
+
+        ratio = round(protected_hits / max(len(matched), 1), 4)
+        return {
+            "contains_pii": bool(protected_hits > 0),
+            "pii_types": pii_types,
+            "pii_chunk_ratio": ratio,
+            "matched_chunks": len(matched),
+        }
+
+    def list_indexed_documents(self) -> List[Dict[str, Any]]:
+        """
+        UI 관리자용 문서 목록을 반환한다.
+        문서명(file_name 우선) 단위로 청크 수/PII 청크 수를 집계한다.
+        """
+        with sqlite3.connect(self._meta_db) as conn:
+            rows = conn.execute(
+                """
+                SELECT
+                    COALESCE(file_name, doc_name) AS doc_label,
+                    COUNT(*)                      AS chunk_count,
+                    SUM(CASE WHEN has_pii=1 THEN 1 ELSE 0 END) AS pii_chunk_count,
+                    MAX(source_path)              AS source_path,
+                    MAX(image_path)               AS image_path,
+                    MAX(id)                       AS last_id
+                FROM chunks
+                WHERE COALESCE(file_name, doc_name) != ''
+                GROUP BY COALESCE(file_name, doc_name)
+                ORDER BY last_id DESC
+                """
+            ).fetchall()
+        out: List[Dict[str, Any]] = []
+        for r in rows:
+            out.append({
+                "doc_name": str(r[0] or ""),
+                "chunk_count": int(r[1] or 0),
+                "pii_chunk_count": int(r[2] or 0),
+                "source_path": str(r[3] or ""),
+                "image_path": str(r[4] or ""),
+            })
+        return out
+
+    def delete_documents(self, doc_names: List[str]) -> Dict[str, Any]:
+        """
+        문서명(file_name/doc_name) 기준으로 청크를 삭제하고 FAISS 인덱스를 재구성한다.
+        """
+        targets = [str(n).strip() for n in (doc_names or []) if str(n).strip()]
+        targets = list(dict.fromkeys(targets))
+        if not targets:
+            return {"deleted_docs": 0, "deleted_chunks": 0}
+
+        placeholders = ",".join("?" for _ in targets)
+        where = f"COALESCE(file_name, doc_name) IN ({placeholders})"
+
+        with sqlite3.connect(self._meta_db) as conn:
+            row = conn.execute(
+                f"SELECT COUNT(*) FROM chunks WHERE {where}",
+                tuple(targets),
+            ).fetchone()
+            deleted_chunks = int((row or [0])[0] or 0)
+            conn.execute(f"DELETE FROM chunks WHERE {where}", tuple(targets))
+
+            # 최근 업로드 키에서 삭제 대상 문서명을 정리
+            rs = conn.execute(
+                "SELECT v FROM app_state WHERE k=?",
+                ("recent_upload_keys",),
+            ).fetchone()
+            if rs and rs[0]:
+                try:
+                    curr = json.loads(rs[0])
+                    if isinstance(curr, list):
+                        lowered = {t.lower() for t in targets}
+                        kept = []
+                        for key in curr:
+                            s = str(key or "").strip()
+                            if not s:
+                                continue
+                            base = Path(s).name.lower()
+                            if s.lower() in lowered or base in lowered:
+                                continue
+                            kept.append(s)
+                        conn.execute(
+                            """
+                            INSERT INTO app_state(k, v) VALUES(?, ?)
+                            ON CONFLICT(k) DO UPDATE SET v=excluded.v
+                            """,
+                            ("recent_upload_keys", json.dumps(kept, ensure_ascii=False)),
+                        )
+                except Exception:
+                    logger.warning("recent_upload_keys 정리 실패 (무시)")
+
+            conn.commit()
+
+        self._rebuild_index_from_db()
+        logger.info(
+            "문서 선택 삭제 완료: docs=%d, chunks=%d",
+            len(targets),
+            deleted_chunks,
+        )
+        return {
+            "deleted_docs": len(targets),
+            "deleted_chunks": deleted_chunks,
+        }
 
     def build_feature_map(
         self,
@@ -401,19 +706,49 @@ class VectorStore:
         검색 결과 + 쿼리를 기반으로 Feature Map 생성.
         실제 청크 원문은 포함하지 않음 — 보안 에이전트에 전달할 메타데이터만 포함.
         """
-        contains_pii = any(r.get("has_pii") for r in results)
+        from security.pii_filter_helpers import (
+            filter_to_protected_pii_types,
+            payment_card_imagery_likely,
+            sensitivity_from_protected_types,
+        )
+
+        def _protected_types_for_hit(row: Dict[str, Any]) -> List[str]:
+            pts = list(
+                filter_to_protected_pii_types(row.get("pii_types") or [])
+            )
+            txt = row.get("text") or ""
+            if payment_card_imagery_likely(
+                txt,
+                is_image_chunk=bool(row.get("is_image")),
+            ):
+                if "CREDIT_CARD" not in pts:
+                    pts.append("CREDIT_CARD")
+            return pts
 
         pii_types: List[str] = []
         for r in results:
-            for t in (r.get("pii_types") or []):
+            for t in _protected_types_for_hit(r):
                 if t not in pii_types:
                     pii_types.append(t)
+
+        contains_pii = any(bool(_protected_types_for_hit(r)) for r in results)
+
+        protected_hits = sum(
+            1 for r in results if _protected_types_for_hit(r)
+        )
+        pii_chunk_ratio = round(
+            protected_hits / max(len(results), 1),
+            4,
+        )
 
         bulk_keywords = ["전부", "모두", "전체", "all", "dump", "export"]
         bulk_request  = any(kw in user_query.lower() for kw in bulk_keywords)
 
-        # 검색 결과 중 최대 민감도 점수 사용
-        max_score = max((r.get("sensitivity_score", 0.0) for r in results), default=0.0)
+        # 검색 결과별 민감도는 보호 대상 PII만 반영해 재계산
+        max_score = 0.0
+        for r in results:
+            pts = _protected_types_for_hit(r)
+            max_score = max(max_score, sensitivity_from_protected_types(pts))
         sensitivity_score = max_score
         if bulk_request:
             sensitivity_score = min(1.0, sensitivity_score + 0.4)
@@ -422,6 +757,7 @@ class VectorStore:
             "matched_docs":      len(results),
             "contains_pii":      contains_pii,
             "pii_types":         pii_types,
+            "pii_chunk_ratio":   pii_chunk_ratio,
             "bulk_request":      bulk_request,
             "owner_match":       True,
             "sensitivity_score": round(sensitivity_score, 4),
@@ -434,6 +770,58 @@ class VectorStore:
             import faiss
             faiss.write_index(self._index, str(self._index_path))
 
+    def _rebuild_index_from_db(self) -> None:
+        """
+        현재 chunks 테이블 기준으로 FAISS 인덱스를 다시 만든다.
+        선택 삭제 후 벡터-행 매핑 정합성을 보장하기 위한 내부 유틸.
+        """
+        with sqlite3.connect(self._meta_db) as conn:
+            rows = conn.execute(
+                """
+                SELECT id, text, source_path, doc_name, pii_types
+                FROM chunks
+                ORDER BY id
+                """
+            ).fetchall()
+
+        if not rows:
+            self._index = None
+            self._chunk_ids = []
+            if self._index_path.exists():
+                self._index_path.unlink()
+            return
+
+        embed_texts_list: List[str] = []
+        chunk_ids: List[int] = []
+        for row in rows:
+            rid, text, source_path, doc_name, pii_types_json = row
+            chunk_ids.append(int(rid))
+            pts: List[str] = []
+            if pii_types_json:
+                try:
+                    parsed = json.loads(pii_types_json)
+                    if isinstance(parsed, list):
+                        pts = [str(x) for x in parsed]
+                except Exception:
+                    pts = []
+            pii_kr = _pii_types_to_korean(pts)
+            file_name = Path(source_path).name if source_path else (doc_name or "")
+            prefix_parts = []
+            if file_name:
+                prefix_parts.append(f"[파일: {file_name}]")
+            if pii_kr:
+                prefix_parts.append(f"[문서유형: {pii_kr}]")
+            prefix = " ".join(prefix_parts)
+            embed_texts_list.append(f"{prefix}\n{text}".strip() if prefix else str(text or ""))
+
+        embeddings = embed_texts(embed_texts_list)
+        import faiss
+        dim = embeddings.shape[1]
+        self._index = faiss.IndexFlatIP(dim)
+        self._index.add(embeddings)
+        self._chunk_ids = chunk_ids
+        self._save_index()
+
     def clear(self) -> None:
         """인덱스와 메타데이터 초기화 (테스트용)"""
         self._index     = None
@@ -442,6 +830,7 @@ class VectorStore:
             self._index_path.unlink()
         with sqlite3.connect(self._meta_db) as conn:
             conn.execute("DELETE FROM chunks")
+            conn.execute("DELETE FROM app_state WHERE k='recent_upload_keys'")
             conn.commit()
         logger.info("VectorStore 초기화 완료")
 

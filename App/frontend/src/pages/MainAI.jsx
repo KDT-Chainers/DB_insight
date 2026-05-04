@@ -1,6 +1,7 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import SearchSidebar from '../components/SearchSidebar'
+import AnimatedOrb from '../components/AnimatedOrb'
 import { useSidebar } from '../context/SidebarContext'
 import { API_BASE } from '../api'
 
@@ -22,6 +23,14 @@ function fmtTime(sec) {
   const m = Math.floor(s / 60)
   return `${m}:${String(s % 60).padStart(2, '0')}`
 }
+
+/** AI 홈 배경 — 중앙 타원 가로 반경을 뷰포트 안에 두어 좌우 끝이 토성 띠처럼 곡선으로 보이게 함 */
+const AI_HOME_BG = [
+  "radial-gradient(ellipse 72% 24% at 50% 50%, rgba(255, 225, 250, 0.12) 0%, rgba(230, 95, 255, 0.28) 34%, rgba(120, 58, 195, 0.24) 56%, rgba(45, 22, 95, 0.14) 74%, rgba(0, 0, 0, 0) 90%)",
+  "radial-gradient(ellipse 40% 16.621% at 34% 50%, rgba(255, 195, 125, 0.16) 0%, rgba(255, 170, 110, 0.05) 45%, rgba(0, 0, 0, 0) 68%)",
+  "radial-gradient(ellipse 40% 16.621% at 66% 50%, rgba(38, 18, 78, 0.38) 0%, rgba(55, 30, 110, 0.1) 42%, rgba(0, 0, 0, 0) 65%)",
+  "#000000",
+].join(", ");
 
 // AI 답변 안전장치 — 시스템 프롬프트로 마크다운 금지했지만,
 // LLM 이 이를 어길 경우를 대비한 프론트엔드 폴리필.
@@ -534,24 +543,24 @@ export default function MainAI() {
   // AI 에이전트 상태
   const [streaming,      setStreaming]      = useState(false)
   const [results,        setResults]        = useState([])
-  const [iterationData,  setIterationData]  = useState([])   // [{iteration, query, domain, items, thought, done, count}]
-  const [domainSelection,setDomainSelection]= useState(null) // {domain, reason}
+  const [iterationData,  setIterationData]  = useState([])
+  const [domainSelection,setDomainSelection]= useState(null)
   const [aiError,        setAiError]        = useState('')
   const [finalQuery,     setFinalQuery]     = useState('')
   const [hasLLM,         setHasLLM]         = useState(undefined)
 
   // ── AIMODE 시각화 4-step 상태 ─────────────────────────────
-  const [aimodeSteps,       setAimodeSteps]       = useState([])   // [{step, label, done, query, selected_idx}]
-  const [aimodeQuery,       setAimodeQuery]       = useState('')   // 파일검색 키워드 (Step 1)
-  const [aimodeContentKws,  setAimodeContentKws]  = useState([])   // 내용검색 키워드 (Step 1)
-  const [aimodeDetailKws,   setAimodeDetailKws]   = useState([])   // 상세내용 키워드 (Step 1)
-  const [aimodeSources,     setAimodeSources]     = useState([])   // 검색 결과 카드 (Step 2)
-  const [aimodeSelected,    setAimodeSelected]    = useState(null) // 선택된 idx (Step 3)
-  const [aimodeAnswer,      setAimodeAnswer]      = useState('')   // 스트리밍 답변 (Step 4)
+  const [aimodeSteps,       setAimodeSteps]       = useState([])
+  const [aimodeQuery,       setAimodeQuery]       = useState('')
+  const [aimodeContentKws,  setAimodeContentKws]  = useState([])
+  const [aimodeDetailKws,   setAimodeDetailKws]   = useState([])
+  const [aimodeSources,     setAimodeSources]     = useState([])
+  const [aimodeSelected,    setAimodeSelected]    = useState(null)
+  const [aimodeAnswer,      setAimodeAnswer]      = useState('')
   const [aimodeDone,        setAimodeDone]        = useState(false)
-  const [useAimode,      setUseAimode]      = useState(true)    // AIMODE 시각화 ON/OFF
-  const [topK,         setTopK]         = useState(20)
-  const [maxIter,      setMaxIter]      = useState(5)
+  const [useAimode,         setUseAimode]         = useState(true)
+  const [topK,              setTopK]              = useState(20)
+  const [maxIter,           setMaxIter]           = useState(5)
   const abortRef = useRef(null)
 
   // 애니메이션
@@ -559,12 +568,35 @@ export default function MainAI() {
   const [resultsReady, setResultsReady] = useState(false)
   const [detailVisible,setDetailVisible]= useState(false)
 
+  // UI 홈 배경 애니메이션
+  const [homeGlowDrift,    setHomeGlowDrift]    = useState(false)
+  const [aiHomeEntranceOn, setAiHomeEntranceOn] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  )
+
   // 포털 전환
   const [searchTransitioning, setSearchTransitioning] = useState(false)
   const [ripplePos, setRipplePos] = useState({ x: '50%', y: '50%' })
-  const btnRef    = useRef(null)
-  const formRef   = useRef(null)
-  const inputRef  = useRef(null)    // 검색창 포커스용
+  const btnRef      = useRef(null)
+  const formRef     = useRef(null)
+  const inputRef    = useRef(null)
+  const orbSinkRef  = useRef(null)
+  const orbVoiceRef = useRef(0)
+
+  // homeGlowDrift 제어
+  useEffect(() => {
+    if (view !== 'home') { setHomeGlowDrift(false); return }
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { setHomeGlowDrift(true) }
+  }, [view])
+
+  // aiHomeEntranceOn 제어
+  useEffect(() => {
+    if (view !== 'home') { setAiHomeEntranceOn(false); return }
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { setAiHomeEntranceOn(true); return }
+    setAiHomeEntranceOn(false)
+    const t = window.setTimeout(() => setAiHomeEntranceOn(true), 180)
+    return () => clearTimeout(t)
+  }, [view])
 
   // 뷰 변경 시 검색창 자동 포커스
   useEffect(() => {
@@ -871,6 +903,8 @@ export default function MainAI() {
     }
   }
 
+  doSearchRef.current = doSearch;
+
   useEffect(() => { doSearchRef.current = doSearch })
 
   const handleSearch  = (e) => { e?.preventDefault(); doSearch(inputValue) }
@@ -920,11 +954,15 @@ export default function MainAI() {
   }, [])
 
   const handleGoToSearch = () => {
-    const rect = btnRef.current?.getBoundingClientRect()
-    if (rect) setRipplePos({ x: `${rect.left + rect.width / 2}px`, y: `${rect.top + rect.height / 2}px` })
-    setSearchTransitioning(true)
-    setTimeout(() => navigate('/search'), 900)
-  }
+    const rect = btnRef.current?.getBoundingClientRect();
+    if (rect)
+      setRipplePos({
+        x: `${rect.left + rect.width / 2}px`,
+        y: `${rect.top + rect.height / 2}px`,
+      });
+    setSearchTransitioning(true);
+    setTimeout(() => navigate("/search"), 900);
+  };
 
   // ── 렌더 ────────────────────────────────────────────────────
   return (
@@ -957,147 +995,150 @@ export default function MainAI() {
         </div>
       )}
 
-      <SearchSidebar />
+      {/* 사이드바 */}
+      <SearchSidebar entranceOn={view === 'home' ? aiHomeEntranceOn : undefined} />
 
       {/* ════ HOME VIEW ════ */}
       {view === 'home' && (
-        <main className={`${ml} h-full flex flex-col items-center justify-center p-8 relative transition-[margin] duration-300`}>
-          {/* 배경 glow */}
-          <div className="absolute top-1/4 left-1/3 w-[600px] h-[400px] rounded-full blur-[140px] pointer-events-none"
-            style={{ background: 'rgba(109,40,217,0.2)' }} />
-          <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[400px] rounded-full blur-[120px] pointer-events-none"
-            style={{ background: 'rgba(88,28,135,0.15)' }} />
-          {/* 스캔라인 */}
-          <div className="absolute inset-0 pointer-events-none"
-            style={{ background: 'repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(139,92,246,0.012) 3px, rgba(139,92,246,0.012) 4px)' }} />
-
-          <div className="w-full max-w-4xl flex flex-col items-center z-10">
-            <div className={`mb-12 text-center transition-all duration-300 ${homeExiting ? 'opacity-0 -translate-y-6' : 'opacity-100 translate-y-0'}`}>
-              <h2 className="text-5xl md:text-6xl font-black tracking-tighter mb-4">
-                <span className="text-on-surface">로컬 </span>
-                <span style={{ background: 'linear-gradient(to right, #a78bfa, #c084fc, #e879f9)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                  AI 에이전트
-                </span>
-                <span style={{ color: AI.accentLight }}>.</span>
-              </h2>
-              <p className="text-on-surface-variant/70 text-lg max-w-xl mx-auto font-light">
-                질문하면 AI가 검색·선택·답변까지 <span style={{ color: AI.accentLight, fontWeight: 700 }}>한 번에</span> 처리합니다.
-              </p>
+        <>
+          <main className={`${ml} relative flex h-full min-h-0 flex-col overflow-x-hidden overflow-y-auto bg-transparent transition-[margin] duration-300`}>
+            {/* 곡선 띠 배경 */}
+            <div
+              className={`pointer-events-none absolute inset-0 z-0 min-h-0 will-change-transform ${homeGlowDrift ? 'ai-home-glow-drift' : 'ai-home-glow-slide-in'}`}
+              style={{ background: AI_HOME_BG }}
+              aria-hidden
+              onAnimationEnd={(e) => {
+                if (e.animationName === 'ai-home-glow-slide-in' || e.animationName?.endsWith('ai-home-glow-slide-in')) {
+                  setHomeGlowDrift(true)
+                }
+              }}
+            />
+            {/* Orb */}
+            <div ref={orbSinkRef} className="absolute inset-0 z-0 min-h-0" aria-hidden>
+              <AnimatedOrb
+                layout="fill"
+                colorMode="ai"
+                hideCenterUI
+                interactive={false}
+                aiHoverFx
+                pointScaleMul={1.45}
+                particleCount={11000}
+                size={720}
+                assembleIntro
+                assembleDuration={8}
+                voiceLevelRef={orbVoiceRef}
+              />
             </div>
 
-            {/* 검색창 */}
-            <form ref={formRef} onSubmit={handleSearch} className="w-full relative group"
-              style={homeExiting ? { visibility: 'hidden' } : {}}>
-              <div className="absolute -inset-[1px] rounded-full blur-sm opacity-0 group-focus-within:opacity-100 transition-opacity duration-500 pointer-events-none"
-                style={{ background: 'linear-gradient(to right, rgba(109,40,217,0.6), rgba(192,38,211,0.3), rgba(109,40,217,0.6))' }} />
-              <div className="relative rounded-full p-2 flex items-center gap-4 transition-all duration-300"
-                style={{ background: 'rgba(5,3,12,0.75)', border: `1px solid rgba(109,40,217,0.4)`,
-                  boxShadow: '0 0 40px rgba(109,40,217,0.12), inset 0 0 20px rgba(0,0,0,0.4)' }}>
-                <button type="button" className="w-12 h-12 rounded-full flex items-center justify-center text-white active:scale-90 transition-transform"
-                  style={{ background: AI.rankBg, boxShadow: '0 0 20px rgba(124,58,237,0.6)' }}>
-                  <span className="material-symbols-outlined font-bold" style={{ fontVariationSettings: '"FILL" 1' }}>psychology</span>
-                </button>
-                <input
-                  ref={inputRef}
-                  type="text"
-                  value={listening ? '' : inputValue}
-                  onChange={(e) => !listening && setInputValue(e.target.value)}
-                  placeholder={listening ? '' : 'AI에게 검색을 맡기세요...'}
-                  className="flex-1 bg-transparent border-none focus:ring-0 text-on-surface font-manrope text-lg py-4 outline-none"
-                  style={{ caretColor: AI.accentLight }}
-                  readOnly={listening}
-                />
-                {listening && (
-                  <div className="absolute left-20 right-20 flex items-center gap-3 pointer-events-none">
-                    <span className="text-lg font-manrope truncate" style={{ color: AI.accentLight }}>{interim || '듣는 중...'}</span>
-                    <div className="flex items-center gap-[3px] shrink-0">
-                      {[0, 0.15, 0.3, 0.15, 0].map((delay, i) => (
-                        <div key={i} className="w-[3px] rounded-full animate-bounce"
-                          style={{ height: `${[12,20,28,20,12][i]}px`, animationDelay: `${delay}s`,
-                            animationDuration: '0.8s', background: AI.accentLight }} />
-                      ))}
+            <div className={`pointer-events-none relative z-10 flex h-full min-h-0 w-full flex-col ${aiHomeEntranceOn ? 'main-search-entrance-on' : 'main-search-entrance-off'}`}>
+              <div className="relative z-10 flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-6 py-8 md:px-8">
+                <div className="relative flex w-full max-w-lg flex-col items-center justify-center">
+                  <div className="relative z-10 flex w-full flex-col items-center gap-9 text-center md:gap-10">
+                    <div className={`mse-hero-down pointer-events-auto max-w-lg shrink-0 transition-all duration-300 ${homeExiting ? 'opacity-0 -translate-y-6' : ''}`}>
+                      <h2 className="font-headline inline-flex flex-wrap items-baseline justify-center gap-0 text-4xl font-semibold tracking-tight md:text-5xl lg:text-6xl">
+                        <span className="font-headline inline-block bg-gradient-to-r from-[#5e5a52] from-[6%] via-[#b8b0a2] to-[#d4cec2] bg-clip-text text-transparent">B</span>
+                        <span className="font-headline text-[#cbc4b6] drop-shadow-[0_1px_5px_rgba(18,16,14,0.18)]">eyond Smarte</span>
+                        <span className="font-headline inline-block bg-gradient-to-r from-[#d4cec2] via-[#9e978a] to-[#45423c] to-[90%] bg-clip-text text-transparent">r</span>
+                      </h2>
                     </div>
+                    <form
+                      onSubmit={handleSearch}
+                      className="mse-search-up group pointer-events-auto relative z-10 w-full max-w-[min(90vw,22rem)] shrink-0 md:max-w-[24rem]"
+                      style={homeExiting ? { visibility: 'hidden' } : {}}
+                    >
+                      <div className="pointer-events-none absolute -inset-[2px] rounded-full bg-gradient-to-r from-fuchsia-500/0 via-violet-400/25 to-fuchsia-500/0 opacity-0 blur-md transition-opacity duration-500 group-focus-within:opacity-100" />
+                      <div className="relative flex items-center gap-2 rounded-full border border-violet-200/[0.14] bg-gradient-to-b from-violet-100/[0.09] to-violet-950/[0.28] px-1.5 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.16),inset_0_-1px_0_rgba(0,0,0,0.22),0_10px_44px_rgba(32,12,58,0.5)] backdrop-blur-2xl transition-all duration-300 group-focus-within:border-violet-200/25 group-focus-within:from-violet-100/[0.12] group-focus-within:to-violet-950/[0.34]">
+                        <button
+                          type="button"
+                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-900 to-purple-600 text-violet-50 shadow-[0_0_20px_rgba(124,58,237,0.32),inset_0_1px_0_rgba(255,255,255,0.18)] transition-transform hover:from-violet-800 hover:to-purple-500 active:scale-90"
+                        >
+                          <span className="material-symbols-outlined text-[20px] font-bold">add</span>
+                        </button>
+                        <input
+                          type="text"
+                          value={inputValue}
+                          onChange={(e) => setInputValue(e.target.value)}
+                          placeholder={
+                            micListening ? "듣는 중…" : "Anything you need"
+                          }
+                          className="min-w-0 flex-1 border-none bg-transparent py-2 font-manrope text-sm text-violet-100/90 outline-none ring-0 placeholder:text-violet-300/45 md:py-2.5 md:text-base"
+                        />
+                        <button
+                          type="button"
+                          onClick={toggleMic}
+                          aria-pressed={micListening}
+                          aria-label={
+                            micListening ? "음성 입력 끄기" : "음성 입력"
+                          }
+                          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border backdrop-blur-md transition-colors ${
+                            micListening
+                              ? "border-rose-400/35 bg-rose-950/40 text-rose-200 shadow-[0_0_16px_rgba(251,113,133,0.25)]"
+                              : "border-violet-300/18 bg-violet-950/35 text-violet-200/80 hover:border-violet-200/30 hover:bg-violet-900/40 hover:text-violet-100"
+                          }`}
+                        >
+                          <span className="material-symbols-outlined text-[20px]">
+                            mic
+                          </span>
+                        </button>
+                      </div>
+                    </form>
                   </div>
-                )}
-                <button type="button" onClick={toggleMic}
-                  className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 shrink-0 ${listening ? 'animate-pulse' : ''}`}
-                  style={{ background: listening ? 'rgba(139,92,246,0.2)' : 'rgba(139,92,246,0.05)',
-                    color: listening ? AI.accentLight : 'rgba(139,92,246,0.6)' }}>
-                  <span className="material-symbols-outlined" style={listening ? { fontVariationSettings: '"FILL" 1' } : {}}>mic</span>
+                </div>
+              </div>
+
+              <div
+                className="mse-search-up mse-search-up-delay-1 pointer-events-auto flex shrink-0 flex-col items-center justify-end px-6 pb-10 pt-2 md:px-8"
+                style={homeExiting ? { visibility: "hidden" } : {}}
+              >
+                <button
+                  ref={btnRef}
+                  onClick={handleGoToSearch}
+                  disabled={searchTransitioning}
+                  className="group flex items-center gap-3 rounded-full border border-white/10 bg-white/[0.06] px-8 py-3 text-sm font-bold uppercase tracking-widest text-neutral-400 transition-all duration-300 hover:border-white/20 hover:text-neutral-200 disabled:pointer-events-none"
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.boxShadow =
+                      "0 0 24px rgba(139, 92, 246, 0.15)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.boxShadow = "none";
+                  }}
+                >
+                  <span
+                    className="h-2 w-2 animate-pulse rounded-full bg-violet-500"
+                    style={{ boxShadow: "0 0 6px rgba(139, 92, 246, 0.9)" }}
+                  />
+                  검색 모드로 전환
+                  <span className="material-symbols-outlined text-lg transition-transform group-hover:translate-x-1">
+                    arrow_forward
+                  </span>
                 </button>
               </div>
-            </form>
-
-            {/* 설정 */}
-            <div className="mt-4 flex items-center justify-center gap-3 text-xs flex-wrap text-on-surface-variant"
-              style={homeExiting ? { visibility: 'hidden' } : {}}>
-              <span className="opacity-50">결과 수</span>
-              {[10, 20, 30].map(n => (
-                <button key={n} type="button" onClick={() => setTopK(n)}
-                  className="px-3 py-1 rounded-full border transition-colors"
-                  style={topK === n
-                    ? { borderColor: AI.accent, color: AI.accentLight, background: 'rgba(139,92,246,0.1)' }
-                    : { borderColor: 'rgba(109,40,217,0.2)', color: 'inherit' }}>
-                  {n}
-                </button>
-              ))}
             </div>
-
-            {/* 검색 모드 전환 버튼 */}
-            <div className="mt-8 flex justify-center" style={homeExiting ? { visibility: 'hidden' } : {}}>
-              <button ref={btnRef} onClick={handleGoToSearch} disabled={searchTransitioning}
-                className="px-8 py-3 rounded-full flex items-center gap-3 text-lg font-bold tracking-widest uppercase transition-all duration-300 group disabled:pointer-events-none"
-                style={{ background: 'rgba(10,5,25,0.6)', border: '1px solid rgba(109,40,217,0.25)',
-                  color: 'rgba(167,139,250,0.5)' }}
-                onMouseEnter={e => { e.currentTarget.style.color = AI.accentLight; e.currentTarget.style.boxShadow = AI.glow }}
-                onMouseLeave={e => { e.currentTarget.style.color = 'rgba(167,139,250,0.5)'; e.currentTarget.style.boxShadow = 'none' }}>
-                <span className="w-2 h-2 rounded-full animate-pulse" style={{ background: AI.accent, boxShadow: AI.glow }} />
-                검색 모드로 전환
-                <span className="material-symbols-outlined text-lg group-hover:translate-x-1 transition-transform">arrow_forward</span>
-              </button>
-            </div>
-
-            {/* 기능 카드 */}
-            <div className={`grid grid-cols-1 md:grid-cols-3 gap-4 mt-24 w-full transition-all duration-300 ${homeExiting ? 'opacity-0 translate-y-4' : 'opacity-100 translate-y-0'}`}>
-              {[
-                { icon: 'manage_search', title: '키워드 추출', sub: '질문에서 핵심 추출' },
-                { icon: 'ads_click',     title: '자동 카드 선택', sub: '도메인 의도 인지' },
-                { icon: 'auto_awesome',  title: '본문 답변',   sub: 'Ollama 로컬 LLM' },
-              ].map((card) => (
-                <div key={card.title}
-                  className="p-6 rounded-xl cursor-pointer transition-all duration-300 group"
-                  style={{ background: 'rgba(5,3,15,0.65)', border: `1px solid rgba(109,40,217,0.2)` }}
-                  onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(139,92,246,0.5)'; e.currentTarget.style.boxShadow = AI.glow }}
-                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(109,40,217,0.2)'; e.currentTarget.style.boxShadow = 'none' }}>
-                  <span className="material-symbols-outlined mb-4 block group-hover:text-violet-400 transition-colors"
-                    style={{ color: AI.accentDark }}>{card.icon}</span>
-                  <h3 className="text-on-surface font-bold mb-1">{card.title}</h3>
-                  <p className="text-[11px] uppercase tracking-tighter" style={{ color: 'rgba(167,139,250,0.4)' }}>{card.sub}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </main>
+          </main>
+        </>
       )}
 
-      {/* ════ RESULTS / DETAIL 헤더 ════
-           top-8 (=32px) — 커스텀 타이틀바 영역 확보 (Electron frame:false). MainSearch 와 동일. */}
-      {view !== 'home' && (
-        <header className={`fixed top-8 ${leftEdge} right-0 z-40 h-16 backdrop-blur-xl flex items-center px-6 gap-4 border-b transition-[left] duration-300`}
-          style={{ background: 'rgba(13,7,24,0.8)', borderColor: AI.border,
-            boxShadow: '0 4px 30px rgba(109,40,217,0.1)' }}>
-
-          <button onClick={() => { setView('home'); setInputValue(''); setResults([]); if (abortRef.current) abortRef.current.abort() }}
-            className={`text-lg font-bold tracking-tighter shrink-0 hover:opacity-70 transition-opacity ${!open ? 'ml-10' : ''}`}
-            style={{ background: 'linear-gradient(to right, #a78bfa, #e879f9)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-            AI 에이전트
+      {/* ════════════════════════════════
+          RESULTS / DETAIL 공통 헤더
+      ════════════════════════════════ */}
+      {view !== "home" && (
+        <header
+          className={`fixed top-0 ${leftEdge} right-0 z-40 bg-[#070d1f]/60 backdrop-blur-xl flex items-center px-8 h-16 gap-6 shadow-[0_4px_30px_rgba(172,138,255,0.1)] transition-[left] duration-300`}
+        >
+          <button
+            onClick={() => {
+              setView("home");
+              setInputValue("");
+            }}
+            className={`text-xl font-bold tracking-tighter bg-gradient-to-r from-violet-400 to-fuchsia-400 bg-clip-text text-transparent shrink-0 hover:opacity-70 transition-opacity ${!open ? "ml-10" : ""}`}
+          >
+            Obsidian AI
           </button>
 
           <form onSubmit={handleSearch} className="flex-1">
-            <div className="flex items-center rounded-full border px-4 py-2 gap-3 transition-all"
-              style={{ background: AI.card, borderColor: AI.border }}>
-              <span className="material-symbols-outlined text-lg" style={{ color: streaming ? AI.accent : 'rgba(139,92,246,0.5)' }}>
-                {streaming ? 'psychology' : 'search'}
+            <div className="relative group flex items-center">
+              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-violet-400/50">
+                search
               </span>
               <input
                 ref={inputRef}
@@ -1126,7 +1167,6 @@ export default function MainAI() {
             </button>
           )}
 
-          {/* 🧹 새 대화 — 서버 history + localStorage thread_id 모두 비움 */}
           <button onClick={handleNewConversation} title="대화 이력 초기화 (새 대화 시작)"
             className="flex items-center gap-2 px-4 py-2 rounded-full border text-base font-bold transition-all shrink-0 text-on-surface-variant hover:text-on-surface"
             style={{ background: AI.card, borderColor: AI.border }}
@@ -1172,8 +1212,6 @@ export default function MainAI() {
                         <span className="font-bold" style={{ color: AI.accentLight }}>{results.length}건</span>을 찾았습니다.
                       </p>
                 }
-              </div>
-            </div>
 
             {/* AIMODE 시각화 4-step 패널 — 컴팩트 progress strip */}
             {useAimode && aimodeSteps.length > 0 && (
@@ -1710,5 +1748,5 @@ export default function MainAI() {
         )
       })()}
     </div>
-  )
+  );
 }

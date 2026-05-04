@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import WindowControls from '../components/WindowControls'
+import AnimatedOrb from '../components/AnimatedOrb'
 import { API_BASE } from '../api'
 
 // ── LibreOffice 의존성 설치 스텝 ─────────────────────────────────
@@ -215,123 +216,178 @@ export default function InitialSetup() {
   const stepIndex = step === 'password' ? 0 : 1
 
   return (
-    <div className="flex items-center justify-center min-h-screen p-4 bg-void">
-      {/* 드래그 가능한 타이틀바 */}
-      <div className="fixed top-0 left-0 right-0 h-8 bg-[#070d1f] z-[9999] flex items-center justify-end px-2" style={{ WebkitAppRegion: 'drag' }}>
-        <div style={{ WebkitAppRegion: 'no-drag' }}><WindowControls /></div>
+    <div className="relative min-h-screen min-h-dvh overflow-x-hidden overflow-y-auto bg-[var(--app-bg-top)] font-body text-on-surface">
+      <div
+        className="titlebar-chrome fixed left-0 right-0 top-0 z-[9999] flex h-8 items-center justify-end px-2"
+        style={{ WebkitAppRegion: 'drag' }}
+      >
+        <div style={{ WebkitAppRegion: 'no-drag' }}>
+          <WindowControls />
+        </div>
       </div>
 
-      {/* Background */}
-      <div className="fixed top-[-10%] left-[-10%] w-[60%] h-[60%] orb-glow rounded-full blur-[100px] opacity-40 pointer-events-none" />
-      <div className="fixed bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-secondary/10 rounded-full blur-[120px] opacity-30 pointer-events-none" />
+      <main className="relative z-10 flex min-h-screen flex-col items-center justify-center p-6 pt-10">
+        <div className="relative isolate w-full max-w-4xl">
+          <div
+            className="pointer-events-none absolute -inset-5 rounded-[1.65rem] bg-gradient-to-b from-sky-200/15 via-primary/10 to-[rgba(37,99,235,0.08)] opacity-90 blur-2xl"
+            aria-hidden
+          />
+          <div
+            className="pointer-events-none absolute -inset-2 rounded-[1.35rem] border border-white/[0.08] bg-white/[0.05] shadow-[0_8px_40px_rgba(0,0,0,0.25),inset_0_1px_0_0_rgba(255,255,255,0.12)] backdrop-blur-2xl backdrop-saturate-150"
+            aria-hidden
+          />
+          <div className="relative min-h-[36rem] overflow-hidden rounded-2xl shadow-[0_28px_80px_rgba(0,0,0,0.55)] lg:min-h-[34rem]">
+            <div className="pointer-events-none absolute inset-0 app-depth-bg" aria-hidden />
 
-      <main className="relative w-full max-w-6xl h-[800px] flex overflow-hidden rounded-xl shadow-2xl border border-white/5 animate-fade-in">
-        {/* Left branding */}
-        <section className="hidden lg:flex w-5/12 flex-col justify-between p-12 bg-surface-container relative overflow-hidden">
-          <div className="relative z-10">
-            <div className="flex items-center gap-3 mb-12">
-              <div className="w-10 h-10 rounded-lg kinetic-gradient flex items-center justify-center shadow-[0_0_20px_rgba(133,173,255,0.4)]">
-                <span className="material-symbols-outlined text-on-primary-container" style={{ fontVariationSettings: '"FILL" 1' }}>dataset</span>
-              </div>
-              <span className="text-2xl font-black tracking-tighter text-on-surface">DB_insight</span>
-            </div>
-            <h1 className="text-5xl font-extrabold tracking-tight leading-[1.1] mb-6">
-              <span style={{ background: 'linear-gradient(45deg, #85adff, #ac8aff)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
-                DB_insight
-              </span>에{' '}오신 것을 환영합니다.
-            </h1>
-            <p className="text-on-surface-variant text-lg leading-relaxed max-w-sm">
-              신경망 수준의 마스터 비밀번호로 개인 인덱스를 보호하세요. 모든 처리는 기기에서 이루어집니다.
-            </p>
-          </div>
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="w-96 h-96 rounded-full orb-glow animate-pulse" />
-            <div className="absolute w-64 h-64 border border-primary/20 rounded-full animate-reverse-spin" />
-            <div className="absolute w-80 h-80 border border-secondary/10 rounded-full animate-spin-slow" />
-          </div>
-          <div className="relative z-10 flex items-center gap-4">
-            <div className="flex -space-x-3">
-              <div className="w-8 h-8 rounded-full border-2 border-surface-container bg-surface-variant flex items-center justify-center text-lg font-bold">AI</div>
-              <div className="w-8 h-8 rounded-full border-2 border-surface-container bg-surface-variant flex items-center justify-center text-lg font-bold">DB</div>
-            </div>
-            <span className="text-sm uppercase tracking-widest text-on-surface-variant font-semibold">코어 v2.4 활성화</span>
-          </div>
-        </section>
-
-        {/* Right form */}
-        <section className="flex-1 flex flex-col p-12 lg:p-20 bg-surface/80 glass-panel relative">
-          <div className="max-w-md mx-auto w-full flex flex-col h-full">
-            {/* 진행 바 */}
-            <div className="flex justify-between items-center mb-12">
-              <div className="flex gap-2">
-                {['마스터 키', '의존성'].map((label, i) => (
-                  <div key={i} className="flex items-center gap-1.5">
-                    <div className={`h-1 w-12 rounded-full transition-all duration-500 ${i <= stepIndex ? 'kinetic-gradient' : 'bg-surface-container-highest'}`} />
-                    <span className={`text-xs uppercase tracking-widest font-bold transition-colors ${i === stepIndex ? 'text-primary' : 'text-on-surface-variant/30'}`}>{label}</span>
-                  </div>
-                ))}
-              </div>
-              <span className="text-sm uppercase tracking-widest text-primary font-bold">초기 설정</span>
-            </div>
-
-            {/* ── STEP 1: 비밀번호 ── */}
-            {step === 'password' && (
-              <form onSubmit={handleSubmit} className="space-y-8 flex-1">
-                <div>
-                  <h2 className="text-3xl font-bold mb-2">마스터 키 생성</h2>
-                  <p className="text-on-surface-variant text-lg">마스터 키는 모든 로컬 데이터 저장소를 암호화합니다.</p>
+            <div className="relative z-10 grid min-h-[36rem] grid-cols-1 bg-gradient-to-b from-white/[0.07] via-white/[0.02] to-transparent backdrop-blur-[56px] backdrop-saturate-150 lg:min-h-[34rem] lg:grid-cols-2">
+              {/* 좌측: 메인 UI와 동일 Orb + 카피 */}
+              <section className="relative flex flex-col items-center justify-center gap-8 overflow-visible border-b border-white/10 px-8 py-12 lg:border-b-0 lg:border-r lg:px-10">
+                <div className="flex flex-col items-center text-center">
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-white/50">DB_insight</p>
+                  <h1 className="max-w-sm text-2xl font-bold leading-tight tracking-tight text-white md:text-3xl">
+                    DB_insight에 오신 것을 환영합니다.
+                  </h1>
+                  <p className="mt-3 max-w-sm text-sm leading-relaxed text-white/65">
+                    신경망 수준의 마스터 비밀번호로 개인 인덱스를 보호하세요. 모든 처리는 기기에서 이루어집니다.
+                  </p>
                 </div>
-                {error && <p className="text-red-400 text-lg text-center">{error}</p>}
-                <div className="space-y-6">
-                  <div className="group">
-                    <label className="block text-lg uppercase tracking-widest font-bold text-on-surface-variant mb-2 group-focus-within:text-primary transition-colors">마스터 비밀번호</label>
-                    <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••••••"
-                      className="w-full bg-transparent border-b border-outline-variant focus:border-primary focus:ring-0 px-0 py-3 text-xl transition-all placeholder:text-outline-variant/30 outline-none" />
+                <div className="overflow-visible py-2">
+                  <AnimatedOrb size={280} interactive={false} />
+                </div>
+                <div className="flex items-center gap-3 text-[10px] font-semibold uppercase tracking-widest text-white/45">
+                  <div className="flex -space-x-2">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white/15 bg-white/[0.06] text-[9px] font-bold text-white/70">
+                      AI
+                    </div>
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white/15 bg-white/[0.06] text-[9px] font-bold text-white/70">
+                      DB
+                    </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    {[
-                      { label: '8자 이상', met: password.length >= 8 },
-                      { label: '대문자 및 특수문자', met: /[A-Z]/.test(password) && /[^a-zA-Z0-9]/.test(password) },
-                      { label: '고유한 문구', met: password.length > 0 },
-                      { label: '사전 단어 미포함', met: false },
-                    ].map(item => (
-                      <div key={item.label} className="flex items-center gap-2 text-base text-on-surface-variant">
-                        <span className="material-symbols-outlined text-lg" style={item.met ? { fontVariationSettings: '"FILL" 1', color: '#85adff' } : {}}>
-                          {item.met ? 'check_circle' : 'circle'}
-                        </span>
-                        <span>{item.label}</span>
+                  <span>AI DB 코어 v2.4 활성화</span>
+                </div>
+              </section>
+
+              {/* 우측: 폼 */}
+              <section className="relative flex flex-col justify-center px-8 py-10 lg:px-10 lg:py-12">
+                <div className="mx-auto w-full max-w-md flex flex-col h-full">
+                  {/* 진행 바 */}
+                  <div className="mb-10 flex items-center justify-between">
+                    <div className="flex gap-2">
+                      {['마스터 키', '의존성'].map((label, i) => (
+                        <div key={i} className="flex items-center gap-1.5">
+                          <div className={`h-1 w-10 rounded-full transition-all duration-500 ${i <= stepIndex ? 'bg-gradient-to-r from-sky-300/90 to-[#2563eb]' : 'bg-white/15'}`} />
+                          <span className={`text-[10px] font-bold uppercase tracking-widest transition-colors ${i === stepIndex ? 'text-sky-200' : 'text-white/30'}`}>{label}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-white/50">초기 설정</span>
+                  </div>
+
+                  {/* ── STEP 1: 비밀번호 ── */}
+                  {step === 'password' && (
+                    <form onSubmit={handleSubmit} className="space-y-8 flex-1">
+                      <div>
+                        <h2 className="mb-2 text-xl font-bold tracking-tight text-white md:text-2xl">마스터 키 생성</h2>
+                        <p className="text-sm text-white/60">마스터 키는 모든 로컬 데이터 저장소를 암호화합니다.</p>
                       </div>
-                    ))}
-                  </div>
-                  <div className="group">
-                    <label className="block text-lg uppercase tracking-widest font-bold text-on-surface-variant mb-2 group-focus-within:text-primary transition-colors">비밀번호 확인</label>
-                    <input type="password" value={confirm} onChange={e => setConfirm(e.target.value)} placeholder="••••••••••••"
-                      className="w-full bg-transparent border-b border-outline-variant focus:border-primary focus:ring-0 px-0 py-3 text-xl transition-all placeholder:text-outline-variant/30 outline-none" />
-                  </div>
+                      {error && <p className="text-center text-sm text-red-300">{error}</p>}
+                      <div className="space-y-6">
+                        <div className="group">
+                          <label className="mb-2 ml-1 block text-[10px] font-bold uppercase tracking-[0.22em] text-white/55">
+                            마스터 비밀번호
+                          </label>
+                          <div className="relative">
+                            <input
+                              type="password"
+                              value={password}
+                              onChange={(e) => setPassword(e.target.value)}
+                              placeholder="••••••••••••"
+                              className="w-full border-b border-white/20 bg-transparent py-3 text-lg text-white placeholder:text-white/35 transition-all focus:border-sky-300/70 focus:outline-none"
+                            />
+                            <div className="pointer-events-none absolute bottom-0 left-0 h-[2px] w-0 bg-gradient-to-r from-sky-300/90 to-[#2563eb] transition-all duration-500 group-focus-within:w-full" />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          {[
+                            { label: '8자 이상', met: password.length >= 8 },
+                            { label: '대문자 및 특수문자', met: /[A-Z]/.test(password) && /[^a-zA-Z0-9]/.test(password) },
+                            { label: '고유한 문구', met: password.length > 0 },
+                            { label: '사전 단어 미포함', met: false },
+                          ].map((item) => (
+                            <div key={item.label} className="flex items-center gap-2 text-xs text-white/55">
+                              <span
+                                className="material-symbols-outlined text-sm"
+                                style={item.met ? { fontVariationSettings: '"FILL" 1', color: '#93c5fd' } : { color: 'rgba(255,255,255,0.35)' }}
+                              >
+                                {item.met ? 'check_circle' : 'circle'}
+                              </span>
+                              <span>{item.label}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="group">
+                          <label className="mb-2 ml-1 block text-[10px] font-bold uppercase tracking-[0.22em] text-white/55">
+                            비밀번호 확인
+                          </label>
+                          <div className="relative">
+                            <input
+                              type="password"
+                              value={confirm}
+                              onChange={(e) => setConfirm(e.target.value)}
+                              placeholder="••••••••••••"
+                              className="w-full border-b border-white/20 bg-transparent py-3 text-lg text-white placeholder:text-white/35 transition-all focus:border-sky-300/70 focus:outline-none"
+                            />
+                            <div className="pointer-events-none absolute bottom-0 left-0 h-[2px] w-0 bg-gradient-to-r from-sky-300/90 to-[#2563eb] transition-all duration-500 group-focus-within:w-full" />
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        type="submit"
+                        className="group flex h-14 w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#060d1f] via-[#0f2847] to-[#2563eb] font-bold tracking-tight text-white shadow-[0_4px_24px_rgba(37,99,235,0.35)] transition-all hover:shadow-[0_8px_36px_rgba(56,189,248,0.35)] hover:brightness-[1.05] active:scale-[0.98]"
+                      >
+                        코어 초기화
+                        <span className="material-symbols-outlined transition-transform group-hover:translate-x-1">arrow_forward</span>
+                      </button>
+                      <div className="mt-auto pt-8 border-t border-white/10 flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-white/45">
+                          <span className="material-symbols-outlined text-sm">lock</span>
+                          <span className="text-[10px] font-semibold uppercase tracking-tighter">제로 지식 저장소</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => navigate('/')}
+                          className="text-[10px] font-bold uppercase tracking-tighter text-white/50 transition-colors hover:text-sky-200"
+                        >
+                          로그인으로 돌아가기
+                        </button>
+                      </div>
+                    </form>
+                  )}
+
+                  {/* ── STEP 2: 의존성 ── */}
+                  {step === 'deps' && (
+                    <DepsStep onDone={() => navigate('/search')} />
+                  )}
                 </div>
-                <button type="submit" className="w-full kinetic-gradient text-on-primary-container font-bold py-4 rounded-full flex items-center justify-center gap-2 shadow-[0_10px_20px_rgba(133,173,255,0.2)] hover:shadow-[0_15px_30px_rgba(133,173,255,0.3)] transition-all group active:scale-95">
-                  코어 초기화
-                  <span className="material-symbols-outlined group-hover:translate-x-1 transition-transform">arrow_forward</span>
-                </button>
-              </form>
-            )}
-
-            {/* ── STEP 2: 의존성 ── */}
-            {step === 'deps' && (
-              <DepsStep onDone={() => navigate('/search')} />
-            )}
-
-            <div className="mt-auto pt-8 border-t border-outline-variant/10 flex items-center justify-between">
-              <div className="flex items-center gap-2 opacity-60">
-                <span className="material-symbols-outlined text-lg">lock</span>
-                <span className="text-sm uppercase tracking-tighter">제로 지식 저장소</span>
-              </div>
-              <button onClick={() => navigate('/')} className="text-sm uppercase tracking-tighter hover:text-primary transition-colors font-bold">
-                로그인으로 돌아가기
-              </button>
+              </section>
             </div>
           </div>
-        </section>
+        </div>
+
+        <div className="mt-12 flex flex-wrap items-center justify-center gap-3">
+          <div className="flex items-center gap-2 rounded-full bg-white/[0.06] px-4 py-2 backdrop-blur-md">
+            <div className="h-2 w-2 animate-pulse rounded-full bg-sky-300 shadow-[0_0_10px_rgba(125,211,252,0.75)]" />
+            <span className="text-[10px] font-bold uppercase tracking-widest text-white/50">
+              노드 상태: <span className="text-sky-200">정상</span>
+            </span>
+          </div>
+          <div className="flex items-center gap-2 rounded-full bg-white/[0.06] px-4 py-2 backdrop-blur-md">
+            <span className="material-symbols-outlined text-xs text-sky-200/90" style={{ fontVariationSettings: '"FILL" 1' }}>
+              verified_user
+            </span>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-white/55">암호화됨</span>
+          </div>
+        </div>
       </main>
     </div>
   )

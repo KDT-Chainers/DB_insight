@@ -21,6 +21,7 @@ _PII_WEIGHT: Dict[str, float] = {
     "KR_DRIVER_LICENSE": 0.8,   # 운전면허
     "KR_BANK_ACCOUNT": 0.85,    # 계좌번호
     "KR_BRN": 0.6,              # 사업자등록번호
+    "CREDIT_CARD": 0.88,        # 신용·체크카드 번호
     "PERSON": 0.4,
     "EMAIL_ADDRESS": 0.5,
     "PHONE_NUMBER": 0.6,
@@ -36,6 +37,7 @@ _DOC_TYPE_RULES: List[tuple[frozenset, str]] = [
     (frozenset({"KR_DRIVER_LICENSE"}),               "driver_license"),
     (frozenset({"KR_BANK_ACCOUNT"}),                 "bank_document"),
     (frozenset({"KR_BRN"}),                         "business_registration"),
+    (frozenset({"CREDIT_CARD"}),                    "payment_card"),
     (frozenset({"PERSON", "EMAIL_ADDRESS"}),         "personal_contact"),
     (frozenset({"PHONE_NUMBER"}),                   "contact_info"),
 ]
@@ -190,6 +192,7 @@ _PII_KOREAN_TERMS: Dict[str, List[str]] = {
     "KR_DRIVER_LICENSE": ["운전면허", "면허번호"],
     "KR_BANK_ACCOUNT":   ["계좌번호", "통장번호"],
     "KR_BRN":            ["사업자번호", "사업자등록번호"],
+    "CREDIT_CARD":       ["카드번호", "신용카드", "체크카드"],
     "PERSON":            ["이름", "성명"],
     "EMAIL_ADDRESS":     ["이메일", "email"],
     "PHONE_NUMBER":      ["전화번호", "휴대폰"],

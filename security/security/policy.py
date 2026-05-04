@@ -139,6 +139,10 @@ class SecurityPolicy:
 class UploadPolicy:
     """
     사용자가 브레이크 모달에서 선택한 옵션을 처리 방침으로 변환.
+
+    브레이크 모달(PII 감지 알림)은 `PIIDetector`가 찾은 **정책 보호 PII**가
+    있을 때만 뜬다. 보호 대상은 주민·여권·운전면허·계좌·사업자번호뿐이며,
+    전화번호·이메일은 민감정보로 분류하지 않는다(security.pii_filter_helpers).
     """
 
     # 선택 옵션 상수

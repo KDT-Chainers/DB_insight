@@ -11,7 +11,7 @@ ABC 권한: [A] 신뢰불가 입력(업로드 파일) 처리
   2. 텍스트 추출 (PDF / HWPX / 이미지)
   3. 이미지 파일: 영구 복사 + OCR bbox 캡처
   4. 청킹
-  5. PII 탐지 (정규식 + Qwen 재검증)
+  5. PII 탐지 (Presidio + 한국형 Recognizer + 정책/휴리스틱; 업로드 단계 Qwen 미사용)
   6. 이미지 PII → 이미지 bbox 좌표 매핑
   7. 탐지 결과 반환 (임베딩 결정은 Orchestrator 가 함)
 """
@@ -34,7 +34,8 @@ from document.image_extractor import (
 )
 from document.pdf_extractor import extract_pdf_with_metadata
 from harness.safe_tools import CAP_A, enforce_abc, validate_upload_file
-from security.pii_detector import ChunkScanResult, PIIDetector
+from security.pii_filter_helpers import payment_card_imagery_likely
+from security.pii_detector import ChunkScanResult, PIIDetector, PIIFinding
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,8 @@ class UploadScanResult:
     has_pii: bool = False
     pii_summary: Dict[str, Any] = field(default_factory=dict)
     error: Optional[str] = None
+    # 원본 바이트 SHA-256 (전체) — 동일 파일 재업로드 시 중복 임베딩 판별용
+    content_sha256: str = ""
     # ── 이미지 전용 ──────────────────────────────────────────────────────────
     is_image: bool = False
     image_path: str = ""          # 영구 저장된 이미지 경로 (IMAGE_STORE_DIR)
@@ -92,6 +95,14 @@ class UploadSecurityAgent:
         ext         = resolved.suffix.lower()
         source_path = str(resolved)
 
+        try:
+            content_sha256 = hashlib.sha256(resolved.read_bytes()).hexdigest()
+        except OSError as exc:
+            return UploadScanResult(
+                filename=filename,
+                error=f"파일 읽기 오류: {exc}",
+            )
+
         # ── 1. 텍스트 추출 ────────────────────────────────────────────────────
         ocr_results: List[Tuple] = []
         persistent_image_path: str = ""
@@ -117,11 +128,16 @@ class UploadSecurityAgent:
                 return UploadScanResult(
                     filename=filename,
                     error=f"지원하지 않는 파일 형식: {ext}",
+                    content_sha256=content_sha256,
                 )
 
         except Exception as exc:
             logger.error("텍스트 추출 실패: %s", exc)
-            return UploadScanResult(filename=filename, error=f"텍스트 추출 오류: {exc}")
+            return UploadScanResult(
+                filename=filename,
+                error=f"텍스트 추출 오류: {exc}",
+                content_sha256=content_sha256,
+            )
 
         # ── 2. 청킹 ──────────────────────────────────────────────────────────
         chunks = chunk_pages(pages, doc_name=filename, source_path=source_path)
@@ -134,11 +150,34 @@ class UploadSecurityAgent:
                 pii_summary={"message": "추출된 텍스트 없음"},
                 is_image=(ext in IMAGE_EXTENSIONS),
                 image_path=persistent_image_path,
+                content_sha256=content_sha256,
             )
 
         # ── 3. PII 탐지 ───────────────────────────────────────────────────────
         chunk_texts  = [c.text for c in chunks]
         scan_results = self._detector.scan_chunks(chunk_texts)
+
+        # PAN 이 로고에 가려져 정규식으로 안 잡히는 카드 사진 → 브랜드·카드면 문구로 보강
+        for idx, (chunk, sr) in enumerate(zip(chunks, scan_results)):
+            if payment_card_imagery_likely(
+                chunk.text,
+                is_image_chunk=(ext in IMAGE_EXTENSIONS),
+            ) and not any(f.entity_type == "CREDIT_CARD" for f in sr.findings):
+                end = min(120, len(chunk.text))
+                sr.findings.append(
+                    PIIFinding(
+                        entity_type="CREDIT_CARD",
+                        text=chunk.text[:end] if end else "",
+                        start=0,
+                        end=end,
+                        score=0.52,
+                        chunk_index=chunk.index,
+                    )
+                )
+                logger.info(
+                    "[Upload] 카드 이미지 휴리스틱 (PAN OCR 불완전 가능) → CREDIT_CARD 보강: %s",
+                    filename,
+                )
 
         # ── 4. 이미지: PII → bbox 매핑 ────────────────────────────────────────
         image_pii_regions: List[List] = []
@@ -166,6 +205,7 @@ class UploadSecurityAgent:
             image_path=persistent_image_path,
             image_pii_regions=image_pii_regions,
             _ocr_results=ocr_results,
+            content_sha256=content_sha256,
         )
 
     # ── 내부 헬퍼 ─────────────────────────────────────────────────────────────

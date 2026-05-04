@@ -1,7 +1,10 @@
 import { useState, useRef, useEffect, useCallback, Fragment } from 'react'
 import { useNavigate } from 'react-router-dom'
 import SearchSidebar from '../components/SearchSidebar'
+import AnimatedOrb from '../components/AnimatedOrb'
+import AmbientPageBackdrop from '../components/AmbientPageBackdrop'
 import { useSidebar } from '../context/SidebarContext'
+import { useSpeechRecognition } from '../hooks/useSpeechRecognition'
 import { API_BASE } from '../api'
 import LocationBadge from '../components/search/LocationBadge'
 import DomainFilter from '../components/search/DomainFilter'
@@ -531,6 +534,9 @@ function ResultCard({ result, rank, onClick, securityMode = false, query = '' })
     p.play().catch(() => {})
   }
 
+/** v0 AIHero 퀵 서제스트 (동일 문구) */
+const V0_HOME_SUGGESTIONS = ['Write an email', 'Summarize text', 'Translate', 'Generate ideas']
+
   return (
     <div
       onClick={isAV ? undefined : onClick}
@@ -988,6 +994,7 @@ export default function MainSearch() {
   const [flyStyle, setFlyStyle] = useState(null)
   const [homeExiting, setHomeExiting] = useState(false)
   const [resultsReady, setResultsReady] = useState(false)
+  const [searchFocused, setSearchFocused] = useState(false)
 
   // results → detail 슬라이드
   const [detailVisible, setDetailVisible] = useState(false)
@@ -995,6 +1002,13 @@ export default function MainSearch() {
   // AI 포털 전환
   const [aiTransitioning, setAiTransitioning] = useState(false)
   const [ripplePos, setRipplePos] = useState({ x: '50%', y: '50%' })
+
+  /** 홈 첫 진입 시 stagger 등장(보안 인증 포털 직후 메인과 이어지게) */
+  const [searchEntranceOn, setSearchEntranceOn] = useState(
+    () =>
+      typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+  )
 
   const btnRef  = useRef(null)
   const formRef = useRef(null)
@@ -1022,6 +1036,17 @@ export default function MainSearch() {
   const ml        = open ? 'ml-64' : 'ml-0'
   const leftEdge  = open ? 'left-64' : 'left-0'
   const sidebarPx = open ? 256 : 0
+
+  useEffect(() => {
+    if (
+      typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    )
+      return
+    /* 한 박자 쉬었다가 entrance-on: 블러 초기 상태가 한 번 보이도록 */
+    const t = window.setTimeout(() => setSearchEntranceOn(true), 180)
+    return () => clearTimeout(t)
+  }, [])
 
   // 뒤로가기
   useEffect(() => {
@@ -1275,8 +1300,10 @@ export default function MainSearch() {
   }
 
   return (
-    <div className={view === 'home' ? 'overflow-hidden h-screen grid-bg relative' : 'min-h-screen relative bg-background text-on-surface'}
-      style={view !== 'home' ? { backgroundImage: 'radial-gradient(circle at 2px 2px, rgba(65,71,91,0.15) 1px, transparent 0)', backgroundSize: '32px 32px' } : {}}>
+    <div
+      className={`relative text-on-surface ${view === 'home' ? 'min-h-screen h-screen overflow-x-hidden overflow-y-auto' : 'min-h-screen overflow-x-hidden'}`}
+    >
+      <AmbientPageBackdrop />
 
       {/* AI 포털 전환 오버레이 */}
       {aiTransitioning && (
@@ -1296,23 +1323,25 @@ export default function MainSearch() {
       )}
 
       {/* 사이드바 */}
-      <SearchSidebar />
+      <SearchSidebar entranceOn={searchEntranceOn} />
 
-      {/* ════ HOME ════ */}
+      {/* ════ HOME — v0 AIHero 레이아웃 + 기존 검색/STT/플라이 로직 ════ */}
       {view === 'home' && (
         <>
-          <main className={`${ml} h-full flex flex-col items-center justify-center p-8 pt-16 relative transition-[margin] duration-300`}>
-            <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-[120px] pointer-events-none" />
-            <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-secondary/5 rounded-full blur-[150px] pointer-events-none" />
-
-            <div className="w-full max-w-4xl flex flex-col items-center z-10">
-              <div className={`mb-12 text-center transition-all duration-300 ${homeExiting ? 'opacity-0 -translate-y-6' : 'opacity-100 translate-y-0'}`}>
-                <h2 className="text-5xl md:text-6xl font-black tracking-tighter text-on-surface mb-4">
-                  로컬 인텔리전스<span className="text-primary">.</span>
-                </h2>
-                <p className="text-on-surface-variant text-lg max-w-xl mx-auto font-light">
-                  개인 신경망 엔진이 파일을 인덱싱하고 분석합니다.
-                </p>
+          <main
+            className={`${ml} relative z-10 flex h-full flex-col items-center justify-center overflow-visible px-6 pb-16 pt-14 transition-[margin] duration-300 md:px-8 md:pt-16 ${
+              searchEntranceOn ? 'main-search-entrance-on' : 'main-search-entrance-off'
+            }`}
+          >
+            <div className="z-10 flex w-full max-w-xl flex-col items-center">
+              {/* Hero (v0) */}
+              <div
+                className={`mse-hero-down mb-6 text-center transition-all duration-300 ${homeExiting ? 'opacity-0 -translate-y-6' : ''}`}
+              >
+                <h1 className="mb-3 text-3xl font-light tracking-tight text-on-surface text-balance md:text-5xl lg:text-6xl">
+                  Local Intelligence
+                </h1>
+                <p className="text-lg text-on-surface-variant md:text-xl">Your Data Stays Yours</p>
               </div>
 
               {/* 이미지 검색용 hidden file input — 모달의 클릭 영역에서 트리거 */}
@@ -1327,89 +1356,65 @@ export default function MainSearch() {
                   e.target.value = ''
                 }}
               />
-              <form ref={formRef} onSubmit={handleSearch} className="w-full relative group"
-                style={homeExiting ? { visibility: 'hidden' } : {}}>
-                <div className={`glass-effect rounded-full p-2 flex items-center gap-4 shadow-[0_0_50px_rgba(133,173,255,0.1)] transition-all duration-300
-                  ${listening ? 'border border-red-400/60 shadow-[0_0_30px_rgba(248,113,113,0.2)]' : 'border border-outline-variant/20 hover:border-primary/40'}`}>
-                  <div className="relative shrink-0">
-                    <button type="button"
-                      onClick={() => setPlusMenuOpen(v => !v)}
-                      className={`w-12 h-12 rounded-full bg-gradient-to-r from-primary to-secondary flex items-center justify-center text-on-primary-fixed shadow-lg active:scale-90 transition-all duration-300
-                        ${plusMenuOpen ? 'rotate-45' : ''}`}>
-                      <span className="material-symbols-outlined font-bold">add</span>
-                    </button>
-                    {/* 멀티 입력 메뉴 — + 버튼 클릭 시 애니메이션 펼침 */}
-                    {[
-                      { id: 'image-search', label: '이미지 검색', icon: 'image_search', domain: 'image', color: 'from-emerald-500 to-teal-500' },
-                      { id: 'bgm-search',   label: 'BGM 검색',   icon: 'music_note',   domain: 'audio', color: 'from-amber-500 to-orange-500' },
-                      { id: 'doc',          label: '문서',       icon: 'description',  domain: 'doc',   color: 'from-blue-500 to-indigo-500' },
-                      { id: 'image',        label: '이미지',     icon: 'image',        domain: 'image', color: 'from-emerald-500 to-green-500' },
-                      { id: 'audio',        label: '음성',       icon: 'mic',          domain: 'audio', color: 'from-amber-500 to-yellow-500' },
-                      { id: 'video',        label: '동영상',     icon: 'movie',        domain: 'video', color: 'from-purple-500 to-pink-500' },
-                    ].map((item, i) => {
-                      // 원형 배치 — 6개 항목 60도 간격, -90도(상단) 시작 시계방향
-                      const total = 6
-                      const angle = -90 + (i * (360 / total))   // -90, -30, 30, 90, 150, 210
-                      const radius = 110
-                      const rad = angle * Math.PI / 180
-                      const tx = Math.cos(rad) * radius
-                      const ty = Math.sin(rad) * radius
-                      return (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => {
-                            if (item.id === 'image-search') {
-                              setImageSearchModalOpen(true)
-                            } else if (item.id === 'bgm-search') {
-                              // BGM 식별 모달 (mp4 업로드 → 곡 인식)
-                              setBgmModalOpen(true)
-                            } else if (item.id === 'bgm-domain') {
-                              setDomainFilter('bgm')
-                            } else {
-                              setDomainFilter(item.domain)
-                            }
-                            setPlusMenuOpen(false)
-                          }}
-                          title={item.label}
-                          style={{
-                            // + 버튼 (48x48) 정중앙 기준 이동: 좌상단(0,0) → 중앙으로 이동 후 원형 분포
-                            transform: plusMenuOpen
-                              ? `translate(${tx}px, ${ty}px) scale(1)`
-                              : 'translate(0, 0) scale(0)',
-                            transitionDelay: plusMenuOpen ? `${i * 30}ms` : `${(total - 1 - i) * 20}ms`,
-                            zIndex: 30,
-                          }}
-                          className={`absolute top-0 left-0 w-12 h-12 rounded-full bg-gradient-to-br ${item.color}
-                            flex flex-col items-center justify-center text-white text-[9px] font-bold
-                            shadow-lg shadow-black/30 active:scale-90
-                            transition-all duration-400 ease-out hover:scale-110
-                            ${plusMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
-                        >
-                          <span className="material-symbols-outlined text-base leading-none">{item.icon}</span>
-                          <span className="mt-0.5 leading-none">{item.label}</span>
-                        </button>
-                      )
-                    })}
+              {/* Orb (v0) */}
+              <div
+                className={`mse-orb-mid my-4 overflow-visible md:my-8 ${homeExiting ? 'pointer-events-none opacity-0' : ''}`}
+              >
+                <AnimatedOrb onMicClick={toggleMic} listening={listening} />
+              </div>
+
+              {/* 검색 필 (v0 LLM input 스타일) */}
+              <form
+                ref={formRef}
+                onSubmit={handleSearch}
+                className="mse-search-up relative w-full max-w-xl"
+                style={homeExiting ? { visibility: 'hidden' } : {}}
+              >
+                <div
+                  className={`relative flex items-center gap-3 rounded-full border bg-surface-container-high/60 px-1 py-1 pl-2 backdrop-blur-xl transition-all duration-300 md:pl-3
+                    ${
+                      listening
+                        ? 'border-red-400/60 shadow-[0_0_24px_rgba(248,113,113,0.2)]'
+                        : searchFocused
+                          ? 'border-primary/50 shadow-lg shadow-primary/20'
+                          : 'border-white/10 hover:border-white/20'
+                    }`}
+                >
+                  <div className="pl-3 md:pl-4">
+                    <span className={`material-symbols-outlined text-xl ${listening ? 'text-red-400' : 'text-on-surface-variant'}`}>
+                      search
+                    </span>
                   </div>
-                  <div className="flex-1 relative">
+                  <div className="relative min-h-[3.25rem] flex-1">
                     <input
                       ref={homeInputRef}
                       type="text"
                       autoFocus
                       value={listening ? '' : inputValue}
                       onChange={(e) => !listening && setInputValue(e.target.value)}
-                      placeholder={listening ? '' : '로컬 파일에 대해 무엇이든 물어보세요...'}
-                      className="w-full bg-transparent border-none focus:ring-0 text-on-surface placeholder:text-on-surface-variant/40 font-manrope text-lg py-4 outline-none"
+                      onFocus={() => setSearchFocused(true)}
+                      onBlur={() => setSearchFocused(false)}
+                      placeholder={listening ? '' : 'Ask anything...'}
+                      className="h-full w-full bg-transparent py-3 text-base text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none md:py-4 md:text-base"
                       readOnly={listening}
                     />
                     {listening && (
-                      <div className="absolute inset-0 flex items-center gap-3 py-4 pointer-events-none">
-                        <span className="text-red-400 font-manrope text-lg truncate">{interim || <span className="text-on-surface-variant/50">듣는 중...</span>}</span>
-                        <div className="flex items-center gap-[3px] shrink-0">
+                      <div className="absolute inset-0 flex items-center gap-2 py-3 pointer-events-none md:py-4">
+                        <span className="truncate font-manrope text-base text-red-400">
+                          {interim || <span className="text-on-surface-variant/50">듣는 중...</span>}
+                        </span>
+                        <div className="flex shrink-0 items-center gap-[3px]">
                           {[0, 0.15, 0.3, 0.15, 0].map((delay, i) => (
-                            <div key={i} className="w-[3px] bg-red-400 rounded-full animate-bounce"
-                              style={{ height: `${[12,20,28,20,12][i]}px`, animationDelay: `${delay}s`, animationDuration: '0.8s' }} />
+                            <div
+                              key={i}
+                              className="animate-bounce rounded-full bg-red-400"
+                              style={{
+                                width: '3px',
+                                height: `${[10, 16, 22, 16, 10][i]}px`,
+                                animationDelay: `${delay}s`,
+                                animationDuration: '0.8s',
+                              }}
+                            />
                           ))}
                         </div>
                       </div>
@@ -1432,19 +1437,42 @@ export default function MainSearch() {
                 </div>
               </form>
 
-              <div className="mt-10 flex justify-center" style={homeExiting ? { visibility: 'hidden' } : {}}>
-                <button ref={btnRef} onClick={handleGoToAI} disabled={aiTransitioning}
-                  className="px-8 py-3 rounded-full bg-surface-container-high border border-outline-variant/20 flex items-center gap-3 text-lg font-bold tracking-widest uppercase text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest transition-all duration-300 group glow-primary disabled:pointer-events-none">
-                  <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+              {/* Quick suggestions (v0) */}
+              <div
+                className={`mse-search-up mse-search-up-delay-1 mt-6 flex flex-wrap justify-center gap-2 transition-all duration-300 ${homeExiting ? 'pointer-events-none opacity-0' : ''}`}
+              >
+                {V0_HOME_SUGGESTIONS.map((suggestion) => (
+                  <button
+                    key={suggestion}
+                    type="button"
+                    onClick={() => setInputValue(suggestion)}
+                    className="rounded-full border border-white/5 bg-surface-container-high/40 px-4 py-2 text-sm text-on-surface-variant backdrop-blur-sm transition-all hover:border-white/10 hover:bg-surface-container-high/60 hover:text-on-surface"
+                  >
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
+
+              <div
+                className={`mse-search-up mse-search-up-delay-2 mt-10 flex justify-center ${homeExiting ? 'pointer-events-none opacity-0' : ''}`}
+              >
+                <button
+                  ref={btnRef}
+                  type="button"
+                  onClick={handleGoToAI}
+                  disabled={aiTransitioning}
+                  className="group flex items-center gap-3 rounded-full border border-outline-variant/20 bg-surface-container-high px-8 py-3 text-sm font-bold uppercase tracking-widest text-on-surface-variant transition-all duration-300 hover:bg-surface-container-highest hover:text-on-surface disabled:pointer-events-none glow-primary"
+                >
+                  <span className="h-2 w-2 animate-pulse rounded-full bg-primary" />
                   AI 모드로 전환
-                  <span className="material-symbols-outlined text-lg group-hover:translate-x-1 transition-transform">arrow_forward</span>
+                  <span className="material-symbols-outlined text-lg transition-transform group-hover:translate-x-1">arrow_forward</span>
                 </button>
               </div>
 
               {/* fly 클론 */}
               {flyStyle && (
                 <div style={{ ...flyStyle }}>
-                  <div className="glass-effect rounded-full p-2 border border-primary/40 shadow-[0_0_30px_rgba(133,173,255,0.15)] flex items-center gap-3 px-4 py-3">
+                  <div className="flex items-center gap-3 rounded-full border border-primary/40 bg-surface-container-high/80 px-4 py-3 shadow-[0_0_30px_rgba(133,173,255,0.15)] backdrop-blur-xl">
                     <span className="material-symbols-outlined text-primary">search</span>
                     <span className="flex-1 text-on-surface font-manrope text-lg truncate">{inputValue}</span>
                   </div>
@@ -1465,10 +1493,7 @@ export default function MainSearch() {
                 ))}
               </div>
             </div>
-
-            <div className="absolute bottom-0 left-0 w-full h-32 bg-gradient-to-t from-surface-container-low/80 to-transparent pointer-events-none" />
           </main>
-          <div className="fixed top-0 right-0 w-1/3 h-screen bg-gradient-to-l from-primary/5 to-transparent pointer-events-none" />
         </>
       )}
 
