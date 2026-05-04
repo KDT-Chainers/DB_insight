@@ -747,6 +747,14 @@ export default function MainAI() {
         setAimodeSources(items)
         // ★ 동일 데이터를 큰 카드 그리드로도 렌더 (MainSearch 와 동일한 UX)
         setResults(items)
+        // 검색 기록 저장
+        fetch(`${API_BASE}/api/history`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: q, method: 'aimode', result_count: items.length }),
+        }).then(() => {
+          window.dispatchEvent(new Event('history-updated'))
+        }).catch(() => {})
         break
       }
 

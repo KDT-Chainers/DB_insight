@@ -175,18 +175,13 @@ def _get_graph():
             keywords  = [k for k in _re2.findall(r"[가-힣A-Za-z0-9]{2,}", extracted)
                          if len(k) >= 2]
 
-            # ── 2단계: 각 후보 전문 로드 + 키워드 카운트 (병렬) ──────
+            # ── 2단계: 각 후보 원본 파일 직접 로드 + 키워드 카운트 (병렬) ──
             if keywords:
                 def _score(item):
                     i, s = item
-                    rid = s.get("trichef_id") or ""
-                    # 전체 텍스트 로드 (page_text/ 캐시 → fitz → converted_pdf)
-                    full_text = ""
-                    if rid:
-                        full_text, _ = _load_full_doc_text(
-                            rid, max_chars=60000,
-                        )
-                    # 비-doc(이미지·영상) 은 snippet 기반
+                    # file_path 로 직접 파일 접근 (registry 불필요)
+                    full_text = _read_source_full_text(s, max_chars=60000)
+                    # 텍스트 미추출(이미지·영상 등)은 snippet 기반
                     if not full_text:
                         full_text = s.get("snippet") or ""
                     hits = sum(1 for kw in keywords if kw in full_text)
@@ -1153,6 +1148,144 @@ def status():
 # ════════════════════════════════════════════════════════════════════
 # 파일 요약 — 상세 페이지에서 [요약] 버튼 클릭 시 호출
 # ════════════════════════════════════════════════════════════════════
+
+def _read_source_full_text(source: dict, max_chars: int = 60000) -> str:
+    """검색 결과 source 의 file_path 로 직접 파일 텍스트 추출 — rerank 키워드 검색용.
+
+    우선순위:
+      1) page_text/<stem>/p*.txt 캐시 (rid 에서 stem 추출, 가장 빠름)
+      2) file_path 가 .pdf → fitz 직접 읽기 + 캐시 저장
+      3) file_path 가 docx/hwp 등 → converted_pdf/ 에서 변환본 탐색 → fitz
+      4) python-docx fallback (.docx)
+      5) 텍스트 파일 직접 읽기 (.txt/.md 등)
+    이미지/영상/음악 도메인은 '' 반환 (snippet 사용).
+    """
+    from pathlib import Path
+    import re
+
+    file_type = source.get("file_type", "")
+    if file_type in {"image", "video", "audio", "bgm"}:
+        return ""
+
+    file_path = (source.get("file_path") or "").strip()
+    if not file_path:
+        return ""
+
+    fp = Path(file_path)
+    ext = fp.suffix.lower()
+
+    # ── 1순위: page_text/<stem>/p*.txt 캐시 ─────────────────────────
+    rid = source.get("trichef_id") or ""
+    m = re.match(r"^page_images/(.+)/p\d+\.(?:jpg|png)$", rid)
+    if m:
+        try:
+            from config import PATHS
+            stem = m.group(1)
+            page_text_dir = Path(PATHS["TRICHEF_DOC_EXTRACT"]) / "page_text" / stem
+            if page_text_dir.is_dir():
+                pages = sorted(page_text_dir.glob("p*.txt"),
+                               key=lambda p: int(p.stem[1:]))
+                texts = []
+                total = 0
+                for tp in pages:
+                    try:
+                        t = tp.read_text(encoding="utf-8").strip()
+                        if t:
+                            texts.append(t)
+                            total += len(t)
+                            if total >= max_chars:
+                                break
+                    except Exception:
+                        continue
+                if texts:
+                    return "\n".join(texts)[:max_chars]
+        except Exception:
+            pass
+
+    # ── 2순위: file_path 가 PDF → fitz 직접 읽기 ─────────────────────
+    if ext == ".pdf":
+        if fp.exists() and fp.stat().st_size > 0:
+            try:
+                import fitz
+                texts = []
+                total = 0
+                pt_dir = None
+                if m:
+                    try:
+                        from config import PATHS
+                        pt_dir = Path(PATHS["TRICHEF_DOC_EXTRACT"]) / "page_text" / m.group(1)
+                        pt_dir.mkdir(parents=True, exist_ok=True)
+                    except Exception:
+                        pt_dir = None
+                with fitz.open(str(fp)) as doc:
+                    for i, page in enumerate(doc):
+                        t = page.get_text("text") or ""
+                        t = t.strip()
+                        if t:
+                            texts.append(t)
+                            total += len(t)
+                            # 캐시 저장
+                            if pt_dir:
+                                try:
+                                    (pt_dir / f"p{i:04d}.txt").write_text(t, encoding="utf-8")
+                                except Exception:
+                                    pass
+                        if total >= max_chars:
+                            break
+                return "\n".join(texts)[:max_chars]
+            except Exception as e:
+                logger.debug(f"[read_source] fitz 실패 {fp.name}: {e}")
+
+    # ── 3순위: docx/hwp → converted_pdf/ 탐색 ───────────────────────
+    if ext in {".docx", ".doc", ".hwp", ".hwpx", ".pptx", ".xlsx"}:
+        try:
+            from config import PATHS
+            conv_root = Path(PATHS["TRICHEF_DOC_EXTRACT"]) / "converted_pdf"
+            want = fp.stem + ".pdf"
+            if conv_root.is_dir():
+                for sub in conv_root.iterdir():
+                    cand = sub / want
+                    if cand.exists() and cand.stat().st_size > 0:
+                        try:
+                            import fitz
+                            texts = []
+                            total = 0
+                            with fitz.open(str(cand)) as doc:
+                                for page in doc:
+                                    t = page.get_text("text") or ""
+                                    t = t.strip()
+                                    if t:
+                                        texts.append(t)
+                                        total += len(t)
+                                    if total >= max_chars:
+                                        break
+                            if texts:
+                                return "\n".join(texts)[:max_chars]
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+
+        # ── 4순위: python-docx (.docx 전용) ──────────────────────────
+        if ext == ".docx" and fp.exists():
+            try:
+                from docx import Document as _Docx
+                doc = _Docx(str(fp))
+                paras = [p.text for p in doc.paragraphs if p.text.strip()]
+                return "\n".join(paras)[:max_chars]
+            except Exception:
+                pass
+
+    # ── 5순위: 텍스트 파일 직접 읽기 ────────────────────────────────
+    if ext in {".txt", ".md", ".csv", ".json", ".xml", ".html"}:
+        if fp.exists():
+            try:
+                return fp.read_text(encoding="utf-8", errors="ignore")[:max_chars]
+            except Exception:
+                pass
+
+    return ""
+
 
 def _load_full_doc_text(rid: str, max_chars: int = 12000) -> tuple[str, str]:
     """doc_page rid 의 PDF 전체 페이지 텍스트 로드 — 요약용.
