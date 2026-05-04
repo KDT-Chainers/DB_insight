@@ -51,14 +51,16 @@ try:
     from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
 
     class AImodeState(TypedDict):
-        user_question:   str
-        extracted_query: str          # parse_intent 가 채움
-        topk:            int
-        sources:         list[dict]   # retrieve 가 채움
-        selected_idx:    int          # rerank 가 채움 (-1 = 실패)
-        retry_count:     int          # 재검색 횟수
-        answer:          str
-        messages:        Annotated[list[BaseMessage], _add_messages]
+        user_question:    str
+        extracted_query:  str          # parse_intent → 파일 검색용 (벡터 검색)
+        content_keywords: list[str]   # parse_intent → 파일 내용 검색용 (rerank)
+        detail_keywords:  list[str]   # parse_intent → 최종 답변 포커스용 (generate)
+        topk:             int
+        sources:          list[dict]   # retrieve 가 채움
+        selected_idx:     int          # rerank 가 채움 (-1 = 실패)
+        retry_count:      int          # 재검색 횟수
+        answer:           str
+        messages:         Annotated[list[BaseMessage], _add_messages]
 
     _LANGGRAPH_OK = True
 except Exception as _e:
@@ -147,9 +149,24 @@ def _get_graph():
 
         # ── Node 1: 검색어 추출 ────────────────────────────────────
         def parse_intent_node(state: AImodeState) -> dict:
-            model     = _get_ollama_model()
-            extracted = _extract_query(state["user_question"], model) if model else state["user_question"]
-            return {"extracted_query": extracted, "retry_count": 0}
+            model = _get_ollama_model()
+            if model:
+                file_q, content_kws, detail_kws = _extract_keywords(
+                    state["user_question"], model
+                )
+            else:
+                # Ollama 없으면 원본 질문 그대로
+                import re as _re0
+                tokens = _re0.findall(r"[가-힣A-Za-z0-9]{2,}", state["user_question"])
+                file_q      = " ".join(tokens[:5])
+                content_kws = tokens[:3]
+                detail_kws  = tokens
+            return {
+                "extracted_query":  file_q,
+                "content_keywords": content_kws,
+                "detail_keywords":  detail_kws,
+                "retry_count":      0,
+            }
 
         # ── Node 2: 검색 ────────────────────────────────────────────
         def retrieve_node(state: AImodeState) -> dict:
@@ -170,10 +187,12 @@ def _get_graph():
             if not sources:
                 return {"selected_idx": -1, "retry_count": retry + 1}
 
-            # ── 1단계: 키워드 추출 ────────────────────────────────────
-            extracted = state.get("extracted_query") or state["user_question"]
-            keywords  = [k for k in _re2.findall(r"[가-힣A-Za-z0-9]{2,}", extracted)
-                         if len(k) >= 2]
+            # ── 1단계: content_keywords (parse_intent 가 분류한 내용검색용 키워드)
+            keywords = state.get("content_keywords") or []
+            # fallback: content_keywords 없으면 원본 질문에서 직접 추출
+            if not keywords:
+                tokens = _re2.findall(r"[가-힣A-Za-z0-9]{2,}", state["user_question"])
+                keywords = [k for k in tokens if len(k) >= 2]
 
             # ── 2단계: 각 후보 원본 파일 직접 로드 + 키워드 카운트 (병렬) ──
             if keywords:
@@ -378,13 +397,24 @@ def _ollama_stream(messages: list[dict], model: str,
 # ── Step 1: 검색어 추출 ────────────────────────────────────────────
 # 검색어 추출 시 제거할 의미 없는 동사·조사·일반 표현
 _STOPWORDS = frozenset((
+    # 도메인/파일 관련
     "문서에서", "문서", "이미지에서", "이미지", "영상에서", "영상", "음원에서", "음원",
     "파일에서", "파일", "내용을", "내용", "정보를", "정보",
+    # 동사/요청 어미
     "찾아서", "찾아", "찾기", "찾을", "찾는", "찾아줘",
     "알려줘", "알려", "보여줘", "보여", "정리해줘", "정리",
     "해줘", "주세요", "주십시오", "있는", "있을", "있나", "있어",
-    "에서", "에게", "에는", "에는", "한테", "에서는",
-    "어디", "무엇", "어떤", "어떻게", "왜", "언제",
+    "입니다", "이다", "합니다", "하면", "하는", "하여", "되는", "됩니다",
+    "이야", "이지", "이에요", "이고", "이랑", "것이", "것들",
+    "하나요", "할까요", "이었", "했어", "했나", "했지",
+    # 조사
+    "에서", "에게", "에는", "한테", "에서는", "으로는", "에서의",
+    # 의문사
+    "어디", "무엇", "어떤", "어떻게", "왜", "언제", "누가", "누구",
+    "뭐야", "뭐더라", "뭐지", "뭔가", "뭐였", "뭐였지",
+    # 수량 의문
+    "몇개", "몇개지", "몇가지", "몇명", "몇번", "몇개야",
+    "얼마나", "얼마", "얼마야",
 ))
 
 
@@ -405,24 +435,75 @@ def _domain_hint(question: str) -> str | None:
     return None
 
 
-def _extract_query(user_question: str, model: str) -> str:
+def _extract_keywords(user_question: str, model: str) -> tuple[str, list[str], list[str]]:
+    """사용자 질문을 3종 키워드로 분류.
+
+    Returns:
+        (file_query, content_keywords, detail_keywords)
+        - file_query       : 벡터 검색용 (retrieve 에 전달)
+        - content_keywords : 파일 내 텍스트 검색용 (rerank 에 전달)
+        - detail_keywords  : 최종 답변 포커스용 (generate 에 전달)
+    """
+    import re as _re
+
     prompt = (
-        "다음 사용자 질문에서 데이터베이스 검색에 사용할 핵심 키워드만 추출해.\n"
-        "조사·동사·접속사 빼고 명사 위주로, 5단어 이내, 한 줄.\n"
-        "답변 외 다른 글자는 출력 금지.\n\n"
-        f"질문: {user_question}\n\n"
-        "검색어:"
+        "사용자 질문을 아래 3가지로 분류해줘. 각 항목에 핵심 명사만, 조사·동사·의문사 제외.\n\n"
+        "파일검색: 어떤 파일을 찾을지 (벡터 검색용, 3단어 이내)\n"
+        "내용검색: 파일 안에서 찾을 핵심 단어 (텍스트 검색용, 2단어 이내)\n"
+        "상세내용: 최종적으로 알고 싶은 것 (답변 생성 참고, 2단어 이내)\n\n"
+        "예시1)\n"
+        "질문: 김라민 생년월일 뭐더라\n"
+        "파일검색: 김라민\n"
+        "내용검색: 김라민\n"
+        "상세내용: 생년월일\n\n"
+        "예시2)\n"
+        "질문: 경주 동궁 월지 문서에서 유구가 몇개야\n"
+        "파일검색: 경주 동궁 월지\n"
+        "내용검색: 유구\n"
+        "상세내용: 유구 개수\n\n"
+        "예시3)\n"
+        "질문: 나이테 PDF에서 탄소 측정 방법 알려줘\n"
+        "파일검색: 나이테 탄소\n"
+        "내용검색: 탄소 측정\n"
+        "상세내용: 측정 방법\n\n"
+        "형식 그대로 출력. 다른 글자 금지.\n\n"
+        f"질문: {user_question}\n"
+        "파일검색:"
     )
-    extracted = _ollama_oneshot(prompt, model).split("\n")[0].strip()
-    # 따옴표/괄호/콜론 제거
-    extracted = extracted.replace('"', '').replace("'", '').replace("검색어:", "").strip()
-    if not extracted or len(extracted) > 80:
-        # fallback — 사용자 질문에서 의미 단어만
-        import re
-        tokens = re.findall(r"[가-힣A-Za-z0-9]+", user_question)
+
+    raw = _ollama_oneshot(prompt, model)
+
+    def _parse_line(text: str, label: str) -> str:
+        for line in text.split("\n"):
+            line = line.strip()
+            if line.startswith(label):
+                val = line[len(label):].strip().strip(":")
+                return val.replace('"', '').replace("'", '').strip()
+        return ""
+
+    # "파일검색:" 이 prompt 마지막에 붙어있으므로 raw 앞에 붙여서 파싱
+    full = f"파일검색:{raw}"
+    file_q   = _parse_line(full, "파일검색")
+    content  = _parse_line(full, "내용검색")
+    detail   = _parse_line(full, "상세내용")
+
+    # fallback — Ollama 실패 시 STOPWORDS 기반 분류
+    if not file_q:
+        tokens = _re.findall(r"[가-힣A-Za-z0-9]+", user_question)
         meaningful = [t for t in tokens if len(t) >= 2 and t not in _STOPWORDS]
-        extracted = " ".join(meaningful[:5])
-    return extracted or user_question
+        file_q  = " ".join(meaningful[:5])
+        content = " ".join(meaningful[:2])
+        detail  = " ".join(meaningful[2:4]) if len(meaningful) > 2 else content
+
+    # content_keywords / detail_keywords → list
+    def _to_list(s: str) -> list[str]:
+        return [w for w in _re.findall(r"[가-힣A-Za-z0-9]{2,}", s) if w not in _STOPWORDS]
+
+    return (
+        file_q or user_question,
+        _to_list(content) or _to_list(file_q),
+        _to_list(detail)  or _to_list(file_q),
+    )
 
 
 # ── Step 2: 검색 ────────────────────────────────────────────────────
@@ -937,11 +1018,16 @@ def _aimode_sse(query: str, topk: int, thread_id: str) -> Generator[str, None, N
                 for node_name, updates in chunk.items():
 
                     if node_name == "parse_intent":
-                        # ── Node 1 완료: 검색어 추출 결과 emit ───────────
-                        extracted = updates.get("extracted_query") or query
+                        # ── Node 1 완료: 3종 키워드 emit ─────────────────
+                        extracted   = updates.get("extracted_query") or query
+                        content_kws = updates.get("content_keywords") or []
+                        detail_kws  = updates.get("detail_keywords")  or []
                         yield emit({"type": "step", "step": 1,
-                                    "label": f"✓ 검색어: {extracted!r}",
-                                    "query": extracted, "done": True})
+                                    "label": "✓ 검색어 분류 완료",
+                                    "query": extracted,
+                                    "content_keywords": content_kws,
+                                    "detail_keywords":  detail_kws,
+                                    "done": True})
                         time.sleep(STEP_DELAY)
                         # Step 2 시작 알림 (retrieve node 진입 전)
                         yield emit({"type": "step", "step": 2,

@@ -541,12 +541,14 @@ export default function MainAI() {
   const [hasLLM,         setHasLLM]         = useState(undefined)
 
   // ── AIMODE 시각화 4-step 상태 ─────────────────────────────
-  const [aimodeSteps,    setAimodeSteps]    = useState([])      // [{step, label, done, query, selected_idx}]
-  const [aimodeQuery,    setAimodeQuery]    = useState('')      // 추출된 검색어 (Step 1)
-  const [aimodeSources,  setAimodeSources]  = useState([])      // 검색 결과 카드 (Step 2)
-  const [aimodeSelected, setAimodeSelected] = useState(null)    // 선택된 idx (Step 3)
-  const [aimodeAnswer,   setAimodeAnswer]   = useState('')      // 스트리밍 답변 (Step 4)
-  const [aimodeDone,     setAimodeDone]     = useState(false)
+  const [aimodeSteps,       setAimodeSteps]       = useState([])   // [{step, label, done, query, selected_idx}]
+  const [aimodeQuery,       setAimodeQuery]       = useState('')   // 파일검색 키워드 (Step 1)
+  const [aimodeContentKws,  setAimodeContentKws]  = useState([])   // 내용검색 키워드 (Step 1)
+  const [aimodeDetailKws,   setAimodeDetailKws]   = useState([])   // 상세내용 키워드 (Step 1)
+  const [aimodeSources,     setAimodeSources]     = useState([])   // 검색 결과 카드 (Step 2)
+  const [aimodeSelected,    setAimodeSelected]    = useState(null) // 선택된 idx (Step 3)
+  const [aimodeAnswer,      setAimodeAnswer]      = useState('')   // 스트리밍 답변 (Step 4)
+  const [aimodeDone,        setAimodeDone]        = useState(false)
   const [useAimode,      setUseAimode]      = useState(true)    // AIMODE 시각화 ON/OFF
   const [topK,         setTopK]         = useState(20)
   const [maxIter,      setMaxIter]      = useState(5)
@@ -619,6 +621,8 @@ export default function MainAI() {
     // AIMODE 시각화 상태 초기화
     setAimodeSteps([])
     setAimodeQuery('')
+    setAimodeContentKws([])
+    setAimodeDetailKws([])
     setAimodeSources([])
     setAimodeSelected(null)
     setAimodeAnswer('')
@@ -727,7 +731,11 @@ export default function MainAI() {
           }
           return [...prev, entry]
         })
-        if (ev.step === 1 && ev.query) setAimodeQuery(ev.query)
+        if (ev.step === 1 && ev.done) {
+          if (ev.query) setAimodeQuery(ev.query)
+          if (ev.content_keywords) setAimodeContentKws(ev.content_keywords)
+          if (ev.detail_keywords)  setAimodeDetailKws(ev.detail_keywords)
+        }
         if (ev.step === 3 && typeof ev.selected_idx === 'number') {
           setAimodeSelected(ev.selected_idx)
           // Step 3 완료 — LangGraph 가 선택한 카드 자동 클릭 (1.4s 딜레이 후)
@@ -896,6 +904,8 @@ export default function MainAI() {
     window.__aimodeThreadId = null
     setAimodeSteps([])
     setAimodeQuery('')
+    setAimodeContentKws([])
+    setAimodeDetailKws([])
     setAimodeSources([])
     setAimodeSelected(null)
     setAimodeAnswer('')
@@ -1167,36 +1177,50 @@ export default function MainAI() {
 
             {/* AIMODE 시각화 4-step 패널 — 컴팩트 progress strip */}
             {useAimode && aimodeSteps.length > 0 && (
-              <div className="mb-6 rounded-2xl border px-5 py-3 flex items-center gap-4 overflow-x-auto"
+              <div className="mb-6 rounded-2xl border px-5 py-4 space-y-3"
                 style={{ background: AI.card, borderColor: AI.border }}>
-                <span className="material-symbols-outlined text-lg shrink-0" style={{ color: AI.accentLight }}>auto_awesome</span>
-                <span className="text-[10px] uppercase tracking-widest font-bold shrink-0"
-                  style={{ color: AI.accentLight }}>AI MODE</span>
-                {[1, 2, 3, 4].map(stepNum => {
-                  const s = aimodeSteps.find(s => s.step === stepNum)
-                  const labels = { 1: '추출', 2: '검색', 3: '선택', 4: '답변' }
-                  const active = !!s
-                  const done = s?.done
-                  return (
-                    <div key={stepNum} className="flex items-center gap-1.5 text-[11px] shrink-0">
-                      <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold border ${
-                        done ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300' :
-                        active ? 'border-purple-400 text-purple-300 animate-pulse' :
-                        'border-white/15 text-on-surface-variant/40'
-                      }`}>
-                        {done ? '✓' : stepNum}
+                {/* 상단: AI MODE + 스텝 인디케이터 */}
+                <div className="flex items-center gap-4 overflow-x-auto">
+                  <span className="material-symbols-outlined text-lg shrink-0" style={{ color: AI.accentLight }}>auto_awesome</span>
+                  <span className="text-[10px] uppercase tracking-widest font-bold shrink-0"
+                    style={{ color: AI.accentLight }}>AI MODE</span>
+                  {[1, 2, 3, 4].map(stepNum => {
+                    const s = aimodeSteps.find(s => s.step === stepNum)
+                    const labels = { 1: '분류', 2: '검색', 3: '선택', 4: '답변' }
+                    const active = !!s
+                    const done = s?.done
+                    return (
+                      <div key={stepNum} className="flex items-center gap-1.5 text-[11px] shrink-0">
+                        <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold border ${
+                          done ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300' :
+                          active ? 'border-purple-400 text-purple-300 animate-pulse' :
+                          'border-white/15 text-on-surface-variant/40'
+                        }`}>
+                          {done ? '✓' : stepNum}
+                        </div>
+                        <span className={done ? 'text-emerald-300' : active ? 'text-on-surface' : 'text-on-surface-variant/40'}>
+                          {labels[stepNum]}
+                        </span>
+                        {stepNum < 4 && <span className="text-on-surface-variant/20">→</span>}
                       </div>
-                      <span className={done ? 'text-emerald-300' : active ? 'text-on-surface' : 'text-on-surface-variant/40'}>
-                        {labels[stepNum]}
-                      </span>
-                      {stepNum < 4 && <span className="text-on-surface-variant/20">→</span>}
-                    </div>
-                  )
-                })}
-                {aimodeQuery && (
-                  <div className="ml-auto flex items-center gap-1.5 text-[11px] font-mono shrink-0"
-                    style={{ color: AI.accentLight }}>
-                    <span className="material-symbols-outlined text-sm">search</span>"{aimodeQuery}"
+                    )
+                  })}
+                </div>
+
+                {/* 하단: Step 1 완료 후 3종 키워드 표시 */}
+                {aimodeSteps.find(s => s.step === 1 && s.done) && (
+                  <div className="flex flex-wrap gap-3 pt-1 border-t" style={{ borderColor: AI.border }}>
+                    {[
+                      { label: '파일검색', value: aimodeQuery, icon: 'folder_search', color: AI.accentLight },
+                      { label: '내용검색', value: aimodeContentKws.join(' · '), icon: 'manage_search', color: '#34d399' },
+                      { label: '상세내용', value: aimodeDetailKws.join(' · '), icon: 'lightbulb', color: '#f59e0b' },
+                    ].map(({ label, value, icon, color }) => value ? (
+                      <div key={label} className="flex items-center gap-1.5 text-[11px]">
+                        <span className="material-symbols-outlined text-sm" style={{ color }}>{icon}</span>
+                        <span className="text-on-surface-variant/50">{label}:</span>
+                        <span className="font-mono font-semibold" style={{ color }}>"{value}"</span>
+                      </div>
+                    ) : null)}
                   </div>
                 )}
               </div>
@@ -1369,16 +1393,31 @@ export default function MainAI() {
                     style={{ color: AI.accentLight }}>
                     <span className="material-symbols-outlined text-lg">analytics</span>AI 검색 요약
                   </h3>
-                  <div className="grid grid-cols-3 gap-4">
+                  <div className="grid grid-cols-2 gap-3 mb-3">
                     {[
                       ['총 결과', `${results.length}건`],
                       ['최고 신뢰도', `${Math.round((results[0]?.confidence ?? 0) * 100)}%`],
-                      ['추출 검색어', aimodeQuery ? `"${aimodeQuery}"` : '—'],
                     ].map(([label, val]) => (
                       <div key={label} className="p-4 rounded-2xl border"
                         style={{ background: 'rgba(109,40,217,0.05)', borderColor: AI.border }}>
                         <p className="text-[10px] uppercase tracking-widest mb-1" style={{ color: 'rgba(167,139,250,0.4)' }}>{label}</p>
                         <p className="text-xl font-bold text-on-surface">{val}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    {[
+                      { label: '파일검색', value: aimodeQuery, icon: 'folder_search', color: AI.accentLight },
+                      { label: '내용검색', value: aimodeContentKws.join(' · '), icon: 'manage_search', color: '#34d399' },
+                      { label: '상세내용', value: aimodeDetailKws.join(' · '), icon: 'lightbulb', color: '#f59e0b' },
+                    ].map(({ label, value, icon, color }) => (
+                      <div key={label} className="p-3 rounded-2xl border"
+                        style={{ background: 'rgba(109,40,217,0.05)', borderColor: AI.border }}>
+                        <div className="flex items-center gap-1 mb-1">
+                          <span className="material-symbols-outlined text-sm" style={{ color }}>{icon}</span>
+                          <p className="text-[10px] uppercase tracking-widest" style={{ color: 'rgba(167,139,250,0.4)' }}>{label}</p>
+                        </div>
+                        <p className="text-sm font-mono font-bold truncate" style={{ color }}>{value || '—'}</p>
                       </div>
                     ))}
                   </div>
@@ -1489,12 +1528,26 @@ export default function MainAI() {
                         style={{ background: AI.accentLight }} />
                     )}
                   </div>
-                  {aimodeQuery && (
-                    <div className="px-6 py-2 border-t flex items-center gap-2 text-[11px]"
+                  {(aimodeQuery || aimodeContentKws.length > 0) && (
+                    <div className="px-6 py-2 border-t flex flex-wrap items-center gap-3 text-[11px]"
                       style={{ borderColor: AI.border, background: 'rgba(13,7,24,0.4)' }}>
-                      <span className="material-symbols-outlined text-sm" style={{ color: AI.accentDark }}>search</span>
-                      <span className="text-on-surface-variant/60">추출 검색어:</span>
-                      <span className="font-mono font-bold" style={{ color: AI.accentLight }}>"{aimodeQuery}"</span>
+                      {aimodeQuery && <>
+                        <span className="material-symbols-outlined text-sm" style={{ color: AI.accentDark }}>folder_search</span>
+                        <span className="text-on-surface-variant/50">파일검색:</span>
+                        <span className="font-mono font-semibold" style={{ color: AI.accentLight }}>"{aimodeQuery}"</span>
+                      </>}
+                      {aimodeContentKws.length > 0 && <>
+                        <span className="text-on-surface-variant/20">|</span>
+                        <span className="material-symbols-outlined text-sm" style={{ color: '#34d399' }}>manage_search</span>
+                        <span className="text-on-surface-variant/50">내용검색:</span>
+                        <span className="font-mono font-semibold" style={{ color: '#34d399' }}>"{aimodeContentKws.join(' · ')}"</span>
+                      </>}
+                      {aimodeDetailKws.length > 0 && <>
+                        <span className="text-on-surface-variant/20">|</span>
+                        <span className="material-symbols-outlined text-sm" style={{ color: '#f59e0b' }}>lightbulb</span>
+                        <span className="text-on-surface-variant/50">상세내용:</span>
+                        <span className="font-mono font-semibold" style={{ color: '#f59e0b' }}>"{aimodeDetailKws.join(' · ')}"</span>
+                      </>}
                     </div>
                   )}
                 </div>
