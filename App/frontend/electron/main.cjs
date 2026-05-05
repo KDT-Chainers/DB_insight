@@ -193,16 +193,10 @@ function waitForBackend(maxRetries = 300, interval = 600) {
     const check = () => {
       tries++
 
-      // 진행 단계별 메시지
-      let statusMsg
-      if (tries <= 5)       statusMsg = `백엔드 시작 중 <span class="dots"><span>.</span><span>.</span><span>.</span></span>`
-      else if (tries <= 30) statusMsg = `AI 모델 로딩 중 <span class="dots"><span>.</span><span>.</span><span>.</span></span>`
-      else if (tries <= 80) statusMsg = `SigLIP2 / BGE-M3 초기화 중 <span class="dots"><span>.</span><span>.</span><span>.</span></span>`
-      else                  statusMsg = `거의 다 됐습니다 <span class="dots"><span>.</span><span>.</span><span>.</span></span>`
-      updateSplash(statusMsg)
+      updateSplash('Loading <span class="dots"><span>.</span><span>.</span><span>.</span></span>')
 
       const req = http.get('http://127.0.0.1:5001/api/auth/status', (res) => {
-        updateSplash('백엔드 준비 완료 ✓')
+        updateSplash('Loading <span class="dots"><span>.</span><span>.</span><span>.</span></span>')
         resolve()
       })
       req.on('error', () => {
@@ -229,6 +223,7 @@ function resolveSplashLogoPath() {
   const candidates = [
     path.join(__dirname, '..', 'dist', 'teamlogo.png'),
     path.join(__dirname, '..', 'public', 'teamlogo.png'),
+    path.join(__dirname, '..', 'src', 'assets', 'teamlogo.png'),
   ]
   for (const p of candidates) {
     try {
@@ -300,7 +295,7 @@ body{
 .dots span:nth-child(3){animation-delay:.4s}
 @keyframes blink{0%,80%,100%{opacity:.2}40%{opacity:1}}
 .bar-wrap{width:320px;height:4px;background:rgba(255,255,255,.14);border-radius:8px;overflow:hidden;margin-bottom:8px}
-.bar{height:100%;width:40%;background:linear-gradient(90deg,#4f86ff,#c6dcff,#4f86ff);
+.bar{height:100%;width:40%;background:linear-gradient(90deg,#020510,#07112a,#020510);
   animation:slide 1.4s ease-in-out infinite}
 @keyframes slide{0%{transform:translateX(-100%)}100%{transform:translateX(350%)}}
 #lo-bar{height:100%;width:0%;background:linear-gradient(90deg,#3d69a2,#9ec0f0);
@@ -313,7 +308,7 @@ body{
 </style></head><body>
 <div class="orb-wrap"><div class="orb"></div><div class="orb-particles"></div></div>
 <div class="logo">${logoImg}<span class="name">DB_insight</span></div>
-<p id="splash-status" class="status">앱 실행 중입니다 <span class="dots"><span>.</span><span>.</span><span>.</span></span></p>
+<p id="splash-status" class="status">Loading <span class="dots"><span>.</span><span>.</span><span>.</span></span></p>
 <div class="bar-wrap">
   <div class="bar" id="boot-bar"></div>
   <div id="lo-bar"></div>

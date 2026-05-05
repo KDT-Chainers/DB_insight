@@ -11,11 +11,11 @@ import MainAI from './pages/MainAI'
 import Settings from './pages/Settings'
 import DataIndexing from './pages/DataIndexing'
 import SplashOrb from './pages/SplashOrb'
+import teamLogoSrc from './assets/teamlogo.png'
 
 function AuthGate() {
   const [loading, setLoading] = useState(true);
   const [initialized, setInitialized] = useState(null);
-  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -33,7 +33,6 @@ function AuthGate() {
       } catch {
         // 백엔드 아직 기동 중 — 1.5초 후 재시도 (최대 60회 = 90초)
         if (active) {
-          setRetryCount(c => c + 1);
           timer = setTimeout(checkStatus, 1500);
         }
       }
@@ -49,15 +48,29 @@ function AuthGate() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-[#070d1f]">
-        <div className="w-10 h-10 bg-gradient-to-br from-primary to-secondary rounded-xl flex items-center justify-center animate-pulse">
-          <span className="material-symbols-outlined text-white text-xl" style={{ fontVariationSettings: '"FILL" 1' }}>dataset</span>
+      <div className="relative min-h-screen overflow-hidden bg-[#070d1f]">
+        <div className="studio-bridge-bg pointer-events-none absolute inset-0" />
+        <div className="pointer-events-none absolute inset-0 grid-bg opacity-[0.22]" />
+        <div className="auth-loading-aurora pointer-events-none absolute inset-0">
+          <span className="aurora-band aurora-band-a" />
+          <span className="aurora-band aurora-band-b" />
+          <span className="aurora-band aurora-band-c" />
         </div>
-        <p className="text-on-surface-variant text-lg">
-          {retryCount < 3 ? '서버에 연결하는 중...' : `백엔드 준비 중... (${retryCount})`}
-        </p>
-        <div className="w-32 h-0.5 bg-surface-container-high rounded-full overflow-hidden">
-          <div className="h-full bg-gradient-to-r from-primary to-secondary animate-[slide_1.4s_ease-in-out_infinite] rounded-full" />
+        <div className="auth-loading-halo pointer-events-none absolute left-1/2 top-1/2 h-[420px] w-[420px] -translate-x-1/2 -translate-y-1/2 rounded-full" />
+        <div className="auth-loading-sweep pointer-events-none absolute inset-0" />
+
+        <div className="relative z-10 flex min-h-screen flex-col items-center justify-center gap-4">
+          <img
+            src={teamLogoSrc}
+            alt=""
+            width={44}
+            height={44}
+            draggable={false}
+            className="auth-loading-logo h-11 w-11 rounded-xl object-contain"
+          />
+          <p className="text-on-surface-variant text-lg tracking-[0.08em]">
+            Loading ...
+          </p>
         </div>
       </div>
     );

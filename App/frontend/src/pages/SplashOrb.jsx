@@ -17,7 +17,7 @@ export default function SplashOrb() {
 
       <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 translate-y-[126px] text-center">
         <p id="splash-status" className="text-xs tracking-[0.08em] text-white/70">
-          로딩중...
+          Loading ...
         </p>
       </div>
     </div>
