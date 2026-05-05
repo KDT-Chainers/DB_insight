@@ -74,7 +74,11 @@ export default function StudioThreePaneShell({
               aria-hidden
             />
 
-            <div className="mb-5 flex items-center gap-3 px-1">
+            <button
+              type="button"
+              onClick={() => navigate('/search')}
+              className="mb-5 flex w-full items-center gap-3 px-1 text-left transition-opacity hover:opacity-85"
+            >
               <TeamLogoMark className="!h-10 !w-10 rounded-[12px]" />
               <div className="min-w-0">
                 <p className="truncate text-[15px] font-bold tracking-tight text-white">DB_insight</p>
@@ -83,7 +87,7 @@ export default function StudioThreePaneShell({
                 </p>
                 <p className="truncate text-[10px] text-white/44">{areaSubtitle}</p>
               </div>
-            </div>
+            </button>
 
             <div className="mb-3 px-0.5" aria-hidden>
               <div className="h-px w-full bg-gradient-to-r from-transparent via-white/[0.24] to-transparent" />
@@ -195,9 +199,7 @@ export default function StudioThreePaneShell({
 
                 {actionBar ? (
                   <div
-                    className={`mb-3 flex min-h-0 shrink-0 flex-wrap items-center gap-2 sm:mb-4 sm:gap-2.5 ${
-                      entranceOn ? 'studio-stagger-item studio-stagger-in studio-stagger-d3' : 'studio-stagger-item studio-stagger-off'
-                    }`}
+                    className="mb-3 flex min-h-0 shrink-0 flex-wrap items-center gap-2 sm:mb-4 sm:gap-2.5"
                   >
                     {actionBar}
                   </div>
