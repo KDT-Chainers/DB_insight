@@ -92,16 +92,45 @@ _DOMAIN_FORCED_KEYWORDS: dict[str, list[str]] = {
         # 장르 (영어)
         "jazz", "rock", "pop", "hiphop", "rap", "classical", "electronic",
         "acoustic", "soul", "blues", "country", "folk", "reggae", "metal",
+        "ballad", "ambient", "lofi", "indie", "kpop", "ost", "soundtrack",
+        # 무드/분위기 (영어) — 이전에 누락된 핵심 항목
+        "calm", "calming", "relaxing", "relaxed", "peaceful", "soothing",
+        "upbeat", "energetic", "lively", "exciting", "vibrant",
+        "romantic", "emotional", "sentimental", "atmospheric",
+        "sad", "melancholic", "dark", "gloomy",
+        "cheerful", "happy", "joyful",
+        "intense", "powerful", "driving",
+        "slow", "gentle", "soft", "mellow",
+        "dreamy", "ethereal", "mysterious",
+        # 용도 (영어)
+        "study", "focus", "sleep", "meditation", "concentration",
+        "workout", "background", "cinematic", "instrumental",
         # 음악 요소 (영어)
         "rhythm", "beat", "melody", "harmony", "tempo", "chord", "note",
         "lyric", "lyrics", "vocal", "chorus", "verse", "bridge",
         # 제작 (영어)
         "album", "track", "single", "mix", "remix", "live", "concert",
-        # ── 한국어 음악/AI 핵심어 ──────────────────────────────────────────
+        # ── 한국어 음악 핵심어 ──────────────────────────────────────────
         # AI 뉴스/팟캐스트 (Rec 도메인 특성)
         "인공지능", "클로드", "ChatGPT", "LLM", "박태웅", "개발자",
-        # 음악
-        "멜로디", "리듬", "화음", "반주", "가사",
+        # 악기 (한국어)
+        "피아노", "기타", "드럼", "바이올린", "첼로", "플루트", "트럼펫",
+        "오케스트라", "현악기", "관악기", "타악기",
+        # 장르 (한국어)
+        "재즈", "록", "팝", "힙합", "랩", "클래식", "발라드",
+        "인디", "가요", "팝송", "OST", "밴드", "솔로",
+        # 무드/분위기 (한국어) — 핵심 누락 항목
+        "잔잔한", "신나는", "편안한", "로맨틱",
+        "감성", "감성적인", "조용한", "빠른", "느린",
+        "슬픈", "우울한", "어두운", "행복한", "경쾌한", "활기찬",
+        "몽환적", "몽환적인", "신비로운", "강렬한", "서정적",
+        "포근한", "따뜻한", "차분한", "설레는", "웅장한",
+        # 용도 (한국어)
+        "공부", "집중", "수면", "명상", "배경음악", "분위기",
+        "운동", "작업", "드라이브", "카페", "힐링",
+        # 기본 음악 요소
+        "멜로디", "리듬", "화음", "반주", "가사", "노래", "음악",
+        "보컬", "악기", "연주", "합창",
     ],
     "image": [
         # 시각 기본 (영어)
