@@ -453,11 +453,39 @@ def _av_stt_texts(segments: list[dict],
     except Exception:
         _eb = None
 
+    # 루트 폴더 패턴 (카테고리가 아닌 수집자/배치 폴더)
+    # 예: 태윤_2차, 태윤_3차, 훤_youtube_2차, YS_다큐_1차, 정혜_BGM_1차 등
+    import re as _re_av
+    _ROOT_FOLDER_PAT = _re_av.compile(
+        r'^[가-힣a-zA-Z0-9]+_(?:[a-zA-Z가-힣0-9]+_)?\d+차?$', _re_av.IGNORECASE
+    )
+
     result = []
     for s in segments:
         stt   = str(s.get("stt_text")  or "").strip()
-        fname = str(s.get("file_name") or s.get("file") or "").strip()
+        # file_name = 파일명만, file = 상대 경로 포함
+        file_path = str(s.get("file") or "").strip()
+        fname     = str(s.get("file_name") or file_path or "").strip()
         title = _clean_filename(fname) if fname else ""
+
+        # 카테고리 서브폴더 이름 추출 (예: 태윤_2차/음악/love letter.wav → "음악")
+        # 루트 폴더(태윤_2차 등)가 아닌 의미 있는 서브폴더만 주입
+        category = ""
+        if file_path:
+            parts = Path(file_path).parts
+            if len(parts) >= 3:
+                # parts[-2] = 직계 부모 폴더 (파일명 제외)
+                parent = parts[-2]
+                if not _ROOT_FOLDER_PAT.match(parent):
+                    category = parent
+            elif len(parts) == 2:
+                # e.g., YS_1차/song.m4a — 루트가 직계 부모
+                parent = parts[0]
+                if not _ROOT_FOLDER_PAT.match(parent):
+                    category = parent
+        if category:
+            title = f"{category} {title}".strip()
+
         # 파일별 메타데이터 조회 (있는 경우에만 삽입)
         meta  = _lookup_metadata(fname, metadata_map) if metadata_map else ""
         if meta:
