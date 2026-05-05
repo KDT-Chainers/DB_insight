@@ -22,6 +22,7 @@ App/frontend/builder-effective-config.yaml
 App/installer/node_modules/
 App/installer/out/
 App/installer/dist/
+App/installer/dist2/
 
 # ============================================================
 # Python / Flask
