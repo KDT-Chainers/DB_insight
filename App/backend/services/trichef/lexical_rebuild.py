@@ -26,6 +26,129 @@ from services.trichef import asf_filter, auto_vocab
 logger = logging.getLogger(__name__)
 
 
+# ── 도메인별 강제 포함 핵심 어휘 ─────────────────────────────────────────
+# IDF 컷오프로 탈락되는 영어 핵심어를 vocab에 보장하기 위한 화이트리스트.
+# 새 도메인 추가 시 여기에만 넣으면 된다.
+_DOMAIN_FORCED_KEYWORDS: dict[str, list[str]] = {
+    "movie": [
+        # 장르/형식 (영어)
+        "drama", "thriller", "horror", "comedy", "romance", "action", "documentary",
+        "series", "episode", "scene", "season",
+        # 우주/과학 영어 (NGC 코스모스, 보이저 등)
+        "cosmos", "cosmo", "cosmic", "space", "universe", "planet", "galaxy", "star",
+        "voyager", "probe", "spacecraft", "satellite", "NASA", "nasa", "orbit",
+        "solar", "moon", "earth", "asteroid", "comet", "nebula",
+        "golden", "record", "signal", "alien", "extraterrestrial",
+        "astronomy", "milky", "spacetime", "sagan", "evolution", "biology",
+        "relativity", "quantum", "electromagnetism",
+        # 역사/문명 영어 (실크로드, 인류 시리즈)
+        "silk", "road", "empire", "dynasty", "medieval", "civilization",
+        "expedition", "conquest", "revolution", "invention", "pioneer",
+        # 제작/스태프
+        "director", "actor", "actress", "producer", "film", "movie", "cinema",
+        # 방송
+        "news", "broadcast", "channel", "live", "interview", "report",
+        # ── 한국어 시리즈 핵심어 (IDF 컷오프로 탈락 방지) ──────────────────
+        # 우주/NGC 코스모스
+        "코스모스", "보이저", "탐사선", "우주선", "골든디스크", "우주탐사",
+        "은하수", "태양계", "블랙홀", "빅뱅", "초신성", "성운",
+        "외계인", "외계생명체", "천문학", "천문학자",
+        # 역사/실크로드
+        "실크로드", "고선지", "당나라", "탈라스", "파미르", "둔황",
+        "인류역사", "인류문명", "고대문명", "대제국",
+        # 인류 다큐
+        "흑사병", "산업혁명", "신대륙", "철기시대", "대항해",
+    ],
+    "music": [
+        # 악기 (영어)
+        "drum", "bass", "guitar", "piano", "violin", "flute", "saxophone",
+        "trumpet", "cello", "harp", "organ", "keyboard",
+        # 장르 (영어)
+        "jazz", "rock", "pop", "hiphop", "rap", "classical", "electronic",
+        "acoustic", "soul", "blues", "country", "folk", "reggae", "metal",
+        # 음악 요소 (영어)
+        "rhythm", "beat", "melody", "harmony", "tempo", "chord", "note",
+        "lyric", "lyrics", "vocal", "chorus", "verse", "bridge",
+        # 제작 (영어)
+        "album", "track", "single", "mix", "remix", "live", "concert",
+        # ── 한국어 음악/AI 핵심어 ──────────────────────────────────────────
+        # AI 뉴스/팟캐스트 (Rec 도메인 특성)
+        "인공지능", "클로드", "ChatGPT", "LLM", "박태웅", "개발자",
+        # 음악
+        "멜로디", "리듬", "화음", "반주", "가사",
+    ],
+    "image": [
+        # 시각 기본 (영어)
+        "image", "photo", "picture", "scene", "visual", "background",
+        "portrait", "landscape", "color", "light", "shadow",
+        # 피사체 (영어)
+        "person", "people", "face", "hand", "animal", "object", "building",
+        "nature", "sky", "water", "tree", "flower",
+        # 구도/품질 (영어)
+        "close", "wide", "zoom", "blur", "sharp", "bright", "dark",
+        # ── 한국어 시각 핵심어 (캡션 기반) ──────────────────────────────────
+        # 인물
+        "사람", "여성", "남성", "어린이", "아이", "아기", "가족", "인물",
+        # 동물/반려동물
+        "고양이", "강아지", "새", "토끼", "동물",
+        # 식물/자연
+        "꽃", "나무", "숲", "풀", "잔디",
+        # 자연/경치
+        "자연", "풍경", "경치", "산", "바다", "강", "하늘", "구름", "호수",
+        "노을", "석양", "일몰", "일출", "눈", "비",
+        # 도시/건물
+        "건물", "도시", "거리", "공원", "다리",
+        # 실내/실외
+        "실내", "실외", "주방", "거실", "침실",
+        # 사물
+        "음식", "요리", "자동차", "자전거", "책",
+        # 색상
+        "빨간", "파란", "노란", "초록", "하얀", "검은",
+    ],
+    "doc": [
+        # 문서 구조 (영어)
+        "document", "page", "chapter", "section", "figure", "table",
+        "reference", "report", "analysis", "result", "conclusion",
+        "data", "graph", "chart", "summary", "abstract",
+        "article", "paper", "study", "research", "review",
+        # ── 한국어 도메인 핵심 어근 ──────────────────────────────────────────
+        # 경제/금융 — 복합어 strip 매칭으로 '경제지표를'→'경제' 등 포착
+        "경제", "금융", "주식", "투자", "무역", "수출", "수입",
+        "물가", "금리", "환율", "성장", "산업", "기업", "예산", "세금",
+        # AI/기술
+        "인공지능", "기술", "반도체", "소프트웨어", "데이터", "플랫폼",
+        "디지털", "정보", "보안", "자동화", "클라우드",
+        # 정치/사회/법
+        "정치", "정부", "선거", "사회", "문화", "역사", "교육",
+        "정책", "법률", "규정", "국가", "지역", "의원", "행정",
+        # 과학/의료
+        "과학", "의료", "건강", "연구", "실험", "의학", "환경",
+        # 통계/분석
+        "통계", "분석", "지수", "현황", "조사", "결과", "평가",
+        # 사회/환경
+        "기후", "에너지", "탄소", "지속", "환경", "재생",
+        # 기업/경영
+        "경영", "생산", "서비스", "개발", "관리", "운영", "계획",
+    ],
+}
+
+_FORCED_KW_IDF = 3.5  # 강제 삽입 어휘의 기본 IDF (중간값)
+
+
+def _inject_domain_keywords(vocab: dict, domain: str) -> dict:
+    """vocab 빌드 후 IDF 컷오프로 탈락된 도메인 핵심어를 강제 삽입한다."""
+    keywords = _DOMAIN_FORCED_KEYWORDS.get(domain, [])
+    added = 0
+    for kw in keywords:
+        kl = kw.lower()
+        if kl not in vocab:
+            vocab[kl] = {"df": 0, "idf": _FORCED_KW_IDF}
+            added += 1
+    if added:
+        logger.info(f"[lexical_rebuild:{domain}] forced-keyword inject: +{added}개")
+    return vocab
+
+
 # ── 공용 유틸 ───────────────────────────────────────────────────────────
 def _encode_sparse(texts: list[str], batch: int = 64, max_length: int | None = None):
     """GPU(RTX 4070) FP16 BGE-M3 기준 batch=64 이 VRAM 내 최적 처리량."""
@@ -134,7 +257,8 @@ def rebuild_image_lexical() -> dict:
         docs.append(txt)
     logger.info(f"[lexical_rebuild:image] 캡션 로드: 빈 {empty}/{len(docs)}")
 
-    vocab = auto_vocab.build_vocab(docs, min_df=2, max_df_ratio=0.5, top_k=5000)
+    vocab = auto_vocab.build_vocab(docs, min_df=2, max_df_ratio=0.5, top_k=8000)
+    vocab = _inject_domain_keywords(vocab, "image")
     auto_vocab.save_vocab(cache / "auto_vocab.json", vocab)
 
     sets = asf_filter.build_doc_token_sets(docs, vocab)
@@ -160,6 +284,7 @@ def rebuild_doc_lexical() -> dict:
     texts = _doc_page_texts(ids)
 
     vocab = auto_vocab.build_vocab(texts, min_df=2, max_df_ratio=0.4, top_k=25000)
+    vocab = _inject_domain_keywords(vocab, "doc")
     auto_vocab.save_vocab(cache / "auto_vocab.json", vocab)
 
     sets = asf_filter.build_doc_token_sets(texts, vocab)
@@ -189,23 +314,90 @@ def _clean_filename(fname: str) -> str:
     return _re.sub(r'\s+', ' ', fname).strip()
 
 
-def _av_stt_texts(segments: list[dict]) -> list[str]:
-    """AV segments → (파일명 제목 + STT) 결합 텍스트 리스트.
+def _load_metadata_map(meta_path: Path) -> dict[str, str]:
+    """metadata.json → {정규화된_stem: 풍부한_텍스트} 딕셔너리.
+
+    key: 파일명 stem(확장자 제외, 소문자) 또는 원본 key
+    value: title_ko + title_en + tags + synopsis 합산 텍스트
+    """
+    if not meta_path.exists():
+        return {}
+    try:
+        raw = json.loads(meta_path.read_text(encoding="utf-8"))
+    except Exception as e:
+        logger.warning(f"[metadata] load 실패 {meta_path}: {e}")
+        return {}
+    result: dict[str, str] = {}
+    for k, v in raw.items():
+        if k.startswith("_") or not isinstance(v, dict):
+            continue
+        parts: list[str] = []
+        for field in ("title_ko", "title_en", "synopsis"):
+            if v.get(field):
+                parts.append(str(v[field]))
+        for field in ("tags_ko", "tags_en"):
+            if isinstance(v.get(field), list):
+                parts.append(" ".join(v[field]))
+        text = " ".join(parts)
+        if not text:
+            continue
+        # 확장자 제거 후 소문자 키로 등록
+        stem_key = Path(k).stem.lower()
+        result[stem_key] = text
+        result[k.lower()] = text   # 원본 키도 등록 (확장자 포함 경우 대비)
+    return result
+
+
+def _lookup_metadata(fname: str, meta_map: dict[str, str]) -> str:
+    """파일명에서 metadata_map을 조회. exact → stem → prefix 순으로 시도."""
+    if not fname or not meta_map:
+        return ""
+    stem = Path(fname).stem.lower()
+    # 1) exact stem match
+    if stem in meta_map:
+        return meta_map[stem]
+    # 2) full fname lowercase match (확장자 포함 키 대비)
+    if fname.lower() in meta_map:
+        return meta_map[fname.lower()]
+    # 3) prefix match: metadata key가 stem의 앞부분인 경우
+    for key, text in meta_map.items():
+        if stem.startswith(key) or key.startswith(stem[:30]):
+            return text
+    return ""
+
+
+def _av_stt_texts(segments: list[dict],
+                  metadata_map: dict[str, str] | None = None) -> list[str]:
+    """AV segments → (파일명 제목 + 메타데이터 + STT + 이중언어 확장) 결합 텍스트 리스트.
 
     file_name 에 포함된 영상 제목을 STT 앞에 붙여 lexical 커버리지 향상.
+    metadata_map 이 제공되면 파일별 제목·줄거리·태그를 텍스트에 삽입해
+    dense/sparse/ASF 모두 메타데이터 기반 검색 가능.
+    expand_bilingual 을 적용해 한→영 / 영→한 토큰을 추가.
     STT 없으면 제목만, 둘 다 없으면 빈 문자열.
     """
+    try:
+        from services.query_expand import expand_bilingual as _eb
+    except Exception:
+        _eb = None
+
     result = []
     for s in segments:
         stt   = str(s.get("stt_text")  or "").strip()
         fname = str(s.get("file_name") or s.get("file") or "").strip()
         title = _clean_filename(fname) if fname else ""
-        if title and stt:
-            result.append(f"{title} {stt}")
-        elif title:
-            result.append(title)
+        # 파일별 메타데이터 조회 (있는 경우에만 삽입)
+        meta  = _lookup_metadata(fname, metadata_map) if metadata_map else ""
+        if meta:
+            base = f"{title} {meta} {stt}".strip()
         else:
-            result.append(stt)
+            base = f"{title} {stt}".strip() if (title and stt) else (title or stt)
+        if _eb and base:
+            try:
+                base = _eb(base, max_extra=12)
+            except Exception:
+                pass
+        result.append(base)
     return result
 
 
@@ -214,17 +406,23 @@ def rebuild_movie_lexical() -> dict:
 
     Engine._build_av_entry 가 cache_movie_sparse.npz 를 자동 로드하므로
     이 함수 실행 후 Engine 재기동 또는 _load_all() 재호출이 필요.
+    movie_metadata.json 이 cache 에 있으면 메타데이터를 텍스트에 삽입해
+    dense/sparse/ASF 채널 모두 메타 기반 검색이 가능해진다.
     """
     cache = Path(PATHS["TRICHEF_MOVIE_CACHE"])
     segs_path = cache / "segments.json"
     if not segs_path.exists():
         return {"skipped": True, "reason": "segments.json 없음"}
     segments = json.loads(segs_path.read_text(encoding="utf-8"))
-    texts = _av_stt_texts(segments)
+    # 메타데이터 맵 로드 (title/synopsis/tags → dense+sparse+ASF 커버리지 향상)
+    meta_map = _load_metadata_map(cache / "movie_metadata.json")
+    logger.info(f"[movie] metadata entries={len(meta_map)//2}")  # 키 2개씩 등록
+    texts = _av_stt_texts(segments, metadata_map=meta_map)
     if not any(texts):
         return {"skipped": True, "reason": "STT 텍스트 없음"}
 
-    vocab = auto_vocab.build_vocab(texts, min_df=2, max_df_ratio=0.5, top_k=15000)
+    vocab = auto_vocab.build_vocab(texts, min_df=2, max_df_ratio=0.5, top_k=25000)
+    vocab = _inject_domain_keywords(vocab, "movie")
     auto_vocab.save_vocab(cache / "vocab_movie.json", vocab)
 
     sets = asf_filter.build_doc_token_sets(texts, vocab)
@@ -250,7 +448,8 @@ def rebuild_music_lexical() -> dict:
     if not any(texts):
         return {"skipped": True, "reason": "STT 텍스트 없음"}
 
-    vocab = auto_vocab.build_vocab(texts, min_df=2, max_df_ratio=0.5, top_k=8000)
+    vocab = auto_vocab.build_vocab(texts, min_df=2, max_df_ratio=0.5, top_k=15000)
+    vocab = _inject_domain_keywords(vocab, "music")
     auto_vocab.save_vocab(cache / "vocab_music.json", vocab)
 
     sets = asf_filter.build_doc_token_sets(texts, vocab)

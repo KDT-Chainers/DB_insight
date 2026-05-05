@@ -1296,6 +1296,59 @@ _KO_EN: dict[str, list[str]] = {
     "rocket":       ["로켓", "우주선"],
     "exploration":  ["탐사", "탐험"],
     "nasa":         ["나사", "미항공우주국"],
+    # 천문학자 / 과학자 고유명사
+    "sagan":        ["세이건", "칼세이건"],
+    "carl":         ["칼", "칼 세이건"],
+    "hawking":      ["호킹", "스티븐호킹"],
+    "einstein":     ["아인슈타인"],
+    "newton":       ["뉴턴"],
+    # 외계 생명체
+    "alien":        ["외계인", "외계생명체", "외계"],
+    "aliens":       ["외계인", "외계생명체"],
+    "extraterrestrial": ["외계인", "외계생명체", "외계"],
+    "ufo":          ["UFO", "비행물체", "외계"],
+
+    # ── 역사 / 탐험 / 다큐멘터리 도메인 ─────────────────────────────────
+    # 실크로드
+    "실크로드":     ["silk road", "silkroad", "Silk Road"],
+    "silk":         ["실크로드", "비단길"],
+    "road":         ["실크로드", "비단길", "길"],
+    "비단길":       ["silk road", "Silk Road"],
+    # 고선지 / 실크로드 인물
+    "고선지":       ["Gao Xianzhi", "Tang dynasty general", "silk road general"],
+    "당나라":       ["Tang dynasty", "Tang", "Chinese dynasty"],
+    "당나라":       ["Tang dynasty", "Tang", "Chinese empire"],
+    # 인류 다큐 시리즈
+    "흑사병":       ["Black Death", "plague", "pandemic"],
+    "산업혁명":     ["Industrial Revolution", "industrialization"],
+    "철기시대":     ["Iron Age"],
+    "신대륙":       ["New World", "Americas", "Columbus"],
+    "대항해":       ["Age of Exploration", "Age of Discovery", "great voyage"],
+    "문명사":       ["history of civilization", "civilizational history"],
+    # EN→KO 역방향
+    "plague":       ["흑사병", "전염병", "역병"],
+    "dynasty":      ["왕조", "당나라", "제국"],
+    "medieval":     ["중세", "중세시대"],
+    "ancient":      ["고대", "고대문명"],
+    "empire":       ["제국", "당나라"],
+    "conquest":     ["정복", "점령"],
+    "expedition":   ["탐험", "원정", "탐사"],
+    "revolution":   ["혁명", "산업혁명"],
+    "invention":    ["발명", "발명품"],
+
+    # ── AI / 개발 도구 고유명사 ───────────────────────────────────────
+    "claude":       ["클로드", "Claude AI", "Anthropic"],
+    "클로드":       ["Claude", "Claude AI", "Anthropic"],
+    "chatgpt":      ["ChatGPT", "GPT", "OpenAI"],
+    "gpt":          ["GPT", "ChatGPT", "언어모델"],
+    "openai":       ["OpenAI", "GPT", "ChatGPT"],
+    "anthropic":    ["Anthropic", "클로드"],
+    "gemini":       ["Gemini", "Google AI"],
+    "박태웅":       ["Park Taewung", "Park Tae-woong", "AI expert"],
+    "taewung":      ["박태웅", "Park Tae-woong"],
+    "세이건":       ["Sagan", "Carl Sagan", "칼 세이건"],
+    "외계인":       ["alien", "aliens", "extraterrestrial", "UFO"],
+    "외계생명체":   ["extraterrestrial life", "alien life", "ET"],
 
     # ── 교육 / 상담 ──────────────────────────────────────────────────
     "상담":         ["counseling", "consultation", "counselling"],
@@ -1527,8 +1580,10 @@ def expand_bilingual(query: str, max_extra: int = 10) -> str:
 
     for t in tokens:
         added_this_token = 0
-        # 한 → 영: 직접 매칭 우선, 없으면 조사 제거 후 재시도
-        t_root = t if t in _KO_EN else _strip_ko_particle(t)
+        # 한 → 영: 직접 매칭 우선, 없으면 소문자 재시도, 없으면 조사 제거 후 재시도
+        # (소문자 재시도: "Taewung"→"taewung", "Claude"→"claude" 등 대문자 입력 대응)
+        t_lc = t.lower()
+        t_root = t if t in _KO_EN else (t_lc if t_lc in _KO_EN else _strip_ko_particle(t))
         for en in _KO_EN.get(t_root, []):
             el = en.lower()
             if el not in seen:

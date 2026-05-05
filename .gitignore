@@ -214,6 +214,15 @@ md/*.html
 scripts/_diag_*.py
 scripts/_test_*.py
 
+# App/backend 일회용 임시 스크립트 자동 제외
+# 규칙: _debug_*, _inspect_*, _list_* 접두어 파일은 커밋 대상에서 제외
+# 운영 스크립트(rebuild_*, smoke_*) 는 App/backend/scripts/ 에 위치 → 커밋 허용
+App/backend/_debug_*.py
+App/backend/_inspect_*.py
+App/backend/_list_*.py
+App/backend/_tmp_*.py
+App/backend/_test_*.py
+
 # ============================================================
 # LaTeX intermediate artifacts
 # ============================================================

@@ -567,6 +567,8 @@ class TriChefEngine:
         #   → "박태웅 의장" 가 정확히 들어간 segment: +0.10 + +0.10 + +0.20 = +0.40
         #   → "의장" 만 들어간 segment:                     +0.10
         _expanded = query  # 기본값 — bilingual 확장 실패 시 raw query 사용
+        tok_lower: list[str] = []   # 파일 루프에서도 사용 — 미리 초기화
+        _orig_token_count: int = len([t for t in query.split() if len(t) >= 2])
         try:
             # 한↔영 크로스랭귀지 substring boost:
             # query_expand 로 bilingual 확장 → 영문 쿼리도 한국어 STT 텍스트와 매칭
@@ -692,6 +694,23 @@ class TriChefEngine:
             z_dense = (dense_agg - _file_mu) / _file_sig
             final   = _ALPHA * z_dense + _BETA * sparse_agg + _GAMMA * asf_agg
             conf    = 0.5 * (1.0 + math.erf(z_dense / (2 ** 0.5)))
+
+            # ── 파일명(제목) 직접 매칭 보너스 ─────────────────────────────────
+            # 시리즈 검색 보장: "코스모스" 검색 시 NGC 코스모스 E01~E13 전부 반환.
+            # 세그먼트 부스트(+0.30)는 top-3 평균에 희석되지만,
+            # 파일명 매칭은 해당 파일이 검색어와 직접 연관된 강한 근거.
+            # z_dense 범위(±3)를 능가하는 +1.5를 final에 직접 가산해
+            # 약한 semantic 점수를 가진 에피소드도 topk 내에 확보한다.
+            # ※ 원본 쿼리 토큰(bilingual 확장 전)만 사용 — 확장 토큰(space, cosmos 등)은
+            #   파일명과 우연 매칭될 수 있으므로 원본 한국어 토큰 기준으로 제한.
+            if tok_lower:
+                _orig_toks_lower = [t.lower() for t in query.split() if len(t) >= 2]
+                # file_name은 아직 best_meta 참조 전이므로 fp 의 basename 사용
+                _fp_stem = Path(fp).name.lower()
+                _fname_hits = sum(1 for tok in _orig_toks_lower if tok in _fp_stem)
+                if _fname_hits > 0:
+                    final += 1.5 * _fname_hits          # 파일명 일치 → 강한 부스트
+                    conf   = max(conf, 0.60)             # 최소 60% 신뢰도 보장
 
             # 상위 세그먼트 메타 빌드
             seg_list: list[dict] = []

@@ -417,6 +417,44 @@ def reindex():
     return jsonify(results)
 
 
+@bp.post("/reload")
+def reload_all():
+    """검색 엔진 전체 핫-리로드 (재시작 없이 새 데이터 반영).
+
+    다음 순서로 실행:
+      1. services.query_expand 모듈 재임포트 → 새 한↔영 사전 항목 즉시 적용
+      2. expand_bilingual LRU 캐시 클리어
+      3. TriChefEngine.reload() → sparse 행렬 / ASF token_sets 재로드
+    """
+    import importlib, sys, time
+    t0 = time.time()
+    msgs: list[str] = []
+
+    # ── 1. query_expand 모듈 재임포트 ─────────────────────────────────────
+    try:
+        mod = sys.modules.get("services.query_expand")
+        if mod is not None:
+            importlib.reload(mod)
+            # LRU 캐시 클리어 (재임포트 후 참조가 바뀔 수 있으므로 재취득)
+            fn = getattr(sys.modules["services.query_expand"], "expand_bilingual", None)
+            if fn is not None and hasattr(fn, "cache_clear"):
+                fn.cache_clear()
+            msgs.append("query_expand reloaded + lru_cache cleared")
+        else:
+            msgs.append("query_expand not yet imported — will load fresh on next call")
+    except Exception as e:
+        msgs.append(f"query_expand reload failed: {e}")
+
+    # ── 2. TriChefEngine 데이터 캐시 재로드 ───────────────────────────────
+    try:
+        reload_engine()
+        msgs.append("TriChefEngine reloaded (sparse / ASF token_sets)")
+    except Exception as e:
+        msgs.append(f"TriChefEngine reload failed: {e}")
+
+    return jsonify({"ok": True, "elapsed_s": round(time.time() - t0, 2), "steps": msgs})
+
+
 @bp.get("/status")
 def status():
     """캐시 현황 빠른 조회 (모델 로드 없음)."""
