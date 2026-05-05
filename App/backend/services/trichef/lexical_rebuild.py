@@ -152,6 +152,9 @@ _DOMAIN_FORCED_KEYWORDS: dict[str, list[str]] = {
         "portrait", "emotion", "expression",
         # 자연과학/생태 (영어)
         "wildlife", "ecology", "ecosystem", "habitat", "sparkling", "shining",
+        "cherry blossom", "cherry blossoms", "sakura", "spring blossom",
+        "snowy scenery", "snow landscape", "autumn foliage", "fallen leaves",
+        "net zero", "carbon neutral", "greenhouse gas",
         # ── 한국어 시각 핵심어 (캡션 기반) ──────────────────────────────────
         # 인물/감정
         "사람", "여성", "남성", "어린이", "아이", "아기", "가족", "인물",
@@ -164,6 +167,8 @@ _DOMAIN_FORCED_KEYWORDS: dict[str, list[str]] = {
         "자연", "풍경", "경치", "산", "바다", "강", "하늘", "구름", "호수",
         "노을", "석양", "일몰", "일출", "눈", "비",
         "봄", "여름", "가을", "겨울",
+        "벚꽃", "설경", "단풍", "낙엽", "눈밭", "새싹", "벚나무",
+        "벚꽃나무", "설원", "눈덮인",
         # 도시/건물
         "건물", "도시", "거리", "공원", "다리",
         # 실내/실외
