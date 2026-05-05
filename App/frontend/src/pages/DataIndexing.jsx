@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import WindowControls from "../components/WindowControls";
-import PageSidebar from "../components/PageSidebar";
+import StudioThreePaneShell from "../components/StudioThreePaneShell";
 import { API_BASE as API } from "../api";
 import { checkIndexed, fetchOrphans } from "../api/registry";
 import IndexedBadge from "../components/indexing/IndexedBadge";
@@ -144,7 +144,7 @@ function FileRow({ item, depth, checked, onToggle, jobResult, indexedInfo }) {
 
   return (
     <div
-      className={`group flex items-center gap-2 rounded-xl py-1 pr-3 transition-colors hover:bg-surface-container-high/40 ${!supported ? "opacity-40" : ""}`}
+      className={`group flex items-center gap-2 rounded-xl py-1 pr-3 transition-colors hover:bg-white/[0.042] ${!supported ? "opacity-40" : ""}`}
       style={{ paddingLeft: `${10 + depth * INDENT}px` }}
     >
       {/* 폴더 화살표 자리 맞춤 */}
@@ -285,7 +285,7 @@ function FolderRow({
     <>
       {/* 폴더 자신 */}
       <div
-        className="group flex cursor-pointer items-center gap-2 rounded-xl py-1 pr-3 transition-colors hover:bg-surface-container-high/40"
+        className="group flex cursor-pointer items-center gap-2 rounded-xl py-1 pr-3 transition-colors hover:bg-white/[0.042]"
         style={{ paddingLeft: `${10 + depth * INDENT}px` }}
       >
         {/* 펼침 화살표 */}
@@ -463,6 +463,8 @@ function IndexingModal({
   onClose,
   onStop,
 }) {
+  const [panelOffset, setPanelOffset] = useState({ x: 0, y: 0 });
+  const dragStateRef = useRef(null);
   const total = jobStatus?.total ?? selectedCount;
   const done = jobStatus?.done ?? 0;
   const skipped = jobStatus?.skipped ?? 0;
@@ -504,6 +506,14 @@ function IndexingModal({
     (r) => r.status === "running",
   );
   const allResults = jobStatus?.results ?? [];
+  const primaryResult =
+    runningResult ??
+    allResults.find((r) => r.status === "done") ??
+    allResults[0] ??
+    null;
+  const primaryFileName = primaryResult
+    ? primaryResult.path.split("\\").pop() || primaryResult.path.split("/").pop()
+    : "처리 중인 파일";
   const errorResults = allResults.filter((r) => r.status === "error");
 
   const handleStop = async () => {
@@ -628,22 +638,48 @@ function IndexingModal({
   const isTriChefMode =
     runningFileType === "image" || runningFileType === "doc";
 
-  return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-      {/* backdrop */}
-      <div
-        className="absolute inset-0 bg-black/70 backdrop-blur-lg"
-        onClick={onClose}
-      />
+  const handleDragStart = (e) => {
+    if (e.button !== 0) return;
+    dragStateRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      baseX: panelOffset.x,
+      baseY: panelOffset.y,
+    };
+    const onMove = (ev) => {
+      const st = dragStateRef.current;
+      if (!st) return;
+      setPanelOffset({
+        x: st.baseX + (ev.clientX - st.startX),
+        y: st.baseY + (ev.clientY - st.startY),
+      });
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      dragStateRef.current = null;
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
 
-      {/* card — 크게, 두 컬럼 */}
+  return (
+    <div className="pointer-events-none fixed inset-0 z-[9999]">
+      {/* card — 전체 화면을 덮지 않는 플로팅 패널 */}
       <div
-        className={`relative flex w-full max-w-2xl flex-col overflow-hidden rounded-3xl border bg-surface-dim/92 backdrop-blur-2xl ${borderGlow}`}
-        style={{ maxHeight: "90vh" }}
+        className={`pointer-events-auto absolute right-4 top-4 flex w-full max-w-[860px] flex-col overflow-hidden rounded-[22px] border border-white/[0.14] bg-white/[0.004] shadow-[inset_0_1px_0_rgba(255,255,255,0.24),inset_0_-1px_0_rgba(255,255,255,0.08)] backdrop-blur-[98px] backdrop-saturate-105 ${borderGlow}`}
+        style={{
+          maxHeight: "72vh",
+          transform: `translate(${panelOffset.x}px, ${panelOffset.y}px)`,
+        }}
       >
         {/* ── 헤더 ── */}
-        <div className="flex shrink-0 items-center justify-between border-b border-outline-variant/20 px-7 pb-4 pt-6">
-          <div className="flex items-center gap-3">
+        <div className="flex shrink-0 items-center justify-between border-b border-white/[0.08] px-5 pb-3 pt-4">
+          <div
+            className="flex items-center gap-3 cursor-grab active:cursor-grabbing"
+            onMouseDown={handleDragStart}
+            title="드래그하여 위치 이동"
+          >
             {isEffectivelyDone ? (
               <span
                 className="material-symbols-outlined text-emerald-400 text-2xl"
@@ -674,7 +710,7 @@ function IndexingModal({
               {statusLabel}
             </h2>
             {rootPath && (
-              <span className="text-xs text-on-surface-variant/40 font-mono truncate max-w-[200px]">
+              <span className="text-xs text-on-surface-variant/60 font-mono truncate max-w-[240px]">
                 {rootPath.split("\\").pop() || rootPath}
               </span>
             )}
@@ -684,7 +720,7 @@ function IndexingModal({
               <button
                 onClick={handleStop}
                 disabled={isStopping}
-                className="flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 text-base font-bold transition-all disabled:opacity-40"
+                className="flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-red-500/7 hover:bg-red-500/14 border border-red-500/24 text-red-300 text-base font-bold transition-all disabled:opacity-40"
               >
                 <span className="material-symbols-outlined text-lg">stop</span>
                 {isStopping ? "중단 중..." : "중단"}
@@ -692,7 +728,7 @@ function IndexingModal({
             )}
             <button
               onClick={onClose}
-              className="flex h-8 w-8 items-center justify-center rounded-full border border-outline-variant/25 bg-surface-container-high/50 text-on-surface-variant transition-all hover:border-outline-variant/40 hover:bg-surface-container-highest/60 hover:text-on-surface"
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/[0.1] bg-white/[0.04] text-white/70 transition-all hover:bg-white/[0.1] hover:text-white"
             >
               <span className="material-symbols-outlined text-sm">close</span>
             </button>
@@ -700,9 +736,24 @@ function IndexingModal({
         </div>
 
         {/* ── 본문: 두 컬럼 ── */}
-        <div className="flex gap-0 flex-1 min-h-0 overflow-hidden">
+        <div className="flex flex-1 min-h-0 gap-3 overflow-hidden p-3 sm:p-3.5">
           {/* 왼쪽: 원형 프로그레스 + 현재 파일 */}
-          <div className="flex w-64 shrink-0 flex-col items-center justify-start gap-6 border-r border-outline-variant/20 px-6 pb-6 pt-8">
+          <div className="flex w-[250px] shrink-0 flex-col items-center justify-start gap-3 rounded-2xl border border-white/[0.12] bg-white/[0.003] shadow-[inset_0_1px_0_rgba(255,255,255,0.2),inset_0_-1px_0_rgba(255,255,255,0.06)] px-3 pb-3 pt-3 backdrop-blur-[84px]">
+            {/* 파일 요약 (시안 스타일) */}
+            <div className="w-full rounded-2xl border border-white/[0.12] bg-white/[0.003] shadow-[inset_0_1px_0_rgba(255,255,255,0.2),inset_0_-1px_0_rgba(255,255,255,0.05)] p-2.5 backdrop-blur-xl">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-white/[0.14] bg-[#85adff]/12 text-[#b9ccff]">
+                  <span className="material-symbols-outlined text-[1.55rem]">description</span>
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-[13px] font-bold text-white/92">{primaryFileName}</p>
+                  <p className="mt-0.5 text-xs text-white/55">
+                    {processed} / {total} 파일
+                  </p>
+                </div>
+              </div>
+            </div>
+
             {/* 원형 링 + 숫자 */}
             <div className="relative flex items-center justify-center">
               <RingProgress
@@ -723,9 +774,17 @@ function IndexingModal({
               </div>
             </div>
 
-            {/* 전체 바 */}
-            <div className="w-full space-y-2">
-              <div className="h-2 overflow-hidden rounded-full bg-outline-variant/25">
+            {/* 진행 바 (시안 스타일) */}
+            <div className="w-full rounded-2xl border border-white/[0.12] bg-white/[0.002] shadow-[inset_0_1px_0_rgba(255,255,255,0.2),inset_0_-1px_0_rgba(255,255,255,0.05)] p-2.5 backdrop-blur-xl">
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-sm font-semibold text-white/78">
+                  {isStopping ? "중단 중..." : isEffectivelyDone ? "완료" : "Uploading ..."}
+                </p>
+                <p className={`text-[1.45rem] font-black tabular-nums ${statusColor}`}>
+                  {progress}%
+                </p>
+              </div>
+              <div className="h-2.5 overflow-hidden rounded-full bg-outline-variant/25">
                 <div
                   className={`h-full rounded-full transition-all duration-500 ${
                     isEffectivelyDone
@@ -739,12 +798,12 @@ function IndexingModal({
                   style={{ width: `${progress}%` }}
                 />
               </div>
-              <p className="text-sm text-center text-on-surface-variant/50 tabular-nums">
+              <p className="mt-2 text-xs text-on-surface-variant/70 tabular-nums">
                 {processed} / {total} 파일
               </p>
               {/* [ETA] 잔여 시간 — 진행률 기반 실시간 추정 (1초 tick). 100% 도달 시 표시 안 함. */}
               {remainingSec != null && !isEffectivelyDone && (
-                <p className="text-xs text-center text-on-surface-variant/60 tabular-nums">
+                <p className="text-xs text-on-surface-variant/65 tabular-nums">
                   <span className="text-on-surface-variant/40">잔여 약</span>{" "}
                   <span className="font-bold text-[#85adff]">
                     {_fmtDuration(remainingSec)}
@@ -752,14 +811,14 @@ function IndexingModal({
                 </p>
               )}
               {isEffectivelyDone && (
-                <p className="text-xs text-center text-emerald-400/80 tabular-nums">
+                <p className="text-xs text-emerald-400/80 tabular-nums">
                   완료
                 </p>
               )}
             </div>
 
             {/* 통계 */}
-            <div className="w-full grid grid-cols-3 gap-2">
+            <div className="w-full grid grid-cols-3 gap-1.5">
               {[
                 {
                   label: "완료",
@@ -782,36 +841,24 @@ function IndexingModal({
               ].map((s) => (
                 <div
                   key={s.label}
-                  className={`${s.bg} rounded-xl p-2 flex flex-col items-center`}
+                  className={`${s.bg} rounded-xl border border-white/[0.11] shadow-[inset_0_1px_0_rgba(255,255,255,0.16)] p-1.5 flex flex-col items-center backdrop-blur-xl`}
                 >
                   <span
                     className={`text-xl font-black ${s.color} tabular-nums`}
                   >
                     {s.val}
                   </span>
-                  <span className="text-sm text-on-surface-variant/40 mt-0.5">
+                    <span className="text-sm text-on-surface-variant/60 mt-0.5">
                     {s.label}
                   </span>
                 </div>
               ))}
             </div>
 
-            {/* 현재 처리 중 파일명 */}
-            {runningResult && (
-              <div className="w-full bg-[#85adff]/5 border border-[#85adff]/15 rounded-xl p-3">
-                <p className="text-sm text-[#85adff]/60 uppercase tracking-widest font-bold mb-1">
-                  현재 처리 중
-                </p>
-                <p className="text-sm font-semibold text-[#dfe4fe] truncate">
-                  {runningResult.path.split("\\").pop() ||
-                    runningResult.path.split("/").pop()}
-                </p>
-              </div>
-            )}
           </div>
 
           {/* 오른쪽: 동영상 스텝 + 파일 목록 */}
-          <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+          <div className="flex-1 flex min-h-0 flex-col overflow-hidden gap-3">
             {/* 처리 단계 — 파일 타입별 4종 파이프라인 */}
             {isRunning &&
               runningResult?.step != null &&
@@ -842,8 +889,8 @@ function IndexingModal({
                       ? "border-amber-400/30"
                       : "border-[#85adff]/30";
                 return (
-                  <div className="shrink-0 px-6 pt-6 pb-5 border-b border-white/5">
-                    <p className="text-sm font-bold uppercase tracking-widest text-on-surface-variant/40 mb-4">
+                  <div className="shrink-0 rounded-2xl border border-white/[0.12] bg-white/[0.003] shadow-[inset_0_1px_0_rgba(255,255,255,0.2),inset_0_-1px_0_rgba(255,255,255,0.05)] px-4 pb-3 pt-3 backdrop-blur-[84px]">
+                    <p className="mb-3 text-sm font-bold uppercase tracking-widest text-on-surface-variant/56">
                       {pipeline.label}
                     </p>
                     <div className={`grid gap-3 ${pipeline.cols}`}>
@@ -860,7 +907,7 @@ function IndexingModal({
                                 ? chipActiveShadow
                                 : isPast
                                   ? "bg-emerald-500/8 border-emerald-500/20"
-                                  : "bg-white/3 border-white/5"
+                                  : "bg-white/[0.02] border-white/[0.06]"
                             }`}
                           >
                             {/* 번호 / 아이콘 */}
@@ -916,13 +963,13 @@ function IndexingModal({
               })()}
 
             {/* 파일 전체 목록 */}
-            <div className="flex-1 overflow-y-auto min-h-0">
-              <div className="sticky top-0 z-10 border-b border-outline-variant/20 bg-surface-dim/90 px-4 pb-2 pt-4 backdrop-blur-md">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-white/[0.12] bg-white/[0.003] shadow-[inset_0_1px_0_rgba(255,255,255,0.2),inset_0_-1px_0_rgba(255,255,255,0.05)] backdrop-blur-[84px]">
+              <div className="sticky top-0 z-10 border-b border-white/[0.06] bg-white/[0.004] px-4 pb-2 pt-3 backdrop-blur-lg">
                 <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/40">
                   파일 목록
                 </p>
               </div>
-              <div className="divide-y divide-outline-variant/12 px-2 pb-4">
+              <div className="min-h-0 flex-1 overflow-y-auto divide-y divide-white/[0.08] px-2 pb-4">
                 {allResults.map((r, i) => {
                   const fname =
                     r.path.split("\\").pop() || r.path.split("/").pop();
@@ -948,7 +995,7 @@ function IndexingModal({
                       className={`flex items-center gap-3 px-3 py-2.5 rounded-xl mx-1 my-0.5 transition-all duration-300 ${
                         isCurrently
                           ? "border border-primary/25 bg-primary/8"
-                          : "border border-transparent hover:bg-surface-container-high/35"
+                          : "border border-transparent hover:bg-white/[0.045]"
                       }`}
                     >
                       <span
@@ -1172,7 +1219,7 @@ function DataSourcesTab() {
               <div
                 key={i}
                 className={`group flex items-center gap-3 px-4 py-3 transition-colors
-                  ${isConfirming ? "bg-red-500/8" : "hover:bg-surface-container-high/40"}
+                  ${isConfirming ? "bg-red-500/8" : "hover:bg-white/[0.042]"}
                   ${!f.exists ? "opacity-40" : ""}`}
               >
                 <span
@@ -1365,7 +1412,7 @@ function VectorStoreTab() {
                   <span className="font-bold text-on-surface">{label}</span>
                 </div>
                 <span
-                  className={`rounded-full border border-outline-variant/25 bg-surface-container-high/50 px-2 py-0.5 text-[10px] font-bold ${color}`}
+                  className={`rounded-full border border-white/[0.08] bg-white/[0.038] px-2 py-0.5 text-[10px] font-bold backdrop-blur-lg ${color}`}
                 >
                   {dim}
                 </span>
@@ -1735,123 +1782,377 @@ export default function DataIndexing() {
 
   const selectedCount = checkedPaths.size;
 
-  return (
-    <div className="studio-bridge-bg flex h-screen overflow-hidden text-on-surface">
-      {/* Sidebar */}
-      <PageSidebar
-        subtitle="데이터 인덱싱"
-        footerExtra={
-          selectedCount > 0 && (
-            <div className="mx-3 mb-3 p-3 rounded-xl bg-primary/10 border border-primary/20">
-              <p className="text-base text-primary font-bold uppercase tracking-widest mb-1">
-                선택됨
-              </p>
-              <p className="text-xl font-black text-primary leading-none">
-                {selectedCount}
-                <span className="text-sm ml-1 font-normal">개 파일</span>
-              </p>
-              <IndexingETA data={estimateData} loading={estimateLoading} />
-            </div>
-          )
-        }
-        footerSub={
-          <button
-            onClick={() => navigate("/settings")}
-            className="text-base text-on-surface-variant hover:text-primary transition-colors"
-          >
-            설정 →
-          </button>
-        }
-      >
-        {[
-          {
-            icon: "database",
-            label: "워크스페이스",
-            onClick: () => navigate("/search"),
-          },
-          { icon: "hub", label: "데이터 소스", tab: "sources" },
-          { icon: "account_tree", label: "인덱싱", tab: "indexing" },
-          { icon: "memory", label: "벡터 저장소", tab: "store" },
-        ].map((item) => (
-          <button
-            key={item.label}
-            onClick={item.onClick ?? (() => setTab(item.tab))}
-            className={`w-full flex items-center gap-3 rounded-xl px-4 py-2.5 text-base font-manrope uppercase tracking-widest transition-all
-              ${
-                item.tab === tab
-                  ? "text-primary bg-[#1c253e]"
-                  : "text-[#a5aac2] hover:bg-[#1c253e]/50 hover:text-[#dfe4fe]"
-              }`}
-          >
-            <span className="material-symbols-outlined text-base">
-              {item.icon}
-            </span>
-            {item.label}
-          </button>
-        ))}
-      </PageSidebar>
+  const listSectionTitle =
+    tab === "indexing"
+      ? "리소스 탐색기"
+      : tab === "sources"
+        ? "연결된 소스"
+        : "저장소";
 
-      {/* Main */}
-      <main className="relative flex flex-1 flex-col overflow-hidden">
-        <div className="pointer-events-none absolute right-0 top-0 h-[min(520px,90vw)] w-[min(520px,90vw)] rounded-full bg-[rgba(149,164,252,0.12)] blur-[140px]" />
-        <div className="pointer-events-none absolute bottom-0 left-1/4 h-[min(420px,70vw)] w-[min(420px,70vw)] rounded-full bg-[rgba(84,22,120,0.14)] blur-[120px]" />
+  const navItems = useMemo(
+    () => [
+      {
+        key: "ws",
+        icon: "database",
+        label: "워크스페이스",
+        subtitle: "검색 · 기록",
+        active: false,
+        onClick: () => navigate("/search"),
+      },
+      {
+        key: "sources",
+        icon: "hub",
+        label: "데이터 소스",
+        subtitle: "원본 경로 및 등록",
+        active: tab === "sources",
+        onClick: () => setTab("sources"),
+      },
+      {
+        key: "indexing",
+        icon: "account_tree",
+        label: "인덱싱",
+        subtitle: "파일 선택 및 임베딩",
+        active: tab === "indexing",
+        onClick: () => setTab("indexing"),
+      },
+      {
+        key: "store",
+        icon: "memory",
+        label: "벡터 저장소",
+        subtitle: "저장 상태 및 통계",
+        active: tab === "store",
+        onClick: () => setTab("store"),
+      },
+    ],
+    [navigate, tab],
+  );
 
-        {/* 드래그 타이틀바 */}
-        <header
-          className="titlebar-chrome-studio shrink-0 flex justify-end items-center px-2 h-8 z-40"
-          style={{ WebkitAppRegion: "drag" }}
+  const studioBreadcrumb = useMemo(
+    () => (
+      <>
+        <button
+          type="button"
+          onClick={() => navigate("/search")}
+          className="shrink-0 rounded-lg px-1.5 py-0.5 text-white/48 transition hover:bg-white/[0.08] hover:text-white/88"
         >
-          <div style={{ WebkitAppRegion: "no-drag" }}>
-            <WindowControls />
-          </div>
-        </header>
+          홈
+        </button>
+        <span className="material-symbols-outlined shrink-0 text-[15px] text-white/22">
+          chevron_right
+        </span>
+        <button
+          type="button"
+          onClick={() => navigate("/data")}
+          className="shrink-0 rounded-lg px-1.5 py-0.5 text-white/48 transition hover:bg-white/[0.08] hover:text-white/88"
+        >
+          데이터
+        </button>
+        <span className="material-symbols-outlined shrink-0 text-[15px] text-white/22">
+          chevron_right
+        </span>
+        <span className="min-w-0 truncate font-medium text-white/88">
+          {tab === "sources"
+            ? "데이터 소스"
+            : tab === "indexing"
+              ? "인덱싱"
+              : "벡터 저장소"}
+        </span>
+      </>
+    ),
+    [navigate, tab],
+  );
 
-        <div className="relative z-10 flex flex-1 flex-col gap-4 overflow-hidden p-5">
-          {/* 탭: 데이터 소스 */}
+  const studioRightWidgets = useMemo(() => {
+    if (tab === "indexing") {
+      return (
+        <>
+          <div className="apple-widget-card rounded-[18px] p-4">
+            <div className="mb-3 flex items-start justify-between gap-2">
+              <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-sky-200/90">
+                선택 요약
+              </span>
+              <span className="material-symbols-outlined text-lg text-white/30">
+                stacked_bar_chart
+              </span>
+            </div>
+            {selectedCount > 0 ? (
+              <>
+                <p className="text-3xl font-bold tabular-nums text-white">{selectedCount}</p>
+                <p className="mt-0.5 text-[12px] text-white/42">개 파일</p>
+                <div className="mt-3 border-t border-white/[0.08] pt-3">
+                  <IndexingETA data={estimateData} loading={estimateLoading} />
+                </div>
+              </>
+            ) : (
+              <p className="text-[13px] leading-relaxed text-white/40">
+                트리에서 파일을 체크하면 예상 시간과 개수가 여기에 표시됩니다.
+              </p>
+            )}
+          </div>
+          <div className="apple-widget-card rounded-[18px] p-4">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/55">
+                진행 안내
+              </span>
+              <span className="material-symbols-outlined text-lg text-white/28">info</span>
+            </div>
+            <p className="text-[12px] leading-relaxed text-white/38">
+              인덱싱 중에는 진행 모달에서 단계를 확인할 수 있습니다. 완료 후 검색·AI에서 바로
+              활용됩니다.
+            </p>
+          </div>
+        </>
+      );
+    }
+    if (tab === "sources") {
+      return (
+        <>
+          <div className="apple-widget-card rounded-[18px] p-4">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-violet-200/85">
+                연결
+              </span>
+              <span className="material-symbols-outlined text-lg text-white/28">link</span>
+            </div>
+            <p className="text-[12px] leading-relaxed text-white/38">
+              소스 경로를 바꾼 뒤에는 인덱싱 탭에서 필요한 범위만 다시 임베딩하세요.
+            </p>
+          </div>
+          <div className="apple-widget-card flex aspect-[4/3] max-h-[140px] items-center justify-center rounded-[18px]">
+            <span
+              className="material-symbols-outlined text-5xl text-white/12"
+              style={{ fontVariationSettings: '"FILL" 1' }}
+            >
+              hub
+            </span>
+          </div>
+        </>
+      );
+    }
+    return (
+      <>
+        <div className="apple-widget-card rounded-[18px] p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-emerald-200/85">
+              저장소
+            </span>
+            <span className="material-symbols-outlined text-lg text-white/28">analytics</span>
+          </div>
+          <p className="text-[12px] leading-relaxed text-white/38">
+            아래 요약 카드에서 타입별 청크 수와 전체 용량을 확인할 수 있습니다.
+          </p>
+        </div>
+        <div className="apple-widget-card flex aspect-[4/3] max-h-[140px] items-center justify-center rounded-[18px]">
+          <span className="material-symbols-outlined text-5xl text-white/12">memory</span>
+        </div>
+      </>
+    );
+  }, [tab, selectedCount, estimateData, estimateLoading]);
+
+  const studioHero = useMemo(() => {
+    if (tab === "indexing") {
+      return (
+        <div className="min-w-0">
+          <span className="inline-flex items-center rounded-full bg-sky-500/18 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-sky-100/90 ring-1 ring-sky-300/25">
+            로컬 워크스페이스
+          </span>
+          <h2 className="mt-2 text-[1.65rem] font-bold tracking-tight text-white sm:text-[1.85rem]">
+            인덱싱
+          </h2>
+          <p className="mt-2 max-w-3xl text-[14px] leading-relaxed text-white/42">
+            {rootPath ? (
+              <span className="break-all font-mono text-[13px] text-white/50">{rootPath}</span>
+            ) : (
+              "액션 바에서 폴더를 선택한 뒤, 리소스 트리에서 파일을 선택합니다."
+            )}
+          </p>
+          <p className="mt-2 text-[13px] text-white/32">
+            {selectedCount > 0
+              ? `${selectedCount}개 파일 선택됨`
+              : "우측 패널에서 선택·예상 시간 요약을 확인할 수 있습니다."}
+          </p>
+        </div>
+      );
+    }
+    if (tab === "sources") {
+      return (
+        <div className="min-w-0">
+          <span className="inline-flex items-center rounded-full bg-violet-500/18 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-violet-100/90 ring-1 ring-violet-400/25">
+            소스
+          </span>
+          <h2 className="mt-2 text-[1.65rem] font-bold tracking-tight text-white sm:text-[1.85rem]">
+            데이터 소스
+          </h2>
+          <p className="mt-2 max-w-3xl text-[14px] leading-relaxed text-white/42">
+            등록된 로컬 및 네트워크 원본을 한곳에서 관리합니다.
+          </p>
+        </div>
+      );
+    }
+    return (
+      <div className="min-w-0">
+        <span className="inline-flex items-center rounded-full bg-emerald-500/18 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-100/90 ring-1 ring-emerald-400/22">
+          저장소
+        </span>
+        <h2 className="mt-2 text-[1.65rem] font-bold tracking-tight text-white sm:text-[1.85rem]">
+          벡터 저장소
+        </h2>
+        <p className="mt-2 max-w-3xl text-[14px] leading-relaxed text-white/42">
+          임베딩 인덱스와 저장 통계를 확인합니다.
+        </p>
+      </div>
+    );
+  }, [tab, rootPath, selectedCount]);
+
+  const studioActionBar = useMemo(() => {
+    if (tab !== "indexing") return null;
+    return (
+      <>
+        <button
+          type="button"
+          onClick={handleSelectFolder}
+          disabled={loading || indexing}
+          className="inline-flex h-10 shrink-0 items-center gap-2 rounded-full bg-white/[0.1] px-4 text-[13px] font-semibold text-white/90 ring-1 ring-white/[0.12] transition hover:bg-white/[0.14] disabled:opacity-40"
+        >
+          <span className="material-symbols-outlined text-[1.15rem] text-white/70">
+            folder_shared
+          </span>
+          {loading ? "스캔 중…" : "폴더 선택"}
+        </button>
+        {jobStatus ? (
+          <button
+            type="button"
+            onClick={() => setModalVisible(true)}
+            className={`inline-flex h-10 items-center gap-1.5 rounded-full px-4 text-[12px] font-semibold uppercase tracking-wide ring-1 transition hover:brightness-110 ${
+              jobStatus.status === "done"
+                ? "bg-emerald-500/15 text-emerald-200 ring-emerald-400/25"
+                : jobStatus.status === "error"
+                  ? "bg-red-500/15 text-red-200 ring-red-400/25"
+                  : "bg-sky-500/15 text-sky-100 ring-sky-400/25"
+            }`}
+          >
+            {jobStatus.status === "running" && (
+              <span className="material-symbols-outlined animate-spin text-base">
+                progress_activity
+              </span>
+            )}
+            {jobStatus.status === "done"
+              ? "완료"
+              : jobStatus.status === "error"
+                ? "오류"
+                : "처리 중"}
+          </button>
+        ) : null}
+        {jobError ? (
+          <span className="text-[13px] font-medium text-red-300">{jobError}</span>
+        ) : null}
+        <div className="min-w-[8px] flex-1" />
+        <button
+          type="button"
+          onClick={() => {
+            if (indexing) setModalVisible(true);
+            else handleStartIndexing();
+          }}
+          disabled={!indexing && selectedCount === 0}
+          title={indexing ? "진행 화면 다시 보기" : undefined}
+          className={`inline-flex h-10 shrink-0 items-center gap-2 rounded-full px-5 text-[13px] font-semibold text-white transition-all disabled:cursor-not-allowed disabled:opacity-40 ${
+            indexing
+              ? "border border-[#85adff]/40 bg-[#85adff]/14 shadow-[0_8px_22px_rgba(133,173,255,0.2),inset_0_1px_0_rgba(255,255,255,0.14)] hover:bg-[#85adff]/20"
+              : "border border-emerald-400/35 bg-emerald-500/18 shadow-[0_8px_22px_rgba(16,185,129,0.2),inset_0_1px_0_rgba(255,255,255,0.14)] hover:bg-emerald-500/24"
+          }`}
+        >
+          <span
+            className={`material-symbols-outlined text-[1.35rem] ${indexing ? "animate-spin" : ""}`}
+            style={{ fontVariationSettings: '"FILL" 1' }}
+          >
+            {indexing ? "progress_activity" : "play_arrow"}
+          </span>
+          {indexing ? "진행 화면 보기" : "인덱싱 시작"}
+        </button>
+        <span className="inline-flex h-10 items-center rounded-full bg-white/[0.08] px-3 text-[12px] font-medium text-white/55 ring-1 ring-white/[0.08]">
+          {selectedCount > 0 ? `${selectedCount}개 선택` : "파일 미선택"}
+        </span>
+      </>
+    );
+  }, [
+    tab,
+    loading,
+    indexing,
+    selectedCount,
+    jobStatus,
+    jobError,
+    handleSelectFolder,
+    handleStartIndexing,
+  ]);
+
+  const footerSubLink = (
+    <button
+      type="button"
+      onClick={() => navigate("/settings")}
+      className="text-left text-[11px] text-white/40 transition-colors hover:text-sky-300"
+    >
+      시스템 설정 →
+    </button>
+  );
+
+  return (
+    <div className="studio-bridge-bg relative flex h-screen overflow-hidden text-on-surface">
+      <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+        <div className="pointer-events-none absolute -left-[12%] -top-[20%] h-[min(560px,95vw)] w-[min(560px,95vw)] rounded-full bg-[rgba(22,62,198,0.36)] blur-[142px]" />
+        <div className="pointer-events-none absolute -bottom-[8%] -right-[6%] h-[min(440px,76vw)] w-[min(440px,76vw)] rounded-full bg-[rgba(56,40,124,0.32)] blur-[124px]" />
+        <div className="pointer-events-none absolute -bottom-[16%] left-[18%] right-[18%] h-[min(400px,48vh)] rounded-full bg-black/62 blur-[104px]" />
+      </div>
+
+      <div className="relative z-10 flex min-h-0 min-w-0 flex-1">
+        <StudioThreePaneShell
+          discoverTitle="데이터"
+          areaSubtitle="데이터 인덱싱"
+          navSectionLabel="메뉴"
+          navItems={navItems}
+          footerSub={footerSubLink}
+          breadcrumb={studioBreadcrumb}
+          rightWidgets={studioRightWidgets}
+          titleBar={
+            <header
+              className="titlebar-chrome-studio z-40 flex h-8 shrink-0 items-center justify-end px-2"
+              style={{ WebkitAppRegion: "drag" }}
+            >
+              <div style={{ WebkitAppRegion: "no-drag" }}>
+                <WindowControls />
+              </div>
+            </header>
+          }
+          hero={studioHero}
+          actionBar={studioActionBar}
+          listSectionTitle={listSectionTitle}
+        >
           {tab === "sources" && (
-            <div className="min-h-0 flex-1 overflow-y-auto">
-              <h2 className="di-section-title mb-4 text-lg">데이터 소스</h2>
+            <div className="min-h-0 flex-1 p-4 sm:p-5">
               <DataSourcesTab />
             </div>
           )}
 
-          {/* 탭: 벡터 저장소 */}
           {tab === "store" && (
-            <div className="min-h-0 flex-1 overflow-y-auto">
-              <h2 className="di-section-title mb-4 text-lg">벡터 저장소</h2>
+            <div className="min-h-0 flex-1 p-4 sm:p-5">
               <VectorStoreTab />
             </div>
           )}
 
-          {/* 탭: 인덱싱 (기존 UI) */}
-          {
-            tab === "indexing" && (
-              <>
-                <h2 className="di-section-title mb-1 shrink-0 text-lg">
-                  인덱싱
-                </h2>
-
-                {/* 폴더 선택 바 */}
-                <div className="di-glass-card flex shrink-0 items-center gap-3 rounded-2xl border border-outline-variant/20 px-4 py-2.5">
-                  <button
-                    onClick={handleSelectFolder}
-                    disabled={loading || indexing}
-                    className="flex shrink-0 items-center gap-2 rounded-full border border-outline-variant/35 bg-surface-container-high/55 px-4 py-2 text-sm font-semibold backdrop-blur-md transition-all hover:border-primary/40 hover:bg-surface-container-highest/60 disabled:opacity-50"
-                  >
-                    <span className="material-symbols-outlined text-base">
-                      folder_shared
-                    </span>
-                    {loading ? "스캔 중..." : "폴더 선택"}
-                  </button>
-                  <span className="text-sm font-mono text-on-surface-variant/50 flex-1 truncate">
-                    {rootPath || "폴더를 선택하세요"}
+          {tab === "indexing" && (
+            <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-4 sm:p-5">
+              <div className="di-glass-card flex shrink-0 items-center gap-3 rounded-2xl border border-outline-variant/20 px-4 py-2.5">
+                <span className="material-symbols-outlined shrink-0 text-lg text-on-surface-variant/45">
+                  folder_open
+                </span>
+                <span className="flex-1 truncate font-mono text-sm text-on-surface-variant/50">
+                  {rootPath || "폴더를 선택하세요"}
+                </span>
+                {rootItems.length > 0 && (
+                  <span className="shrink-0 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 text-xs font-bold text-primary">
+                    {rootItems.length}개
                   </span>
-                  {rootItems.length > 0 && (
-                    <span className="shrink-0 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 text-xs font-bold text-primary">
-                      {rootItems.length}개
-                    </span>
-                  )}
-                </div>
+                )}
+              </div>
 
                 {/* 파일 트리 */}
                 <div className="di-glass-card flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-outline-variant/20">
@@ -1864,30 +2165,6 @@ export default function DataIndexing() {
                         indexedMap={indexedMap}
                         onApply={(paths) => setCheckedPaths(new Set(paths))}
                       />
-                      {jobStatus && (
-                        <button
-                          onClick={() => setModalVisible(true)}
-                          className={`flex items-center gap-1.5 text-base font-bold uppercase px-2.5 py-0.5 rounded-full transition-all hover:brightness-125
-                    ${
-                      jobStatus.status === "done"
-                        ? "bg-emerald-500/15 text-emerald-400"
-                        : jobStatus.status === "error"
-                          ? "bg-red-500/15 text-red-400"
-                          : "bg-primary/10 text-primary"
-                    }`}
-                        >
-                          {jobStatus.status === "running" && (
-                            <span className="material-symbols-outlined text-base animate-spin">
-                              progress_activity
-                            </span>
-                          )}
-                          {jobStatus.status === "done"
-                            ? "완료"
-                            : jobStatus.status === "error"
-                              ? "오류"
-                              : "처리 중"}
-                        </button>
-                      )}
                     </div>
                   </div>
 
@@ -1958,49 +2235,10 @@ export default function DataIndexing() {
                       )}
                   </div>
                 </div>
-
-                {/* 인덱싱 버튼 */}
-                <div className="shrink-0 flex flex-col items-center gap-2 pb-1">
-                  {jobError && (
-                    <p className="text-sm text-red-400">{jobError}</p>
-                  )}
-                  <button
-                    onClick={() => {
-                      // [UX] 인덱싱 진행 중 모달이 닫힌 상태면 클릭으로 모달 재오픈.
-                      // 이전: disabled 처리되어 사용자가 진행 화면으로 돌아갈 수 없었음.
-                      if (indexing) setModalVisible(true);
-                      else handleStartIndexing();
-                    }}
-                    disabled={!indexing && selectedCount === 0}
-                    title={indexing ? "진행 화면 다시 보기" : undefined}
-                    className="relative group disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    <div className="absolute -inset-0.5 bg-gradient-to-r from-primary to-secondary rounded-full blur opacity-40 group-hover:opacity-70 transition duration-500" />
-                    <div className="relative flex items-center divide-x divide-outline-variant/25 rounded-2xl border border-outline-variant/25 bg-surface-dim/80 px-10 py-3.5 backdrop-blur-xl">
-                      <span className="flex items-center gap-2.5 pr-5">
-                        <span
-                          className={`material-symbols-outlined text-primary ${indexing ? "animate-spin" : "animate-pulse"}`}
-                          style={{ fontVariationSettings: '"FILL" 1' }}
-                        >
-                          {indexing ? "progress_activity" : "rocket_launch"}
-                        </span>
-                        <span className="text-on-surface font-black tracking-widest text-lg uppercase">
-                          {indexing ? "진행 화면 보기" : "인덱싱 시작"}
-                        </span>
-                      </span>
-                      <span className="pl-5 text-secondary text-base font-bold uppercase tracking-widest">
-                        {selectedCount > 0
-                          ? `${selectedCount}개 선택됨`
-                          : "파일 미선택"}
-                      </span>
-                    </div>
-                  </button>
-                </div>
-              </>
-            ) /* end tab === 'indexing' */
-          }
-        </div>
-      </main>
+            </div>
+          )}
+        </StudioThreePaneShell>
+      </div>
 
       {/* 인덱싱 진행 모달 */}
       {modalVisible && (
