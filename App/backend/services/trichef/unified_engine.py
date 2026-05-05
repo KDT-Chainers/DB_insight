@@ -277,9 +277,18 @@ class TriChefEngine:
         if domain in ("image", "doc", "doc_page"):  # [BUGFIX] doc_page 가 실제 캐시 키
             try:
                 from services.query_expand import expand_bilingual as _qe_bil
+                import re as _re
                 _bil = _qe_bil(query)
                 if _bil != query and _bil not in variants:
                     variants = variants + [_bil]
+                # SigLIP2 text-encoder 는 영문에 최적화 → 한글 쿼리의 순수 영문 번역을
+                # 별도 variant 로 추가해 Re 채널 점수를 EN 의미 공간으로 당김.
+                # "수영 swimming" → "swimming" 별도 추가 → 0.40 conf cap 돌파.
+                _en_only = " ".join(
+                    t for t in _bil.split() if not _re.search(r"[가-힣]", t)
+                ).strip()
+                if _en_only and _en_only != query and _en_only not in variants:
+                    variants = variants + [_en_only]
             except Exception:
                 pass
         q_Re = qwen_expand.avg_normalize(siglip2_re.embed_texts(variants))
@@ -388,11 +397,13 @@ class TriChefEngine:
             z = (s - q_mu) / q_sig
             conf = 0.5 * (1 + math.erf(z / (2 ** 0.5)))
             # [항목3] low_confidence 이중 조건 (PROJECT_PIPELINE_SPEC §9)
-            # cosine 점수 약 AND sparse lexical 신호도 없음 → confidence 상한 캡 0.40
+            # cosine 점수 약 AND sparse lexical 신호도 없음 → confidence 상한 캡 0.55
+            # (0.40 → 0.55 로 완화: 한국어↔영어 크로스링구얼 매칭에서 sparse 채널 부재가
+            #  정상 케이스이므로 과도한 패널티 방지)
             sparse_s = float(sparse_scores[i]) if sparse_scores is not None else None
             weak_evidence = (s < abs_thr * 1.1) and (sparse_s is None or sparse_s < 0.05)
             if weak_evidence:
-                conf = min(conf, 0.40)
+                conf = min(conf, 0.55)
             meta = {
                 "domain": domain, "dense": s, "low_confidence": weak_evidence,
                 "fused": round(float(fused_scores[i]), 4),

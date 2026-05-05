@@ -39,9 +39,10 @@ def _load():
 
 
 @torch.inference_mode()
-def embed_passage(texts: list[str], batch_size: int = 32,
+def embed_passage(texts: list[str], batch_size: int = 64,
                   max_length: int = 1024) -> np.ndarray:
-    """장문 캡션(BLIP L3) 대응. (N, 1024) float32."""
+    """장문 캡션(BLIP L3) 대응. (N, 1024) float32.
+    batch_size=64 — RTX 4070 8.6GB VRAM 에서 FP16 최적 처리량."""
     _load()
     if not texts:
         return np.zeros((0, TRICHEF_CFG["DIM_IM"]), dtype=np.float32)

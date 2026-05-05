@@ -237,11 +237,14 @@ def search():
     all_items = list(_seen_img.values()) + list(_seen_doc.values()) + _other
 
     # 5도메인 통합 score 조정 — Edge case 격리 + generous curve
+    # 페널티 판정은 확장된 쿼리(engine_query)로 수행:
+    #   '꽃' → '꽃 flower flowers blossom' → meaningful ≫ 2 → 0.55 cap 해제
     try:
         from services.score_adjust import adjust_confidence, _generous_curve
+        _penalty_q = engine_query  # expand_bilingual 결과 재사용
         for it in all_items:
             if "confidence" in it and it["confidence"] is not None:
-                it["confidence"] = round(adjust_confidence(it["confidence"], query), 4)
+                it["confidence"] = round(adjust_confidence(it["confidence"], _penalty_q), 4)
             # dense (raw cosine): edge case 무관, generous curve 만 적용
             if "dense" in it and it["dense"] is not None:
                 it["dense"] = round(_generous_curve(it["dense"]), 4)
@@ -252,6 +255,23 @@ def search():
     top = all_items[:topk]
     for i, it in enumerate(top, 1):
         it["global_rank"] = i
+
+    # ── location 부착 (이미지 title/tagline/synopsis, 문서 page/snippet) ──────
+    try:
+        from services.location_resolver import _img_location, _doc_location
+        for it in top:
+            d = it.get("domain", "")
+            trichef_id = it.get("id", "")
+            if d == "image":
+                loc = _img_location(trichef_id, query)
+                if loc:
+                    it["location"] = loc
+            elif d == "doc_page":
+                loc = _doc_location(trichef_id, query)
+                if loc:
+                    it["location"] = loc
+    except Exception:
+        pass
 
     return jsonify({"query": query, "top": top, "stats": stats})
 

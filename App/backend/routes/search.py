@@ -128,8 +128,13 @@ def search():
     #   → generous_curve 이중 적용 금지. 쿼리 품질 페널티만 적용.
     # BGM: 엔진 z-score CDF + 0.75 상한 (비음악 쿼리 오버랭크 방지)
     # dense (raw cosine): generous_curve 적용 (UI 유사도 표시용)
+    #
+    # 페널티 판정은 확장된 쿼리로 수행:
+    #   '꽃'(1글자) → '꽃 flower flowers blossom' → meaningful ≫ 2 → 0.55 cap 해제
     try:
         from services.score_adjust import apply_query_penalty, _generous_curve
+        from services.query_expand import expand_bilingual as _expand
+        _penalty_q = _expand(query)   # 확장 쿼리로 n_meaningful 재계산
         for r in results:
             if r.get("file_type") == "bgm":
                 for f in ("confidence", "similarity"):
@@ -139,7 +144,7 @@ def search():
             # TRI-CHEF 도메인: CDF 값에 쿼리 페널티만
             for f in ("confidence", "similarity"):
                 if f in r and r[f] is not None:
-                    r[f] = round(apply_query_penalty(float(r[f]), query), 4)
+                    r[f] = round(apply_query_penalty(float(r[f]), _penalty_q), 4)
             # dense: raw cosine → generous_curve
             if "dense" in r and r["dense"] is not None:
                 r["dense"] = round(_generous_curve(r["dense"]), 4)
@@ -154,6 +159,12 @@ def search():
         loc = extract_location(r, query=query)
         if loc is not None:
             r["location"] = loc
+            # doc: snippet 이 비어있으면 location.snippet 으로 backfill
+            if not r.get("snippet") and loc.get("snippet"):
+                r["snippet"] = loc["snippet"]
+            # doc: page_num backfill
+            if r.get("page_num") is None and loc.get("page"):
+                r["page_num"] = loc["page"]
 
     return jsonify({"query": query, "results": results})
 
@@ -449,22 +460,57 @@ def _search_bgm(query: str, top_k: int) -> list[dict]:
 
 
 def _read_img_caption(cap_root: Path, key: str) -> str:
-    """캡션 파일(json 또는 txt)에서 캡션 텍스트 읽기."""
+    """캡션 파일(json 또는 txt)에서 캡션 텍스트 읽기.
+
+    탐색 순서:
+      1. stem_key_for(key) 기반 해시 스템 (신포맷)
+      2. Path(key).stem 단순 스템 (구포맷 — real_cat_31.txt 등)
+    """
+    def _is_clean(text: str) -> bool:
+        """CJK 통합 한자(U+4E00-U+9FFF) 비율 >5% 이면 오염 텍스트로 판단."""
+        if not text:
+            return False
+        n = len(text)
+        cjk = sum(1 for c in text if "一" <= c <= "鿿")
+        return (cjk / n) <= 0.05
+
+    def _try_stems(stems):
+        for stem in stems:
+            for suffix in (f"{stem}.caption.json", f"{stem}.txt"):
+                p = cap_root / suffix
+                if p.exists():
+                    try:
+                        if suffix.endswith(".json"):
+                            d = json.loads(p.read_text(encoding="utf-8"))
+                            txt = d.get("L1") or ""
+                        else:
+                            txt = p.read_text(encoding="utf-8")[:300]
+                        if _is_clean(txt):
+                            return txt
+                    except Exception:
+                        pass
+        return None
+
+    # 1. 해시 포함 신포맷 스템
     try:
         from embedders.trichef.doc_page_render import stem_key_for
-        stem = stem_key_for(key)
+        hash_stem = stem_key_for(key)
     except Exception:
-        stem = key.replace("/", "_").replace("\\", "_")
-    for suffix in (f"{stem}.caption.json", f"{stem}.txt"):
-        p = cap_root / suffix
-        if p.exists():
-            try:
-                if suffix.endswith(".json"):
-                    d = json.loads(p.read_text(encoding="utf-8"))
-                    return d.get("L1") or ""
-                return p.read_text(encoding="utf-8")[:300]
-            except Exception:
-                pass
+        hash_stem = key.replace("/", "_").replace("\\", "_")
+
+    # 2. 단순 스템 (파일명에서 확장자 제거)
+    simple_stem = Path(key).stem
+
+    result = _try_stems([hash_stem])
+    if result is not None:
+        return result
+
+    # hash_stem 과 simple_stem 이 다를 때만 추가 탐색
+    if simple_stem != hash_stem:
+        result = _try_stems([simple_stem])
+        if result is not None:
+            return result
+
     return ""
 
 

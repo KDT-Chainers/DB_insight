@@ -30,6 +30,28 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
+def _clean_caption_text(text: str) -> str:
+    """CJK 중국어 또는 인코딩 깨진 텍스트를 걸러낸다.
+
+    - CJK 통합 한자(U+4E00–U+9FFF) 비율이 5% 초과 → 빈 문자열 반환
+    - 제어 문자(U+FFFD replacement, \x00–\x08 등) 다수 포함 → 빈 문자열 반환
+    한글(U+AC00–U+D7A3) 및 영어는 항상 허용.
+    """
+    if not text:
+        return ""
+    total = len(text)
+    if total == 0:
+        return ""
+    cjk_count = sum(1 for c in text if "一" <= c <= "鿿")
+    if cjk_count / total > 0.05:
+        return ""
+    # 인코딩 깨짐 감지: U+FFFD(replacement char) 또는 제어문자 다수
+    bad_count = sum(1 for c in text if c == "�" or (ord(c) < 0x20 and c not in "\n\r\t"))
+    if bad_count / total > 0.05:
+        return ""
+    return text
+
+
 # 한국어 조사·어미 — 매칭 시 제거하여 어간 매칭 강화
 # 예: "박태웅의" → "박태웅", "AI를" → "AI"
 _KOR_JOSA = (
@@ -332,7 +354,7 @@ def _img_location(trichef_id: str, query: str = "") -> dict | None:
             p = cap_dir / f"{key}_{sk}.txt"
             if p.is_file():
                 try:
-                    txt = p.read_text(encoding="utf-8").strip()
+                    txt = _clean_caption_text(p.read_text(encoding="utf-8").strip())
                     if txt:
                         out[sk] = txt[:500]
                 except Exception:
@@ -364,16 +386,16 @@ def _img_location(trichef_id: str, query: str = "") -> dict | None:
                         if cp.suffix == ".json":
                             data = _json.loads(cp.read_text(encoding="utf-8"))
                             if isinstance(data, dict):
-                                cap_text = " ".join(filter(None, (
+                                cap_text = _clean_caption_text(" ".join(filter(None, (
                                     data.get("caption", ""),
                                     data.get("L1", ""),
                                     data.get("L2", ""),
                                     data.get("L3", ""),
-                                ))).strip()
+                                ))).strip())
                             else:
-                                cap_text = str(data).strip()
+                                cap_text = _clean_caption_text(str(data).strip())
                         else:
-                            cap_text = cp.read_text(encoding="utf-8").strip()
+                            cap_text = _clean_caption_text(cp.read_text(encoding="utf-8").strip())
                     except Exception:
                         pass
                     if cap_text:

@@ -27,7 +27,8 @@ logger = logging.getLogger(__name__)
 
 
 # ── 공용 유틸 ───────────────────────────────────────────────────────────
-def _encode_sparse(texts: list[str], batch: int = 32, max_length: int | None = None):
+def _encode_sparse(texts: list[str], batch: int = 64, max_length: int | None = None):
+    """GPU(RTX 4070) FP16 BGE-M3 기준 batch=64 이 VRAM 내 최적 처리량."""
     parts = []
     for i in tqdm(range(0, len(texts), batch), desc="BGE-M3 Sparse"):
         chunk = texts[i:i + batch]
@@ -223,7 +224,7 @@ def rebuild_movie_lexical() -> dict:
     if not any(texts):
         return {"skipped": True, "reason": "STT 텍스트 없음"}
 
-    vocab = auto_vocab.build_vocab(texts, min_df=2, max_df_ratio=0.5, top_k=8000)
+    vocab = auto_vocab.build_vocab(texts, min_df=2, max_df_ratio=0.5, top_k=15000)
     auto_vocab.save_vocab(cache / "vocab_movie.json", vocab)
 
     sets = asf_filter.build_doc_token_sets(texts, vocab)

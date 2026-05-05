@@ -189,6 +189,7 @@ class BGMEngine:
                 # that stay in the same semantic region as typical English BGM queries.
                 # e.g. "어두운 긴장감" → "dark tense dramatic" (same region as EN query)
                 _BGM_MOOD_PRIORITY: dict[str, list[str]] = {
+                    # 분위기/느낌
                     "어두운":   ["dark", "tense", "dramatic"],
                     "긴장감":   ["tense", "dramatic", "intense"],
                     "긴장":     ["tense", "tension", "dramatic"],
@@ -201,6 +202,34 @@ class BGMEngine:
                     "웅장한":   ["epic", "grand", "orchestral"],
                     "신비로운": ["mysterious", "ethereal", "ambient"],
                     "편안한":   ["relaxing", "soothing", "comfortable"],
+                    "경쾌한":   ["cheerful", "light", "upbeat"],
+                    "감성적인": ["emotional", "sentimental", "heartfelt"],
+                    "무거운":   ["heavy", "intense", "powerful"],
+                    "가벼운":   ["light", "gentle", "soft"],
+                    "흥겨운":   ["lively", "joyful", "festive"],
+                    "고요한":   ["quiet", "serene", "tranquil"],
+                    "로맨틱한": ["romantic", "warm", "tender"],
+                    # 악기명 — CLAP이 instrument 단어를 그대로 이해함
+                    "피아노":   ["piano", "keyboard"],
+                    "기타":     ["guitar", "acoustic guitar"],
+                    "드럼":     ["drum", "drums", "percussion"],
+                    "바이올린": ["violin", "strings"],
+                    "첼로":     ["cello", "strings"],
+                    "플루트":   ["flute", "woodwind"],
+                    "트럼펫":   ["trumpet", "brass"],
+                    "오케스트라": ["orchestra", "orchestral"],
+                    "현악":     ["strings", "string ensemble"],
+                    "관악":     ["wind instruments", "brass"],
+                    "타악":     ["percussion", "drums"],
+                    # 장르
+                    "재즈":     ["jazz"],
+                    "클래식":   ["classical", "orchestral"],
+                    "록":       ["rock", "electric guitar"],
+                    "팝":       ["pop", "popular"],
+                    "힙합":     ["hip hop", "rap"],
+                    "전자음악": ["electronic", "EDM", "synth"],
+                    "어쿠스틱": ["acoustic", "unplugged"],
+                    "앰비언트": ["ambient", "atmospheric"],
                 }
                 # Korean query: translate to English ONLY (discard Korean tokens)
                 tokens = raw_text.split()
@@ -216,6 +245,10 @@ class BGMEngine:
                                 seen.add(en.lower())
                     # else: no translation, skip Korean token
                 # Fallback: if no translations found, use original
+                # "music" 접미어 추가 — CLAP이 음악 컨텍스트로 임베딩하도록 유도
+                if english_parts:
+                    if "music" not in seen:
+                        english_parts.append("music")
                 clap_query = " ".join(english_parts) if english_parts else raw_text
             else:
                 # English query: use as-is (CLAP handles English natively)
