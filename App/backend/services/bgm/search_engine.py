@@ -221,6 +221,13 @@ class BGMEngine:
                     "현악":     ["strings", "string ensemble"],
                     "관악":     ["wind instruments", "brass"],
                     "타악":     ["percussion", "drums"],
+                    "영화음악": ["cinematic", "orchestral", "film score"],
+                    "사운드트랙": ["soundtrack", "cinematic", "film score"],
+                    "배경음악": ["background music", "ambient"],
+                    "새소리":   ["birds", "birdsong", "nature sounds"],
+                    "바람소리": ["wind", "nature sounds", "ambient"],
+                    "물소리":   ["water", "stream", "nature sounds"],
+                    "자연소리": ["nature sounds", "ambient", "outdoor"],
                     # 장르
                     "재즈":     ["jazz"],
                     "클래식":   ["classical", "orchestral"],

@@ -658,6 +658,14 @@ class TriChefEngine:
         _max_cands = len(file_keys) if len(file_keys) <= 1000 else max(topk * 10, 100)
         ordered_keys = [fp for _, fp in pre_agg[:_max_cands]]
 
+        # ── 파일 수준 z-score 기준값 (segment 분포와 분리) ────────────────
+        # q_mu/q_sig 는 segment-level 이라 substring boost 로 부풀려지면
+        # dense_agg(file-level) 와 비교했을 때 z≈0 → conf≈50% 로 수렴.
+        # pre_agg 의 파일별 top-3 mean 분포(file-level)로 z-score 기준을 재산정.
+        _all_aggs = np.array([agg for agg, _ in pre_agg], dtype=np.float32)
+        _file_mu  = float(_all_aggs.mean()) if len(_all_aggs) > 0 else q_mu
+        _file_sig = max(float(_all_aggs.std()),  0.01, 1e-6) if len(_all_aggs) > 1 else q_sig
+
         out: list[TriChefAVResult] = []
         for fp in ordered_keys:
             idxs = file_idx[fp]
@@ -678,9 +686,10 @@ class TriChefEngine:
             if sparse_seg_norm is not None:
                 sparse_agg = float(max(float(sparse_seg_norm[i]) for i in idxs))
 
-            # ── per-query z-score → confidence (이미지/문서와 동일한 공식) ──
+            # ── per-query z-score → confidence (파일 수준 분포 기준) ──────
             # z > 0: 이 쿼리 대비 평균 이상 관련  z < 0: 평균 이하
-            z_dense = (dense_agg - q_mu) / q_sig
+            # _file_mu/_file_sig: 파일별 top-3 mean 분포 → segment-level 부풀림 없음
+            z_dense = (dense_agg - _file_mu) / _file_sig
             final   = _ALPHA * z_dense + _BETA * sparse_agg + _GAMMA * asf_agg
             conf    = 0.5 * (1.0 + math.erf(z_dense / (2 ** 0.5)))
 
@@ -704,7 +713,9 @@ class TriChefEngine:
                 (seg.get("text", "").strip() or seg.get("caption", "").strip())
                 for seg in seg_list
             )
-            weak_evidence = (dense_agg < abs_thr * 1.1) and no_text
+            # z < 0.3 (평균 근방 이하) AND 텍스트 없음일 때만 weak_evidence 처리.
+            # 기존 _file_mu*1.1 기준은 z=2+ 강매칭 파일도 0.40으로 잘못 캡핑함.
+            weak_evidence = (z_dense < 0.3) and no_text
             if weak_evidence:
                 conf = min(conf, 0.40)
 

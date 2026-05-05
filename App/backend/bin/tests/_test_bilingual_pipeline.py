@@ -32,6 +32,9 @@ PAIRS = [
     ("해변 바다",           "beach ocean sea",              "beach_img",    ["image"]),
     ("노을 일몰",           "sunset",                       "sunset_img",   ["image"]),
     ("음식 요리",           "food meal dish",               "food_img",     ["image"]),
+    ("산 자연 풍경",        "mountain landscape nature",    "mountain_img", ["image"]),
+    ("꽃 식물",             "flower plant",                 "flower_img",   ["image"]),
+    ("건물 도시",           "building city architecture",   "building_img", ["image"]),
     # Doc pairs — 실제 문서 제목 기반 (연도 특정으로 ambiguity 최소화)
     ("2024 인공지능산업 실태조사",         "2024 AI industry survey report",          "AI_doc",     ["doc_page"]),
     ("2023년 소프트웨어산업 연간보고서",   "2023 software industry annual report",    "SW_doc",     ["doc_page"]),
