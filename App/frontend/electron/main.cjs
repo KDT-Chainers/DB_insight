@@ -74,7 +74,6 @@ function _startPythonBackend() {
   // app.getPath('exe') = 실행된 exe의 실제 경로 (portable 포함)
   const exeDir = path.dirname(app.getPath('exe'))
   const candidates = [
-    'C:\\yssong\\KDT-FT-team3-Chainers\\DB_insight\\App\\backend', // 로컬 PC 고정 경로 (이 사용자)
     path.join(exeDir, '..', '..', 'backend'),                     // portable: out/ → App/backend
     path.join(exeDir, '..', '..', '..', 'backend'),               // win-unpacked: out/win-unpacked/ → App/backend
     path.resolve(__dirname, '..', '..', 'backend'),                // 개발 모드 (소스에서 실행 시)

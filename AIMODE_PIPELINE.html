@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AIMODE LangGraph 파이프라인 설명</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg:       #08050f;
+    --card:     #110c1f;
+    --border:   rgba(139,92,246,0.22);
+    --purple:   #8b5cf6;
+    --purple-l: #a78bfa;
+    --purple-d: #6d28d9;
+    --green:    #10b981;
+    --teal:     #06b6d4;
+    --yellow:   #eab308;
+    --red:      #ef4444;
+    --text:     #e2e8f0;
+    --muted:    #94a3b8;
+    --dim:      #475569;
+  }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Pretendard', 'Noto Sans KR', system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.7;
+    padding: 40px 24px 80px;
+    max-width: 960px;
+    margin: 0 auto;
+  }
+
+  /* ── 타이틀 ── */
+  .hero {
+    text-align: center;
+    padding: 48px 0 40px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 48px;
+  }
+  .hero-badge {
+    display: inline-block;
+    background: rgba(139,92,246,0.15);
+    border: 1px solid var(--border);
+    color: var(--purple-l);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 4px 14px;
+    border-radius: 999px;
+    margin-bottom: 18px;
+  }
+  .hero h1 {
+    font-size: 34px;
+    font-weight: 800;
+    background: linear-gradient(135deg, #c4b5fd, #8b5cf6, #4f46e5);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 12px;
+  }
+  .hero p { color: var(--muted); font-size: 15px; max-width: 600px; margin: 0 auto; }
+
+  /* ── 섹션 ── */
+  h2 {
+    font-size: 21px;
+    font-weight: 800;
+    color: var(--purple-l);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  h2 .num {
+    width: 28px; height: 28px;
+    background: linear-gradient(135deg, var(--purple-d), var(--purple));
+    border-radius: 8px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 900; color: #fff; flex-shrink: 0;
+  }
+  h3 { font-size: 16px; font-weight: 700; color: #c4b5fd; margin-bottom: 10px; }
+
+  section { margin-bottom: 56px; }
+
+  /* ── 카드 ── */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 22px 24px;
+    margin-bottom: 14px;
+  }
+  .card-row { display: flex; gap: 14px; flex-wrap: wrap; }
+  .card-half { flex: 1; min-width: 240px; }
+
+  /* ── 파이프라인 플로우 ── */
+  .pipeline {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    position: relative;
+  }
+  .node {
+    display: flex;
+    align-items: flex-start;
+    gap: 18px;
+    position: relative;
+    padding-bottom: 0;
+  }
+  .node-left {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex-shrink: 0;
+    width: 52px;
+  }
+  .node-icon {
+    width: 52px; height: 52px;
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+    position: relative;
+    z-index: 1;
+    border: 2px solid transparent;
+    flex-shrink: 0;
+  }
+  .node-line {
+    width: 2px;
+    flex: 1;
+    min-height: 28px;
+    background: linear-gradient(to bottom, rgba(139,92,246,0.4), rgba(139,92,246,0.1));
+    margin-top: 0;
+  }
+  .node-body {
+    flex: 1;
+    padding-bottom: 28px;
+  }
+  .node-title {
+    font-size: 17px;
+    font-weight: 800;
+    margin-bottom: 4px;
+  }
+  .node-sub {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    opacity: 0.7;
+  }
+  .node-desc { color: var(--muted); font-size: 14px; line-height: 1.75; }
+  .node-desc strong { color: var(--text); font-weight: 700; }
+
+  /* ── SSE 뱃지 ── */
+  .sse-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .sse { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+  .sse-purple { background: rgba(139,92,246,0.15); color: var(--purple-l); border: 1px solid rgba(139,92,246,0.3); }
+  .sse-green  { background: rgba(16,185,129,0.12); color: #34d399; border: 1px solid rgba(16,185,129,0.25); }
+  .sse-teal   { background: rgba(6,182,212,0.12); color: #67e8f9; border: 1px solid rgba(6,182,212,0.25); }
+  .sse-yellow { background: rgba(234,179,8,0.12); color: #fde68a; border: 1px solid rgba(234,179,8,0.25); }
+  .sse-red    { background: rgba(239,68,68,0.1); color: #fca5a5; border: 1px solid rgba(239,68,68,0.2); }
+
+  /* ── 노드 색상 테마 ── */
+  .n-router  .node-icon { background: rgba(99,102,241,0.15); border-color: rgba(99,102,241,0.35); }
+  .n-intent  .node-icon { background: rgba(139,92,246,0.15); border-color: rgba(139,92,246,0.35); }
+  .n-search  .node-icon { background: rgba(6,182,212,0.12); border-color: rgba(6,182,212,0.3); }
+  .n-scan    .node-icon { background: rgba(16,185,129,0.12); border-color: rgba(16,185,129,0.3); }
+  .n-select  .node-icon { background: rgba(234,179,8,0.12); border-color: rgba(234,179,8,0.3); }
+  .n-generate .node-icon { background: rgba(168,85,247,0.15); border-color: rgba(168,85,247,0.4); }
+
+  /* ── 코드 블록 ── */
+  pre {
+    background: rgba(0,0,0,0.4);
+    border: 1px solid rgba(139,92,246,0.15);
+    border-radius: 10px;
+    padding: 16px 18px;
+    font-size: 12.5px;
+    color: #c4b5fd;
+    overflow-x: auto;
+    font-family: 'Fira Code', 'Cascadia Code', monospace;
+    margin: 12px 0;
+    line-height: 1.7;
+  }
+  code { color: #a5f3fc; font-family: inherit; }
+
+  /* ── 인포 박스 ── */
+  .info-box {
+    padding: 14px 18px;
+    border-radius: 10px;
+    font-size: 14px;
+    line-height: 1.75;
+    margin-bottom: 12px;
+  }
+  .info-purple { background: rgba(139,92,246,0.08); border: 1px solid rgba(139,92,246,0.2); color: #c4b5fd; }
+  .info-green  { background: rgba(16,185,129,0.07); border: 1px solid rgba(16,185,129,0.2); color: #a7f3d0; }
+  .info-yellow { background: rgba(234,179,8,0.07); border: 1px solid rgba(234,179,8,0.2); color: #fde68a; }
+  .info-red    { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2); color: #fca5a5; }
+
+  /* ── 테이블 ── */
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th {
+    text-align: left; padding: 9px 12px;
+    background: rgba(139,92,246,0.1);
+    color: var(--purple-l); font-weight: 700; font-size: 11px;
+    letter-spacing: 0.07em; text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+  }
+  td { padding: 10px 12px; border-bottom: 1px solid rgba(139,92,246,0.08); color: var(--muted); }
+  tr:last-child td { border-bottom: none; }
+  td:first-child { color: var(--text); font-weight: 600; }
+  .ok   { color: #10b981; font-weight: 700; }
+  .warn { color: #eab308; font-weight: 700; }
+  .bad  { color: #f87171; font-weight: 700; }
+
+  /* ── 라우터 분기 다이어그램 ── */
+  .branches { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
+  .branch {
+    flex: 1; min-width: 180px;
+    border-radius: 10px; padding: 14px 16px;
+    font-size: 13px;
+  }
+  .branch-title { font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 6px; }
+  .branch-rag    { background: rgba(139,92,246,0.1); border: 1px solid rgba(139,92,246,0.25); }
+  .branch-chat   { background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.22); }
+  .branch-follow { background: rgba(6,182,212,0.08); border: 1px solid rgba(6,182,212,0.22); }
+  .branch-qa     { background: rgba(234,179,8,0.08); border: 1px solid rgba(234,179,8,0.22); }
+  .branch-rag    .branch-title { color: var(--purple-l); }
+  .branch-chat   .branch-title { color: #34d399; }
+  .branch-follow .branch-title { color: #67e8f9; }
+  .branch-qa     .branch-title { color: #fde68a; }
+
+  /* ── 키팩트 흐름 ── */
+  .kf-flow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .kf-box {
+    padding: 8px 14px; border-radius: 8px; font-size: 13px; font-weight: 600;
+    border: 1px solid; text-align: center;
+  }
+  .kf-arrow { color: var(--dim); font-size: 18px; flex-shrink: 0; }
+
+  /* ── 왜? 박스 ── */
+  .why-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 600px) { .why-grid { grid-template-columns: 1fr; } }
+  .why-item {
+    background: rgba(0,0,0,0.3);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+  }
+  .why-icon { font-size: 22px; margin-bottom: 8px; }
+  .why-title { font-size: 14px; font-weight: 700; color: var(--purple-l); margin-bottom: 6px; }
+  .why-desc { font-size: 13px; color: var(--muted); line-height: 1.7; }
+
+  /* ── UI 이벤트 타임라인 ── */
+  .timeline { position: relative; padding-left: 24px; }
+  .timeline::before { content:''; position:absolute; left:8px; top:0; bottom:0; width:2px; background: linear-gradient(to bottom, var(--purple), rgba(139,92,246,0.1)); }
+  .tl-item { position: relative; margin-bottom: 18px; }
+  .tl-dot {
+    position: absolute; left: -20px; top: 6px;
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--purple); border: 2px solid var(--bg);
+  }
+  .tl-label { font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--purple-l); margin-bottom: 3px; }
+  .tl-desc { font-size: 13.5px; color: var(--muted); line-height: 1.65; }
+  .tl-desc strong { color: var(--text); }
+
+  hr { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
+  .tag {
+    display: inline-block;
+    background: rgba(139,92,246,0.12); color: var(--purple-l);
+    border: 1px solid rgba(139,92,246,0.2);
+    font-size: 11px; font-weight: 700;
+    padding: 2px 8px; border-radius: 5px; margin: 0 2px;
+  }
+</style>
+</head>
+<body>
+
+<!-- ══════════ HERO ══════════ -->
+<div class="hero">
+  <div class="hero-badge">AIMODE · LangGraph RAG Pipeline</div>
+  <h1>AIMODE 파이프라인 완전 해설</h1>
+  <p>질문 하나가 들어왔을 때, 내부에서 어떤 일이 일어나는지 단계별로 설명합니다.</p>
+</div>
+
+<!-- ══════════ 0. 전체 흐름 한눈에 ══════════ -->
+<section>
+  <h2><span class="num">0</span>전체 흐름 한눈에</h2>
+  <div class="card">
+    <p style="color:var(--muted); font-size:14px; margin-bottom:16px;">
+      사용자가 질문을 입력하면 아래 6개 노드를 순서대로 거쳐 최종 답변이 생성됩니다.<br>
+      각 노드는 결과를 <strong style="color:var(--text)">SSE(Server-Sent Events)</strong>로 실시간 전송해 UI가 즉시 업데이트됩니다.
+    </p>
+    <pre>사용자 질문
+    │
+    ▼
+┌─────────────┐    "이게 파일 검색이야? 아니면 그냥 대화야?"
+│ router_node │ ──────────────────────────────────────────────────┐
+└─────────────┘                                                    │
+    │ (rag / followup)               (chat)      (qa_gen)          │
+    ▼                                  │              │             │
+┌─────────────┐                        │              │             │
+│ intent_node │  "어떤 파일? 무슨 내용?"  │              │             │
+└─────────────┘                        │              │             │
+    │                                  │              │             │
+    ▼                                  │              │             │
+┌─────────────┐                        │              │             │
+│ search_node │  벡터 DB에서 후보 파일 검색  │              │             │
+└─────────────┘                        │              │             │
+    │                                  │              │             │
+    ▼                                  │              │             │
+┌─────────────┐                        │              │             │
+│  scan_node  │  각 파일 본문 키워드 스캔   │              │             │
+└─────────────┘                        │              │             │
+    │                                  │              │             │
+    ▼                                  │              │             │
+┌─────────────┐                        │              │             │
+│ select_node │  실제로 찾은 파일만 추려냄  │              │             │
+└─────────────┘                        │              │             │
+    │                                  │              │             │
+    ▼                                  ▼              ▼             │
+┌───────────────┐  ┌───────────────┐  ┌────────────────────┐       │
+│ generate_node │  │  chat_node    │  │ qa_generate_node   │       │
+│  (RAG 답변)   │  │  (일반 대화)  │  │  (문제 자동 생성)  │       │
+└───────────────┘  └───────────────┘  └────────────────────┘       │
+    │                    │                      │                    │
+    └────────────────────┴──────────────────────┘────────────────────┘
+                                 ▼
+                          최종 답변 스트리밍</pre>
+  </div>
+</section>
+
+<!-- ══════════ 1. router_node ══════════ -->
+<section>
+  <h2><span class="num">1</span>router_node — 질문 유형 분류</h2>
+
+  <div class="pipeline">
+    <div class="node n-router">
+      <div class="node-left">
+        <div class="node-icon">🧭</div>
+        <div class="node-line"></div>
+      </div>
+      <div class="node-body">
+        <div class="node-sub" style="color:#818cf8">Step 1 · Router</div>
+        <div class="node-title" style="color:#a5b4fc">질문 유형 판별</div>
+        <div class="node-desc">
+          LLM에게 질문을 보여주고 <strong>4가지 중 하나</strong>로 분류합니다.<br>
+          분류 결과에 따라 이후 파이프라인이 완전히 달라집니다.
+        </div>
+        <div class="sse-list">
+          <span class="sse sse-purple">📡 SSE: route</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="branches">
+    <div class="branch branch-rag">
+      <div class="branch-title">🔍 rag</div>
+      <div style="color:#c4b5fd; font-size:13px;">파일에서 정보를 찾아야 할 때<br>
+      <span style="color:var(--dim); font-size:12px;">예) "삼성 재생에너지 전환율이 몇 %야?"</span></div>
+    </div>
+    <div class="branch branch-chat">
+      <div class="branch-title">💬 chat</div>
+      <div style="color:#a7f3d0; font-size:13px;">파일 없이 일반 대화할 때<br>
+      <span style="color:var(--dim); font-size:12px;">예) "파이썬 리스트 정렬 방법 알려줘"</span></div>
+    </div>
+    <div class="branch branch-follow">
+      <div class="branch-title">↩️ followup</div>
+      <div style="color:#a5f3fc; font-size:13px;">이전 턴 파일을 그대로 쓸 때<br>
+      <span style="color:var(--dim); font-size:12px;">예) "그러면 그 파일에서 3장도 알려줘"</span></div>
+    </div>
+    <div class="branch branch-qa">
+      <div class="branch-title">📝 qa_gen</div>
+      <div style="color:#fde68a; font-size:13px;">퀴즈·문제 생성 요청할 때<br>
+      <span style="color:var(--dim); font-size:12px;">예) "이 문서로 퀴즈 만들어줘"</span></div>
+    </div>
+  </div>
+
+  <div class="info-box info-yellow" style="margin-top:14px;">
+    ⚠️ <strong>주의</strong>: "FAO 가격지수가 얼마야?"처럼 질문 형태인데도 <span class="tag">qa_gen</span>으로 오분류되는 버그가 있었음.<br>
+    → 프롬프트에 <strong>"명시적 생성 요청이 없으면 무조건 rag"</strong> 규칙 추가 + 테스트마다 고유한 thread_id 사용으로 해결.
+  </div>
+</section>
+
+<!-- ══════════ 2. intent_node ══════════ -->
+<section>
+  <h2><span class="num">2</span>intent_node — 의도 파악 + 키워드 추출</h2>
+
+  <div class="pipeline">
+    <div class="node n-intent">
+      <div class="node-left">
+        <div class="node-icon">🎯</div>
+        <div class="node-line"></div>
+      </div>
+      <div class="node-body">
+        <div class="node-sub" style="color:#a78bfa">Step 2 · Intent</div>
+        <div class="node-title" style="color:#c4b5fd">의도 요약 + 검색 키워드 생성</div>
+        <div class="node-desc">
+          LLM이 질문을 분석해 <strong>3가지 정보</strong>를 추출합니다.
+        </div>
+        <div class="sse-list">
+          <span class="sse sse-purple">📡 SSE: intent</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-row">
+      <div class="card-half">
+        <h3>출력 3가지</h3>
+        <table>
+          <tr><th>항목</th><th>예시</th><th>용도</th></tr>
+          <tr>
+            <td>의도메시지</td>
+            <td style="color:#c4b5fd">"삼성전자 탄소중립 목표와 재생에너지 전환율을 문서에서 찾아드릴게요."</td>
+            <td>UI에 표시</td>
+          </tr>
+          <tr>
+            <td>파일검색 키워드</td>
+            <td style="color:#c4b5fd">["삼성전자", "탄소중립", "재생에너지"]</td>
+            <td>벡터 DB 검색</td>
+          </tr>
+          <tr>
+            <td>내용검색 키워드</td>
+            <td style="color:#c4b5fd">["재생에너지", "탄소중립"]</td>
+            <td>파일 내 본문 스캔</td>
+          </tr>
+        </table>
+      </div>
+      <div class="card-half">
+        <h3>LLM 프롬프트 형식</h3>
+        <pre>질문: 삼성전자 재생에너지 전환율은?
+의도메시지: 삼성전자 재생에너지 전환율을 찾아드릴게요.
+파일검색: 삼성전자 재생에너지
+내용검색: 재생에너지 전환율</pre>
+        <div style="color:var(--muted); font-size:12px; margin-top:8px;">
+          ※ 형식을 벗어난 출력이 오면 질문에서 직접 명사 추출 (Fallback)
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ 3. search_node ══════════ -->
+<section>
+  <h2><span class="num">3</span>search_node — 벡터 DB 후보 검색</h2>
+
+  <div class="pipeline">
+    <div class="node n-search">
+      <div class="node-left">
+        <div class="node-icon">🔍</div>
+        <div class="node-line"></div>
+      </div>
+      <div class="node-body">
+        <div class="node-sub" style="color:#67e8f9">Step 3 · Search</div>
+        <div class="node-title" style="color:#a5f3fc">벡터 유사도 검색</div>
+        <div class="node-desc">
+          파일검색 키워드를 임베딩 벡터로 변환 후, DB에 저장된 파일 벡터들과 <strong>코사인 유사도</strong>를 계산해<br>
+          상위 <strong>topK개</strong> 파일을 후보로 선정합니다. UI에는 파일 카드로 즉시 표시됩니다.
+        </div>
+        <div class="sse-list">
+          <span class="sse sse-teal">📡 SSE: candidates</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="info-box info-purple">
+    <strong>왜 원본 파일 전체를 검색하지 않고 벡터를 쓰나?</strong><br>
+    179,328자짜리 PDF를 통째로 하나의 벡터로 만들면 세부 수치(93.4%, 3,035.5만 톤)가
+    평균화되어 희석됩니다. 청크로 나눠 각각 임베딩하면 <strong>관련 단락의 벡터가 질문 벡터에 더 가까워져</strong>
+    정확한 파일을 찾을 수 있습니다.
+  </div>
+</section>
+
+<!-- ══════════ 4. scan_node ══════════ -->
+<section>
+  <h2><span class="num">4</span>scan_node — 파일 본문 정밀 스캔</h2>
+
+  <div class="pipeline">
+    <div class="node n-scan">
+      <div class="node-left">
+        <div class="node-icon">📡</div>
+        <div class="node-line"></div>
+      </div>
+      <div class="node-body">
+        <div class="node-sub" style="color:#34d399">Step 4 · Scan</div>
+        <div class="node-title" style="color:#6ee7b7">키워드 슬라이딩 윈도우 스캔</div>
+        <div class="node-desc">
+          후보 파일 각각을 <strong>fitz(PyMuPDF)</strong>로 직접 읽어 전문 텍스트를 추출한 뒤,<br>
+          내용검색 키워드가 나타나는 위치를 찾고 <strong>앞뒤 ±400자를 window로 추출</strong>합니다.<br>
+          키워드가 하나라도 발견되면 <span class="tag" style="color:#34d399;border-color:#34d399;background:rgba(16,185,129,0.1)">found</span>, 없으면 <span class="tag" style="color:#f87171;border-color:#ef4444;background:rgba(239,68,68,0.08)">not_found</span>.
+        </div>
+        <div class="sse-list">
+          <span class="sse sse-green">📡 SSE: scanning (파일마다)</span>
+          <span class="sse sse-green">📡 SSE: scan_result (found/not_found)</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>왜 청크에서 검색하나? (원본 전체 vs 청크)</h3>
+    <div class="why-grid">
+      <div class="why-item">
+        <div class="why-icon">📏</div>
+        <div class="why-title">컨텍스트 한계</div>
+        <div class="why-desc">LLM에 179K자 전체를 넣으면 중요한 수치를 긴 문서 속에서 놓치는 "바늘 찾기(Needle in Haystack)" 문제 발생. 핵심 단락만 추려야 정확도가 올라간다.</div>
+      </div>
+      <div class="why-item">
+        <div class="why-icon">🎯</div>
+        <div class="why-title">노이즈 제거</div>
+        <div class="why-desc">scan_node의 ±400자 윈도우는 이미 관련 단락으로 정제된 덩어리. 전체를 통째로 넘기는 것보다 정확한 수치 포함 확률이 높다.</div>
+      </div>
+      <div class="why-item">
+        <div class="why-icon">🔤</div>
+        <div class="why-title">fitz 줄바꿈 문제</div>
+        <div class="why-desc">PDF를 읽으면 단어 중간에 \n이 들어감. 예: "재생에너지\n전환율은 93.4%". _join_pdf_lines()로 소프트 줄바꿈을 제거해야 키워드 매칭이 성공한다.</div>
+      </div>
+      <div class="why-item">
+        <div class="why-icon">🌏</div>
+        <div class="why-title">중국어 필터</div>
+        <div class="why-desc">삼성 ESG 보고서에 중국어 섹션 혼입 → CJK 문자 비율 25% 이상인 줄은 자동 제거. 답변에 중국어가 섞이는 문제 해결.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ 5. select_node ══════════ -->
+<section>
+  <h2><span class="num">5</span>select_node — 최종 소스 확정</h2>
+
+  <div class="pipeline">
+    <div class="node n-select">
+      <div class="node-left">
+        <div class="node-icon">✅</div>
+        <div class="node-line"></div>
+      </div>
+      <div class="node-body">
+        <div class="node-sub" style="color:#fde68a">Step 5 · Select</div>
+        <div class="node-title" style="color:#fef08a">발견된 파일만 추려냄</div>
+        <div class="node-desc">
+          scan_node에서 <span class="tag" style="color:#34d399;border-color:#34d399;background:rgba(16,185,129,0.1)">found</span> 판정을 받은 파일만 <strong>matched_sources</strong>로 확정합니다.<br>
+          이 파일들이 generate_node의 컨텍스트 소스가 됩니다.
+        </div>
+        <div class="sse-list">
+          <span class="sse sse-yellow">📡 SSE: selected</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ 6. generate_node ══════════ -->
+<section>
+  <h2><span class="num">6</span>generate_node — 답변 생성 (핵심)</h2>
+
+  <div class="pipeline">
+    <div class="node n-generate">
+      <div class="node-left">
+        <div class="node-icon">✨</div>
+      </div>
+      <div class="node-body">
+        <div class="node-sub" style="color:#d8b4fe">Step 6 · Generate</div>
+        <div class="node-title" style="color:#e9d5ff">컨텍스트 조립 → key_facts 추출 → LLM 답변</div>
+        <div class="node-desc">
+          가장 복잡한 단계입니다. 크게 3단계로 나뉩니다.
+        </div>
+        <div class="sse-list">
+          <span class="sse sse-purple">📡 SSE: key_facts</span>
+          <span class="sse sse-purple">📡 SSE: generating</span>
+          <span class="sse sse-purple">📡 SSE: token (스트리밍)</span>
+          <span class="sse sse-purple">📡 SSE: done</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-bottom:14px;">6-1. 컨텍스트 조립</h3>
+    <pre>matched_sources 각각에 대해:
+
+① scan_chunks        ← scan_node가 찾아준 ±400자 윈도우 (이미 정제됨)
+② fitz head[:5000]  ← 문서 앞 5000자 (메타, 총괄 수치 포함)
+③ keyword_target     ← 나머지 구간에서 키워드 슬라이딩 검색
+
+combined = ①  +  ②  +  ③  (최대 15,000자)</pre>
+  </div>
+
+  <div class="card" style="border-color: rgba(16,185,129,0.3);">
+    <h3 style="color:#34d399; margin-bottom:14px;">6-2. key_facts 추출 (핵심 수치 강제 고정)</h3>
+    <p style="color:var(--muted); font-size:14px; margin-bottom:12px;">
+      LLM이 학습 데이터 기억으로 환각하는 것을 막기 위해, <strong style="color:var(--text)">Python regex로 문서에서 직접 수치 포함 문장을 추출</strong>합니다.
+    </p>
+
+    <div class="kf-flow">
+      <div class="kf-box" style="background:rgba(16,185,129,0.1); border-color:rgba(16,185,129,0.3); color:#a7f3d0;">
+        scan_chunks<br><span style="font-size:11px; color:var(--dim)">min_score=1 (관대)</span>
+      </div>
+      <div class="kf-arrow">+</div>
+      <div class="kf-box" style="background:rgba(139,92,246,0.1); border-color:rgba(139,92,246,0.3); color:#c4b5fd;">
+        fitz_head[:3000]<br><span style="font-size:11px; color:var(--dim)">min_score=4 (엄격)</span>
+      </div>
+      <div class="kf-arrow">→</div>
+      <div class="kf-box" style="background:rgba(234,179,8,0.1); border-color:rgba(234,179,8,0.3); color:#fde68a;">
+        중복 제거<br><span style="font-size:11px; color:var(--dim)">최대 6개</span>
+      </div>
+      <div class="kf-arrow">→</div>
+      <div class="kf-box" style="background:rgba(168,85,247,0.15); border-color:rgba(168,85,247,0.4); color:#e9d5ff;">
+        key_facts 확정<br><span style="font-size:11px; color:var(--dim)">UI + 프롬프트 이중 노출</span>
+      </div>
+    </div>
+
+    <pre style="margin-top:14px;">def _python_extract_key_facts(full_text, question, max_facts=6, min_score=1):
+    # 1. 문장 분리 (줄바꿈 + 문장 종결 어미 기준)
+    # 2. score = 숫자 패턴 수 × 3 + 질문 키워드 매칭 수
+    # 3. score ≥ min_score AND 키워드 1개 이상 포함한 문장만
+    # 4. 점수 내림차순 정렬 → 상위 max_facts개 반환</pre>
+
+    <div class="info-box info-red" style="margin-top:12px; margin-bottom:0;">
+      <strong>왜 fitz_head에 min_score=4를 쓰나?</strong><br>
+      FAO PDF 앞부분(식량가격지수 섹션)에는 <code>107.3</code> 같은 숫자가 많은데, Q2(곡물 생산량) 질문과 키워드가 겹쳐
+      잘못된 수치가 key_facts에 들어가는 오염이 발생했었음. min_score=4로 엄격히 필터하면 관련도 낮은 수치는 걸러진다.
+    </div>
+  </div>
+
+  <div class="card" style="border-color: rgba(168,85,247,0.35);">
+    <h3 style="color:#d8b4fe; margin-bottom:14px;">6-3. 이중 노출(Forced-Quote) 프롬프트</h3>
+    <p style="color:var(--muted); font-size:14px; margin-bottom:12px;">
+      key_facts를 <strong style="color:var(--text)">시스템 프롬프트 + 유저 메시지 양쪽에 모두</strong> 삽입합니다.<br>
+      Gemma3:12b처럼 IFEval 점수가 높은 모델은 이 규칙을 따라 학습 기억을 무시하고 문서 수치를 그대로 씁니다.
+    </p>
+    <pre>--- 시스템 프롬프트 ---
+[문서에서 직접 추출한 핵심 인용 — 아래 수치만 사용할 것]
+  "DX부문은 2030년 탄소중립 달성을 목표로 2024년 말 기준 전체 에너지의 93.4%가..."
+
+[절대 규칙]
+1. 숫자·비율·날짜는 반드시 [핵심 인용] 또는 [문서 발췌]에 있는 것만 쓰세요.
+2. 학습 데이터에서 알고 있는 수치를 쓰면 안 됩니다.
+...
+
+--- 유저 메시지 ---
+[문서 핵심 인용]
+- "DX부문은 2030년 탄소중립 달성을 목표로 2024년 말 기준 전체 에너지의 93.4%가..."
+
+위 인용문의 수치를 그대로 사용해서 다음 질문에 답하세요:
+삼성전자의 2030년 탄소중립 목표와 2024년 재생에너지 전환율은?</pre>
+  </div>
+</section>
+
+<!-- ══════════ 7. 모델 선택 이유 ══════════ -->
+<section>
+  <h2><span class="num">7</span>모델 선택 — 왜 Gemma3:12b인가?</h2>
+
+  <div class="card">
+    <h3 style="margin-bottom:12px;">RAG에서 환각이 발생하는 이유</h3>
+    <div class="info-box info-red" style="margin-bottom:14px;">
+      RAG는 "이 문서만 봐"라고 지시하는 방식인데, <strong>작은 모델은 유명한 정보에 대한 학습 prior가 너무 강해서</strong>
+      문서를 눈앞에 줘도 학습 기억을 꺼냅니다.<br><br>
+      삼성 ESG는 공개된 유명 보고서 → Qwen7b 학습 데이터에 이미 포함
+      → "내가 아는 게 50%/100%인데 문서가 93.4%라고?" → 문서 무시 → 환각
+    </div>
+
+    <table>
+      <tr>
+        <th>모델</th>
+        <th>디스크</th>
+        <th>VRAM</th>
+        <th>IFEval↑</th>
+        <th>Q4 (93.4%)</th>
+        <th>RTX 4060</th>
+      </tr>
+      <tr>
+        <td>Qwen2.5:7b</td>
+        <td>4.7GB</td>
+        <td>5.5GB</td>
+        <td>71.2</td>
+        <td class="bad">❌ 100% 환각</td>
+        <td class="ok">✅</td>
+      </tr>
+      <tr>
+        <td>Qwen2.5:14b</td>
+        <td>9GB</td>
+        <td>10GB</td>
+        <td>81.0</td>
+        <td>—</td>
+        <td class="bad">❌ VRAM 초과</td>
+      </tr>
+      <tr>
+        <td><strong>Gemma3:12b ✓</strong></td>
+        <td>8.1GB</td>
+        <td>~8.5GB</td>
+        <td class="ok"><strong>88.9</strong></td>
+        <td class="ok"><strong>✅ 93.4% 정답</strong></td>
+        <td class="warn">⚠️ CPU offload</td>
+      </tr>
+      <tr>
+        <td>Gemma3:27b</td>
+        <td>17GB</td>
+        <td>17GB</td>
+        <td>90.4</td>
+        <td>—</td>
+        <td class="bad">❌ 불가</td>
+      </tr>
+    </table>
+    <p style="color:var(--muted); font-size:12px; margin-top:10px;">
+      IFEval = "지시 준수 능력" 벤치마크. 높을수록 시스템 프롬프트 규칙을 잘 따름 → RAG 정확도의 핵심 지표.
+    </p>
+  </div>
+</section>
+
+<!-- ══════════ 8. UI 실시간 업데이트 ══════════ -->
+<section>
+  <h2><span class="num">8</span>UI 실시간 업데이트 흐름</h2>
+
+  <div class="card">
+    <p style="color:var(--muted); font-size:14px; margin-bottom:18px;">
+      백엔드 각 노드가 완료될 때마다 SSE 이벤트를 보내고, 프론트엔드가 즉시 UI를 업데이트합니다.
+    </p>
+    <div class="timeline">
+      <div class="tl-item">
+        <div class="tl-dot"></div>
+        <div class="tl-label">📡 route</div>
+        <div class="tl-desc">라우팅 결과 수신 → <strong>RAG · 파일 검색</strong> 뱃지 표시</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot"></div>
+        <div class="tl-label">📡 intent</div>
+        <div class="tl-desc">의도메시지 + 키워드 수신 → <strong>"삼성전자 탄소중립 목표와 재생에너지 전환율을 문서에서 찾아드릴게요."</strong> + 키워드 태그 표시</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot"></div>
+        <div class="tl-label">📡 candidates</div>
+        <div class="tl-desc">후보 파일 목록 수신 → 오른쪽 패널에 <strong>파일 카드</strong> 즉시 표시</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot"></div>
+        <div class="tl-label">📡 scanning / scan_result</div>
+        <div class="tl-desc">파일별로 스캔 진행 → 왼쪽 스캔 로그에 <strong>스캔 중 / 발견됨 / 없음</strong> 애니메이션. 파일 카드에도 상태 오버레이 표시</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot"></div>
+        <div class="tl-label">📡 selected</div>
+        <div class="tl-desc">최종 소스 확정 → 출처 목록 업데이트</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot" style="background:#10b981"></div>
+        <div class="tl-label" style="color:#34d399">📡 key_facts (신규)</div>
+        <div class="tl-desc">Python이 추출한 핵심 인용문 → <strong>📌 핵심 인용</strong> 섹션으로 초록 카드에 표시</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot" style="background:#8b5cf6"></div>
+        <div class="tl-label">📡 generating (신규)</div>
+        <div class="tl-desc">LLM 생성 시작 → <strong>"답변 생성 중…"</strong> 스피너 표시</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot" style="background:#a78bfa"></div>
+        <div class="tl-label">📡 token × N</div>
+        <div class="tl-desc">답변 토큰 스트리밍 → 글자가 실시간으로 하나씩 추가됨. 생성 중 스피너 사라짐</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot" style="background:#34d399"></div>
+        <div class="tl-label">📡 done</div>
+        <div class="tl-desc">생성 완료 → 커서 블링크 사라짐, 출처 링크 클릭 가능</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ 9. 알려진 한계 ══════════ -->
+<section>
+  <h2><span class="num">9</span>알려진 한계 & 개선 방향</h2>
+  <div class="card-row">
+    <div class="card card-half" style="border-color:rgba(239,68,68,0.25);">
+      <h3 style="color:#fca5a5;">Q1 원인 파악 미흡</h3>
+      <p style="color:var(--muted); font-size:13.5px; margin-bottom:8px;">
+        FAO 가격지수 <strong>128.5</strong>는 맞추지만, 유지류/설탕 상승 원인을 못 찾음.
+      </p>
+      <p style="font-size:12.5px; color:var(--dim);">
+        원인: 질문에 "팜유", "말레이시아", "해바라기유", "에탄올", "브라질" 키워드가 없어 scan_node가 해당 단락을 아예 찾지 못함.<br>
+        → 개선: 질문 키워드 → 관련 키워드 자동 확장(Query Expansion) 로직 필요
+      </p>
+    </div>
+    <div class="card card-half" style="border-color:rgba(239,68,68,0.25);">
+      <h3 style="color:#fca5a5;">Q3 이해관계자 채널 환각</h3>
+      <p style="color:var(--muted); font-size:13.5px; margin-bottom:8px;">
+        "Slack", "월례 보고회" 등 문서에 없는 내용 출력.
+      </p>
+      <p style="font-size:12.5px; color:var(--dim);">
+        원인: Samsung ESG 이해관계자 소통 채널이 표(Table) 형태로 PDF에 있어 fitz가 평탄화하면서 맥락 손실.<br>
+        → 개선: PDF 표 구조 파싱(pdfplumber 등) + 표 행·열 재구성
+      </p>
+    </div>
+  </div>
+</section>
+
+<hr>
+<p style="text-align:center; color:var(--dim); font-size:12px; padding-top:8px;">
+  AIMODE RAG Pipeline v8.3 · Gemma3:12b · LangGraph · 2026-05-06
+</p>
+
+</body>
+</html>

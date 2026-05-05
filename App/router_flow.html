@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Obsidian AI — Router Flow</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #06030f;
+    --bg2:       #0b0718;
+    --bg3:       #100c1e;
+    --accent:    #8b5cf6;
+    --accent2:   #a78bfa;
+    --accent3:   #6d28d9;
+    --green:     #10b981;
+    --teal:      #06b6d4;
+    --rose:      #f43f5e;
+    --amber:     #f59e0b;
+    --border:    rgba(139,92,246,0.18);
+    --text:      #e2e8f0;
+    --muted:     #64748b;
+    --card:      rgba(17,11,34,0.9);
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── 배경 ── */
+  .bg-orbs {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden;
+  }
+  .bg-orbs span {
+    position: absolute; border-radius: 50%;
+    filter: blur(120px); opacity: 0.12;
+    animation: orb-drift 18s ease-in-out infinite alternate;
+  }
+  .bg-orbs span:nth-child(1) { width: 600px; height: 600px; background: #7c3aed; top: -200px; left: -100px; animation-delay: 0s; }
+  .bg-orbs span:nth-child(2) { width: 400px; height: 400px; background: #0ea5e9; bottom: 0; right: -100px; animation-delay: -6s; }
+  .bg-orbs span:nth-child(3) { width: 300px; height: 300px; background: #10b981; bottom: 200px; left: 40%; animation-delay: -12s; }
+  @keyframes orb-drift { from { transform: translate(0,0) scale(1); } to { transform: translate(40px,30px) scale(1.1); } }
+
+  /* ── 레이아웃 ── */
+  .wrap { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; padding: 60px 24px 100px; }
+
+  /* ── 헤더 ── */
+  .hero {
+    text-align: center; margin-bottom: 80px;
+  }
+  .hero-eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 18px; border-radius: 999px; margin-bottom: 24px;
+    background: rgba(139,92,246,0.1); border: 1px solid var(--border);
+    font-size: 12px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--accent2);
+  }
+  .hero-eyebrow .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.6;transform:scale(1.3)} }
+
+  .hero h1 {
+    font-size: clamp(36px, 6vw, 72px); font-weight: 900; line-height: 1.05;
+    letter-spacing: -0.03em; margin-bottom: 20px;
+    background: linear-gradient(135deg, #fff 0%, #c4b5fd 40%, #8b5cf6 70%, #6d28d9 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .hero p {
+    font-size: 18px; color: #94a3b8; max-width: 580px; margin: 0 auto; line-height: 1.7;
+  }
+
+  /* ── 섹션 제목 ── */
+  .section-label {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 32px;
+  }
+  .section-label .line { flex: 1; height: 1px; background: var(--border); }
+  .section-label span {
+    font-size: 11px; font-weight: 800; letter-spacing: 0.15em; text-transform: uppercase;
+    color: var(--accent2); padding: 0 4px;
+  }
+
+  /* ══ ROUTER FLOW DIAGRAM ══ */
+  .flow-container {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    padding: 48px 40px;
+    margin-bottom: 64px;
+    backdrop-filter: blur(20px);
+    position: relative;
+    overflow: hidden;
+  }
+  .flow-container::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: radial-gradient(ellipse at 50% 0%, rgba(139,92,246,0.08) 0%, transparent 65%);
+    pointer-events: none;
+  }
+
+  /* START 노드 */
+  .flow-start {
+    display: flex; justify-content: center; margin-bottom: 16px;
+  }
+  .node-start {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 12px 28px; border-radius: 999px;
+    background: linear-gradient(135deg, #1e1033, #2d1659);
+    border: 2px solid var(--accent);
+    font-size: 13px; font-weight: 700; color: var(--accent2);
+    box-shadow: 0 0 30px rgba(139,92,246,0.25), inset 0 1px 0 rgba(255,255,255,0.08);
+    position: relative;
+  }
+  .node-start::before {
+    content: '';
+    position: absolute; inset: -4px; border-radius: 999px;
+    background: linear-gradient(135deg, var(--accent), transparent, var(--accent3));
+    z-index: -1; opacity: 0.3; animation: border-spin 4s linear infinite;
+  }
+  @keyframes border-spin { from{transform:rotate(0)} to{transform:rotate(360deg)} }
+
+  /* 화살표 */
+  .arrow-down {
+    display: flex; justify-content: center; align-items: center;
+    height: 36px; position: relative;
+  }
+  .arrow-down::before {
+    content: '';
+    display: block; width: 2px; height: 28px;
+    background: linear-gradient(to bottom, var(--accent), transparent);
+  }
+  .arrow-down::after {
+    content: '▼';
+    position: absolute; bottom: -2px;
+    font-size: 10px; color: var(--accent); opacity: 0.7;
+  }
+
+  /* ROUTER 노드 */
+  .node-router {
+    margin: 0 auto 8px;
+    width: fit-content;
+    padding: 20px 40px;
+    border-radius: 16px;
+    background: linear-gradient(135deg, rgba(109,40,217,0.25), rgba(139,92,246,0.15));
+    border: 2px solid var(--accent);
+    text-align: center;
+    box-shadow: 0 0 40px rgba(139,92,246,0.2);
+    position: relative;
+  }
+  .node-router .label {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--accent2); margin-bottom: 4px;
+  }
+  .node-router .title {
+    font-size: 20px; font-weight: 800; color: #fff;
+  }
+  .node-router .sub {
+    font-size: 11px; color: #64748b; margin-top: 4px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* 분기선 */
+  .branch-lines {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0;
+    margin: 0 -20px 0;
+    position: relative;
+  }
+  .branch-lines::before {
+    content: '';
+    position: absolute;
+    top: 0; left: calc(50% - 1px);
+    width: 2px; height: 100%;
+    background: transparent;
+  }
+
+  .branch-col {
+    display: flex; flex-direction: column; align-items: center;
+    padding: 0 12px;
+    position: relative;
+  }
+
+  /* 분기 상단 연결선 */
+  .branch-top-line {
+    height: 40px; width: 2px;
+    background: linear-gradient(to bottom, transparent, var(--accent));
+    margin-bottom: 0;
+    position: relative;
+  }
+  .branch-top-label {
+    position: absolute; top: 50%;
+    font-size: 9px; font-weight: 700; letter-spacing: 0.1em;
+    text-transform: uppercase; transform: translateY(-50%);
+    padding: 2px 8px; border-radius: 999px;
+    white-space: nowrap;
+  }
+  .branch-top-label.rag   { color: var(--accent2); background: rgba(139,92,246,0.15); border: 1px solid rgba(139,92,246,0.3); right: calc(100% + 4px); }
+  .branch-top-label.chat  { color: var(--green);   background: rgba(16,185,129,0.1);  border: 1px solid rgba(16,185,129,0.25); left: calc(100% + 4px); }
+  .branch-top-label.followup { color: var(--teal); background: rgba(6,182,212,0.1);   border: 1px solid rgba(6,182,212,0.25); right: calc(100% + 4px); }
+
+  /* 모드 카드 */
+  .mode-card {
+    width: 100%; border-radius: 16px; padding: 20px 16px;
+    border: 1px solid; position: relative; overflow: hidden;
+    transition: transform 0.2s, box-shadow 0.2s;
+    cursor: default;
+  }
+  .mode-card:hover { transform: translateY(-3px); }
+  .mode-card.rag {
+    background: rgba(109,40,217,0.12); border-color: rgba(139,92,246,0.3);
+    box-shadow: 0 4px 24px rgba(109,40,217,0.15);
+  }
+  .mode-card.chat {
+    background: rgba(16,185,129,0.08); border-color: rgba(16,185,129,0.25);
+    box-shadow: 0 4px 24px rgba(16,185,129,0.12);
+  }
+  .mode-card.followup {
+    background: rgba(6,182,212,0.08); border-color: rgba(6,182,212,0.25);
+    box-shadow: 0 4px 24px rgba(6,182,212,0.12);
+  }
+  .mode-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  }
+  .mode-card.rag::before      { background: linear-gradient(90deg, transparent, var(--accent), transparent); }
+  .mode-card.chat::before     { background: linear-gradient(90deg, transparent, var(--green), transparent); }
+  .mode-card.followup::before { background: linear-gradient(90deg, transparent, var(--teal), transparent); }
+
+  .mode-badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 10px; border-radius: 999px; margin-bottom: 10px;
+    font-size: 10px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase;
+  }
+  .mode-badge.rag      { background: rgba(139,92,246,0.2); color: var(--accent2); border: 1px solid rgba(139,92,246,0.35); }
+  .mode-badge.chat     { background: rgba(16,185,129,0.15); color: var(--green);  border: 1px solid rgba(16,185,129,0.3); }
+  .mode-badge.followup { background: rgba(6,182,212,0.12); color: var(--teal);   border: 1px solid rgba(6,182,212,0.28); }
+
+  .mode-icon { font-size: 11px; }
+  .mode-title { font-size: 15px; font-weight: 800; color: #fff; margin-bottom: 6px; }
+  .mode-desc  { font-size: 11px; color: #64748b; line-height: 1.5; margin-bottom: 12px; }
+
+  /* 파이프라인 스텝 */
+  .pipeline {
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .pipe-step {
+    display: flex; align-items: center; gap: 7px;
+    padding: 5px 8px; border-radius: 7px;
+    font-size: 10px; font-weight: 600;
+    background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.05);
+    animation: step-in 0.4s ease both;
+  }
+  @keyframes step-in { from{opacity:0;transform:translateX(-8px)} to{opacity:1;transform:none} }
+  .pipe-step:nth-child(1){animation-delay:0.1s}
+  .pipe-step:nth-child(2){animation-delay:0.2s}
+  .pipe-step:nth-child(3){animation-delay:0.3s}
+  .pipe-step:nth-child(4){animation-delay:0.4s}
+  .pipe-step:nth-child(5){animation-delay:0.5s}
+  .pipe-num {
+    width: 16px; height: 16px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 8px; font-weight: 800;
+  }
+  .rag   .pipe-num { background: rgba(139,92,246,0.3); color: var(--accent2); }
+  .chat  .pipe-num { background: rgba(16,185,129,0.25); color: var(--green); }
+  .followup .pipe-num { background: rgba(6,182,212,0.2); color: var(--teal); }
+
+  /* ══ SCENARIO 카드 ══ */
+  .scenarios {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(300px,1fr));
+    gap: 20px; margin-bottom: 64px;
+  }
+  .scenario-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 20px; padding: 28px 24px;
+    backdrop-filter: blur(16px);
+    transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+  }
+  .scenario-card:hover {
+    border-color: rgba(139,92,246,0.35);
+    box-shadow: 0 8px 40px rgba(109,40,217,0.15);
+    transform: translateY(-2px);
+  }
+  .scenario-header {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 16px;
+  }
+  .scenario-icon {
+    width: 38px; height: 38px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; flex-shrink: 0;
+  }
+  .scenario-icon.rag      { background: rgba(139,92,246,0.2); }
+  .scenario-icon.chat     { background: rgba(16,185,129,0.15); }
+  .scenario-icon.followup { background: rgba(6,182,212,0.12); }
+  .scenario-title { font-size: 14px; font-weight: 700; color: #e2e8f0; }
+  .scenario-sub   { font-size: 11px; color: #475569; }
+
+  .chat-bubble {
+    padding: 10px 14px; border-radius: 12px; font-size: 12px; line-height: 1.6;
+    margin-bottom: 6px; position: relative;
+  }
+  .chat-bubble.user {
+    background: rgba(109,40,217,0.2); border: 1px solid rgba(139,92,246,0.25);
+    color: #c4b5fd; text-align: right; border-radius: 16px 16px 4px 16px;
+  }
+  .chat-bubble.ai {
+    background: rgba(15,10,30,0.8); border: 1px solid rgba(139,92,246,0.12);
+    color: #94a3b8; border-radius: 4px 16px 16px 16px;
+  }
+  .route-tag {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 9px; font-weight: 800; letter-spacing: 0.1em;
+    padding: 2px 8px; border-radius: 999px; margin-bottom: 6px;
+    text-transform: uppercase;
+  }
+  .route-tag.rag      { background: rgba(139,92,246,0.15); color: var(--accent2); }
+  .route-tag.chat     { background: rgba(16,185,129,0.12); color: var(--green); }
+  .route-tag.followup { background: rgba(6,182,212,0.1);  color: var(--teal); }
+
+  /* ══ SSE EVENTS 표 ══ */
+  .sse-table-wrap {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 20px; overflow: hidden; margin-bottom: 64px;
+    backdrop-filter: blur(16px);
+  }
+  .sse-table-wrap table {
+    width: 100%; border-collapse: collapse;
+  }
+  .sse-table-wrap thead th {
+    padding: 14px 20px; text-align: left;
+    font-size: 10px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--accent2); background: rgba(109,40,217,0.08);
+    border-bottom: 1px solid var(--border);
+  }
+  .sse-table-wrap tbody tr {
+    border-bottom: 1px solid rgba(139,92,246,0.06);
+    transition: background 0.15s;
+  }
+  .sse-table-wrap tbody tr:last-child { border-bottom: none; }
+  .sse-table-wrap tbody tr:hover { background: rgba(139,92,246,0.05); }
+  .sse-table-wrap td { padding: 12px 20px; font-size: 12px; vertical-align: top; }
+  .sse-table-wrap td:first-child { width: 26%; }
+  .sse-table-wrap td:nth-child(2){ width: 38%; }
+
+  .ev-type {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700;
+    color: #fff; background: rgba(109,40,217,0.25); border: 1px solid rgba(139,92,246,0.35);
+    padding: 2px 9px; border-radius: 5px; display: inline-block;
+  }
+  .ev-new {
+    font-size: 9px; font-weight: 800; letter-spacing: 0.08em;
+    color: var(--green); background: rgba(16,185,129,0.12);
+    border: 1px solid rgba(16,185,129,0.25); padding: 1px 7px; border-radius: 999px;
+    margin-left: 6px; text-transform: uppercase; vertical-align: middle;
+  }
+  .ev-mode {
+    display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px;
+  }
+  .ev-badge {
+    font-size: 9px; font-weight: 700; padding: 1px 7px; border-radius: 999px;
+  }
+  .ev-badge.rag      { background: rgba(139,92,246,0.15); color: var(--accent2); }
+  .ev-badge.chat     { background: rgba(16,185,129,0.1);  color: var(--green); }
+  .ev-badge.followup { background: rgba(6,182,212,0.1);   color: var(--teal); }
+  .ev-badge.all      { background: rgba(255,255,255,0.07); color: #94a3b8; }
+
+  code {
+    font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    background: rgba(0,0,0,0.4); border: 1px solid rgba(139,92,246,0.15);
+    padding: 1px 6px; border-radius: 4px; color: #a78bfa;
+  }
+
+  /* ══ FOOTER ══ */
+  .footer {
+    text-align: center; padding-top: 48px;
+    border-top: 1px solid var(--border);
+  }
+  .footer p { font-size: 12px; color: #1e1a2e; }
+  .footer .team {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 13px; font-weight: 700; color: var(--accent2);
+    margin-bottom: 8px;
+  }
+
+  /* ══ 연결선 SVG ══ */
+  .connector-row {
+    display: grid; grid-template-columns: 1fr 1fr 1fr;
+    height: 48px; margin: 0;
+    position: relative;
+  }
+</style>
+</head>
+<body>
+
+<div class="bg-orbs">
+  <span></span><span></span><span></span>
+</div>
+
+<div class="wrap">
+
+  <!-- ── HERO ── -->
+  <div class="hero">
+    <div class="hero-eyebrow">
+      <span class="dot"></span>
+      Obsidian AI · LangGraph Router
+    </div>
+    <h1>세 가지 대화<br>하나의 흐름</h1>
+    <p>모든 질문을 파일 검색으로 처리하던 구조를 개선 — LLM이 직접 맥락을 판단해 <strong>RAG · Chat · Followup</strong> 세 경로로 분기합니다.</p>
+  </div>
+
+  <!-- ── ROUTER FLOW ── -->
+  <div class="section-label">
+    <div class="line"></div>
+    <span>Router Flow</span>
+    <div class="line"></div>
+  </div>
+
+  <div class="flow-container">
+
+    <!-- START -->
+    <div class="flow-start">
+      <div class="node-start">
+        <span>💬</span>
+        사용자 질문 입력
+      </div>
+    </div>
+
+    <div class="arrow-down"></div>
+
+    <!-- ROUTER -->
+    <div class="node-router">
+      <div class="label">Node 0</div>
+      <div class="title">🔀 Router</div>
+      <div class="sub">LLM이 대화 맥락 분석 → 경로 결정</div>
+    </div>
+
+    <!-- 분기 연결선 (SVG) -->
+    <div style="position:relative;height:52px;margin:0 0 0;">
+      <svg width="100%" height="52" style="position:absolute;top:0;left:0">
+        <defs>
+          <marker id="arr" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L6,3 z" fill="rgba(139,92,246,0.5)"/>
+          </marker>
+        </defs>
+        <!-- 중앙선 (RAG) -->
+        <line x1="50%" y1="0" x2="50%" y2="52" stroke="rgba(139,92,246,0.4)" stroke-width="1.5" stroke-dasharray="4,3"/>
+        <!-- 왼쪽선 (RAG) -->
+        <path d="M50%,0 Q17%,0 17%,52" stroke="rgba(139,92,246,0.35)" stroke-width="1.5" fill="none" stroke-dasharray="4,3"/>
+        <!-- 오른쪽선 (followup) -->
+        <path d="M50%,0 Q83%,0 83%,52" stroke="rgba(6,182,212,0.35)" stroke-width="1.5" fill="none" stroke-dasharray="4,3"/>
+      </svg>
+      <!-- 라벨 -->
+      <span style="position:absolute;left:9%;top:50%;transform:translateY(-50%);font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#a78bfa;background:rgba(109,40,217,0.15);border:1px solid rgba(139,92,246,0.3);padding:2px 8px;border-radius:999px;white-space:nowrap">rag</span>
+      <span style="position:absolute;left:50%;transform:translate(-50%,-50%);top:50%;font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#10b981;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.25);padding:2px 8px;border-radius:999px;white-space:nowrap">chat</span>
+      <span style="position:absolute;right:9%;top:50%;transform:translateY(-50%);font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#06b6d4;background:rgba(6,182,212,0.1);border:1px solid rgba(6,182,212,0.25);padding:2px 8px;border-radius:999px;white-space:nowrap">followup</span>
+    </div>
+
+    <!-- 세 카드 -->
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">
+
+      <!-- RAG -->
+      <div class="mode-card rag">
+        <div class="mode-badge rag"><span class="mode-icon">🔍</span> RAG</div>
+        <div class="mode-title">파일 검색 모드</div>
+        <div class="mode-desc">로컬 파일을 새로 찾아야 하는 질문. 벡터 검색 전 파이프라인 실행.</div>
+        <div class="pipeline">
+          <div class="pipe-step"><div class="pipe-num">1</div>Intent — 키워드 추출</div>
+          <div class="pipe-step"><div class="pipe-num">2</div>Search — 벡터 DB 검색</div>
+          <div class="pipe-step"><div class="pipe-num">3</div>Scan — 파일 내용 확인</div>
+          <div class="pipe-step"><div class="pipe-num">4</div>Select — 관련 파일 선택</div>
+          <div class="pipe-step"><div class="pipe-num">5</div>Generate — LLM 답변</div>
+        </div>
+      </div>
+
+      <!-- CHAT -->
+      <div class="mode-card chat">
+        <div class="mode-badge chat"><span class="mode-icon">💬</span> Chat</div>
+        <div class="mode-title">일반 대화 모드</div>
+        <div class="mode-desc">파일 검색 불필요. 일반 지식·대화 질문. 파이프라인 스킵.</div>
+        <div class="pipeline">
+          <div class="pipe-step" style="background:rgba(16,185,129,0.08);border-color:rgba(16,185,129,0.15)"><div class="pipe-num" style="background:rgba(16,185,129,0.25);color:#10b981">✓</div>Direct Generate</div>
+          <div class="pipe-step" style="background:rgba(16,185,129,0.04);border-color:rgba(16,185,129,0.08);opacity:0.5"><div class="pipe-num" style="background:rgba(100,116,139,0.2);color:#475569">—</div><s style="color:#334155">파일 검색 없음</s></div>
+          <div class="pipe-step" style="background:rgba(16,185,129,0.04);border-color:rgba(16,185,129,0.08);opacity:0.5"><div class="pipe-num" style="background:rgba(100,116,139,0.2);color:#475569">—</div><s style="color:#334155">스캔 없음</s></div>
+        </div>
+        <div style="margin-top:10px;padding:8px;border-radius:8px;background:rgba(16,185,129,0.07);border:1px solid rgba(16,185,129,0.15);font-size:10px;color:#10b981">
+          ⚡ 대화 전용 프롬프트 적용
+        </div>
+      </div>
+
+      <!-- FOLLOWUP -->
+      <div class="mode-card followup">
+        <div class="mode-badge followup"><span class="mode-icon">🔗</span> Followup</div>
+        <div class="mode-title">후속 질문 모드</div>
+        <div class="mode-desc">이전 턴에서 찾은 파일에 대한 추가 질문. 파일 재검색 없음.</div>
+        <div class="pipeline">
+          <div class="pipe-step" style="background:rgba(6,182,212,0.08);border-color:rgba(6,182,212,0.18)"><div class="pipe-num" style="background:rgba(6,182,212,0.2);color:#06b6d4">↩</div>이전 파일 재사용</div>
+          <div class="pipe-step" style="background:rgba(6,182,212,0.08);border-color:rgba(6,182,212,0.18)"><div class="pipe-num" style="background:rgba(6,182,212,0.2);color:#06b6d4">5</div>Generate — LLM 답변</div>
+          <div class="pipe-step" style="background:rgba(6,182,212,0.04);border-color:rgba(6,182,212,0.08);opacity:0.5"><div class="pipe-num" style="background:rgba(100,116,139,0.2);color:#475569">—</div><s style="color:#334155">벡터 검색 없음</s></div>
+        </div>
+        <div style="margin-top:10px;padding:8px;border-radius:8px;background:rgba(6,182,212,0.06);border:1px solid rgba(6,182,212,0.18);font-size:10px;color:#06b6d4">
+          🔗 이전 matched_sources 재사용
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── SCENARIO ── -->
+  <div class="section-label">
+    <div class="line"></div>
+    <span>대화 시나리오</span>
+    <div class="line"></div>
+  </div>
+
+  <div class="scenarios">
+
+    <!-- 시나리오 1 -->
+    <div class="scenario-card">
+      <div class="scenario-header">
+        <div class="scenario-icon rag">📄</div>
+        <div>
+          <div class="scenario-title">파일 검색 후 후속 질문</div>
+          <div class="scenario-sub">RAG → Followup 전환</div>
+        </div>
+      </div>
+      <div class="chat-bubble user">삼성 ESG 보고서에서 탄소 감축 목표 알려줘</div>
+      <div class="route-tag rag">🔍 rag — 파일 새로 검색</div>
+      <div class="chat-bubble ai">삼성전자는 2030년까지 탄소 배출을 42% 감축하는 목표를 수립했습니다. [출처1]</div>
+      <div style="height:12px"></div>
+      <div class="chat-bubble user">거기서 2040년 Net Zero 계획은?</div>
+      <div class="route-tag followup">🔗 followup — 이전 파일 재사용</div>
+      <div class="chat-bubble ai">동 보고서에서 2040년 Net Zero 달성을 위해 재생에너지 100% 전환을 명시하고 있습니다. [출처1]</div>
+    </div>
+
+    <!-- 시나리오 2 -->
+    <div class="scenario-card">
+      <div class="scenario-header">
+        <div class="scenario-icon chat">💬</div>
+        <div>
+          <div class="scenario-title">일반 대화 전환</div>
+          <div class="scenario-sub">RAG → Chat 전환</div>
+        </div>
+      </div>
+      <div class="chat-bubble user">계약서 파일에서 위약금 조항 찾아줘</div>
+      <div class="route-tag rag">🔍 rag — 파일 새로 검색</div>
+      <div class="chat-bubble ai">계약서_2024.pdf에서 7조 위약금 조항을 확인했습니다. 지연 시 일 0.1% 부과됩니다. [출처1]</div>
+      <div style="height:12px"></div>
+      <div class="chat-bubble user">위약금이 뭔지 법적으로 설명해줘</div>
+      <div class="route-tag chat">💬 chat — 일반 지식 답변</div>
+      <div class="chat-bubble ai">위약금은 계약 불이행 시 사전에 약정한 손해배상액으로, 민법 제398조에 근거합니다. 실손해와 무관하게 청구할 수 있는 특징이 있습니다.</div>
+    </div>
+
+    <!-- 시나리오 3 -->
+    <div class="scenario-card">
+      <div class="scenario-header">
+        <div class="scenario-icon chat">✨</div>
+        <div>
+          <div class="scenario-title">순수 대화</div>
+          <div class="scenario-sub">처음부터 Chat 모드</div>
+        </div>
+      </div>
+      <div class="chat-bubble user">RAG가 뭐야?</div>
+      <div class="route-tag chat">💬 chat — 파일 검색 없음</div>
+      <div class="chat-bubble ai">RAG(Retrieval-Augmented Generation)는 외부 문서를 검색해 LLM 답변 품질을 높이는 기법입니다. 파일을 컨텍스트로 주입해 환각(hallucination)을 줄이는 것이 핵심입니다.</div>
+      <div style="height:12px"></div>
+      <div class="chat-bubble user">우리 시스템에서는 어떻게 써?</div>
+      <div class="route-tag followup">🔗 followup — 대화 맥락 유지</div>
+      <div class="chat-bubble ai">이 시스템에서는 ChromaDB 벡터 검색으로 관련 파일을 찾고, 파일 전체 텍스트를 Ollama에 컨텍스트로 전달합니다.</div>
+    </div>
+
+  </div>
+
+  <!-- ── SSE EVENTS ── -->
+  <div class="section-label">
+    <div class="line"></div>
+    <span>SSE 이벤트 스펙</span>
+    <div class="line"></div>
+  </div>
+
+  <div class="sse-table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>타입</th>
+          <th>페이로드</th>
+          <th>발생 모드</th>
+          <th>설명</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="ev-type">info</span></td>
+          <td><code>model, thread_id, langgraph</code></td>
+          <td><div class="ev-mode"><span class="ev-badge all">all</span></div></td>
+          <td>연결 확인, 모델명</td>
+        </tr>
+        <tr>
+          <td><span class="ev-type">route</span> <span class="ev-new">new</span></td>
+          <td><code>mode: "rag"|"chat"|"followup"</code></td>
+          <td><div class="ev-mode"><span class="ev-badge all">all</span></div></td>
+          <td>라우터 판단 결과. 프론트는 이걸 보고 UI 분기</td>
+        </tr>
+        <tr>
+          <td><span class="ev-type">intent</span></td>
+          <td><code>message, file_keywords, detail_keywords</code></td>
+          <td><div class="ev-mode"><span class="ev-badge rag">rag</span><span class="ev-badge followup">followup</span></div></td>
+          <td>의도 파악 결과 + 검색 키워드</td>
+        </tr>
+        <tr>
+          <td><span class="ev-type">candidates</span></td>
+          <td><code>items: [{file_name, file_type, confidence, ...}]</code></td>
+          <td><div class="ev-mode"><span class="ev-badge rag">rag</span></div></td>
+          <td>벡터 검색 결과 후보 파일 목록</td>
+        </tr>
+        <tr>
+          <td><span class="ev-type">scanning</span></td>
+          <td><code>index, file_id, file_name</code></td>
+          <td><div class="ev-mode"><span class="ev-badge rag">rag</span></div></td>
+          <td>파일 스캔 시작 (UI 애니메이션)</td>
+        </tr>
+        <tr>
+          <td><span class="ev-type">scan_result</span></td>
+          <td><code>file_id, found, chunks</code></td>
+          <td><div class="ev-mode"><span class="ev-badge rag">rag</span></div></td>
+          <td>파일 내 키워드 매칭 결과</td>
+        </tr>
+        <tr>
+          <td><span class="ev-type">selected</span></td>
+          <td><code>sources: [...]</code></td>
+          <td><div class="ev-mode"><span class="ev-badge rag">rag</span><span class="ev-badge followup">followup</span></div></td>
+          <td>최종 답변에 쓸 파일 선택 완료</td>
+        </tr>
+        <tr>
+          <td><span class="ev-type">token</span></td>
+          <td><code>text: "..."</code></td>
+          <td><div class="ev-mode"><span class="ev-badge all">all</span></div></td>
+          <td>LLM 스트리밍 토큰 (실시간 출력)</td>
+        </tr>
+        <tr>
+          <td><span class="ev-type">done</span></td>
+          <td><code>answer, model, sources_count</code></td>
+          <td><div class="ev-mode"><span class="ev-badge all">all</span></div></td>
+          <td>스트리밍 종료 + 최종 답변</td>
+        </tr>
+        <tr>
+          <td><span class="ev-type">error</span></td>
+          <td><code>message</code></td>
+          <td><div class="ev-mode"><span class="ev-badge all">all</span></div></td>
+          <td>오류 발생</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ── FOOTER ── -->
+  <div class="footer">
+    <div class="team">✦ Team Chainers</div>
+    <p>Obsidian AI — LangGraph Router Flow · 2026</p>
+  </div>
+
+</div>
+
+</body>
+</html>

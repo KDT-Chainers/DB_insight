@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Obsidian AI — UI Design</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet"/>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:       #06030f;
+  --bg2:      #08050f;
+  --bg3:      #0c0818;
+  --card:     #100c1e;
+  --accent:   #8b5cf6;
+  --accent2:  #a78bfa;
+  --accent3:  #6d28d9;
+  --green:    #10b981;
+  --teal:     #06b6d4;
+  --border:   rgba(139,92,246,0.14);
+  --text:     #e2e8f0;
+  --muted:    #475569;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── 스크롤바 ── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(139,92,246,0.25); border-radius: 99px; }
+
+/* ══ HEADER ══ */
+header {
+  display: flex; align-items: center; gap: 14px;
+  padding: 0 20px; height: 52px; flex-shrink: 0;
+  background: rgba(6,3,15,0.92);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+  position: relative; z-index: 10;
+}
+
+.header-logo {
+  font-size: 15px; font-weight: 800; letter-spacing: -0.03em;
+  background: linear-gradient(to right, #c4b5fd, #e879f9);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  flex-shrink: 0; cursor: pointer;
+}
+
+.header-route-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 10px; border-radius: 999px; font-size: 10px; font-weight: 700;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  animation: fade-in 0.3s ease;
+}
+.header-route-badge.rag      { background: rgba(139,92,246,0.12); color: var(--accent2); border: 1px solid rgba(139,92,246,0.25); }
+.header-route-badge.chat     { background: rgba(16,185,129,0.1);  color: var(--green);   border: 1px solid rgba(16,185,129,0.22); }
+.header-route-badge.followup { background: rgba(6,182,212,0.1);   color: var(--teal);    border: 1px solid rgba(6,182,212,0.22); }
+@keyframes fade-in { from{opacity:0;transform:scale(0.9)} to{opacity:1;transform:scale(1)} }
+
+.header-status {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 10px; font-weight: 700; padding: 3px 10px;
+  border-radius: 999px; flex-shrink: 0;
+}
+.header-status.processing {
+  background: rgba(139,92,246,0.1); color: var(--accent2);
+  border: 1px solid rgba(139,92,246,0.2);
+}
+.header-status.done {
+  background: rgba(16,185,129,0.1); color: var(--green);
+  border: 1px solid rgba(16,185,129,0.2);
+}
+.header-status .spin {
+  animation: spin 1s linear infinite;
+  font-size: 11px;
+}
+@keyframes spin { to{transform:rotate(360deg)} }
+
+.spacer { flex: 1; }
+
+.btn-new-chat {
+  display: flex; align-items: center; gap: 5px;
+  padding: 5px 12px; border-radius: 999px; font-size: 11px; font-weight: 700;
+  background: var(--card); border: 1px solid var(--border);
+  color: #64748b; cursor: pointer; flex-shrink: 0;
+  transition: color 0.2s, border-color 0.2s;
+}
+.btn-new-chat:hover { color: var(--accent2); border-color: rgba(139,92,246,0.3); }
+.btn-new-chat .icon { font-size: 14px; }
+
+/* ══ TWO PANEL ══ */
+.panels {
+  flex: 1; display: flex; overflow: hidden;
+}
+
+/* ── LEFT ── */
+.left-panel {
+  width: 55%; display: flex; flex-direction: column;
+  border-right: 1px solid rgba(139,92,246,0.07);
+  background: var(--bg2);
+  position: relative;
+}
+
+/* 대화 스크롤 */
+.convo-scroll {
+  flex: 1; overflow-y: auto; padding: 24px 18px 12px;
+  display: flex; flex-direction: column; gap: 0;
+}
+
+/* ── 턴 (Turn) ── */
+.turn { margin-bottom: 32px; }
+
+/* 사용자 버블 */
+.user-bubble-wrap { display: flex; justify-content: flex-end; margin-bottom: 16px; }
+.user-bubble {
+  max-width: 78%; padding: 11px 16px;
+  background: linear-gradient(135deg, #3b1d7a, #4c1d95, #5b21b6);
+  border-radius: 18px 18px 4px 18px;
+  font-size: 13.5px; color: #ede9fe; line-height: 1.55;
+  box-shadow: 0 4px 20px rgba(109,40,217,0.3), inset 0 1px 0 rgba(255,255,255,0.08);
+  letter-spacing: -0.01em;
+}
+
+/* AI 블록 */
+.ai-block { display: flex; gap: 10px; }
+
+/* 아바타 */
+.ai-avatar {
+  width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0; margin-top: 2px;
+  background: radial-gradient(circle at 36% 30%, #c4b5fd 0%, #7c3aed 50%, #3b0764 100%);
+  box-shadow: 0 0 12px rgba(139,92,246,0.5), inset 0 1px 0 rgba(255,255,255,0.18);
+  position: relative; overflow: hidden;
+}
+.ai-avatar.latest::after {
+  content: '';
+  position: absolute; inset: 0; border-radius: 50%;
+  background: linear-gradient(135deg, rgba(196,181,253,0.3) 0%, transparent 60%);
+  animation: orb-shimmer 2s ease-in-out infinite alternate;
+}
+@keyframes orb-shimmer { from{opacity:0.4} to{opacity:1} }
+
+.ai-content { flex: 1; min-width: 0; }
+
+/* 라우트 뱃지 */
+.route-badge {
+  display: inline-flex; align-items: center; gap: 4px; margin-bottom: 8px;
+  padding: 3px 10px; border-radius: 999px; font-size: 10px; font-weight: 700;
+  letter-spacing: 0.08em; text-transform: uppercase;
+}
+.route-badge.rag      { background: rgba(139,92,246,0.12); color: var(--accent2); border: 1px solid rgba(139,92,246,0.22); }
+.route-badge.chat     { background: rgba(16,185,129,0.1);  color: var(--green);   border: 1px solid rgba(16,185,129,0.2); }
+.route-badge.followup { background: rgba(6,182,212,0.08);  color: var(--teal);    border: 1px solid rgba(6,182,212,0.2); }
+.route-badge .dot { width: 4px; height: 4px; border-radius: 50%; background: currentColor; }
+
+/* 의도 박스 */
+.intent-box {
+  padding: 11px 15px; margin-bottom: 8px;
+  background: rgba(109,40,217,0.08);
+  border: 1px solid rgba(139,92,246,0.18);
+  border-radius: 4px 16px 16px 16px;
+  font-size: 13px; color: #e2e8f0; line-height: 1.6;
+}
+.intent-kws { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+.kw-file {
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 2px 9px; border-radius: 999px; font-size: 10px; font-weight: 700;
+  background: rgba(139,92,246,0.15); color: var(--accent2);
+  border: 1px solid rgba(139,92,246,0.25);
+}
+.kw-detail {
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 2px 9px; border-radius: 999px; font-size: 10px; font-weight: 700;
+  background: rgba(16,185,129,0.1); color: var(--green);
+  border: 1px solid rgba(16,185,129,0.2);
+}
+.kw-icon { font-size: 10px; }
+
+/* 스캔 로그 */
+.scan-log {
+  margin-bottom: 8px; padding: 11px 13px;
+  background: rgba(6,3,15,0.6); border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.scan-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 8px;
+}
+.scan-title {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 10px; font-weight: 700; color: var(--accent2);
+  letter-spacing: 0.06em;
+}
+.scan-found { font-size: 10px; color: var(--green); font-weight: 700; }
+.scan-items { display: flex; flex-direction: column; gap: 3px; }
+.scan-item {
+  display: flex; align-items: center; gap: 7px;
+  padding: 4px 10px; border-radius: 7px; font-size: 11px;
+  transition: all 0.25s;
+}
+.scan-item.scanning { background: rgba(139,92,246,0.07); border: 1px solid rgba(139,92,246,0.18); }
+.scan-item.found    { background: rgba(16,185,129,0.06); border: 1px solid rgba(16,185,129,0.16); }
+.scan-item.not_found { opacity: 0.3; border: 1px solid transparent; background: transparent; }
+.scan-item.idle     { border: 1px solid transparent; }
+.scan-file-icon { font-size: 13px; flex-shrink: 0; }
+.scan-file-name { flex: 1; font-size: 11px; color: #94a3b8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scan-status { font-size: 10px; font-weight: 700; flex-shrink: 0; display: flex; align-items: center; gap: 3px; }
+.scan-status.scanning { color: var(--accent2); }
+.scan-status.found    { color: var(--green); }
+.scan-status.not_found { color: var(--muted); }
+.scan-progress { margin-top: 8px; height: 2px; border-radius: 999px; background: rgba(139,92,246,0.08); overflow: hidden; }
+.scan-progress-bar {
+  height: 100%; border-radius: 999px;
+  background: linear-gradient(90deg, #6d28d9, #8b5cf6, #a78bfa);
+  transition: width 0.4s ease;
+}
+
+/* 답변 박스 */
+.answer-box {
+  padding: 13px 16px; margin-bottom: 6px;
+  background: rgba(109,40,217,0.07);
+  border: 1px solid rgba(139,92,246,0.14);
+  border-radius: 10px;
+  font-size: 13.5px; color: #e2e8f0; line-height: 1.85;
+  letter-spacing: -0.01em;
+}
+.answer-box.chat-mode {
+  background: rgba(6,3,15,0.5);
+  border-color: rgba(139,92,246,0.1);
+}
+.cursor {
+  display: inline-block; width: 2px; height: 16px;
+  background: var(--accent2); margin-left: 2px; vertical-align: text-bottom;
+  animation: blink 0.9s infinite;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+/* 출처 */
+.sources { display: flex; flex-direction: column; gap: 2px; }
+.source-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 6px; border-radius: 6px; font-size: 11px;
+  background: transparent; border: none; cursor: pointer; color: var(--muted);
+  text-align: left; transition: color 0.15s;
+}
+.source-btn:hover { color: var(--accent2); }
+.source-num {
+  font-size: 10px; font-weight: 700;
+  background: rgba(139,92,246,0.15); color: var(--accent2);
+  padding: 1px 6px; border-radius: 4px; flex-shrink: 0;
+}
+
+/* ── 입력창 ── */
+.input-area {
+  padding: 10px 14px; flex-shrink: 0;
+  border-top: 1px solid rgba(139,92,246,0.07);
+  background: rgba(6,3,15,0.9); backdrop-filter: blur(12px);
+}
+.input-row { display: flex; gap: 8px; align-items: flex-end; }
+.input-box {
+  flex: 1; display: flex; align-items: center; gap: 8px;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 24px; padding: 8px 14px;
+  transition: border-color 0.2s;
+}
+.input-box:focus-within { border-color: rgba(139,92,246,0.35); }
+.input-box input {
+  flex: 1; background: transparent; border: none; outline: none;
+  font-size: 13px; color: var(--text); font-family: 'Inter', sans-serif;
+  caret-color: var(--accent2);
+}
+.input-box input::placeholder { color: rgba(100,116,139,0.6); }
+.mic-btn {
+  background: none; border: none; cursor: pointer; padding: 0; flex-shrink: 0;
+  color: rgba(139,92,246,0.3); font-size: 16px; transition: color 0.2s;
+}
+.mic-btn:hover { color: var(--accent2); }
+.send-btn {
+  width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0;
+  border: none; background: linear-gradient(135deg, #6d28d9, #7c3aed);
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 14px rgba(109,40,217,0.35);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.send-btn:hover { transform: scale(1.08); box-shadow: 0 6px 20px rgba(109,40,217,0.5); }
+.send-btn .icon { color: #fff; font-size: 17px; }
+
+/* ── RIGHT PANEL ── */
+.right-panel {
+  width: 45%; display: flex; flex-direction: column;
+  background: var(--bg); overflow: hidden;
+}
+
+.right-header {
+  padding: 12px 14px; flex-shrink: 0;
+  border-bottom: 1px solid rgba(139,92,246,0.06);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.right-title {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.12em;
+  text-transform: uppercase; color: #1e1535;
+}
+.right-count {
+  font-size: 10px; color: #1e1535; font-weight: 600;
+}
+
+.cards-grid {
+  flex: 1; overflow-y: auto; padding: 12px 12px;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+  align-content: start;
+}
+
+.file-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 12px; overflow: hidden; cursor: pointer;
+  transition: all 0.25s;
+}
+.file-card:hover {
+  border-color: rgba(139,92,246,0.32);
+  box-shadow: 0 6px 24px rgba(109,40,217,0.18);
+  transform: translateY(-2px);
+}
+.file-card.found {
+  border-color: rgba(16,185,129,0.3);
+  box-shadow: 0 0 20px rgba(16,185,129,0.12);
+}
+.file-card.scanning {
+  border-color: rgba(139,92,246,0.3);
+  box-shadow: 0 0 16px rgba(139,92,246,0.12);
+}
+.file-card.not-found { opacity: 0.35; filter: grayscale(60%); }
+
+.card-thumb {
+  height: 82px; background: #040210;
+  display: flex; align-items: center; justify-content: center;
+  position: relative; overflow: hidden;
+}
+.card-thumb .file-icon { font-size: 28px; }
+.card-badge {
+  position: absolute; top: 5px; left: 6px;
+  background: linear-gradient(135deg,#6d28d9,#7c3aed);
+  color: #fff; font-size: 8px; font-weight: 800;
+  padding: 1px 6px; border-radius: 999px;
+}
+.card-status-badge {
+  position: absolute; top: 5px; right: 6px;
+  font-size: 8px; font-weight: 800;
+  padding: 1px 6px; border-radius: 999px;
+  display: flex; align-items: center; gap: 2px;
+}
+.card-status-badge.found    { background: rgba(16,185,129,0.9); color: #fff; }
+.card-status-badge.scanning { background: rgba(109,40,217,0.9); color: #fff; }
+.scan-anim {
+  position: absolute; inset: 0;
+  background: rgba(109,40,217,0.06);
+}
+.scan-anim::after {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 40%;
+  background: linear-gradient(to bottom, transparent, rgba(139,92,246,0.3), transparent);
+  animation: scan 1.2s ease-in-out infinite;
+}
+@keyframes scan { 0%{transform:translateY(-100%)} 100%{transform:translateY(250%)} }
+
+.card-body { padding: 8px 10px; }
+.card-name {
+  font-size: 10px; font-weight: 600; color: #e2e8f0; line-height: 1.35;
+  margin-bottom: 5px;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.card-footer { display: flex; justify-content: space-between; align-items: center; }
+.card-type { font-size: 8px; font-weight: 600; }
+.card-conf { font-size: 9px; font-weight: 800; color: var(--accent2); font-family: 'JetBrains Mono', monospace; }
+
+/* empty state */
+.empty-right {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 10px; padding: 40px;
+}
+.empty-icon { font-size: 40px; color: rgba(139,92,246,0.08); }
+.empty-text { font-size: 11px; color: #0e0924; text-align: center; }
+</style>
+</head>
+<body>
+
+<!-- ══ HEADER ══ -->
+<header>
+  <div class="header-logo">Obsidian AI</div>
+
+  <div class="header-route-badge rag">
+    <span>🔍</span> RAG 검색 중
+  </div>
+
+  <div class="header-status processing">
+    <span class="material-icons-round spin" style="font-size:11px">sync</span>
+    처리 중
+  </div>
+
+  <div class="spacer"></div>
+
+  <button class="btn-new-chat">
+    <span class="material-icons-round icon">restart_alt</span>
+    새 대화
+  </button>
+</header>
+
+<!-- ══ TWO PANEL ══ -->
+<div class="panels">
+
+  <!-- ── LEFT ── -->
+  <div class="left-panel">
+    <div class="convo-scroll">
+
+      <!-- ══ TURN 1: RAG ══ -->
+      <div class="turn">
+        <div class="user-bubble-wrap">
+          <div class="user-bubble">삼성 ESG 보고서에서 탄소 감축 목표 알려줘</div>
+        </div>
+        <div class="ai-block">
+          <div class="ai-avatar"></div>
+          <div class="ai-content">
+            <div class="route-badge rag"><span class="dot"></span> RAG · 파일 검색</div>
+
+            <!-- 의도 -->
+            <div class="intent-box">
+              삼성 ESG 보고서에서 탄소 감축 목표를 찾고 싶으신군요.
+              <div class="intent-kws">
+                <span class="kw-file"><span class="kw-icon">📁</span>삼성</span>
+                <span class="kw-file"><span class="kw-icon">📁</span>ESG</span>
+                <span class="kw-detail"><span class="kw-icon">🔎</span>탄소</span>
+                <span class="kw-detail"><span class="kw-icon">🔎</span>감축</span>
+              </div>
+            </div>
+
+            <!-- 스캔 로그 -->
+            <div class="scan-log">
+              <div class="scan-header">
+                <div class="scan-title">
+                  <span class="material-icons-round" style="font-size:12px">radar</span>
+                  파일 스캔 3/3
+                </div>
+                <span class="scan-found">2개 발견</span>
+              </div>
+              <div class="scan-items">
+                <div class="scan-item found">
+                  <span class="scan-file-icon" style="color:#85adff">📄</span>
+                  <span class="scan-file-name">삼성전자_ESG보고서_2024.pdf</span>
+                  <span class="scan-status found"><span class="material-icons-round" style="font-size:10px">check_circle</span>발견됨</span>
+                </div>
+                <div class="scan-item found">
+                  <span class="scan-file-icon" style="color:#34d399">📷</span>
+                  <span class="scan-file-name">ESG_summary_slide.png</span>
+                  <span class="scan-status found"><span class="material-icons-round" style="font-size:10px">check_circle</span>발견됨</span>
+                </div>
+                <div class="scan-item not_found">
+                  <span class="scan-file-icon" style="color:#94a3b8">🎬</span>
+                  <span class="scan-file-name">삼성_IR_발표영상.mp4</span>
+                  <span class="scan-status not_found"><span class="material-icons-round" style="font-size:10px">cancel</span>없음</span>
+                </div>
+              </div>
+              <div class="scan-progress"><div class="scan-progress-bar" style="width:100%"></div></div>
+            </div>
+
+            <!-- 답변 -->
+            <div class="answer-box">
+              삼성전자는 2030년까지 탄소 배출량을 2018년 대비 <strong>42% 감축</strong>하는 목표를 수립했습니다. [출처1] 또한 2040년까지 사업장 전체에서 Net Zero를 달성하기 위해 재생에너지 100% 전환을 단계적으로 추진 중입니다. [출처1]
+            </div>
+
+            <!-- 출처 -->
+            <div class="sources">
+              <button class="source-btn"><span class="source-num">출처1</span> 삼성전자_ESG보고서_2024.pdf</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ TURN 2: FOLLOWUP ══ -->
+      <div class="turn">
+        <div class="user-bubble-wrap">
+          <div class="user-bubble">거기서 2040년 Net Zero 세부 계획은?</div>
+        </div>
+        <div class="ai-block">
+          <div class="ai-avatar"></div>
+          <div class="ai-content">
+            <div class="route-badge followup"><span class="dot"></span> Followup · 이전 파일 재사용</div>
+
+            <div class="answer-box">
+              동 보고서에서 2040 Net Zero 달성을 위해 세 가지 전략을 명시하고 있습니다. ① 2027년까지 국내외 사업장 전력의 100%를 재생에너지로 전환, ② 물류·출장 탄소 배출 감축을 위한 EV 전환, ③ 협력사 탄소 저감 지원 프로그램 운영입니다. [출처1]
+            </div>
+            <div class="sources">
+              <button class="source-btn"><span class="source-num">출처1</span> 삼성전자_ESG보고서_2024.pdf</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ TURN 3: CHAT (진행 중) ══ -->
+      <div class="turn">
+        <div class="user-bubble-wrap">
+          <div class="user-bubble">탄소중립이 뭔지 쉽게 설명해줘</div>
+        </div>
+        <div class="ai-block">
+          <div class="ai-avatar latest"></div>
+          <div class="ai-content">
+            <div class="route-badge chat"><span class="dot"></span> Chat · 일반 대화</div>
+            <div class="answer-box chat-mode">
+              탄소중립이란 이산화탄소를 비롯한 온실가스 배출량과 흡수량을 같게 만들어 대기 중 농도를 더 이상 늘리지 않는 상태를 말합니다. 쉽게 말해 내가 배출한 만큼 나무를 심거나 기술로 없애면 실질 배출량이 0이 되는 거예요.<span class="cursor"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ── 입력창 ── -->
+    <div class="input-area">
+      <div class="input-row">
+        <div class="input-box">
+          <input type="text" placeholder="메시지를 입력하세요..." value=""/>
+          <button class="mic-btn"><span class="material-icons-round" style="font-size:16px">mic</span></button>
+        </div>
+        <button class="send-btn">
+          <span class="material-icons-round icon">send</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── RIGHT ── -->
+  <div class="right-panel">
+    <div class="right-header">
+      <span class="right-title">후보 파일</span>
+      <span class="right-count">3개</span>
+    </div>
+    <div class="cards-grid">
+
+      <!-- 카드 1 — found -->
+      <div class="file-card found">
+        <div class="card-thumb">
+          <span class="card-badge">#1</span>
+          <span class="file-icon">📄</span>
+          <div class="card-status-badge found">
+            <span class="material-icons-round" style="font-size:8px">check_circle</span>발견
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="card-name">삼성전자_ESG보고서_2024.pdf</div>
+          <div class="card-footer">
+            <span class="card-type" style="color:#85adff">문서</span>
+            <span class="card-conf">94%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 카드 2 — found -->
+      <div class="file-card found">
+        <div class="card-thumb">
+          <span class="card-badge">#2</span>
+          <span class="file-icon">📷</span>
+          <div class="card-status-badge found">
+            <span class="material-icons-round" style="font-size:8px">check_circle</span>발견
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="card-name">ESG_summary_slide.png</div>
+          <div class="card-footer">
+            <span class="card-type" style="color:#34d399">이미지</span>
+            <span class="card-conf">81%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 카드 3 — not found -->
+      <div class="file-card not-found">
+        <div class="card-thumb">
+          <span class="card-badge">#3</span>
+          <span class="file-icon">🎬</span>
+        </div>
+        <div class="card-body">
+          <div class="card-name">삼성_IR_발표영상.mp4</div>
+          <div class="card-footer">
+            <span class="card-type" style="color:#ac8aff">영상</span>
+            <span class="card-conf">62%</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>
