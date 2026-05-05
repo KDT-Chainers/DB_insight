@@ -1343,12 +1343,28 @@ _KO_EN: dict[str, list[str]] = {
     "gpt":          ["GPT", "ChatGPT", "언어모델"],
     "openai":       ["OpenAI", "GPT", "ChatGPT"],
     "anthropic":    ["Anthropic", "클로드"],
+    "앤트로픽":     ["Anthropic", "Claude", "클로드"],
     "gemini":       ["Gemini", "Google AI"],
     "박태웅":       ["Park Taewung", "Park Tae-woong", "AI expert"],
     "taewung":      ["박태웅", "Park Tae-woong"],
+    "샘":           ["Sam", "Sam Altman", "Samuel"],
+    "알트먼":       ["Altman", "Sam Altman", "OpenAI CEO"],
+    "altman":       ["알트먼", "샘 알트먼", "Sam Altman", "OpenAI"],
+    "미토스":       ["Mythos", "AI model", "Anthropic"],
+    "mythos":       ["미토스", "AI model"],
     "세이건":       ["Sagan", "Carl Sagan", "칼 세이건"],
     "외계인":       ["alien", "aliens", "extraterrestrial", "UFO"],
     "외계생명체":   ["extraterrestrial life", "alien life", "ET"],
+    # ── 미디어 / 팟캐스트 ────────────────────────────────────────────
+    "김어준":       ["Kim Eojun", "Das Beoida", "podcast", "시사"],
+    "다스뵈이다":   ["Das Beoida", "김어준", "podcast", "시사"],
+    # ── 개발 방법론 ──────────────────────────────────────────────────
+    "바이브":       ["vibe", "vibe coding", "AI coding"],
+    "바이브코딩":   ["vibe coding", "AI coding", "no-code", "바이브 코딩"],
+    "바이브 코딩":  ["vibe coding", "AI coding", "no-code"],
+    "vibe":         ["바이브", "바이브 코딩", "vibe coding"],
+    "퀀트":         ["quant", "quantitative", "quantitative investing", "알고리즘 투자"],
+    "quant":        ["퀀트", "quantitative", "알고리즘 투자"],
 
     # ── 교육 / 상담 ──────────────────────────────────────────────────
     "상담":         ["counseling", "consultation", "counselling"],
