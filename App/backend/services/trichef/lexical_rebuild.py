@@ -45,10 +45,12 @@ _DOMAIN_FORCED_KEYWORDS: dict[str, list[str]] = {
         "silk", "road", "empire", "dynasty", "medieval", "civilization",
         "expedition", "conquest", "revolution", "invention", "pioneer",
         "history", "historical", "ancient", "culture", "heritage",
-        # 과학/자연 영어 (과학을 보다, 기후 시리즈)
+        # 과학/자연/생태 영어 (다큐멘터리 도메인)
         "science", "scientific", "nature", "climate", "temperature", "global",
         "warming", "carbon", "environment", "environmental", "energy",
         "research", "experiment", "discovery", "theory",
+        "wildlife", "ecology", "ecosystem", "habitat", "species", "fauna", "flora",
+        "animal", "biology", "biodiversity", "ocean", "forest", "migration",
         # 경제/사회 영어 (돈의 얼굴, 경제위기 시리즈)
         "economy", "economics", "economic", "finance", "financial",
         "money", "monetary", "currency", "investment", "inflation",
@@ -72,9 +74,11 @@ _DOMAIN_FORCED_KEYWORDS: dict[str, list[str]] = {
         "역사", "문명", "고대", "중세", "제국",
         # 인류 다큐
         "흑사병", "산업혁명", "신대륙", "철기시대", "대항해",
-        # 과학/자연 (과학을 보다, 기후 시리즈)
+        # 과학/자연/생태 (다큐멘터리 도메인)
         "과학", "자연", "기후", "온난화", "탄소", "환경", "기온",
         "에너지", "연구", "실험", "발견", "이론", "생물",
+        "야생동물", "생태", "생태계", "서식지", "생물다양성", "동물",
+        "식물", "바다", "숲", "이동", "번식", "멸종",
         # 경제/사회 (돈의 얼굴, 한국경제 시리즈)
         "경제", "금융", "투자", "돈", "화폐", "인플레이션",
         "자본주의", "금리", "시장", "무역", "성장", "위기",
