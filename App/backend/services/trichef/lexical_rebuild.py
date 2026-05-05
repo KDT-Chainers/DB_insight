@@ -180,6 +180,9 @@ _DOMAIN_FORCED_KEYWORDS: dict[str, list[str]] = {
         "fiscal", "fiscal rule", "soundness", "consolidation",
         "legislation", "bill", "act", "statutory", "budget",
         "public finance", "government finance",
+        # 환경/무역 (영어) — CBAM·탄소국경조정 문서 특화
+        "CBAM", "carbon border", "carbon emission", "carbon tax",
+        "EU CBAM", "greenhouse", "net zero", "carbon neutral",
         # ── 한국어 도메인 핵심 어근 ──────────────────────────────────────────
         # 경제/금융 — 복합어 strip 매칭으로 '경제지표를'→'경제' 등 포착
         "경제", "금융", "주식", "투자", "무역", "수출", "수입",
