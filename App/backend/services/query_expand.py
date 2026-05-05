@@ -143,6 +143,7 @@ _KO_EN: dict[str, list[str]] = {
     "풀":           ["grass", "herb", "plant"],
     "열매":         ["fruit", "berry", "berries"],
     "과일":         ["fruit", "fruits"],
+    "사과":         ["apple", "apples", "fruit"],
     "씨앗":         ["seed", "seeds"],
     "잎":           ["leaf", "leaves", "foliage"],
     "가지":         ["branch", "twig", "stem"],
@@ -226,6 +227,7 @@ _KO_EN: dict[str, list[str]] = {
     "표면":         ["surface", "texture", "material"],
     "질감":         ["texture", "feel", "surface quality"],
     "무늬":         ["pattern", "motif", "design"],
+    "그라데이션":   ["gradient", "color gradient", "gradation"],
     # EN→KO 실내/가구/텍스처 역방향
     "interior":     ["실내", "인테리어"],
     "decor":        ["인테리어", "장식"],
@@ -239,6 +241,8 @@ _KO_EN: dict[str, list[str]] = {
     "pattern":      ["패턴", "무늬"],
     "background":   ["배경"],
     "surface":      ["표면", "질감"],
+    "gradient":     ["그라데이션", "색조"],
+    "apple":        ["사과", "과일"],
 
     # ── 뉴스 / 방송 ────────────────────────────────────────────────
     "뉴스":         ["news", "broadcast"],
@@ -539,7 +543,7 @@ _KO_EN: dict[str, list[str]] = {
     "LLM":          ["LLM", "large language model", "언어모델"],
     # ── 복합명사 (doc 도메인 고빈도) ─────────────────────────────────
     "인공지능산업":  ["AI industry", "artificial intelligence industry"],
-    "소프트웨어산업": ["software industry"],
+    "소프트웨어산업": ["software industry", "SW industry"],
     "반도체산업":   ["semiconductor industry"],
     "정보통신":     ["information communication", "ICT"],
     "ICT":          ["정보통신", "ICT", "information technology"],
@@ -551,6 +555,34 @@ _KO_EN: dict[str, list[str]] = {
     "클라우드컴퓨팅": ["cloud computing"],
     "사이버보안":   ["cybersecurity", "information security"],
     "생성형":       ["generative", "generative AI"],
+    # ── VR / AR / XR ────────────────────────────────────────────────
+    "가상현실":     ["virtual reality", "VR", "VR experience"],
+    "증강현실":     ["augmented reality", "AR", "AR experience"],
+    "혼합현실":     ["mixed reality", "XR", "MR"],
+    "vr":           ["가상현실", "virtual reality"],
+    "ar":           ["증강현실", "augmented reality"],
+    "xr":           ["혼합현실", "XR", "가상현실", "증강현실"],
+    "virtual":      ["가상", "가상현실"],
+    "augmented":    ["증강", "증강현실"],
+    # ── e-learning ──────────────────────────────────────────────────
+    "이러닝":       ["e-learning", "online learning", "digital learning"],
+    "온라인교육":   ["online education", "e-learning", "distance learning"],
+    "e-learning":   ["이러닝", "온라인 학습", "온라인교육"],
+    "elearning":    ["이러닝", "온라인 학습"],
+    # ── SaaS ────────────────────────────────────────────────────────
+    "saas":         ["SaaS", "software as a service", "서비스형 소프트웨어"],
+    "서비스형소프트웨어": ["SaaS", "software as a service"],
+    # ── AI/ML 모델 아키텍처 (논문 검색 대응) ────────────────────────
+    "트랜스포머":   ["transformer", "transformer model", "attention mechanism"],
+    "어텐션":       ["attention", "self-attention", "attention mechanism"],
+    "자기어텐션":   ["self-attention", "multi-head attention"],
+    "bert":         ["BERT", "language model", "언어모델", "사전학습"],
+    "transformer":  ["트랜스포머", "언어모델", "attention"],
+    "attention":    ["어텐션", "self-attention", "주목"],
+    # ── SPRI / SW산업 (문서 특화) ───────────────────────────────────
+    "spri":         ["SPRI", "소프트웨어정책연구소", "SW 정책"],
+    "소프트웨어정책연구소": ["SPRI", "SW Policy Research Institute"],
+    "sw":           ["software", "소프트웨어"],
     # EN single-word → KO expansions (for "artificial intelligence" query tokenized as ["artificial","intelligence"])
     "artificial":   ["인공지능", "AI"],
     "intelligence": ["인공지능", "AI"],
@@ -959,7 +991,7 @@ _KO_EN: dict[str, list[str]] = {
     "지원":         ["support"],
     "보고서":       ["report", "white paper"],
     "연간보고서":   ["annual report", "yearly report"],
-    "실태조사":     ["survey", "survey report", "investigation report"],
+    "실태조사":     ["industry survey", "survey report", "research report"],
     "통계":         ["statistics", "statistical"],
     "정책":         ["policy", "policies"],
     "산업":         ["industry", "industrial"],
