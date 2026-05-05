@@ -491,6 +491,17 @@ def _av_stt_texts(segments: list[dict],
         if category:
             title = f"{category} {title}".strip()
 
+        # 숫자 전용 파일명(001.mp4 등): 루트 폴더에서 의미 있는 토큰 추출
+        # 예: 정혜_BGM_1차/001.mp4 → category="BGM 정혜" 주입
+        if not category and fname and Path(fname).stem.isdigit() and file_path:
+            fp_parts = Path(file_path).parts
+            root_folder = (fp_parts[-2] if len(fp_parts) >= 2
+                           else (fp_parts[0] if fp_parts else ""))
+            if root_folder:
+                tokens = _re_av.findall(r'[A-Z]{2,}|[가-힣]{2,}', root_folder)
+                if tokens:
+                    title = f"{' '.join(tokens)} {title}".strip()
+
         # 파일별 메타데이터 조회 (있는 경우에만 삽입)
         meta  = _lookup_metadata(fname, metadata_map) if metadata_map else ""
         if meta:
