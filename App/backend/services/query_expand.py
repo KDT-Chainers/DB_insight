@@ -126,7 +126,11 @@ _KO_EN: dict[str, list[str]] = {
     "반려견":       ["dog", "pet dog", "puppy", "canine"],
     "반려동물":     ["pet", "companion animal", "domestic animal"],
     "개":           ["dog", "canine"],
-    "새":           ["bird", "avian"],
+    "새":           ["bird", "avian", "bird species"],
+    "야생동물":     ["wildlife", "wild animal", "creature", "fauna"],
+    "서식지":       ["habitat", "natural habitat", "ecosystem"],
+    "생태":         ["ecology", "ecosystem", "ecological", "biodiversity"],
+    "생태계":       ["ecosystem", "ecology", "biome"],
     "물고기":       ["fish", "aquatic animal"],
     "토끼":         ["rabbit", "bunny"],
     "햄스터":       ["hamster", "rodent"],
@@ -163,6 +167,27 @@ _KO_EN: dict[str, list[str]] = {
     "노을":         ["sunset", "dusk", "golden hour", "twilight"],
     "일몰":         ["sunset", "dusk", "sundown"],
     "일출":         ["sunrise", "dawn"],
+    # 계절 (KO→EN)
+    "봄":           ["spring", "springtime", "spring season"],
+    "여름":         ["summer", "summertime", "summer season"],
+    "가을":         ["autumn", "fall", "autumn season", "harvest"],
+    "겨울":         ["winter", "wintertime", "winter season"],
+    # 시각/감정/표정 (이미지 도메인)
+    "미소":         ["smile", "smiling", "grin", "laugh"],
+    "눈물":         ["tear", "tears", "crying", "weeping", "emotional"],
+    "행복":         ["happiness", "happy", "joy", "joyful", "cheerful"],
+    "슬픔":         ["sadness", "sorrow", "grief", "melancholy", "sad"],
+    "공포":         ["fear", "horror", "scary", "frightening", "terror"],
+    # 시각 특성
+    "빛나는":       ["shining", "glowing", "bright", "radiant", "luminous"],
+    "반짝이는":     ["sparkling", "twinkling", "glittering", "shimmering"],
+    # 영상/촬영
+    "촬영":         ["filming", "shooting", "recorded", "captured", "filmed"],
+    "클립":         ["clip", "video clip", "snippet", "footage"],
+    # BGM/효과음
+    "BGM":          ["background music", "BGM", "soundtrack", "ambient"],
+    "효과음":       ["sound effect", "sfx", "audio effect"],
+    "사운드트랙":   ["soundtrack", "OST", "score", "film score"],
 
     # ── 사물 ──────────────────────────────────────────────────────
     "노트북":       ["laptop", "notebook"],
@@ -343,6 +368,28 @@ _KO_EN: dict[str, list[str]] = {
     "forest":       ["숲", "나무"],
     "sunset":       ["노을", "일몰", "석양"],
     "sunrise":      ["일출"],
+    # 계절 (EN→KO)
+    "spring":       ["봄", "봄철", "봄날"],
+    "summer":       ["여름", "여름철", "한여름"],
+    "autumn":       ["가을", "가을철", "단풍"],
+    "fall":         ["가을", "단풍", "낙엽"],
+    "winter":       ["겨울", "겨울철", "눈"],
+    # 시각/감정 (EN→KO)
+    "smile":        ["미소", "웃음", "웃는"],
+    "smiling":      ["미소", "웃는"],
+    "tear":         ["눈물", "울음", "감동"],
+    "happiness":    ["행복", "기쁨", "행복한"],
+    "sorrow":       ["슬픔", "슬픈", "우울"],
+    "fear":         ["공포", "두려움", "무서운"],
+    "sparkling":    ["반짝이는", "빛나는", "반짝"],
+    "shining":      ["빛나는", "반짝이는", "빛"],
+    # 생태/자연과학 (EN→KO)
+    "ecology":      ["생태", "생태계", "자연"],
+    "ecosystem":    ["생태계", "생태", "환경"],
+    "habitat":      ["서식지", "자연환경"],
+    # 효과음/BGM (EN→KO)
+    "sound effect": ["효과음", "사운드"],
+    "sfx":          ["효과음", "사운드 이펙트"],
     "indoor":       ["실내"],
     "outdoor":      ["야외", "실외"],
     "doll":         ["인형", "봉제인형"],
