@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain, dialog, protocol } = require('electron')
 const path = require('path')
+const { pathToFileURL } = require('url')
 const { spawn, execSync } = require('child_process')
 const os = require('os')
 const fs = require('fs')
@@ -223,36 +224,56 @@ function waitForBackend(maxRetries = 300, interval = 600) {
 // 스플래시 창
 // ---------------------------------------------------------------------------
 
-const SPLASH_HTML = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+/** 배포(dist) 또는 개발(public)에서 teamlogo.png 경로 */
+function resolveSplashLogoPath() {
+  const candidates = [
+    path.join(__dirname, '..', 'dist', 'teamlogo.png'),
+    path.join(__dirname, '..', 'public', 'teamlogo.png'),
+  ]
+  for (const p of candidates) {
+    try {
+      if (fs.existsSync(p)) return p
+    } catch (_) {}
+  }
+  return null
+}
+
+function buildSplashHtml(logoFileUrl) {
+  const logoImg = logoFileUrl
+    ? `<img class="logo-img" src="${logoFileUrl}" alt="" width="40" height="40" />`
+    : `<div class="logo-fallback" aria-hidden="true">DB</div>`
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:radial-gradient(ellipse 100% 88% at -4% 106%,rgba(37,99,235,0.72) 0%,rgba(59,130,246,0.38) 32%,rgba(5,16,79,0.35) 58%,transparent 76%),radial-gradient(ellipse 100% 88% at 104% 106%,rgba(56,189,248,0.65) 0%,rgba(96,165,250,0.35) 34%,rgba(5,16,79,0.28) 58%,transparent 76%),linear-gradient(to top,rgba(77,212,232,0.55) 0%,rgba(77,212,232,0.22) 12%,rgba(59,130,246,0.1) 28%,transparent 48%),linear-gradient(to bottom,#020510 0%,#05104f 42%,#040c35 78%,#030818 100%);color:#dfe4fe;font-family:'Segoe UI',sans-serif;
+body{background:linear-gradient(90deg,#3d69a2 0%,#284a8f 22%,#1e3a7a 50%,#284a8f 78%,#3d69a2 100%),
+  radial-gradient(ellipse 120% 100% at 50% 100%,rgba(15,30,70,.45) 0%,transparent 55%);
+  color:#e8eefc;font-family:'Segoe UI',sans-serif;
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   height:100vh;overflow:hidden;user-select:none;-webkit-app-region:drag}
 .glow{position:fixed;width:280px;height:280px;border-radius:50%;
-  background:radial-gradient(circle,rgba(133,173,255,.15) 0%,transparent 70%);
+  background:radial-gradient(circle,rgba(100,150,220,.12) 0%,transparent 70%);
   top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none}
 .logo{display:flex;align-items:center;gap:10px;margin-bottom:20px}
-.icon{width:34px;height:34px;border-radius:8px;
-  background:linear-gradient(135deg,#85adff,#ac8aff);
-  display:flex;align-items:center;justify-content:center;font-size:16px}
-.name{font-size:19px;font-weight:900;letter-spacing:-.5px;color:#85adff}
-.status{font-size:11px;color:#a5aac2;letter-spacing:.15em;text-transform:uppercase;margin-bottom:18px;text-align:center}
-.dots span{animation:blink 1.2s infinite;color:#85adff}
+.logo-img{width:40px;height:40px;object-fit:contain;display:block;filter:drop-shadow(0 1px 2px rgba(0,0,0,.25))}
+.logo-fallback{width:40px;height:40px;border-radius:8px;background:rgba(255,255,255,.12);
+  display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#e8eefc}
+.name{font-size:19px;font-weight:900;letter-spacing:-.5px;color:#e8eefc}
+.status{font-size:11px;color:rgba(232,238,252,.72);letter-spacing:.15em;text-transform:uppercase;margin-bottom:18px;text-align:center}
+.dots span{animation:blink 1.2s infinite;color:#9ec0f0}
 .dots span:nth-child(2){animation-delay:.2s}
 .dots span:nth-child(3){animation-delay:.4s}
 @keyframes blink{0%,80%,100%{opacity:.2}40%{opacity:1}}
-.bar-wrap{width:200px;height:3px;background:rgba(255,255,255,.08);border-radius:2px;overflow:hidden;margin-bottom:8px}
-.bar{height:100%;width:40%;background:linear-gradient(90deg,#85adff,#ac8aff);
+.bar-wrap{width:200px;height:3px;background:rgba(255,255,255,.12);border-radius:2px;overflow:hidden;margin-bottom:8px}
+.bar{height:100%;width:40%;background:linear-gradient(90deg,#3d69a2,#7aa3e0,#3d69a2);
   animation:slide 1.4s ease-in-out infinite}
 @keyframes slide{0%{transform:translateX(-100%)}100%{transform:translateX(350%)}}
-#lo-bar{height:100%;width:0%;background:linear-gradient(90deg,#85adff,#ac8aff);
+#lo-bar{height:100%;width:0%;background:linear-gradient(90deg,#3d69a2,#9ec0f0);
   border-radius:2px;transition:width .4s ease;display:none}
-#lo-detail{font-size:9px;color:#6b7194;margin-top:4px;text-align:center;max-width:260px;
+#lo-detail{font-size:9px;color:rgba(232,238,252,.45);margin-top:4px;text-align:center;max-width:260px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:none}
-.ver{position:fixed;bottom:12px;font-size:9px;color:rgba(165,170,194,.3);letter-spacing:.1em}
+.ver{position:fixed;bottom:12px;font-size:9px;color:rgba(232,238,252,.28);letter-spacing:.1em}
 </style></head><body>
 <div class="glow"></div>
-<div class="logo"><div class="icon">⬡</div><span class="name">DB_insight</span></div>
+<div class="logo">${logoImg}<span class="name">DB_insight</span></div>
 <p id="splash-status" class="status">앱 실행 중입니다 <span class="dots"><span>.</span><span>.</span><span>.</span></span></p>
 <div class="bar-wrap">
   <div class="bar" id="boot-bar"></div>
@@ -261,10 +282,15 @@ body{background:radial-gradient(ellipse 100% 88% at -4% 106%,rgba(37,99,235,0.72
 <p id="lo-detail"></p>
 <span class="ver">v0.1.0</span>
 </body></html>`
+}
 
 function createSplash() {
+  const logoPath = resolveSplashLogoPath()
+  const logoHref = logoPath ? pathToFileURL(logoPath).href : ''
+  const html = buildSplashHtml(logoHref)
+
   const tmpPath = path.join(os.tmpdir(), 'dbinsight_splash.html')
-  try { fs.writeFileSync(tmpPath, SPLASH_HTML, 'utf8') } catch (_) {}
+  try { fs.writeFileSync(tmpPath, html, 'utf8') } catch (_) {}
 
   splashWindow = new BrowserWindow({
     width: 340,
@@ -273,7 +299,7 @@ function createSplash() {
     resizable: false,
     center: true,
     alwaysOnTop: true,
-    backgroundColor: '#020510', /* index.css --app-bg-top 과 동일 */
+    backgroundColor: '#1e3a7a',
     show: true,                 // 생성 즉시 표시
     webPreferences: { nodeIntegration: false, contextIsolation: true },
   })

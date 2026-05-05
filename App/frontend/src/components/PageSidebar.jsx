@@ -9,6 +9,7 @@
  *   footerSub  {node}      프로필 아래 두 번째 줄 (기본: "심층 분석 접근 권한")
  */
 import { useNavigate } from 'react-router-dom'
+import TeamLogoMark from './TeamLogoMark'
 
 export default function PageSidebar({ subtitle, children, footerExtra, footerSub }) {
   const navigate = useNavigate()
@@ -22,12 +23,7 @@ export default function PageSidebar({ subtitle, children, footerExtra, footerSub
           onClick={() => navigate('/search')}
           className="flex items-center gap-3 hover:opacity-80 transition-opacity text-left"
         >
-          <div className="w-8 h-8 bg-gradient-to-br from-primary to-secondary rounded-lg flex items-center justify-center shrink-0">
-            <span
-              className="material-symbols-outlined text-on-primary-fixed text-lg"
-              style={{ fontVariationSettings: '"FILL" 1' }}
-            >dataset</span>
-          </div>
+          <TeamLogoMark />
           <div>
             <h1 className="text-xl font-black text-[#dfe4fe] leading-none">DB_insight</h1>
             <p className="text-base uppercase tracking-widest text-[#a5aac2] mt-1">{subtitle}</p>

@@ -1,9 +1,9 @@
 import { useNavigate } from "react-router-dom";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useScale } from "../context/ScaleContext";
 import { API_BASE } from "../api";
 import WindowControls from "../components/WindowControls";
-import PageSidebar from "../components/PageSidebar";
+import StudioThreePaneShell from "../components/StudioThreePaneShell";
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -129,65 +129,160 @@ export default function Settings() {
     }
   };
 
-  return (
-    <div className="studio-bridge-bg text-on-surface flex h-screen overflow-hidden">
-      {/* ── Sidebar ── */}
-      <PageSidebar subtitle="시스템 설정">
-        {[
-          {
-            icon: "database",
-            label: "워크스페이스",
-            onClick: () => navigate("/search"),
-          },
-          {
-            icon: "account_tree",
-            label: "인덱싱",
-            onClick: () => navigate("/data"),
-          },
-          { icon: "tune", label: "설정", active: true },
-        ].map((item) => (
-          <button
-            key={item.label}
-            onClick={item.onClick}
-            className={`w-full flex items-center gap-3 rounded-xl px-4 py-2.5 text-base font-manrope uppercase tracking-widest transition-all
-              ${
-                item.active
-                  ? "text-primary bg-[#1c253e]"
-                  : "text-[#a5aac2] hover:bg-[#1c253e]/50 hover:text-[#dfe4fe]"
-              }`}
-          >
-            <span className="material-symbols-outlined text-base">
-              {item.icon}
-            </span>
-            {item.label}
-          </button>
-        ))}
-      </PageSidebar>
+  const navItems = useMemo(
+    () => [
+      {
+        key: "ws",
+        icon: "database",
+        label: "워크스페이스",
+        subtitle: "검색 · 기록",
+        active: false,
+        onClick: () => navigate("/search"),
+      },
+      {
+        key: "data",
+        icon: "account_tree",
+        label: "데이터",
+        subtitle: "소스 · 인덱싱 · 벡터",
+        active: false,
+        onClick: () => navigate("/data"),
+      },
+      {
+        key: "settings",
+        icon: "tune",
+        label: "시스템 설정",
+        subtitle: "보안 · 환경 · API",
+        active: true,
+        onClick: () => {},
+      },
+    ],
+    [navigate],
+  );
 
-      {/* ── Main — AI 홈과 동일 #000 베이스 위 은은한 퍼플 글로우 */}
-      <main className="relative flex flex-1 flex-col overflow-hidden">
-        <div className="pointer-events-none absolute right-0 top-0 h-[min(480px,85vw)] w-[min(480px,85vw)] rounded-full bg-[rgba(149,164,252,0.1)] blur-[130px]" />
-        <div className="pointer-events-none absolute bottom-0 left-1/4 h-[min(380px,65vw)] w-[min(380px,65vw)] rounded-full bg-[rgba(5,11,48,0.55)] blur-[110px]" />
-
-        {/* 드래그 타이틀바 */}
-        <header
-          className="titlebar-chrome-studio shrink-0 flex justify-end items-center px-2 h-8 z-40"
-          style={{ WebkitAppRegion: "drag" }}
+  const settingsBreadcrumb = useMemo(
+    () => (
+      <>
+        <button
+          type="button"
+          onClick={() => navigate("/search")}
+          className="shrink-0 rounded-lg px-1.5 py-0.5 text-white/48 transition hover:bg-white/[0.08] hover:text-white/88"
         >
-          <div style={{ WebkitAppRegion: "no-drag" }}>
-            <WindowControls />
+          홈
+        </button>
+        <span className="material-symbols-outlined shrink-0 text-[15px] text-white/22">
+          chevron_right
+        </span>
+        <span className="min-w-0 truncate font-medium text-white/88">시스템 설정</span>
+      </>
+    ),
+    [navigate],
+  );
+
+  const settingsRightWidgets = useMemo(
+    () => (
+      <>
+        <div className="apple-widget-card rounded-[18px] p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-sky-200/85">
+              보안
+            </span>
+            <span className="material-symbols-outlined text-lg text-white/28">shield</span>
           </div>
-        </header>
+          <p className="text-[12px] leading-relaxed text-white/38">
+            마스터 비밀번호는 로컬 DB 복호화에 사용됩니다. 상단 또는 본문에서 변경할 수
+            있습니다.
+          </p>
+        </div>
+        <div className="apple-widget-card rounded-[18px] p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/55">
+              BGM API
+            </span>
+            <span className="material-symbols-outlined text-lg text-white/28">music_note</span>
+          </div>
+          <p className="text-[12px] leading-relaxed text-white/38">
+            외부 음원 인식은 끄면 호출이 발생하지 않습니다. 키 저장 후 카탈로그 동기화를
+            실행하세요.
+          </p>
+        </div>
+        <div className="apple-widget-card rounded-[18px] p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/55">
+              적용
+            </span>
+            <span className="material-symbols-outlined text-lg text-white/28">bolt</span>
+          </div>
+          <p className="text-[12px] leading-relaxed text-white/38">
+            UI 배율은 즉시 반영됩니다. 위험 구역 작업은 되돌릴 수 없으니 신중히 진행하세요.
+          </p>
+        </div>
+      </>
+    ),
+    [],
+  );
 
-        <div className="flex-1 overflow-y-auto">
-          <div className="max-w-3xl mx-auto px-8 py-8 relative z-10">
-            <header className="mb-8">
-              <h2 className="di-section-title mb-1 text-2xl">시스템 설정</h2>
-              <p className="text-sm text-on-surface-variant">
-                DB_insight 노드 파라미터 및 보안 프로토콜을 관리합니다.
-              </p>
+  const settingsHero = useMemo(
+    () => (
+      <div className="min-w-0">
+        <span className="inline-flex items-center rounded-full bg-white/[0.1] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-white/80 ring-1 ring-white/[0.12]">
+          시스템
+        </span>
+        <h2 className="mt-2 text-[1.65rem] font-bold tracking-tight text-white sm:text-[1.85rem]">
+          시스템 설정
+        </h2>
+        <p className="mt-2 max-w-3xl text-[14px] leading-relaxed text-white/56">
+          DB_insight 노드 파라미터 및 보안 프로토콜을 관리합니다.
+        </p>
+      </div>
+    ),
+    [],
+  );
+
+  const settingsToolbarRight = (
+    <button
+      type="button"
+      onClick={openModal}
+      className="inline-flex h-9 items-center gap-1.5 rounded-full bg-white/[0.1] px-3.5 text-[12px] font-semibold text-white/90 ring-1 ring-white/[0.12] transition hover:bg-white/[0.14]"
+    >
+      <span className="material-symbols-outlined text-base text-white/70">key</span>
+      비밀번호
+    </button>
+  );
+
+  return (
+    <div className="studio-bridge-bg relative flex h-screen overflow-hidden text-on-surface">
+      <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+        <div className="pointer-events-none absolute -left-[14%] -top-[22%] h-[min(520px,92vw)] w-[min(520px,92vw)] rounded-full bg-[rgba(22,62,198,0.34)] blur-[132px]" />
+        <div className="pointer-events-none absolute -bottom-[10%] -right-[8%] h-[min(400px,72vw)] w-[min(400px,72vw)] rounded-full bg-[rgba(56,40,124,0.3)] blur-[118px]" />
+        <div className="pointer-events-none absolute -bottom-[14%] left-1/4 right-1/4 h-[min(360px,45vh)] rounded-full bg-black/58 blur-[96px]" />
+      </div>
+
+      <div className="relative z-10 flex min-h-0 min-w-0 flex-1">
+        <StudioThreePaneShell
+          discoverTitle="설정"
+          areaSubtitle="시스템 설정"
+          navSectionLabel="메뉴"
+          navItems={navItems}
+          footerSub={
+            <span className="text-[11px] text-white/40">심층 분석 접근 권한</span>
+          }
+          breadcrumb={settingsBreadcrumb}
+          rightWidgets={settingsRightWidgets}
+          titleBar={
+            <header
+              className="titlebar-chrome-studio z-40 flex h-8 shrink-0 items-center justify-end px-2"
+              style={{ WebkitAppRegion: "drag" }}
+            >
+              <div style={{ WebkitAppRegion: "no-drag" }}>
+                <WindowControls />
+              </div>
             </header>
-
+          }
+          toolbarRight={settingsToolbarRight}
+          hero={settingsHero}
+          listSectionTitle="구성"
+        >
+          <div className="relative z-10 mx-auto max-w-[46rem] px-4 py-5 sm:px-6 sm:py-6">
             <div className="flex flex-col gap-5">
               {/* 보안 */}
               <section className="di-glass-card settings-glass-strong rounded-md p-6">
@@ -208,7 +303,7 @@ export default function Settings() {
                   </div>
                   <button
                     onClick={openModal}
-                    className="shrink-0 bg-gradient-to-tr from-primary to-secondary text-on-primary font-bold py-2.5 px-6 rounded-full text-lg shadow-lg shadow-primary/20 hover:scale-105 active:scale-95 transition-all duration-200 whitespace-nowrap"
+                    className="shrink-0 rounded-full border border-white/[0.16] bg-white/[0.08] px-6 py-2.5 text-lg font-bold text-white/90 shadow-[0_8px_24px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.08)] transition-all duration-200 hover:bg-white/[0.12] active:scale-95 whitespace-nowrap"
                   >
                     비밀번호 변경
                   </button>
@@ -302,7 +397,7 @@ export default function Settings() {
                           <p className="text-sm font-semibold text-on-surface">
                             {item.label}
                           </p>
-                          <p className="text-xs text-on-surface-variant mt-0.5">
+                          <p className="text-xs text-on-surface-variant/80 mt-0.5">
                             {item.desc}
                           </p>
                         </div>
@@ -321,7 +416,7 @@ export default function Settings() {
               </section>
 
               {/* BGM 검색 — 외부 API 스위치 */}
-              <section className="glass-panel p-6 rounded-xl border border-pink-500/20 bg-pink-500/5 relative overflow-hidden">
+              <section className="di-glass-card settings-glass-strong relative overflow-hidden rounded-md border border-pink-500/22 bg-pink-500/[0.04] p-6">
                 <div className="absolute -right-16 -bottom-16 w-48 h-48 bg-pink-500/10 blur-[60px] rounded-full" />
                 <div className="flex items-center gap-2 mb-5">
                   <span className="material-symbols-outlined text-pink-400">
@@ -333,19 +428,19 @@ export default function Settings() {
                   <div className="h-px flex-grow bg-pink-500/20" />
                 </div>
                 <div className="space-y-4 relative z-10">
-                  <p className="text-sm text-on-surface-variant">
+                  <p className="text-sm text-on-surface-variant/85">
                     기본은 로컬 모델 (Chromaprint + CLAP)로 검색합니다. 외부
                     ACRCloud API를 켜면 메타데이터 보강 및 fallback으로 이용할
                     수 있습니다.
                   </p>
 
                   {/* 마스터 토글 */}
-                  <div className="p-4 rounded-xl bg-surface-container-low border border-outline-variant/10 flex items-center justify-between gap-3">
+                  <div className="rounded-md border border-outline-variant/10 bg-surface-container-low p-4 flex items-center justify-between gap-3">
                     <div>
                       <p className="text-sm font-semibold text-on-surface">
                         외부 음원 인식 API 사용
                       </p>
-                      <p className="text-xs text-on-surface-variant mt-0.5">
+                      <p className="text-xs text-on-surface-variant/80 mt-0.5">
                         OFF 상태에서는 외부 호출이 0건이며 로컬 모델만
                         사용합니다.
                       </p>
@@ -495,8 +590,8 @@ export default function Settings() {
               </section>
             </div>
           </div>
-        </div>
-      </main>
+        </StudioThreePaneShell>
+      </div>
 
       {/* ── 비밀번호 변경 모달 ── */}
       {modalOpen && (

@@ -15,10 +15,10 @@
   background-color: var(--app-bg-top);
 }
 
-/* 데이터·설정·스튜디오 — AI 홈과 동일 상단 크롬 (#000) */
+/* 데이터·설정·스튜디오 — 순블랙 크롬 + 중성 테두리 */
 .titlebar-chrome-studio {
   background-color: #000000;
-  border-bottom: 1px solid rgba(139, 92, 246, 0.1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 /*
@@ -65,42 +65,125 @@ body.app-depth-bg {
 }
 
 /*
- * 공용 스튜디오(데이터 소스·인덱싱·벡터 저장소·설정) — AI 홈과 동일 #000 베이스 + 은은한 바이올렛 딥
+ * 공용 스튜디오 — 메시 글로우: 좌상 블루(한 톤 다운) · 우하 바이올렛(한 톤 다운) · #050507 베이스
  */
 .studio-bridge-bg {
-  background-color: #000000;
+  background-color: #050507;
   background-image:
-    radial-gradient(ellipse 120% 90% at 50% 42%, rgba(88, 28, 135, 0.18) 0%, transparent 58%),
-    radial-gradient(ellipse 100% 70% at 50% -8%, rgba(139, 92, 246, 0.07) 0%, transparent 52%),
-    radial-gradient(ellipse 70% 55% at 100% 100%, rgba(30, 27, 75, 0.35) 0%, transparent 50%);
+    radial-gradient(
+      ellipse 148% 120% at -12% -16%,
+      rgba(22, 62, 198, 0.4) 0%,
+      rgba(22, 62, 198, 0.155) 46%,
+      transparent 84%
+    ),
+    radial-gradient(
+      ellipse 134% 114% at 114% 118%,
+      rgba(56, 40, 124, 0.33) 0%,
+      rgba(56, 40, 124, 0.115) 48%,
+      transparent 86%
+    ),
+    radial-gradient(
+      ellipse 130% 95% at 50% 118%,
+      rgba(0, 0, 0, 0.88) 0%,
+      transparent 56%
+    ),
+    linear-gradient(
+      165deg,
+      #0a0a0c 0%,
+      #050507 42%,
+      #030304 100%
+    );
 }
 
-/* 설정(관리자) — di-glass 위에 글래스만 한 단계 강화 */
+/* 스튜디오 셸 — 유리에 가깝게: 채움 최소 + 블러·얇은 테 두께감 */
+.apple-studio-unified-canvas {
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  background: linear-gradient(
+    165deg,
+    rgba(255, 255, 255, 0.032) 0%,
+    rgba(255, 255, 255, 0.012) 42%,
+    rgba(255, 255, 255, 0.003) 100%
+  );
+  backdrop-filter: blur(104px) saturate(1.1);
+  -webkit-backdrop-filter: blur(104px) saturate(1.1);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.06),
+    0 22px 72px rgba(0, 0, 0, 0.28);
+}
+
+/* 사이드바 열: 캔버스 위 살짝만 구획 */
+.apple-studio-sidebar-col {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.016) 0%,
+    rgba(255, 255, 255, 0.005) 50%,
+    transparent 100%
+  );
+}
+
+.apple-hero-card {
+  background: linear-gradient(
+    152deg,
+    rgba(255, 255, 255, 0.024) 0%,
+    rgba(255, 255, 255, 0.009) 40%,
+    rgba(255, 255, 255, 0.003) 100%
+  );
+  backdrop-filter: blur(62px) saturate(1.1);
+  -webkit-backdrop-filter: blur(62px) saturate(1.1);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  box-shadow:
+    0 10px 38px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.apple-widget-card {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: linear-gradient(
+    160deg,
+    rgba(255, 255, 255, 0.02) 0%,
+    rgba(255, 255, 255, 0.008) 45%,
+    rgba(255, 255, 255, 0.002) 100%
+  );
+  backdrop-filter: blur(54px) saturate(1.08);
+  -webkit-backdrop-filter: blur(54px) saturate(1.08);
+  box-shadow:
+    0 8px 28px rgba(0, 0, 0, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.apple-studio-widgets {
+  min-width: 0;
+}
+
+/* 설정(관리자) — 동일 유리 톤 */
 .di-glass-shell.settings-glass-strong {
-  backdrop-filter: blur(56px) saturate(1.52);
-  -webkit-backdrop-filter: blur(56px) saturate(1.52);
+  backdrop-filter: blur(64px) saturate(1.08);
+  -webkit-backdrop-filter: blur(64px) saturate(1.08);
   background: linear-gradient(
     155deg,
-    rgba(255, 255, 255, 0.07) 0%,
-    rgba(17, 25, 46, 0.5) 48%,
-    rgba(7, 13, 31, 0.62) 100%
+    rgba(255, 255, 255, 0.016) 0%,
+    rgba(255, 255, 255, 0.0055) 48%,
+    rgba(255, 255, 255, 0.002) 100%
   );
 }
 
 .di-glass-card.settings-glass-strong {
-  backdrop-filter: blur(44px) saturate(1.48);
-  -webkit-backdrop-filter: blur(44px) saturate(1.48);
+  backdrop-filter: blur(60px) saturate(1.06);
+  -webkit-backdrop-filter: blur(60px) saturate(1.06);
   background: linear-gradient(
     168deg,
-    rgba(255, 255, 255, 0.08) 0%,
-    rgba(255, 255, 255, 0.035) 40%,
-    rgba(6, 10, 26, 0.58) 100%
+    rgba(255, 255, 255, 0.018) 0%,
+    rgba(255, 255, 255, 0.006) 40%,
+    rgba(255, 255, 255, 0.0015) 100%
   );
-  border-color: rgba(165, 180, 252, 0.2);
+  border-color: rgba(255, 255, 255, 0.065);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.14),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.22),
-    0 12px 48px rgba(0, 0, 0, 0.45);
+    inset 0 1px 0 rgba(255, 255, 255, 0.055),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.1),
+    0 6px 32px rgba(0, 0, 0, 0.22);
 }
 
 html {
@@ -137,62 +220,64 @@ body {
   background-color: rgba(28, 37, 62, 0.6);
 }
 
-/* 데이터 인덱싱·설정 — 스튜디오 블랙 베이스 위 인디고 글래스 */
+/* 데이터 인덱싱·설정 — 순블랙 베이스 위 모노 글래스 */
 .di-glass-shell {
   background: linear-gradient(
     155deg,
-    rgba(28, 37, 62, 0.74) 0%,
-    rgba(17, 25, 46, 0.56) 50%,
-    rgba(10, 14, 28, 0.64) 100%
+    rgba(255, 255, 255, 0.03) 0%,
+    rgba(255, 255, 255, 0.012) 50%,
+    rgba(255, 255, 255, 0.004) 100%
   );
-  backdrop-filter: blur(44px) saturate(1.42);
-  -webkit-backdrop-filter: blur(44px) saturate(1.42);
-  border-right: 1px solid rgba(154, 168, 255, 0.14);
+  backdrop-filter: blur(54px) saturate(1.1);
+  -webkit-backdrop-filter: blur(54px) saturate(1.1);
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.1),
-    inset 0 0 0 1px rgba(199, 210, 254, 0.05),
-    16px 0 56px rgba(0, 0, 0, 0.5);
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.04),
+    16px 0 42px rgba(0, 0, 0, 0.32);
 }
 
+/* 본문 카드 — 채움 거의 없음 + 강 블러로 유리면 */
 .di-glass-card {
   background: linear-gradient(
     168deg,
-    rgba(28, 37, 62, 0.62) 0%,
-    rgba(17, 31, 54, 0.5) 42%,
-    rgba(7, 13, 28, 0.52) 100%
+    rgba(255, 255, 255, 0.018) 0%,
+    rgba(255, 255, 255, 0.007) 42%,
+    rgba(255, 255, 255, 0.002) 100%
   );
-  backdrop-filter: blur(36px) saturate(1.36);
-  -webkit-backdrop-filter: blur(36px) saturate(1.36);
-  border: 1px solid rgba(154, 168, 255, 0.14);
+  backdrop-filter: blur(64px) saturate(1.08);
+  -webkit-backdrop-filter: blur(64px) saturate(1.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.09),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.25),
-    0 10px 42px rgba(0, 0, 0, 0.42);
+    inset 0 1px 0 rgba(255, 255, 255, 0.17),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.04),
+    0 4px 22px rgba(0, 0, 0, 0.12);
 }
 
 .di-glass-card--accent {
-  border-color: rgba(165, 180, 252, 0.32);
+  border-color: rgba(255, 255, 255, 0.13);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.16),
-    0 10px 42px rgba(0, 0, 0, 0.28),
-    0 0 40px rgba(149, 164, 252, 0.14);
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.05),
+    0 4px 26px rgba(0, 0, 0, 0.14),
+    0 0 20px rgba(255, 255, 255, 0.016);
 }
 
 .di-nav-active {
-  background: rgba(26, 30, 54, 0.9);
-  border: 1px solid rgba(165, 180, 252, 0.35);
-  color: #e8eaff;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  color: #f4f4f5;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.1),
-    0 0 30px rgba(149, 164, 252, 0.16);
+    0 0 24px rgba(255, 255, 255, 0.04);
 }
 
 .di-section-title {
   display: inline-block;
   font-weight: 900;
   letter-spacing: -0.03em;
-  background: linear-gradient(105deg, #9aa8ff 0%, #c4cafd 42%, #eef0ff 100%);
+  background: linear-gradient(105deg, #e4e4e7 0%, #fafafa 48%, #ffffff 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
