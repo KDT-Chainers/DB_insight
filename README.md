@@ -1,4 +1,7 @@
-# KDT Project : Team 'Chainers'
+# KDT Project (2026)
+- Team : Chainers
+- Korea IT Academy (KDT, Ministry of Employment and Labor)
+- Independent Researchers, Republic of Korea
 
 ---
 
@@ -156,7 +159,7 @@ Query ──► SigLIP2 (시각축)  ─┐
 **Ollama 모델 설치 (AI 모드 사용 시):**
 
 ```bash
-ollama pull gemma3:12b
+ollama pull gemma3:7b
 ```
 
 **Python 패키지 설치:**
@@ -376,11 +379,11 @@ DB_insight/
 
 **© 2026. All rights reserved.**
 
-Please contact team leader.
+Please contact team leader, e-mail : sjowun@gmail.com.
 
 | 역할            | 이름                     | 연락처                                      |
 | --------------- | ------------------------ | ------------------------------------------- |
-| **Team Leader** | 송영상 (Young-Sang SONG) | [sjowun@gmail.com](mailto:sjowun@gmail.com) |
+| **Team Leader** | 송영상 (Young-Sang SONG) | Project Manager                              |
 | Team Member     | 이훤 (Hwon LEE)          | Technical Master                            |
 | Team Member     | 장주연 (Ju Yeon JANG)    | Technical Support & Security                |
 | Team Member     | 황영진 (Young Jin HWANG) | Technical Support                           |
