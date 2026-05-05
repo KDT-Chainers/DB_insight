@@ -641,6 +641,17 @@ _KO_EN: dict[str, list[str]] = {
     "연구":         ["research", "study"],
     "실험":         ["experiment", "test"],
     "우주":           ["space", "universe", "cosmos", "cosmic"],
+    "코스모스":       ["cosmos", "space", "universe"],
+    "보이저":         ["Voyager", "spacecraft", "space probe"],
+    "보이저호":       ["Voyager", "Voyager spacecraft", "space probe"],
+    "골든디스크":     ["golden record", "golden disk", "Voyager record"],
+    "골든":           ["golden", "gold"],
+    "탐사선":         ["space probe", "probe", "spacecraft", "explorer"],
+    "탐사":           ["exploration", "probe", "expedition"],
+    "우주선":         ["spacecraft", "spaceship", "rocket"],
+    "위성":           ["satellite", "orbital"],
+    "인공위성":       ["satellite", "artificial satellite"],
+    "로켓":           ["rocket", "launch vehicle"],
     "환경":         ["environment", "environmental"],
     "기후":         ["climate"],
     "지진":           ["earthquake"],
@@ -1277,6 +1288,14 @@ _KO_EN: dict[str, list[str]] = {
     "space":        ["우주", "공간"],
     "universe":     ["우주", "우주론"],
     "cosmos":       ["우주", "코스모스"],
+    "voyager":      ["보이저", "보이저호"],
+    "golden":       ["골든", "황금"],
+    "probe":        ["탐사선", "탐사"],
+    "spacecraft":   ["우주선", "탐사선"],
+    "satellite":    ["인공위성", "위성"],
+    "rocket":       ["로켓", "우주선"],
+    "exploration":  ["탐사", "탐험"],
+    "nasa":         ["나사", "미항공우주국"],
 
     # ── 교육 / 상담 ──────────────────────────────────────────────────
     "상담":         ["counseling", "consultation", "counselling"],
@@ -1459,6 +1478,22 @@ for _ko, _ens in _KO_EN.items():
 from functools import lru_cache
 
 
+# 한국어 조사/어미 제거 (사전 매칭 전 전처리) — 길이순 내림차순 필수
+_KO_PARTICLES = [
+    "에서의", "으로서", "이라는", "이라고", "이지만", "이라도",
+    "에서", "에게", "으로", "이라", "이나", "이고", "이면",
+    "의", "을", "를", "이", "가", "은", "는", "로", "와", "과",
+    "도", "만", "에", "서", "라", "나", "야",
+]
+
+def _strip_ko_particle(token: str) -> str:
+    """한국어 토큰 끝의 조사를 제거하여 어근 반환."""
+    for p in _KO_PARTICLES:
+        if token.endswith(p) and len(token) > len(p) + 1:
+            return token[: -len(p)]
+    return token
+
+
 @lru_cache(maxsize=4096)
 def expand_bilingual(query: str, max_extra: int = 10) -> str:
     """쿼리를 한↔영 양방향 사전으로 확장.
@@ -1492,8 +1527,9 @@ def expand_bilingual(query: str, max_extra: int = 10) -> str:
 
     for t in tokens:
         added_this_token = 0
-        # 한 → 영
-        for en in _KO_EN.get(t, []):
+        # 한 → 영: 직접 매칭 우선, 없으면 조사 제거 후 재시도
+        t_root = t if t in _KO_EN else _strip_ko_particle(t)
+        for en in _KO_EN.get(t_root, []):
             el = en.lower()
             if el not in seen:
                 extras.append(en)
