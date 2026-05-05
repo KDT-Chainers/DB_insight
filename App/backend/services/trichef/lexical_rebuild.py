@@ -166,10 +166,15 @@ _DOMAIN_FORCED_KEYWORDS: dict[str, list[str]] = {
         "reference", "report", "analysis", "result", "conclusion",
         "data", "graph", "chart", "summary", "abstract",
         "article", "paper", "study", "research", "review",
+        # 경제/재정 (영어) — 재정건전화법안 등 문서 특화
+        "fiscal", "fiscal rule", "soundness", "consolidation",
+        "legislation", "bill", "act", "statutory", "budget",
+        "public finance", "government finance",
         # ── 한국어 도메인 핵심 어근 ──────────────────────────────────────────
         # 경제/금융 — 복합어 strip 매칭으로 '경제지표를'→'경제' 등 포착
         "경제", "금융", "주식", "투자", "무역", "수출", "수입",
         "물가", "금리", "환율", "성장", "산업", "기업", "예산", "세금",
+        "재정", "재정준칙", "건전화", "재정건전화", "법안", "입법",
         # AI/기술
         "인공지능", "기술", "반도체", "소프트웨어", "데이터", "플랫폼",
         "디지털", "정보", "보안", "자동화", "클라우드",
