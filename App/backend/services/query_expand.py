@@ -1172,6 +1172,7 @@ _KO_EN: dict[str, list[str]] = {
     "신비로운":     ["mysterious", "mystical", "ethereal", "ambient"],
     "편안한":       ["relaxing", "comfortable", "cozy", "soothing"],
     "몽환적":       ["dreamy", "ethereal", "hazy", "ambient"],
+    "몽환적인":     ["dreamy", "ethereal", "hazy", "ambient", "surreal"],
     "강렬한":       ["intense", "powerful", "strong", "forceful"],
     "부드러운":     ["smooth", "soft", "gentle", "mellow"],
     "따뜻한":       ["warm", "cozy", "heartwarming", "gentle"],
