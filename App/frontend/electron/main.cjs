@@ -244,35 +244,74 @@ function buildSplashHtml(logoFileUrl) {
     : `<div class="logo-fallback" aria-hidden="true">DB</div>`
   return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:linear-gradient(90deg,#3d69a2 0%,#284a8f 22%,#1e3a7a 50%,#284a8f 78%,#3d69a2 100%),
-  radial-gradient(ellipse 120% 100% at 50% 100%,rgba(15,30,70,.45) 0%,transparent 55%);
+body{
+  background:
+    radial-gradient(ellipse 148% 120% at -12% -16%, rgba(22,62,198,.42) 0%, rgba(22,62,198,.16) 46%, transparent 84%),
+    radial-gradient(ellipse 134% 114% at 114% 118%, rgba(56,40,124,.36) 0%, rgba(56,40,124,.12) 48%, transparent 86%),
+    radial-gradient(ellipse 130% 95% at 50% 118%, rgba(0,0,0,.88) 0%, transparent 56%),
+    linear-gradient(165deg,#0a0a0c 0%,#050507 42%,#030304 100%);
   color:#e8eefc;font-family:'Segoe UI',sans-serif;
   display:flex;flex-direction:column;align-items:center;justify-content:center;
-  height:100vh;overflow:hidden;user-select:none;-webkit-app-region:drag}
-.glow{position:fixed;width:280px;height:280px;border-radius:50%;
-  background:radial-gradient(circle,rgba(100,150,220,.12) 0%,transparent 70%);
-  top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none}
-.logo{display:flex;align-items:center;gap:10px;margin-bottom:20px}
-.logo-img{width:40px;height:40px;object-fit:contain;display:block;filter:drop-shadow(0 1px 2px rgba(0,0,0,.25))}
-.logo-fallback{width:40px;height:40px;border-radius:8px;background:rgba(255,255,255,.12);
-  display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#e8eefc}
-.name{font-size:19px;font-weight:900;letter-spacing:-.5px;color:#e8eefc}
-.status{font-size:11px;color:rgba(232,238,252,.72);letter-spacing:.15em;text-transform:uppercase;margin-bottom:18px;text-align:center}
+  height:100vh;overflow:hidden;user-select:none;-webkit-app-region:drag
+}
+.orb-wrap{
+  position:relative;width:172px;height:172px;margin-bottom:18px;
+  animation:floatY 3.6s ease-in-out infinite;
+  filter:drop-shadow(0 16px 46px rgba(139,92,246,.34))
+}
+.orb{
+  position:absolute;inset:0;border-radius:50%;
+  background:
+    radial-gradient(circle at 34% 26%, rgba(242,232,255,.82) 0%, rgba(206,175,255,.46) 22%, rgba(139,92,246,.34) 46%, rgba(58,30,98,.62) 70%, rgba(16,10,32,.78) 100%),
+    conic-gradient(from 0deg, rgba(167,139,250,.52), rgba(124,58,237,.12), rgba(236,72,153,.26), rgba(99,102,241,.24), rgba(167,139,250,.52));
+  border:1px solid rgba(255,255,255,.22);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.34), inset 0 -1px 0 rgba(255,255,255,.08), 0 0 58px rgba(139,92,246,.28);
+  animation:orbSpin 8.8s linear infinite;
+}
+.orb-particles{
+  position:absolute;inset:9%;border-radius:50%;pointer-events:none;
+  background:
+    radial-gradient(circle, rgba(255,255,255,.55) 0 1px, transparent 1.6px);
+  background-size:12px 12px;
+  mix-blend-mode:screen;
+  opacity:.38;
+  animation:orbSpin 11.6s linear infinite reverse;
+}
+.orb::before{
+  content:'';position:absolute;inset:-12px;border-radius:50%;
+  border:1px solid rgba(167,139,250,.32);
+  box-shadow:0 0 30px rgba(139,92,246,.22), inset 0 1px 0 rgba(255,255,255,.18);
+  animation:orbSpin 16s linear infinite;
+}
+.orb::after{
+  content:'';position:absolute;left:20%;top:14%;width:44%;height:28%;
+  border-radius:50%;
+  background:radial-gradient(ellipse at center, rgba(255,255,255,.86) 0%, rgba(255,255,255,.32) 48%, rgba(255,255,255,0) 100%);
+  transform:rotate(-12deg)
+}
+.logo{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.logo-img{width:34px;height:34px;object-fit:contain;display:block;filter:drop-shadow(0 1px 2px rgba(0,0,0,.25))}
+.logo-fallback{width:34px;height:34px;border-radius:8px;background:rgba(255,255,255,.12);
+  display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#e8eefc}
+.name{font-size:27px;font-weight:900;letter-spacing:-.5px;color:#f2f6ff}
+.status{font-size:14px;color:rgba(232,238,252,.86);letter-spacing:.05em;margin-bottom:16px;text-align:center;font-weight:600}
 .dots span{animation:blink 1.2s infinite;color:#9ec0f0}
 .dots span:nth-child(2){animation-delay:.2s}
 .dots span:nth-child(3){animation-delay:.4s}
 @keyframes blink{0%,80%,100%{opacity:.2}40%{opacity:1}}
-.bar-wrap{width:200px;height:3px;background:rgba(255,255,255,.12);border-radius:2px;overflow:hidden;margin-bottom:8px}
-.bar{height:100%;width:40%;background:linear-gradient(90deg,#3d69a2,#7aa3e0,#3d69a2);
+.bar-wrap{width:320px;height:4px;background:rgba(255,255,255,.14);border-radius:8px;overflow:hidden;margin-bottom:8px}
+.bar{height:100%;width:40%;background:linear-gradient(90deg,#4f86ff,#c6dcff,#4f86ff);
   animation:slide 1.4s ease-in-out infinite}
 @keyframes slide{0%{transform:translateX(-100%)}100%{transform:translateX(350%)}}
 #lo-bar{height:100%;width:0%;background:linear-gradient(90deg,#3d69a2,#9ec0f0);
   border-radius:2px;transition:width .4s ease;display:none}
-#lo-detail{font-size:9px;color:rgba(232,238,252,.45);margin-top:4px;text-align:center;max-width:260px;
+#lo-detail{font-size:10px;color:rgba(232,238,252,.55);margin-top:4px;text-align:center;max-width:260px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:none}
-.ver{position:fixed;bottom:12px;font-size:9px;color:rgba(232,238,252,.28);letter-spacing:.1em}
+.ver{position:fixed;bottom:14px;font-size:10px;color:rgba(232,238,252,.34);letter-spacing:.1em}
+@keyframes orbSpin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+@keyframes floatY{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
 </style></head><body>
-<div class="glow"></div>
+<div class="orb-wrap"><div class="orb"></div><div class="orb-particles"></div></div>
 <div class="logo">${logoImg}<span class="name">DB_insight</span></div>
 <p id="splash-status" class="status">앱 실행 중입니다 <span class="dots"><span>.</span><span>.</span><span>.</span></span></p>
 <div class="bar-wrap">
@@ -293,18 +332,27 @@ function createSplash() {
   try { fs.writeFileSync(tmpPath, html, 'utf8') } catch (_) {}
 
   splashWindow = new BrowserWindow({
-    width: 340,
-    height: 200,
+    width: 500,
+    height: 330,
     frame: false,
     resizable: false,
     center: true,
     alwaysOnTop: true,
-    backgroundColor: '#1e3a7a',
+    backgroundColor: '#050507',
     show: true,                 // 생성 즉시 표시
     webPreferences: { nodeIntegration: false, contextIsolation: true },
   })
 
-  splashWindow.loadFile(tmpPath)
+  // 스플래시도 React 라우트(/splash)를 사용해 메인 UI의 실제 Orb 컴포넌트를 재사용한다.
+  if (isDev) {
+    splashWindow
+      .loadURL(`${DEV_URL}#/splash`)
+      .catch(() => splashWindow && splashWindow.loadFile(tmpPath))
+  } else {
+    splashWindow
+      .loadFile(path.join(__dirname, '..', 'dist', 'index.html'), { hash: '/splash' })
+      .catch(() => splashWindow && splashWindow.loadFile(tmpPath))
+  }
 }
 
 function closeSplash() {

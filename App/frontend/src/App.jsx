@@ -10,6 +10,7 @@ import MainSearch from './pages/MainSearch'
 import MainAI from './pages/MainAI'
 import Settings from './pages/Settings'
 import DataIndexing from './pages/DataIndexing'
+import SplashOrb from './pages/SplashOrb'
 
 function AuthGate() {
   const [loading, setLoading] = useState(true);
@@ -143,6 +144,7 @@ function ScaledApp() {
   return (
     <SidebarProvider>
       <Routes>
+        <Route path="/splash" element={<SplashOrb />} />
         <Route path="/" element={<AuthGate />} />
         <Route path="/welcome" element={<WelcomeGate />} />
         <Route path="/login" element={<Navigate to="/" replace />} />
