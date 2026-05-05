@@ -1313,7 +1313,6 @@ _KO_EN: dict[str, list[str]] = {
 
     # ── 영상 / 방송 고유명사 ─────────────────────────────────────
     "유퀴즈":       ["You Quiz", "variety show"],
-    "다스뵈이다":   ["Das Boot", "political podcast"],
     "뉴스하이킥":   ["News High Kick", "news show"],
     "오뚝이":       ["comeback", "resilience"],
     "MBC":          ["MBC", "Munhwa Broadcasting"],
@@ -1380,8 +1379,7 @@ _KO_EN: dict[str, list[str]] = {
     "비단길":       ["silk road", "Silk Road"],
     # 고선지 / 실크로드 인물
     "고선지":       ["Gao Xianzhi", "Tang dynasty general", "silk road general"],
-    "당나라":       ["Tang dynasty", "Tang", "Chinese dynasty"],
-    "당나라":       ["Tang dynasty", "Tang", "Chinese empire"],
+    "당나라":       ["Tang dynasty", "Tang", "Chinese dynasty", "Chinese empire"],
     # 인류 다큐 시리즈
     "흑사병":       ["Black Death", "plague", "pandemic"],
     "산업혁명":     ["Industrial Revolution", "industrialization"],
@@ -1398,7 +1396,6 @@ _KO_EN: dict[str, list[str]] = {
     "conquest":     ["정복", "점령"],
     "expedition":   ["탐험", "원정", "탐사"],
     "revolution":   ["혁명", "산업혁명"],
-    "invention":    ["발명", "발명품"],
 
     # ── AI / 개발 도구 고유명사 ───────────────────────────────────────
     "claude":       ["클로드", "Claude AI", "Anthropic"],
