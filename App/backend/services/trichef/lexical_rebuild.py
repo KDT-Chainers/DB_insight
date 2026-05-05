@@ -349,7 +349,17 @@ def _load_metadata_map(meta_path: Path) -> dict[str, str]:
 
 
 def _lookup_metadata(fname: str, meta_map: dict[str, str]) -> str:
-    """파일명에서 metadata_map을 조회. exact → stem → prefix 순으로 시도."""
+    """파일명에서 metadata_map을 조회.
+    exact → stem → prefix → keyword-in-stem 순으로 시도.
+
+    4단계 fallback:
+      1) exact stem match      (NGCcosmos e01... → key 정확히 일치)
+      2) full fname lowercase  (확장자 포함 키 대비)
+      3) prefix match          (stem이 key로 시작 or key가 stem[:30]으로 시작)
+      4) keyword-in-stem       (key를 공백 제거 후 stem에 포함 여부 검사)
+                               → 'donui eolgul' 같은 토픽 키가
+                                  긴 YouTube 제목 안에 포함된 경우 매칭
+    """
     if not fname or not meta_map:
         return ""
     stem = Path(fname).stem.lower()
@@ -362,6 +372,13 @@ def _lookup_metadata(fname: str, meta_map: dict[str, str]) -> str:
     # 3) prefix match: metadata key가 stem의 앞부분인 경우
     for key, text in meta_map.items():
         if stem.startswith(key) or key.startswith(stem[:30]):
+            return text
+    # 4) keyword-in-stem match (공백 정규화 후 substring 검사)
+    #    최소 3자(한글 인명/단어 포함) 이상의 키만 사용해 오탐 방지
+    stem_ns = stem.replace(" ", "").replace("​", "")
+    for key, text in meta_map.items():
+        kns = key.replace(" ", "")
+        if len(kns) >= 3 and kns in stem_ns:
             return text
     return ""
 
