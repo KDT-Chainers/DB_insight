@@ -167,6 +167,13 @@ _KO_EN: dict[str, list[str]] = {
     "노을":         ["sunset", "dusk", "golden hour", "twilight"],
     "일몰":         ["sunset", "dusk", "sundown"],
     "일출":         ["sunrise", "dawn"],
+    # 계절/자연 풍경 보조
+    "벚꽃":         ["cherry blossom", "cherry blossoms", "sakura", "spring blossom"],
+    "설경":         ["snowy scenery", "snow landscape", "winter scenery", "snowscape"],
+    "눈밭":         ["snow field", "snowy field", "snowfield"],
+    "단풍":         ["autumn foliage", "fall foliage", "maple leaves", "autumn leaves"],
+    "낙엽":         ["fallen leaves", "autumn leaves", "fall leaves"],
+    "새싹":         ["sprout", "bud", "young shoot", "spring green"],
     # 계절 (KO→EN)
     "봄":           ["spring", "springtime", "spring season"],
     "여름":         ["summer", "summertime", "summer season"],
@@ -374,6 +381,12 @@ _KO_EN: dict[str, list[str]] = {
     "autumn":       ["가을", "가을철", "단풍"],
     "fall":         ["가을", "단풍", "낙엽"],
     "winter":       ["겨울", "겨울철", "눈"],
+    "cherry":       ["벚꽃", "체리", "cherry blossom"],
+    "blossom":      ["벚꽃", "꽃", "꽃봉오리"],
+    "sakura":       ["벚꽃", "봄"],
+    "foliage":      ["단풍", "낙엽", "가을"],
+    "snowscape":    ["설경", "겨울 풍경"],
+    "sprout":       ["새싹", "봄"],
     # 시각/감정 (EN→KO)
     "smile":        ["미소", "웃음", "웃는"],
     "smiling":      ["미소", "웃는"],
