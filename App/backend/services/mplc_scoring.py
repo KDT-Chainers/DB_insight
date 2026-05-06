@@ -25,6 +25,36 @@ except ImportError:
                 "keyword_count", "filename_substr", "z_dense"]
 
 
+# [v16] Query-aware domain boost — 자연어 쿼리에서 도메인 의도 추출.
+#   예: "잔잔한 배경음악 BGM" → bgm 키워드 매칭 → bgm score ×1.3.
+#   곱셈 형태 → 다른 도메인 매칭에 영향 X (절대 boost).
+DOMAIN_KEYWORDS: dict[str, list[str]] = {
+    "bgm":   ["bgm", "배경음악", "ost", "효과음", "사운드트랙", "광고음악"],
+    "audio": ["음악", "노래", "보컬", "팟캐스트", "녹음", "오디오", "음성", "wav"],
+    "image": ["이미지", "사진", "그림", "그래픽", "캡션", "픽쳐", "image", "photo"],
+    "video": ["동영상", "영상", "다큐", "방송", "뉴스", "비디오", "movie", "video"],
+    "doc":   ["문서", "pdf", "보고서", "논문", "도서", "단행본", "보도자료"],
+}
+QUERY_BOOST_FACTOR = 0.3   # 키워드 1개 매칭 → ×1.3
+
+
+def query_intent_boost(query: str, domain: str) -> float:
+    """쿼리 → 도메인 의도 매칭 boost.
+    1.0 (매칭 없음) ~ 1 + n × QUERY_BOOST_FACTOR.
+    """
+    if not query or not domain:
+        return 1.0
+    q_lower = query.lower()
+    kws = DOMAIN_KEYWORDS.get(domain, [])
+    hits = sum(1 for kw in kws if kw.lower() in q_lower)
+    return 1.0 + QUERY_BOOST_FACTOR * hits
+
+
+# [v16] '없음' / 노이즈 제거 임계값. 측정한 MPLC 분포에서:
+#   top 75% ≥ 0.047, top 90% ≥ 0.017 → 0.1 이상이면 의미 있는 매칭.
+MPLC_NOISE_THRESHOLD = 0.10
+
+
 def _sigmoid(x: float) -> float:
     if x >= 0:
         return 1.0 / (1.0 + math.exp(-x))
@@ -91,7 +121,6 @@ def compute_mplc_score(r: dict, domain: str, query: str) -> float:
     w = MPLC_WEIGHTS[domain]
     bias = float(w.get("bias", 0))
     weights = w.get("weights", {})
-
     z = bias
     for f in FEATURES:
         z += float(weights.get(f, 0)) * feats.get(f, 0)

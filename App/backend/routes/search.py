@@ -83,20 +83,40 @@ def search():
             from concurrent.futures import ThreadPoolExecutor
             from services.cmp_scoring import apply_cmp_to_results, CMP_THRESHOLD_NONE
 
-            # 도메인당 검색 cap (사용자 요청: 100/도메인, 500/전체)
-            DOMAIN_CAP = min(top_k, 100) if top_k <= 500 else 100
+            # [v15] 도메인별 데이터 기반 최적 cap (의미 매칭 측정 결과):
+            #   doc:   평균 32 강매칭 → cap 50 (50% 여유, 응답 시간 단축)
+            #   image: 평균 57 강매칭 → cap 100
+            #   video: 평균 91 강매칭 → cap 100 (가장 풍부)
+            #   audio: 평균 80 강매칭 → cap 100
+            #   bgm:   평균 62 강매칭 → cap 100
+            # 합계 max 450 (사용자 요청 500 이내).
+            DOMAIN_OPTIMAL_TOPK = {
+                "doc":   50,
+                "image": 100,
+                "video": 100,
+                "audio": 100,
+                "bgm":   100,
+            }
+            # top_k 사용자 요청에 맞춰 도메인별 cap proportional scaling
+            scale = min(1.0, top_k / 500.0)
+            DOMAIN_CAP_BY_DOMAIN = {
+                d: max(10, int(c * scale * 1.0))   # min 10건 보장
+                for d, c in DOMAIN_OPTIMAL_TOPK.items()
+            }
             TOTAL_CAP  = min(top_k, 500)
+            # legacy 호환 — 기존 DOMAIN_CAP 변수 유지 (후속 코드용)
+            DOMAIN_CAP = max(DOMAIN_CAP_BY_DOMAIN.values())
 
-            # ── 1. 5도메인 병렬 검색 (GPU+CPU 활용) ────────────────────────
-            def _img():   return _search_trichef(expanded_query, ["image"], DOMAIN_CAP)
-            def _doc():   return _search_trichef(expanded_query, ["doc_page"], DOMAIN_CAP)
+            # ── 1. 5도메인 병렬 검색 (GPU+CPU 활용, 도메인별 최적 cap) ──
+            def _img():   return _search_trichef(expanded_query, ["image"],    DOMAIN_CAP_BY_DOMAIN["image"])
+            def _doc():   return _search_trichef(expanded_query, ["doc_page"], DOMAIN_CAP_BY_DOMAIN["doc"])
             def _video():
-                v = _search_trichef_av(expanded_query, ["movie"], DOMAIN_CAP)
-                return v or _search_legacy_video(expanded_query, DOMAIN_CAP)
+                v = _search_trichef_av(expanded_query, ["movie"], DOMAIN_CAP_BY_DOMAIN["video"])
+                return v or _search_legacy_video(expanded_query, DOMAIN_CAP_BY_DOMAIN["video"])
             def _audio():
-                a = _search_trichef_av(expanded_query, ["music"], DOMAIN_CAP)
-                return a or _search_legacy_audio(expanded_query, DOMAIN_CAP)
-            def _bgm():   return _search_bgm(expanded_query, DOMAIN_CAP)
+                a = _search_trichef_av(expanded_query, ["music"], DOMAIN_CAP_BY_DOMAIN["audio"])
+                return a or _search_legacy_audio(expanded_query, DOMAIN_CAP_BY_DOMAIN["audio"])
+            def _bgm():   return _search_bgm(expanded_query, DOMAIN_CAP_BY_DOMAIN["bgm"])
 
             with ThreadPoolExecutor(max_workers=5, thread_name_prefix="search") as ex:
                 fut_img = ex.submit(_img)
