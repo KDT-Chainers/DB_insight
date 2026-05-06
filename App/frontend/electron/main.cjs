@@ -59,9 +59,12 @@ function freePort(port) {
 function _checkBackendAlive(port = 5001) {
   const http = require('http')
   const tryOnce = () => new Promise((resolve) => {
+    // [v9] /api/health (초경량) 사용 — 인덱싱/Qwen 추론으로 busy 한 백엔드도
+    //   Flask 라우터만 거치므로 즉시 응답. /api/search 는 ChromaDB+reranker
+    //   걸쳐 busy 시 5s 도 timeout → 멀쩡한 백엔드 죽이는 부작용.
     const req = http.request({
-      host: '127.0.0.1', port, path: '/api/search?q=ping&top_k=1',
-      method: 'GET', timeout: 5000,
+      host: '127.0.0.1', port, path: '/api/health',
+      method: 'GET', timeout: 3000,
     }, (res) => {
       resolve(res.statusCode >= 200 && res.statusCode < 500)
       res.resume()
@@ -176,27 +179,18 @@ function _startPythonBackend() {
 }
 
 function killBackend() {
-  // shell:true 로 spawn 하면 python.exe 는 cmd.exe 의 자식이므로
-  // /T 플래그로 프로세스 트리 전체를 종료해야 한다.
+  // [v9] Electron 이 spawn 한 자기 자식 백엔드만 종료 (backendProcess).
+  //   외부 detached 백엔드 (5001 점유 중이지만 다른 PID) 는 보존하여 다음
+  //   실행 시 health check 통해 즉시 재사용 → 30~60s 모델 로딩 회피.
+  //
+  //   이전: 5001 LISTENING 프로세스를 모두 강제 종료 → 외부 detached 도 죽어
+  //   매 실행마다 새 spawn + 모델 로딩 → 무한 Loading 부작용.
   if (backendProcess && backendProcess.pid) {
     try {
       execSync(`taskkill /F /T /PID ${backendProcess.pid}`, { shell: true, stdio: 'pipe' })
     } catch (_) {}
     backendProcess = null
   }
-  // 혹시 남아있을 경우 포트 점유 프로세스도 강제 종료 (동기)
-  try {
-    const out = execSync(
-      'netstat -ano | findstr LISTENING | findstr :5001',
-      { shell: true, stdio: 'pipe' }
-    ).toString()
-    out.trim().split('\n').forEach(line => {
-      const parts = line.trim().split(/\s+/)
-      if (parts.length >= 5 && parts[1].endsWith(':5001')) {
-        try { execSync(`taskkill /F /PID ${parts[4]}`, { shell: true, stdio: 'pipe' }) } catch (_) {}
-      }
-    })
-  } catch (_) {}
 }
 
 // ---------------------------------------------------------------------------

@@ -111,6 +111,14 @@ def create_app() -> Flask:
     app.register_blueprint(bgm_bp)
     app.register_blueprint(aimode_bp)
 
+    # [v9 health endpoint] Electron 의 _checkBackendAlive() 가 호출하는 초경량
+    # endpoint. /api/search 는 인덱싱 / Qwen 추론으로 busy 시 응답 지연되어
+    # health check 실패 → 멀쩡한 백엔드 죽이고 재시작 → 인덱싱 lost 부작용.
+    # /api/health 는 Flask 라우터만 거쳐 즉시 응답 → 인덱싱 중에도 health 통과.
+    @app.route("/api/health")
+    def _health():
+        return {"ok": True}, 200
+
     # [W5-4] Warmup — 기동 시 TriChefEngine 싱글턴 로드 + dummy 쿼리 1회 실행하여
     # SigLIP2 / BGE-M3 / DINOv2 / Qwen 을 선로딩. 첫 사용자 쿼리 430ms 지연 제거.
     try:
