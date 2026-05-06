@@ -32,8 +32,8 @@ Zenodo, May 2026. https://doi.org/10.5281/zenodo.20034370
 | --------------- | -------------------------------------------------------------------- | -------------------------------------------------------------------- |
 | **Version DOI** | [`10.5281/zenodo.20046344`](https://doi.org/10.5281/zenodo.20046344) | [`10.5281/zenodo.20034371`](https://doi.org/10.5281/zenodo.20034371) |
 | **Record URL**  | https://zenodo.org/records/20046344                                  | https://zenodo.org/records/20034371                                  |
-| **PDF (영문)**  | `publication/paper/제출용/Tri-CHEF_paper_v1.1.pdf` (12 pp)           | `publication/paper/Tri-CHEF_paper.pdf` (12 pp)                       |
-| **PDF (국문)**  | `publication/paper/제출용/Tri-CHEF_paper_Korean_v1.1.pdf` (13 pp)    | `publication/paper/Tri-CHEF_paper_Korean.pdf` (13 pp)                |
+| **PDF (영문)**  | `Tri-CHEF_paper_v1.1.pdf` (12 pp)                                    | `Tri-CHEF_paper.pdf` (12 pp)                                         |
+| **PDF (국문)**  | `Tri-CHEF_paper_Korean_v1.1.pdf` (13 pp)                             | `Tri-CHEF_paper_Korean.pdf` (13 pp)                                  |
 | **게재일**      | 2026-05-06                                                           | 2026-05-06                                                           |
 | **비고**        | 모든 페이지 푸터에 DOI/라이선스 표시                                 | 최초 게재                                                            |
 
