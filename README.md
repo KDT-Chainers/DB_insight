@@ -27,10 +27,14 @@ Zenodo, May 2026. https://doi.org/10.5281/zenodo.20034370
 
 ### Versions
 
-| 버전 | Version DOI | Record URL | PDF (영문) | PDF (국문) | 게재일 | 비고 |
-|------|-------------|------------|-----------|-----------|--------|------|
-| **v1.1** (latest) | [`10.5281/zenodo.20046344`](https://doi.org/10.5281/zenodo.20046344) | https://zenodo.org/records/20046344 | `publication/paper/제출용/Tri-CHEF_paper_v1.1.pdf` (12 pp) | `publication/paper/제출용/Tri-CHEF_paper_Korean_v1.1.pdf` (13 pp) | 2026-05-06 | 모든 페이지 푸터에 DOI/라이선스 표시 |
-| v1.0 | [`10.5281/zenodo.20034371`](https://doi.org/10.5281/zenodo.20034371) | https://zenodo.org/records/20034371 | `publication/paper/Tri-CHEF_paper_v1-9.pdf` (12 pp) | `publication/paper/Tri-CHEF_paper_Korean_v1-9.pdf` (13 pp) | 2026-05-06 | 최초 게재 |
+| 항목 | **v1.1** (latest) | v1.0 |
+|------|-------------------|------|
+| **Version DOI** | [`10.5281/zenodo.20046344`](https://doi.org/10.5281/zenodo.20046344) | [`10.5281/zenodo.20034371`](https://doi.org/10.5281/zenodo.20034371) |
+| **Record URL** | https://zenodo.org/records/20046344 | https://zenodo.org/records/20034371 |
+| **PDF (영문)** | `publication/paper/제출용/Tri-CHEF_paper_v1.1.pdf` (12 pp) | `publication/paper/Tri-CHEF_paper_v1-9.pdf` (12 pp) |
+| **PDF (국문)** | `publication/paper/제출용/Tri-CHEF_paper_Korean_v1.1.pdf` (13 pp) | `publication/paper/Tri-CHEF_paper_Korean_v1-9.pdf` (13 pp) |
+| **게재일** | 2026-05-06 | 2026-05-06 |
+| **비고** | 모든 페이지 푸터에 DOI/라이선스 표시 | 최초 게재 |
 
 > 본문 콘텐츠와 그림/표 레이아웃, 페이지 분할은 v1.0 = v1.1 바이트 단위로 동일합니다 (v1.1은 v1.0 PDF에 페이지 푸터만 오버레이).
 
