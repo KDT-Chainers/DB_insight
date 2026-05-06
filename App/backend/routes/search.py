@@ -69,48 +69,62 @@ def search():
         elif file_type == "bgm":
             results = _search_bgm(expanded_query, top_k)
         else:
-            # 전체 검색: 이미지·문서·영상·음원·BGM 5도메인 TRI-CHEF + CLAP.
-            # [v3] 도메인별 최소 보장 비율 — AV conf 가 dense 0.99 로 매우 높고
-            # doc/image conf 가 0.4~0.7 로 낮아, 단순 confidence sort 시 doc/image
-            # 가 거의 모두 잘려나가는 문제 해결.
-            #   각 도메인 top_k/4 보장 (round-robin), 남는 자리는 score sort.
-            img_only  = _search_trichef(expanded_query, ["image"], top_k)
-            doc_only  = _search_trichef(expanded_query, ["doc_page"], top_k)
-            video     = _search_trichef_av(expanded_query, ["movie"], top_k)
-            if not video:
-                video = _search_legacy_video(expanded_query, top_k)
-            audio     = _search_trichef_av(expanded_query, ["music"], top_k)
-            if not audio:
-                audio = _search_legacy_audio(expanded_query, top_k)
-            bgm       = _search_bgm(expanded_query, top_k)
+            # ════════════════════════════════════════════════════════════════
+            # [v10 전체 검색] 5도메인 병렬 실행 + CMP 통합 ranking + cap.
+            # ════════════════════════════════════════════════════════════════
+            # 변경 요지:
+            #  1. 5 도메인 검색을 ThreadPoolExecutor 로 병렬 실행 → 응답 시간 단축
+            #     (GPU 추론은 GIL 보호 + lock 으로 자연 직렬화, I/O+sparse 는 병렬).
+            #  2. 각 도메인 결과에 CMP 적용 (Calibrated Match Probability) →
+            #     도메인 무관 [0,1] 비교 가능 + CMP < 0.40 자동 제외 ('없음').
+            #  3. 통합 ranking 은 CMP 단일 기준 (도메인 가중치 X) → 5도메인 결과
+            #     가 합리적으로 섞임. 한 도메인이 독식 안 함.
+            #  4. cap: 도메인당 max 100, 전체 max 500 (일반화 가능).
+            from concurrent.futures import ThreadPoolExecutor
+            from services.cmp_scoring import apply_cmp_to_results, CMP_THRESHOLD_NONE
 
-            # 도메인별 정렬 (각 도메인 내부 confidence 순)
+            # 도메인당 검색 cap (사용자 요청: 100/도메인, 500/전체)
+            DOMAIN_CAP = min(top_k, 100) if top_k <= 500 else 100
+            TOTAL_CAP  = min(top_k, 500)
+
+            # ── 1. 5도메인 병렬 검색 (GPU+CPU 활용) ────────────────────────
+            def _img():   return _search_trichef(expanded_query, ["image"], DOMAIN_CAP)
+            def _doc():   return _search_trichef(expanded_query, ["doc_page"], DOMAIN_CAP)
+            def _video():
+                v = _search_trichef_av(expanded_query, ["movie"], DOMAIN_CAP)
+                return v or _search_legacy_video(expanded_query, DOMAIN_CAP)
+            def _audio():
+                a = _search_trichef_av(expanded_query, ["music"], DOMAIN_CAP)
+                return a or _search_legacy_audio(expanded_query, DOMAIN_CAP)
+            def _bgm():   return _search_bgm(expanded_query, DOMAIN_CAP)
+
+            with ThreadPoolExecutor(max_workers=5, thread_name_prefix="search") as ex:
+                fut_img = ex.submit(_img)
+                fut_doc = ex.submit(_doc)
+                fut_vid = ex.submit(_video)
+                fut_aud = ex.submit(_audio)
+                fut_bgm = ex.submit(_bgm)
+                img_only = fut_img.result() or []
+                doc_only = fut_doc.result() or []
+                video    = fut_vid.result() or []
+                audio    = fut_aud.result() or []
+                bgm      = fut_bgm.result() or []
+
+            # ── 2. [v7 Phase 4 복원] 품질 기반 동적 quota ──────────────────
+            # v10/v11 (CMP/Blended/Round-robin) 시도 결과 audio dense cluster
+            # 본질적 한계로 도메인 비교 정확도 baseline (88%) 미달. 안정적인
+            # v7 quota 로 복원. (CMP 도구는 cmp_scoring.py 에 보존)
             for lst in (img_only, doc_only, video, audio, bgm):
                 lst.sort(key=lambda r: r.get("confidence", 0), reverse=True)
 
-            # [v7] 품질 기반 동적 quota — 강매칭 도메인이 더 많은 자리 차지하도록.
-            # 기존(v6)은 quota = top_k//5 고정 → 약매칭 도메인이 자리 차지해서
-            # NGC 코스모스 같은 강매칭(video 13편)이 6편만 노출되는 부작용.
-            #
-            # 새 규칙: 도메인 최고 confidence 기준
-            #   ≥0.80 (강매칭) → base × 2
-            #   ≥0.50 (보통)   → base × 1
-            #   ≥0.30 (약함)   → max(1, base // 2)
-            #   <0.30 (매우약) → 1  (공정성 — 최소 1개 노출)
-            base_quota = max(1, top_k // 10)
-
+            base_quota = max(1, TOTAL_CAP // 10)
             def _max_conf(lst):
                 return float(lst[0].get("confidence", 0.0)) if lst else 0.0
-
-            def _adj_quota(max_conf):
-                if max_conf >= 0.80:
-                    return base_quota * 2
-                if max_conf >= 0.50:
-                    return base_quota
-                if max_conf >= 0.30:
-                    return max(1, base_quota // 2)
+            def _adj_quota(mc):
+                if mc >= 0.80: return base_quota * 2
+                if mc >= 0.50: return base_quota
+                if mc >= 0.30: return max(1, base_quota // 2)
                 return 1
-
             quotas = {
                 "doc":   _adj_quota(_max_conf(doc_only)),
                 "image": _adj_quota(_max_conf(img_only)),
@@ -118,27 +132,16 @@ def search():
                 "audio": _adj_quota(_max_conf(audio)),
                 "bgm":   _adj_quota(_max_conf(bgm)),
             }
-
             guaranteed: list[dict] = []
-            for key, lst in (
-                ("doc",   doc_only),
-                ("image", img_only),
-                ("video", video),
-                ("audio", audio),
-                ("bgm",   bgm),
-            ):
+            for key, lst in (("doc", doc_only), ("image", img_only),
+                             ("video", video), ("audio", audio), ("bgm", bgm)):
                 guaranteed.extend(lst[:quotas[key]])
 
-            # 추가 자리: 각 도메인 quota 초과분 score sort
-            _DOMAIN_W = {"image": 1.0, "doc": 1.0, "video": 0.75, "audio": 0.75, "bgm": 0.75}
-            extras = []
-            for key, lst in (
-                ("doc",   doc_only),
-                ("image", img_only),
-                ("video", video),
-                ("audio", audio),
-                ("bgm",   bgm),
-            ):
+            _DOMAIN_W = {"image": 1.0, "doc": 1.0, "video": 0.75,
+                          "audio": 0.75, "bgm": 0.75}
+            extras: list[dict] = []
+            for key, lst in (("doc", doc_only), ("image", img_only),
+                             ("video", video), ("audio", audio), ("bgm", bgm)):
                 extras.extend(lst[quotas[key]:])
             extras.sort(
                 key=lambda r: r.get("confidence", 0) *
@@ -146,11 +149,8 @@ def search():
                 reverse=True,
             )
 
-            # 합치기 — guaranteed 먼저, 그 다음 extras (가중 score 순)
-            # [v4] dedup 단계에서 file_name 중복으로 결과 줄어들 수 있어 여유분 (×2)
-            # 받아서 후속 dedup 후 top_k 까지 채움.
             combined = guaranteed + extras
-            results = combined[:top_k * 2]
+            results = combined[:TOTAL_CAP]
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
