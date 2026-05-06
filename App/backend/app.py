@@ -15,6 +15,7 @@ from routes.ai_search import ai_search_bp
 from routes.registry import registry_bp
 from routes.bgm import bp as bgm_bp
 from routes.aimode import aimode_bp
+from routes.stt import stt_bp
 
 
 def _auto_normalize_paths_if_mismatch() -> None:
@@ -110,6 +111,7 @@ def create_app() -> Flask:
     app.register_blueprint(registry_bp)
     app.register_blueprint(bgm_bp)
     app.register_blueprint(aimode_bp)
+    app.register_blueprint(stt_bp)
 
     # [v9 health endpoint] Electron 의 _checkBackendAlive() 가 호출하는 초경량
     # endpoint. /api/search 는 인덱싱 / Qwen 추론으로 busy 시 응답 지연되어
