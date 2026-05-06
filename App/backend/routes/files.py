@@ -26,13 +26,16 @@ def _trichef_indexed_files() -> list[dict]:
 
     items: list[dict] = []
 
+    # [v9 PC 호환] registry 'abs' 필드 무시, rel_key + 현재 RAW_DB 동적 결합.
+    from services.path_resolver import resolve_raw_path
+
     # 이미지
     img_reg_path = Path(PATHS["TRICHEF_IMG_CACHE"]) / "registry.json"
     if img_reg_path.exists():
         try:
             reg = json.loads(img_reg_path.read_text(encoding="utf-8"))
             for _key, info in reg.items():
-                orig = info.get("abs") or info.get("staged", "")
+                orig = resolve_raw_path(_key, "image", info)
                 items.append({
                     "file_path":  orig,
                     "file_name":  Path(orig).name if orig else _key,
@@ -49,7 +52,7 @@ def _trichef_indexed_files() -> list[dict]:
         try:
             reg = json.loads(doc_reg_path.read_text(encoding="utf-8"))
             for _key, info in reg.items():
-                orig = info.get("abs") or info.get("staged", "")
+                orig = resolve_raw_path(_key, "doc", info)
                 items.append({
                     "file_path":  orig,
                     "file_name":  Path(orig).name if orig else _key,
@@ -421,9 +424,20 @@ def _delete_trichef_file(orig_path: str) -> bool:
             continue
         try:
             reg = json.loads(reg_path.read_text(encoding="utf-8"))
-            # 원본 경로가 일치하는 항목 찾기
-            to_remove = [k for k, v in reg.items()
-                         if v.get("abs") == orig_path or v.get("staged") == orig_path]
+            # [v9 PC 호환] orig_path 가 rel_key + 현재 RAW_DB 결합 결과 또는
+            # 옛 abs (다른 PC) 일 수 있음. 둘 다 정규화하여 비교.
+            from services.path_resolver import resolve_raw_path
+            _dom = "doc" if is_doc else "image"
+            def _match(rel_key: str, v: dict) -> bool:
+                if v.get("staged") == orig_path:
+                    return True
+                if v.get("abs") == orig_path:
+                    return True
+                # 현재 PC RAW_DB 기준 동적 결합 비교
+                if resolve_raw_path(rel_key, _dom, v) == orig_path:
+                    return True
+                return False
+            to_remove = [k for k, v in reg.items() if _match(k, v)]
             if not to_remove:
                 continue
             for k in to_remove:

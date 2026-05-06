@@ -297,9 +297,10 @@ def _search_trichef(query: str, domains: list[str], top_k: int) -> list[dict]:
             if domain == "image":
                 file_type = "image"
                 reg_entry = img_reg.get(rid, {})
-                orig_path = reg_entry.get("abs") or str(
-                    Path(PATHS["RAW_DB"]) / "Img" / rid
-                )
+                # [v9 PC 호환] registry 의 'abs' 필드는 인덱싱한 PC 의 절대경로라
+                # 다른 PC 에서 깨짐. rel_key + 현재 RAW_DB 로 매번 결합.
+                from services.path_resolver import resolve_raw_path
+                orig_path = resolve_raw_path(rid, "image", reg_entry)
                 file_name   = Path(orig_path).name
                 snippet     = _read_img_caption(Path(PATHS["TRICHEF_IMG_EXTRACT"]) / "captions", rid)
                 # URL encode rid — 한글/공백/특수문자(+,[,] 등) 처리. + 는 공백으로 디코드되어 깨짐.
@@ -404,8 +405,21 @@ def _search_trichef_av(query: str, domains: list[str], top_k: int) -> list[dict]
 
             conf    = round(r.confidence, 4)
             av_meta = r.metadata
+            # [v9 PC 호환] r.file_path 가 절대경로(인덱싱 PC) 또는 rel_key 인 경우
+            # 모두 처리. abs 면 rel_key 추출 후 현재 RAW_DB 로 재결합.
+            from services.path_resolver import resolve_raw_path
+            _fp = r.file_path or ""
+            _fp_norm = _fp.replace("\\", "/")
+            # rel_key 추출: raw_DB/<domain>/ 이후 부분
+            _domain_dir = "Movie" if file_type == "video" else "Rec"
+            _marker = f"/raw_DB/{_domain_dir}/"
+            if _marker in _fp_norm:
+                _rel = _fp_norm.split(_marker, 1)[1]
+            else:
+                _rel = _fp_norm  # 이미 rel_key 형태
+            file_path = resolve_raw_path(_rel, file_type)
             results.append({
-                "file_path":      r.file_path,
+                "file_path":      file_path,
                 "file_name":      r.file_name,
                 "file_type":      file_type,
                 "confidence":     conf,
@@ -610,12 +624,16 @@ def _doc_page_to_source(stem_key: str, doc_reg: dict) -> tuple[str, str]:
     except Exception:
         return "", ""
 
+    # [v9 PC 호환] registry 의 'abs' / 'abs_aliases' 는 인덱싱한 PC 의 절대경로라
+    # 다른 PC 에서 깨짐. rel_key + 현재 RAW_DB 로 매번 결합 (resolve_raw_path).
+    from services.path_resolver import resolve_raw_path
+
     # 1. 신포맷 (hash 포함)
     for rel_key, info in doc_reg.items():
         if not isinstance(info, dict):
             continue
         if stem_key_for(rel_key) == stem_key:
-            orig = info.get("abs") or info.get("staged", "")
+            orig = resolve_raw_path(rel_key, "doc", info)
             return orig, Path(rel_key).name
 
     # 2. 구포맷 — hash 제거된 raw stem_key 일 가능성
@@ -626,19 +644,16 @@ def _doc_page_to_source(stem_key: str, doc_reg: dict) -> tuple[str, str]:
             continue
         rel_stem = Path(rel_key).stem
         if _sanitize(rel_stem) == base_key or rel_stem == base_key:
-            orig = info.get("abs") or info.get("staged", "")
+            orig = resolve_raw_path(rel_key, "doc", info)
             return orig, Path(rel_key).name
 
-    # 3. abs 경로 stem 매칭 (registry rel_key 와 abs 가 다른 경우)
+    # 3. abs 경로 stem 매칭 — 옛 registry 가 abs 만 가진 케이스 fallback.
+    #    rel_key 의 Path(...).stem 으로 base_key 매칭 후 동적 결합.
     for rel_key, info in doc_reg.items():
         if not isinstance(info, dict):
             continue
-        ap = info.get("abs")
-        if ap and Path(ap).stem == base_key:
-            return ap, Path(ap).name
-        for alias in info.get("abs_aliases") or []:
-            if Path(alias).stem == base_key:
-                return alias, Path(alias).name
+        if Path(rel_key).stem == base_key:
+            return resolve_raw_path(rel_key, "doc", info), Path(rel_key).name
 
     return "", ""
 
