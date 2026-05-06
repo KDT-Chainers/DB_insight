@@ -3,6 +3,54 @@
 - Korea IT Academy (KDT, Ministry of Employment and Labor)
 - Independent Researchers, Republic of Korea
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20034370.svg)](https://doi.org/10.5281/zenodo.20034370)
+[![License: CC BY 4.0](https://img.shields.io/badge/Paper%20License-CC%20BY%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by/4.0/)
+[![Preprint: Zenodo](https://img.shields.io/badge/Preprint-Zenodo-blue.svg)](https://zenodo.org/records/20034371)
+[![ORCID](https://img.shields.io/badge/ORCID-0009--0001--4636--9896-A6CE39.svg?logo=orcid&logoColor=white)](https://orcid.org/0009-0001-4636-9896)
+
+---
+
+## Publication / 논문
+
+본 프로젝트의 핵심 알고리즘은 다음 논문으로 공개되어 있습니다 (Zenodo, CC BY 4.0).
+
+**Tri-CHEF: Complex-Hermitian Embedding Fusion for Korean Multimodal Retrieval**
+Young-Sang Song, Hwon Lee, Ju Yeon Jang, Young Jin Hwang, Tae Yoon Lee, Jeong Hye Gim.
+Team Chainers, Korea IT Academy (KDT, Ministry of Employment and Labor), Independent Researchers.
+Zenodo, May 2026. https://doi.org/10.5281/zenodo.20034370
+
+| 항목 | 값 |
+|------|-----|
+| Concept DOI (인용 권장, 항상 최신 버전) | [`10.5281/zenodo.20034370`](https://doi.org/10.5281/zenodo.20034370) |
+| Version DOI (v1.0) | [`10.5281/zenodo.20034371`](https://doi.org/10.5281/zenodo.20034371) |
+| Record URL | https://zenodo.org/records/20034371 |
+| 영문 PDF | `publication/paper/Tri-CHEF_paper_v1-9.pdf` (12 pp) |
+| 국문 PDF | `publication/paper/Tri-CHEF_paper_Korean_v1-9.pdf` (13 pp) |
+| 라이선스 | CC BY 4.0 (논문) |
+| 게재일 | 2026-05-06 |
+
+### Citation (BibTeX)
+
+```bibtex
+@misc{trichef2026,
+  title         = {Tri-CHEF: Complex-Hermitian Embedding Fusion for Korean Multimodal Retrieval},
+  author        = {Song, Young-Sang and Lee, Hwon and Jang, Ju Yeon and Hwang, Young Jin and Lee, Tae Yoon and Gim, Jeong Hye},
+  year          = {2026},
+  month         = may,
+  publisher     = {Zenodo},
+  version       = {1.0},
+  doi           = {10.5281/zenodo.20034370},
+  url           = {https://zenodo.org/records/20034371},
+  note          = {Preprint, CC BY 4.0}
+}
+```
+
+### Citation (APA)
+
+> Song, Y.-S., Lee, H., Jang, J. Y., Hwang, Y. J., Lee, T. Y., & Gim, J. H. (2026). *Tri-CHEF: Complex-Hermitian Embedding Fusion for Korean Multimodal Retrieval* (Version 1.0) [Preprint]. Zenodo. https://doi.org/10.5281/zenodo.20034370
+
+GitHub은 저장소 루트의 `CITATION.cff` 를 자동 인식하여 우측 상단에 **"Cite this repository"** 버튼을 표시합니다.
+
 ---
 
 # DB_insight
