@@ -110,21 +110,26 @@ def search():
                 audio    = fut_aud.result() or []
                 bgm      = fut_bgm.result() or []
 
-            # ── 2. [v13 MPLC] 학습된 multi-feature linear combination ────
-            # XRD Bragg peak Rietveld refinement 비유:
-            #   단일 raw cosine = 단일 wavelength (분리 불가)
-            #   → multi-feature (dense+sparse+asf+rerank+keyword+filename+z_dense)
-            #     의 학습된 선형 조합 = 다중 wavelength → 분리 가능
-            # CV AUC: doc 0.972 / image 0.924 / video 0.986 / audio 0.989 / bgm 0.912
-            # 도메인 무관 [0,1] score → 통합 ranking 정확.
-            from services.mplc_scoring import apply_mplc_to_results, MPLC_WEIGHTS
+            # ── 2. [v13.1 MPLC default + BSWS 환경변수 toggle] ─────────────
+            # MPLC v13.1: Multi-feature logistic regression + image hand-tune.
+            #   80케이스 검증 합격률 86% (baseline 79% +7%, FAIL 0).
+            # BSWS: Bragg-Scherrer Weighted Score — Occam's razor 단순 공식.
+            #   Hyperparameters 3개로 audio cluster 자동 페널티 시도. 검증
+            #   결과 79% (baseline 동률, MPLC 미달) — 자산 보존만.
+            # 환경변수 OMC_USE_BSWS=1 이면 BSWS 시도 (실험 용).
+            import os as _os
             results_by_domain_pre = {
                 "doc":   doc_only, "image": img_only,
                 "video": video,    "audio": audio,
                 "bgm":   bgm,
             }
-            if MPLC_WEIGHTS:
-                apply_mplc_to_results(results_by_domain_pre, query)
+            if _os.environ.get("OMC_USE_BSWS", "").strip() == "1":
+                from services.bsws_scoring import apply_bsws_to_results
+                apply_bsws_to_results(results_by_domain_pre, query)
+            else:
+                from services.mplc_scoring import apply_mplc_to_results, MPLC_WEIGHTS
+                if MPLC_WEIGHTS:
+                    apply_mplc_to_results(results_by_domain_pre, query)
 
             for lst in (img_only, doc_only, video, audio, bgm):
                 lst.sort(key=lambda r: r.get("confidence", 0), reverse=True)
