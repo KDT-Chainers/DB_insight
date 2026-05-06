@@ -59,17 +59,17 @@ export default function LandingLogin() {
       <main className="relative z-10 flex min-h-screen flex-col items-center justify-center p-6 pt-10">
         <div className="relative isolate w-full max-w-sm">
           <div
-            className="pointer-events-none absolute -inset-5 rounded-[1.65rem] bg-gradient-to-b from-sky-200/15 via-primary/10 to-[rgba(37,99,235,0.08)] opacity-90 blur-2xl"
+            className="pointer-events-none absolute -inset-4 rounded-[1.6rem] bg-gradient-to-b from-sky-200/8 via-primary/6 to-[rgba(37,99,235,0.04)] opacity-80 blur-[28px]"
             aria-hidden
           />
           <div
-            className="pointer-events-none absolute -inset-2 rounded-[1.35rem] border border-white/[0.08] bg-white/[0.05] shadow-[0_8px_40px_rgba(0,0,0,0.25),inset_0_1px_0_0_rgba(255,255,255,0.12)] backdrop-blur-2xl backdrop-saturate-150"
+            className="pointer-events-none absolute -inset-1.5 rounded-[1.25rem] border border-white/[0.13] bg-white/[0.025] shadow-[0_8px_30px_rgba(3,10,30,0.24),inset_0_1px_0_0_rgba(255,255,255,0.22)] backdrop-blur-[26px] backdrop-saturate-135"
             aria-hidden
           />
-          <div className="relative min-h-[34rem] overflow-hidden rounded-2xl shadow-[0_28px_80px_rgba(0,0,0,0.55)]">
+          <div className="relative min-h-[34rem] overflow-hidden rounded-[1.2rem] border border-white/[0.09] shadow-[0_14px_44px_rgba(0,0,0,0.38)]">
           <div className="pointer-events-none absolute inset-0 app-depth-bg" aria-hidden />
 
-          <div className="relative z-10 flex min-h-[34rem] flex-col justify-center bg-gradient-to-b from-white/[0.07] via-white/[0.02] to-transparent px-7 py-12 backdrop-blur-[56px] backdrop-saturate-150">
+          <div className="relative z-10 flex min-h-[34rem] flex-col justify-center bg-gradient-to-b from-white/[0.05] via-white/[0.015] to-transparent px-7 py-12 backdrop-blur-[34px] backdrop-saturate-130">
             <div className="flex w-full flex-col items-center gap-6">
               <div className="relative">
                 <div className="h-24 w-24 overflow-hidden rounded-full bg-gradient-to-tr from-[#060d1f] via-[#0f2847] to-[#2563eb] p-1 shadow-[0_0_28px_rgba(37,99,235,0.28)]">
@@ -160,30 +160,6 @@ export default function LandingLogin() {
         </div>
       </main>
 
-      {/* Side status */}
-      <div className="fixed right-6 top-1/2 -translate-y-1/2 flex flex-col gap-8 opacity-20 hover:opacity-50 transition-opacity">
-        <div className="flex flex-col items-center gap-1">
-          <div className="w-[1px] h-12 bg-outline-variant"></div>
-          <span className="text-sm font-mono text-primary">04ms</span>
-        </div>
-        <div className="flex flex-col items-center gap-1">
-          <div className="w-[1px] h-12 bg-outline-variant"></div>
-          <span className="text-sm font-mono text-primary">99.9%</span>
-        </div>
-      </div>
-
-      {/* Corner accent */}
-      <div className="fixed bottom-0 left-0 p-8">
-        <div className="flex items-center gap-4">
-          <div className="w-8 h-8 rounded-lg bg-surface-container-highest border border-white/5 flex items-center justify-center">
-            <span className="material-symbols-outlined text-lg text-primary">terminal</span>
-          </div>
-          <div className="hidden md:block">
-            <p className="text-xs font-bold text-outline uppercase tracking-widest">활성 시퀀스</p>
-            <p className="text-sm font-mono text-on-surface-variant">LOG_AUTH_INIT_PRIME</p>
-          </div>
-        </div>
-      </div>
     </div>
   )
 }

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback, Fragment } from 'react'
 import { createPortal } from 'react-dom'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import SearchSidebar from '../components/SearchSidebar'
 import AnimatedOrb from '../components/AnimatedOrb'
 import AmbientPageBackdrop from '../components/AmbientPageBackdrop'
@@ -23,6 +23,69 @@ const TYPE_META = {
 }
 const getTypeMeta = (t) =>
   TYPE_META[t] ?? { icon: 'insert_drive_file', color: 'text-on-surface-variant', label: t ?? '파일', grad: 'from-[#1c253e] to-[#263354]' }
+
+function FileStackSearchMotion() {
+  const cards = [
+    { id: 'a', tilt: '-rotate-[8deg]', tone: 'from-[#6ea8ff]/35 to-[#8cb6ff]/10', delay: '0s' },
+    { id: 'b', tilt: 'rotate-[1deg]', tone: 'from-[#91b9ff]/38 to-[#6f8cff]/12', delay: '0.45s' },
+    { id: 'c', tilt: 'rotate-[9deg]', tone: 'from-[#7f9bff]/34 to-[#7b8dff]/10', delay: '0.9s' },
+    { id: 'd', tilt: '-rotate-[3deg]', tone: 'from-[#9fbcff]/32 to-[#7aa2ff]/10', delay: '1.35s' },
+  ]
+
+  return (
+    <div className="flex flex-col items-center justify-center py-20">
+      <div className="relative w-full max-w-[680px] overflow-hidden rounded-[28px] border border-white/[0.1] bg-white/[0.035] px-6 py-7 shadow-[0_18px_54px_rgba(8,18,50,0.36)] backdrop-blur-[18px]">
+        <div className="pointer-events-none absolute -left-10 -top-10 h-36 w-36 rounded-full bg-sky-400/18 blur-3xl" />
+        <div className="pointer-events-none absolute -right-12 -bottom-12 h-40 w-40 rounded-full bg-violet-400/18 blur-3xl" />
+
+        <div className="mb-4 flex items-center justify-between">
+          <div className="inline-flex items-center gap-2 rounded-full border border-sky-300/25 bg-sky-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-sky-100/90">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-sky-300" />
+            탐색 엔진 동작 중
+          </div>
+          <span className="text-[11px] text-white/45">Local Retrieval</span>
+        </div>
+
+        <div className="file-stack-search relative mx-auto h-[220px] w-[360px] max-w-[82vw]">
+          {cards.map((card, idx) => (
+            <div
+              key={card.id}
+              className={`file-stack-card absolute left-1/2 top-1/2 h-[148px] w-[248px] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-white/20 bg-gradient-to-br ${card.tone} ${card.tilt} shadow-[0_18px_44px_rgba(14,26,64,0.48)] backdrop-blur-md`}
+              style={{
+                animationDelay: card.delay,
+                zIndex: cards.length - idx,
+              }}
+            >
+              <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl">
+                <div className="absolute inset-x-4 top-4 h-4 rounded-md bg-white/18" />
+                <div className="absolute left-4 right-20 top-11 h-2 rounded bg-white/14" />
+                <div className="absolute left-4 right-10 top-[62px] h-2 rounded bg-white/10" />
+                <div className="absolute left-4 right-28 top-[78px] h-2 rounded bg-white/10" />
+              </div>
+              <div className="file-stack-scan-line absolute inset-y-0 w-10 bg-gradient-to-r from-transparent via-cyan-200/35 to-transparent" />
+            </div>
+          ))}
+          <div className="file-stack-hand pointer-events-none absolute left-1/2 top-1/2 z-30 -translate-x-1/2 -translate-y-1/2">
+            <span className="material-symbols-outlined text-[34px] text-white/80 drop-shadow-[0_6px_14px_rgba(8,12,28,0.7)]">
+              back_hand
+            </span>
+          </div>
+        </div>
+
+        <div className="mt-2 text-center">
+          <p className="text-sm tracking-[0.08em] text-white/78">파일 후보를 순차 탐색 중...</p>
+          <p className="mt-1 text-xs text-white/50">질문과 가장 유사한 문서를 찾고 있어요</p>
+        </div>
+
+        <div className="mt-5 grid grid-cols-3 gap-2 text-[11px] text-white/58">
+          <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-center">벡터 유사도 계산</div>
+          <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-center">타입별 후보 정렬</div>
+          <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-center">상위 결과 확정</div>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 // ── 경량 Markdown 렌더러 (## ### **bold** *italic* `code` - bullet > quote --- hr) ──
 // LLM 출력을 추가 의존성 없이 풍부한 UI 로 렌더. 외부 패키지 없음.
@@ -506,7 +569,8 @@ function ResultCard({ result, rank, onClick, securityMode = false, query = '' })
   return (
     <div
       onClick={isAV ? undefined : onClick}
-      className={`bg-[#1e293b] border border-[#334155] rounded-[10px] overflow-hidden flex flex-col relative transition-transform duration-150
+      style={{ animationDelay: `${Math.min(Math.max(rank - 1, 0), 14) * 58}ms` }}
+      className={`result-card-enter bg-[#1e293b] border border-[#334155] rounded-[10px] overflow-hidden flex flex-col relative transition-transform duration-150
         ${isAV ? '' : 'cursor-pointer hover:-translate-y-0.5 hover:border-[#059669]'}`}
     >
       {/* 랭크 배지 */}
@@ -913,6 +977,7 @@ const V0_HOME_SUGGESTIONS = ['Write an email', 'Summarize text', 'Translate', 'G
 // ── 메인 컴포넌트 ────────────────────────────────────────
 export default function MainSearch() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { open } = useSidebar()
 
   // view: 'home' | 'results' | 'detail'
@@ -994,6 +1059,18 @@ export default function MainSearch() {
     }, 100)
     return () => clearTimeout(t)
   }, [view])
+
+  // 같은 /search 경로에서도 로고 클릭 시 홈 상태로 복귀
+  useEffect(() => {
+    if (!location.state?.goHomeAt) return
+    setView('home')
+    setResultsReady(false)
+    setHomeExiting(false)
+    setSelectedFile(null)
+    setFileDetail(null)
+    setSearchError('')
+    setSearching(false)
+  }, [location.state?.goHomeAt])
 
   // STT
   const doSearchRef = useRef(null)
@@ -1340,7 +1417,7 @@ export default function MainSearch() {
                 const items = [
                   { angle: 270, icon: 'image_search', label: '이미지\n검색',  ic: 'text-emerald-400', bg: 'bg-emerald-500/20 border-emerald-400/30', action: () => setImageSearchModalOpen(true) },
                   { angle: 318, icon: 'music_note',   label: 'BGM\n검색',     ic: 'text-pink-400',    bg: 'bg-pink-500/20 border-pink-400/30',       action: () => setBgmModalOpen(true) },
-                  { angle: 6,   icon: 'movie',        label: '동영상',         ic: 'text-violet-400',  bg: 'bg-violet-500/20 border-violet-400/30',   action: () => setDomainFilter(f => f === 'video' ? '' : 'video') },
+                  { angle: 114, icon: 'movie',        label: '동영상',         ic: 'text-violet-400',  bg: 'bg-violet-500/20 border-violet-400/30',   action: () => setDomainFilter(f => f === 'video' ? '' : 'video') },
                   { angle: 54,  icon: 'volume_up',    label: '음성',           ic: 'text-amber-400',   bg: 'bg-amber-500/20 border-amber-400/30',     action: () => setDomainFilter(f => f === 'audio' ? '' : 'audio') },
                   { angle: 222, icon: 'image',        label: '이미지',         ic: 'text-cyan-400',    bg: 'bg-cyan-500/20 border-cyan-400/30',       action: () => setDomainFilter(f => f === 'image' ? '' : 'image') },
                   { angle: 174, icon: 'description',  label: '문서',           ic: 'text-blue-400',    bg: 'bg-blue-500/20 border-blue-400/30',       action: () => setDomainFilter(f => f === 'doc' ? '' : 'doc') },
@@ -1351,9 +1428,6 @@ export default function MainSearch() {
                     <div className="fixed inset-0 z-[9998]" onMouseDown={() => setPlusMenuOpen(false)} />
                     <div className="fixed z-[9999] pointer-events-none"
                       style={{ left: plusBtnCenter.x, top: plusBtnCenter.y }}>
-                      {/* 배경 원 */}
-                      <div className="absolute -translate-x-1/2 -translate-y-1/2 w-[260px] h-[260px] rounded-full border border-white/10 bg-black/55 backdrop-blur-2xl shadow-[0_0_60px_rgba(133,173,255,0.18)]"
-                        style={{ animation: 'radialOpen 0.22s cubic-bezier(0.34,1.56,0.64,1) both' }} />
                       {/* 아이템들 */}
                       {items.map((it, idx) => {
                         const rad = (it.angle * Math.PI) / 180
@@ -1412,11 +1486,6 @@ export default function MainSearch() {
                   >
                     <span className={`material-symbols-outlined text-[20px] font-bold transition-transform duration-300 ${plusMenuOpen ? 'rotate-45' : ''}`}>add</span>
                   </button>
-                  <div className="pl-1 md:pl-2">
-                    <span className={`material-symbols-outlined text-xl ${listening ? 'text-red-400' : 'text-on-surface-variant'}`}>
-                      search
-                    </span>
-                  </div>
                   <div className="relative min-h-[3.25rem] flex-1">
                     <input
                       ref={homeInputRef}
@@ -1452,6 +1521,11 @@ export default function MainSearch() {
                       </div>
                     )}
                   </div>
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center text-on-surface-variant">
+                    <span className="material-symbols-outlined block text-[22px] leading-none">
+                      search
+                    </span>
+                  </div>
                   {/* 보안 모드 토글 — 마이크 옆에 위치 */}
                   <button type="button" onClick={() => setSecurityMode(v => !v)}
                     title={securityMode ? '보안 모드 켜짐: 결과 미리보기에 PII 마스킹 적용' : '보안 모드 꺼짐'}
@@ -1460,11 +1534,6 @@ export default function MainSearch() {
                         ? 'bg-red-500/20 text-red-400 ring-2 ring-red-400/40 shadow-[0_0_20px_rgba(248,113,113,0.3)]'
                         : 'text-on-surface-variant hover:text-red-400 hover:bg-red-400/10'}`}>
                     <span className="material-symbols-outlined" style={securityMode ? { fontVariationSettings: '"FILL" 1' } : {}}>shield</span>
-                  </button>
-                  <button type="button" onClick={toggleMic}
-                    className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 shrink-0
-                      ${listening ? 'bg-red-500/20 text-red-400 animate-pulse' : 'text-on-surface-variant hover:text-primary hover:bg-primary/10'}`}>
-                    <span className="material-symbols-outlined" style={listening ? { fontVariationSettings: '"FILL" 1' } : {}}>mic</span>
                   </button>
                 </div>
               </form>
@@ -1502,16 +1571,11 @@ export default function MainSearch() {
 
       {/* ════ RESULTS / DETAIL 공통 헤더 ════ */}
       {view !== 'home' && (
-        <header className={`fixed top-8 ${leftEdge} right-0 z-40 bg-slate-950/60 backdrop-blur-xl flex items-center px-6 py-3 gap-4 border-b border-outline-variant/10 shadow-[0_0_20px_rgba(133,173,255,0.1)] transition-[left] duration-300`}>
-          <button onClick={() => { setView('home'); setInputValue(''); setResults([]) }}
-            className={`text-lg font-bold tracking-tighter bg-gradient-to-r from-blue-300 to-purple-400 bg-clip-text text-transparent shrink-0 hover:opacity-70 transition-opacity ${!open ? 'ml-10' : ''}`}>
-            DB_insight
-          </button>
-
-          <form onSubmit={handleSearch} className="flex-1">
-            <div className={`flex items-center rounded-full border px-4 py-2 gap-3 transition-all
+        <header className={`fixed top-8 ${leftEdge} right-0 z-40 border-b border-outline-variant/10 bg-slate-950/60 py-3 shadow-[0_0_20px_rgba(133,173,255,0.1)] backdrop-blur-xl transition-[left] duration-300`}>
+          <div className="mx-auto flex max-w-[1400px] items-center gap-4 px-8">
+            <form onSubmit={handleSearch} className="min-w-0 flex-1 max-w-[760px]">
+              <div className={`flex items-center gap-3 rounded-full border px-4 py-2 transition-all
               ${listening ? 'bg-red-500/5 border-red-400/50 shadow-[0_0_15px_rgba(248,113,113,0.15)]' : 'bg-surface-container-high border-outline-variant/20 focus-within:border-primary/50'}`}>
-              <span className={`material-symbols-outlined text-lg ${listening ? 'text-red-400' : 'text-primary'}`}>{listening ? 'mic' : 'search'}</span>
               <div className="flex-1 relative">
                 <input
                   ref={resultsInputRef}
@@ -1533,38 +1597,45 @@ export default function MainSearch() {
                   </div>
                 )}
               </div>
-              {/* 보안 모드 토글 (results header) */}
-              <button type="button" onClick={() => setSecurityMode(v => !v)}
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center text-primary">
+                <span className="material-symbols-outlined block text-lg leading-none">search</span>
+              </div>
+              </div>
+            </form>
+
+            <div className="ml-auto flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setSecurityMode(v => !v)}
                 title={securityMode ? '보안 모드 켜짐' : '보안 모드 꺼짐'}
-                className={`shrink-0 transition-all duration-200 ${securityMode ? 'text-red-400' : 'text-on-surface-variant hover:text-red-400'}`}>
+                className={`flex h-10 w-10 items-center justify-center rounded-full border transition-all duration-200 ${
+                  securityMode
+                    ? 'border-red-400/50 bg-red-500/15 text-red-400'
+                    : 'border-white/[0.08] bg-white/[0.04] text-on-surface-variant hover:text-red-400'
+                }`}
+              >
                 <span className="material-symbols-outlined text-lg" style={securityMode ? { fontVariationSettings: '"FILL" 1' } : {}}>shield</span>
               </button>
-              <button type="button" onClick={toggleMic}
-                className={`shrink-0 transition-all duration-200 ${listening ? 'text-red-400 animate-pulse' : 'text-on-surface-variant hover:text-primary'}`}>
-                <span className="material-symbols-outlined text-lg" style={listening ? { fontVariationSettings: '"FILL" 1' } : {}}>mic</span>
-              </button>
+              {view === 'detail' && (
+                <button onClick={handleBackToResults}
+                  className="flex items-center gap-2 rounded-full border border-outline-variant/20 bg-surface-container-high px-4 py-2 text-base font-bold text-on-surface-variant transition-all hover:border-primary/30 hover:text-primary">
+                  <span className="material-symbols-outlined text-lg">arrow_back</span>결과로
+                </button>
+              )}
             </div>
-          </form>
-
-          {view === 'detail' && (
-            <button onClick={handleBackToResults}
-              className="flex items-center gap-2 px-4 py-2 rounded-full bg-surface-container-high border border-outline-variant/20 text-base font-bold text-on-surface-variant hover:text-primary hover:border-primary/30 transition-all shrink-0">
-              <span className="material-symbols-outlined text-lg">arrow_back</span>결과로
-            </button>
-          )}
+          </div>
         </header>
       )}
 
       {/* ════ RESULTS VIEW ════ */}
       {view === 'results' && (
-        <main className={`${ml} pt-24 min-h-screen transition-[margin] duration-300`}
+        <main className={`${ml} relative pt-24 min-h-screen transition-[margin] duration-300`}
           style={{ opacity: resultsReady ? 1 : 0, transform: resultsReady ? 'translateY(0)' : 'translateY(24px)', transition: 'opacity 0.38s ease, transform 0.38s ease, margin 0.3s' }}>
           <div className="p-8 max-w-[1400px] mx-auto">
 
             {/* 헤더 */}
-            <div className="flex justify-between items-end mb-10">
+            <div className="apple-hero-card mb-6 flex items-end justify-between rounded-[22px] border border-white/[0.11] px-6 py-5">
               <div className="space-y-2 flex-1 min-w-0">
-                <span className="px-2 py-0.5 rounded text-lg font-bold bg-primary/10 text-primary uppercase tracking-widest border border-primary/20">현재 쿼리</span>
                 {/* 이미지 검색 시 — 미리보기 + 파일명 표시 */}
                 {imageSearchActive && imageSearchPreviewUrl ? (
                   <div className="flex items-start gap-4">
@@ -1612,6 +1683,8 @@ export default function MainSearch() {
               </div>
             </div>
 
+            <section className="rounded-[22px] border border-white/[0.07] bg-white/[0.02] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-[40px]">
+
             {/* [#2] 도메인 필터 칩 — 검색창 구조 미변경, 결과 헤더 아래에 독립 마운트 */}
             <div className="mb-6 -mt-4">
               <DomainFilter
@@ -1651,18 +1724,21 @@ export default function MainSearch() {
 
             {/* 로딩 */}
             {searching && (
-              <div className="flex flex-col items-center justify-center py-32 gap-4">
-                <span className="material-symbols-outlined text-primary text-5xl animate-spin">progress_activity</span>
-                <p className="text-on-surface-variant">벡터 유사도 계산 중...</p>
+              <div
+                className={`pointer-events-auto fixed ${leftEdge} right-0 top-0 bottom-0 z-[80] flex items-center justify-center bg-[#01030c]/88 transition-[left] duration-300`}
+              >
+                <div className="-translate-x-16 translate-y-64">
+                  <FileStackSearchMotion />
+                </div>
               </div>
             )}
 
             {/* 결과 없음 */}
             {!searching && !searchError && results.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-32 gap-4">
-                <span className="material-symbols-outlined text-on-surface-variant/20 text-6xl">search_off</span>
-                <p className="text-on-surface-variant">일치하는 파일을 찾지 못했습니다.</p>
-                <p className="text-xs text-on-surface-variant/40">데이터 페이지에서 먼저 파일을 인덱싱하세요.</p>
+              <div className="mx-auto flex max-w-[560px] flex-col items-center justify-center gap-4 px-8 py-14 text-center">
+                <span className="material-symbols-outlined text-on-surface-variant/25 text-6xl">search_off</span>
+                <p className="text-on-surface text-lg font-semibold">일치하는 파일을 찾지 못했습니다.</p>
+                <p className="text-sm text-on-surface-variant/55">데이터 페이지에서 먼저 파일을 인덱싱하세요.</p>
               </div>
             )}
 
@@ -1721,6 +1797,7 @@ export default function MainSearch() {
                 </div>
               </div>
             )}
+            </section>
           </div>
         </main>
       )}
