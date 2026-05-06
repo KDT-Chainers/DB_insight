@@ -198,12 +198,13 @@ def orphans_under(folder_path: str) -> list[dict]:
     if not base:
         return []
     out: list[dict] = []
-    # _abs_index_cache 는 _norm 키 → domain. 원본 abs 는 도메인별 registry 의 entry["abs"].
-    # prefix 매칭은 norm 기준, 존재 검사는 원본 abs 로 수행.
+    # [v9 PC 호환] abs 필드는 PC 별 다름. rel_key + RAW_DB 동적 결합으로
+    # 현재 PC abs 를 매번 빌드해서 prefix 매칭/존재 검사 수행.
+    from services.path_resolver import resolve_raw_path
     for dom, label in _DOMAIN_LABEL.items():
         reg = _load_one(dom)
-        for entry in reg.values():
-            abs_path = entry.get("abs") if isinstance(entry, dict) else None
+        for rel_key, entry in reg.items():
+            abs_path = resolve_raw_path(rel_key, label, entry if isinstance(entry, dict) else None)
             if not abs_path:
                 continue
             n = _norm(abs_path)

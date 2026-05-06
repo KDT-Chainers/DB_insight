@@ -343,7 +343,9 @@ def run_image_incremental() -> IncrementalResult:
             continue
         if registry.get(key, {}).get("sha") != sha:
             new_files.append(p)
-            registry[key] = {"sha": sha, "abs": str(p)}
+            # [v9 PC 호환] abs 저장 안 함 — rel_key + 현재 RAW_DB 동적 결합으로
+            #   다른 PC 호환. (이전엔 PC 별 abs 가 registry 에 박혀 다른 PC 에서 깨짐.)
+            registry[key] = {"sha": sha}
 
     logger.info(f"[img_inc] 기존={existing_count}, 신규={len(new_files)}")
     if not new_files:
@@ -514,7 +516,8 @@ def run_doc_incremental() -> IncrementalResult:
     # 5. registry save — 실제로 페이지를 기여한 문서만 등록 (lexical_rebuild 이전에 커밋)
     for p in ingested_docs:
         key = str(p.relative_to(raw_dir)).replace("\\", "/")
-        registry[key] = {"sha": sha_cache[key], "abs": str(p)}
+        # [v9 PC 호환] abs 저장 안 함 (cross-PC compatibility)
+        registry[key] = {"sha": sha_cache[key]}
     _save_registry(reg_path, registry)
 
     # 6. lexical 채널 재빌드 (vocab / asf_token_sets / sparse) — 신규 항목 반영 필수
@@ -665,7 +668,8 @@ def embed_image_file(file_path: str, progress_cb=None, defer_lexical_rebuild: bo
         except Exception as e:
             logger.warning(f"[embed_image_file] lexical rebuild 실패: {e}")
 
-    registry[key] = {"sha": sha, "abs": str(p), "staged": str(staged)}
+    # [v9 PC 호환] abs 저장 안 함 (rel_key + RAW_DB 동적 결합)
+    registry[key] = {"sha": sha, "staged": str(staged)}
     _save_registry(reg_path, registry)
 
     return {"status": "done", "chunks": 1}
@@ -809,7 +813,8 @@ def embed_doc_file(file_path: str, progress_cb=None, defer_lexical_rebuild: bool
         except Exception as e:
             logger.warning(f"[embed_doc_file] lexical rebuild 실패: {e}")
 
-    registry[key] = {"sha": sha, "abs": str(p), "staged": str(staged),
+    # [v9 PC 호환] abs 저장 안 함 (rel_key + RAW_DB 동적 결합)
+    registry[key] = {"sha": sha, "staged": str(staged),
                      "pages": len(img_pages)}
     _save_registry(reg_path, registry)
 
