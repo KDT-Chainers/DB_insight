@@ -264,7 +264,7 @@ async function searchBgm(query, topK = 20) {
 }
 
 // ── 검색 API ────────────────────────────────────────────
-async function searchFiles(query, topK = 20, type = '') {
+async function searchFiles(query, topK = 30, type = '') {
   // BGM 단독 도메인일 때는 /api/bgm/search 만 호출
   if (type === 'bgm') {
     return await searchBgm(query, topK)
@@ -1037,7 +1037,7 @@ export default function MainSearch() {
     setSearching(true)
     setSearchError('')
     try {
-      const data = await searchFiles(q, 20, type)
+      const data = await searchFiles(q, 30, type)
       setResults(data)
       // 검색 기록 저장 → 완료 후 사이드바 갱신 이벤트
       fetch(`${API_BASE}/api/history`, {

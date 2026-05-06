@@ -84,17 +84,58 @@ def search():
             for lst in (img_only, doc_only, video, audio, bgm):
                 lst.sort(key=lambda r: r.get("confidence", 0), reverse=True)
 
-            # 최소 보장: 각 도메인 quota = max(1, top_k // 5) — 5도메인 기준
-            quota = max(1, top_k // 5)
-            guaranteed: list[dict] = []
-            for lst in (doc_only, img_only, video, audio, bgm):
-                guaranteed.extend(lst[:quota])
+            # [v7] 품질 기반 동적 quota — 강매칭 도메인이 더 많은 자리 차지하도록.
+            # 기존(v6)은 quota = top_k//5 고정 → 약매칭 도메인이 자리 차지해서
+            # NGC 코스모스 같은 강매칭(video 13편)이 6편만 노출되는 부작용.
+            #
+            # 새 규칙: 도메인 최고 confidence 기준
+            #   ≥0.80 (강매칭) → base × 2
+            #   ≥0.50 (보통)   → base × 1
+            #   ≥0.30 (약함)   → max(1, base // 2)
+            #   <0.30 (매우약) → 1  (공정성 — 최소 1개 노출)
+            base_quota = max(1, top_k // 10)
 
-            # 추가 자리: 5도메인 quota 초과한 부분에 대해 score sort
+            def _max_conf(lst):
+                return float(lst[0].get("confidence", 0.0)) if lst else 0.0
+
+            def _adj_quota(max_conf):
+                if max_conf >= 0.80:
+                    return base_quota * 2
+                if max_conf >= 0.50:
+                    return base_quota
+                if max_conf >= 0.30:
+                    return max(1, base_quota // 2)
+                return 1
+
+            quotas = {
+                "doc":   _adj_quota(_max_conf(doc_only)),
+                "image": _adj_quota(_max_conf(img_only)),
+                "video": _adj_quota(_max_conf(video)),
+                "audio": _adj_quota(_max_conf(audio)),
+                "bgm":   _adj_quota(_max_conf(bgm)),
+            }
+
+            guaranteed: list[dict] = []
+            for key, lst in (
+                ("doc",   doc_only),
+                ("image", img_only),
+                ("video", video),
+                ("audio", audio),
+                ("bgm",   bgm),
+            ):
+                guaranteed.extend(lst[:quotas[key]])
+
+            # 추가 자리: 각 도메인 quota 초과분 score sort
             _DOMAIN_W = {"image": 1.0, "doc": 1.0, "video": 0.75, "audio": 0.75, "bgm": 0.75}
             extras = []
-            for lst in (img_only, doc_only, video, audio, bgm):
-                extras.extend(lst[quota:])
+            for key, lst in (
+                ("doc",   doc_only),
+                ("image", img_only),
+                ("video", video),
+                ("audio", audio),
+                ("bgm",   bgm),
+            ):
+                extras.extend(lst[quotas[key]:])
             extras.sort(
                 key=lambda r: r.get("confidence", 0) *
                               _DOMAIN_W.get(r.get("file_type", ""), 1.0),
@@ -114,14 +155,29 @@ def search():
     from services.rerank_adapter import maybe_rerank, _is_enabled as _rr_enabled
     results = maybe_rerank(query, results)
 
-    # [v5] 재순위 후 관련성 하한 필터 — reranker 활성 시만 작동.
+    # [v6] 재순위 후 관련성 하한 필터 — reranker 활성 시만 작동.
     # 도메인 보장 쿼터(guaranteed slot)에 의해 포함된 비관련 결과가 상위 노출되는
     # 문제 해결 (예: '경주 시굴 조사' 검색에 '실크로드 영상' 등장).
     # rerank_score < -5.0 → sigmoid((-5+3)/3) ≈ 0.25 (관련성 25% 미만) → 제거.
     # reranker 비활성 또는 rerank_score 없는 항목은 영향 없음 (default=0.0 ≥ -5.0).
+    #
+    # [v6 패치] AV 도메인(movie/music) 면제 —
+    #   AV passage 는 STT 한 segment 의 짧은 텍스트(한국어 자막 일부)라
+    #   cross-encoder logit 이 본질적으로 낮음(-5~-10 흔함).
+    #   파일명 매칭(+1.5 부스트)으로 이미 final score 가 충분히 높은
+    #   NGC 코스모스 E02~E12 같은 결과까지 floor 에 걸려 사라지는 부작용 발생.
+    #   AV 도메인은 file_path 기반 의미 매칭이 더 강하므로 floor 면제.
     if _rr_enabled():
         _RERANK_FLOOR = -5.0
-        results = [r for r in results if r.get("rerank_score", 0.0) >= _RERANK_FLOOR]
+        def _keep_after_rerank(r):
+            # AV(movie/music): passage 가 STT 일부라 reranker 점수가 본질적으로 낮음 → 면제
+            if r.get("file_type") in ("video", "audio"):
+                return True
+            # BGM: 자체 점수 체계 사용 → 면제
+            if r.get("file_type") == "bgm":
+                return True
+            return r.get("rerank_score", 0.0) >= _RERANK_FLOOR
+        results = [r for r in results if _keep_after_rerank(r)]
 
     # 5도메인 통합 score 조정
     # TRI-CHEF(image/doc/video/audio): 엔진이 이미 per-query z-score CDF [0,1] 출력
@@ -165,6 +221,11 @@ def search():
             # doc: page_num backfill
             if r.get("page_num") is None and loc.get("page"):
                 r["page_num"] = loc["page"]
+
+    # [v7] 최종 top_k 컷 — combined[:top_k*2] dedup 여유분으로 받았으나
+    # 사용자 요청 top_k 정확히 맞춰 반환. (이전 v6 까지는 자르지 않아 30 요청에
+    # 47건 반환되는 비직관적 동작 발생.)
+    results = results[:top_k]
 
     return jsonify({"query": query, "results": results})
 

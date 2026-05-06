@@ -101,7 +101,16 @@ def maybe_rerank(query: str, results: list[dict],
             #   기반 값을 보존한다. 다만 강한 부정(s < -3) 인 경우 50% 디스카운트만
             #   적용해 사용자에게 약한 신호를 주는 정도로 그친다.
             prev = float(r.get("confidence") or 0.0)
-            if s < -3.0:
+            ftype = r.get("file_type", "")
+            # [v7 패치] AV(video/audio) + BGM 도메인: STT passage 가 짧아
+            #   cross-encoder logit 이 본질적으로 낮음(-5~-10 흔함).
+            #   prev × 0.5 디스카운트 적용 시 파일명 매칭으로 final score 가
+            #   충분한 NGC 코스모스 E02~E12 등이 모두 conf 50% 균일 캡핑되는
+            #   부작용 발생. AV/BGM 도메인은 dense + 파일명 신호가 더 신뢰
+            #   있으므로 디스카운트 면제 (정렬용 rerank_score 는 그대로 사용).
+            if ftype in ("video", "audio", "bgm"):
+                pass  # confidence 보존
+            elif s < -3.0:
                 # 강한 부정: 절반으로만 깎음 (0 으로 절멸시키지 않음)
                 r["confidence"] = round(prev * 0.5, 4)
             # else: confidence 그대로 유지
