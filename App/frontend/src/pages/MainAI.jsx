@@ -7,14 +7,23 @@ import { useSpeechRecognition } from '../hooks/useSpeechRecognition'
 import { useMicLevelRef } from '../hooks/useMicLevelRef'
 import { API_BASE } from '../api'
 
-// ── 파일 타입 메타 (MainSearch 동일) ─────────────────────────
+// ── 파일 타입 메타 (AI 오브 점 색상 계열) ─────────────────────
+/** AnimatedOrb `aiPointColor` 와 동일 계열 (가독성 위해 일부만 살짝 보정) */
+const ORB = {
+  navy: '#5c9dff',
+  pink: '#ff59e0',
+  mint: '#52fac7',
+  coral: '#ff6142',
+  electric: '#8cf2ff',
+}
+
 const TYPE_META = {
-  doc:   { icon: 'description', color: 'text-[#85adff]',   label: '문서',   grad: 'from-[#1e3a8a] to-[#1e40af]' },
-  video: { icon: 'movie',       color: 'text-[#ac8aff]',   label: '동영상', grad: 'from-[#4c1d95] to-[#5b21b6]' },
-  image: { icon: 'image',       color: 'text-emerald-400', label: '이미지', grad: 'from-[#064e3b] to-[#065f46]' },
-  audio: { icon: 'volume_up',   color: 'text-amber-400',   label: '음성',   grad: 'from-[#78350f] to-[#92400e]' },
-  movie: { icon: 'movie',       color: 'text-[#ac8aff]',   label: '동영상', grad: 'from-[#4c1d95] to-[#5b21b6]' },
-  music: { icon: 'volume_up',   color: 'text-amber-400',   label: '음성',   grad: 'from-[#78350f] to-[#92400e]' },
+  doc:   { icon: 'description', color: 'text-[#8cf2ff]', label: '문서',   grad: 'from-[#1e3a6e] to-[#5c9dff]' },
+  video: { icon: 'movie',       color: 'text-[#ff59e0]', label: '동영상', grad: 'from-[#581c87] to-[#be185d]' },
+  image: { icon: 'image',       color: 'text-[#52fac7]', label: '이미지', grad: 'from-[#0f766e] to-[#14b8a6]' },
+  audio: { icon: 'volume_up',   color: 'text-[#ff7a5c]', label: '음성',   grad: 'from-[#7c2d12] to-[#ea580c]' },
+  movie: { icon: 'movie',       color: 'text-[#ff59e0]', label: '동영상', grad: 'from-[#581c87] to-[#be185d]' },
+  music: { icon: 'volume_up',   color: 'text-[#ff7a5c]', label: '음성',   grad: 'from-[#7c2d12] to-[#ea580c]' },
 }
 const getTypeMeta = (t) =>
   TYPE_META[t] ?? { icon: 'insert_drive_file', color: 'text-on-surface-variant', label: t ?? '파일', grad: 'from-[#1c253e] to-[#263354]' }
@@ -66,7 +75,15 @@ const AI = {
   borderHover: 'rgba(139,92,246,0.5)',
   rankBg:      'linear-gradient(135deg, #6d28d9, #7c3aed)',
   glow:        '0 0 20px rgba(139,92,246,0.3)',
+  /** 카드·패널에서 공통 참조하는 오브 포인트 */
+  orb: ORB,
 }
+
+/** 로컬 UI 프리뷰 전용 (#/ai?devDummy=1). 프로덕션 배포에서는 localhost 에서만 동작 */
+const _LOCAL_AI_DUMMY_HOST =
+  typeof window !== 'undefined' &&
+  (window.location.hostname === 'localhost' ||
+    window.location.hostname === '127.0.0.1')
 
 // ── 결과 카드 (AI 색상) ───────────────────────────────────────
 function AiResultCard({ result, rank, onClick }) {
@@ -117,10 +134,27 @@ function AiResultCard({ result, rank, onClick }) {
   const streamUrl   = isAV ? avStreamUrl(result) : null
 
   const DOMAIN_CLS = {
-    image:    'bg-[#065f46] text-[#d1fae5] border-[#10b981]',
-    doc_page: 'bg-[#5b21b6] text-[#ede9fe] border-[#8b5cf6]',
-    movie:    'bg-[#7c2d12] text-[#ffedd5] border-[#ea580c]',
-    music:    'bg-[#1e40af] text-[#dbeafe] border-[#3b82f6]',
+    image:    'text-[#52fac7] border-[#52fac7]/35',
+    doc_page: 'text-[#8cf2ff] border-[#5c9dff]/40',
+    movie:    'text-[#ff9edc] border-[#ff59e0]/35',
+    music:    'text-[#ffc4b3] border-[#ff6142]/40',
+  }
+  
+  const getDomainStyle = (label) => {
+    const colorMap = {
+      image:    { text: '#52fac7', glow: 'rgba(82, 250, 199, 0.25)' },
+      doc_page: { text: '#8cf2ff', glow: 'rgba(140, 242, 255, 0.25)' },
+      movie:    { text: '#ff9edc', glow: 'rgba(255, 158, 220, 0.25)' },
+      music:    { text: '#ffc4b3', glow: 'rgba(255, 196, 179, 0.25)' },
+    }
+    const color = colorMap[label] || { text: '#a78bfa', glow: 'rgba(167, 139, 250, 0.25)' }
+    return {
+      background: 'rgba(13, 7, 24, 0.5)',
+      backdropFilter: 'blur(12px)',
+      border: `1.5px solid ${color.text}28`,
+      color: color.text,
+      boxShadow: `0 4px 16px ${color.glow}, inset 0 1px 2px rgba(255, 255, 255, 0.12), inset 0 -1px 2px rgba(0, 0, 0, 0.3)`
+    }
   }
 
   const seekTo = (t) => { const p = playerRef.current; if (!p) return; p.currentTime = t; p.play().catch(() => {}) }
@@ -168,7 +202,7 @@ function AiResultCard({ result, rank, onClick }) {
               onError={() => setImgError(true)}
             />
           ) : (
-            <span className="text-[#6b21a8] text-xs">{domainLabel}</span>
+            <span className="text-xs" style={{ color: AI.orb.pink }}>{domainLabel}</span>
           )}
         </div>
       )}
@@ -178,9 +212,9 @@ function AiResultCard({ result, rank, onClick }) {
         {/* 3지표 — 미리보기 화면 바로 아래 */}
         <div className="grid grid-cols-3 gap-1.5">
           {[
-            { label: '신뢰도', value: `${confPct}%`, cls: 'text-[#a78bfa]' },
-            { label: '정확도', value: acc,            cls: 'text-[#60a5fa]' },
-            { label: '유사도', value: sim,            cls: 'text-[#c4b5fd]' },
+            { label: '신뢰도', value: `${confPct}%`, cls: 'text-[#ff59e0]' },
+            { label: '정확도', value: acc,            cls: 'text-[#8cf2ff]' },
+            { label: '유사도', value: sim,            cls: 'text-[#52fac7]' },
           ].map(({ label, value, cls }) => (
             <div key={label} className="rounded-md p-1.5 text-center border"
               style={{ background: '#0b0515', borderColor: AI.border }}>
@@ -192,11 +226,14 @@ function AiResultCard({ result, rank, onClick }) {
 
         {/* 도메인 배지 */}
         <div className="flex gap-1 flex-wrap">
-          <span className={`text-[10px] px-2 py-0.5 rounded-full border ${DOMAIN_CLS[domainLabel] ?? 'bg-[#1e1040] text-[#a78bfa] border-[#7c3aed]'}`}>
+          <span 
+            className="text-[10px] px-2 py-0.5 rounded-full border transform origin-left transition-transform duration-200 ease-out hover:scale-x-105"
+            style={getDomainStyle(domainLabel)}
+          >
             {domainLabel}
           </span>
           {isAV && (
-            <span className="text-[10px] px-2 py-0.5 rounded-full border border-[#4c1d95] bg-[#2e1065] text-[#c4b5fd]">
+            <span className="border border-[#ff59e0]/35 bg-purple-950/60 text-[10px] text-[#f0abfc] px-2 py-0.5 rounded-full">
               세그 {segments.length}
             </span>
           )}
@@ -208,7 +245,7 @@ function AiResultCard({ result, rank, onClick }) {
             {result.file_name}
           </div>
           {result.page_num != null && (
-            <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-[#2e1065] text-[#c4b5fd] border border-[#7c3aed]/40 font-mono whitespace-nowrap">
+            <span className="shrink-0 rounded border border-[#5c9dff]/35 bg-indigo-950/60 px-1.5 py-0.5 font-mono text-[10px] text-[#8cf2ff] whitespace-nowrap">
               {result.page_num}p
             </span>
           )}
@@ -243,8 +280,8 @@ function AiResultCard({ result, rank, onClick }) {
                       style={{ background: '#0b0515', border: `1px solid ${AI.border}` }}
                       onMouseEnter={e => e.currentTarget.style.borderColor = AI.accentLight}
                       onMouseLeave={e => e.currentTarget.style.borderColor = AI.border}>
-                      <span className="text-[#7dd3fc] font-mono font-semibold whitespace-nowrap min-w-[112px]">{fmtTime(t0)} ~ {fmtTime(t1)}</span>
-                      <span className="text-[#a78bfa] font-mono whitespace-nowrap">s={sc.toFixed(3)}</span>
+                      <span className="font-mono font-semibold whitespace-nowrap min-w-[112px]" style={{ color: ORB.electric }}>{fmtTime(t0)} ~ {fmtTime(t1)}</span>
+                      <span className="font-mono whitespace-nowrap" style={{ color: ORB.pink }}>s={sc.toFixed(3)}</span>
                       <span className="text-[#94a3b8] flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{preview}</span>
                     </button>
                   )
@@ -275,7 +312,7 @@ function AVDetailContent({ result }) {
               className="w-full max-h-[280px] object-contain" />
           ) : (
             <div className="flex flex-col items-center p-6 gap-3">
-              <span className="material-symbols-outlined text-amber-400 text-4xl" style={{ fontVariationSettings: '"FILL" 1' }}>volume_up</span>
+              <span className="material-symbols-outlined text-4xl" style={{ fontVariationSettings: '"FILL" 1', color: ORB.coral }}>volume_up</span>
               <audio ref={playerRef} src={streamUrl} controls preload="metadata" className="w-full" />
             </div>
           )}
@@ -324,11 +361,11 @@ function AVDetailContent({ result }) {
 
 // ── 도메인 색상/레이블 ─────────────────────────────────────────
 const DOMAIN_META = {
-  image:    { label: '이미지', icon: 'image',       bg: '#064e3b', text: '#d1fae5', border: '#10b981' },
-  doc_page: { label: '문서',   icon: 'description', bg: '#4c1d95', text: '#ede9fe', border: '#8b5cf6' },
-  movie:    { label: '동영상', icon: 'movie',       bg: '#7c2d12', text: '#ffedd5', border: '#ea580c' },
-  music:    { label: '음성',   icon: 'volume_up',   bg: '#1e3a8a', text: '#dbeafe', border: '#3b82f6' },
-  all:      { label: '전체',   icon: 'search',      bg: '#1e1b4b', text: '#c7d2fe', border: '#6366f1' },
+  image:    { label: '이미지', icon: 'image',       bg: '#0d0718', text: '#a7f3d0', border: ORB.mint },
+  doc_page: { label: '문서',   icon: 'description', bg: '#0d0718', text: '#dbeafe', border: ORB.electric },
+  movie:    { label: '동영상', icon: 'movie',       bg: '#0d0718', text: '#fce7f3', border: ORB.pink },
+  music:    { label: '음성',   icon: 'volume_up',   bg: '#0d0718', text: '#ffedd5', border: ORB.coral },
+  all:      { label: '전체',   icon: 'search',      bg: '#0d0718', text: '#e9d5ff', border: '#a78bfa' },
 }
 
 // ── 미니 결과 카드 (단계별 미리보기) ──────────────────────────
@@ -351,7 +388,13 @@ function MiniResultPill({ item, rank }) {
             onError={() => setImgErr(true)} />
         </div>
       ) : (
-        <div className="h-9 flex items-center justify-center" style={{ background: `${dc.bg}55` }}>
+        <div className="h-9 flex items-center justify-center" 
+          style={{ 
+            background: 'rgba(13, 7, 24, 0.5)',
+            backdropFilter: 'blur(12px)',
+            border: `1.5px solid ${dc.border}28`,
+            boxShadow: `inset 0 1px 2px rgba(255, 255, 255, 0.08), inset 0 -1px 2px rgba(0, 0, 0, 0.3)`
+          }}>
           <span className="material-symbols-outlined text-sm" style={{ color: dc.border }}>{dc.icon}</span>
         </div>
       )}
@@ -428,13 +471,22 @@ function AIIterationPanel({ iterationData, domainSelection, streaming, hasLLM })
 
                 {/* 단계 카드 */}
                 <div className="rounded-xl overflow-hidden"
-                  style={{ border: `1px solid rgba(109,40,217,0.15)`, background: '#080412' }}>
+                  style={{ 
+                    border: `1.5px solid ${dc.border}28`, 
+                    background: 'rgba(13, 7, 24, 0.5)',
+                    backdropFilter: 'blur(12px)',
+                    boxShadow: `0 4px 16px rgba(0, 0, 0, 0.2), inset 0 1px 2px rgba(255, 255, 255, 0.08), inset 0 -1px 2px rgba(0, 0, 0, 0.3)`
+                  }}>
 
                   {/* 단계 헤더 */}
                   <div className="flex items-center gap-2 px-3 py-2"
-                    style={{ background: 'rgba(109,40,217,0.07)', borderBottom: '1px solid rgba(109,40,217,0.1)' }}>
+                    style={{ 
+                      background: `rgba(13, 7, 24, 0.6)`,
+                      backdropFilter: 'blur(12px)',
+                      borderBottom: `1.5px solid ${dc.border}28`
+                    }}>
                     <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
-                      style={{ background: step.done ? 'linear-gradient(135deg,#059669,#047857)' : isGlobal ? 'rgba(99,102,241,0.7)' : AI.rankBg }}>
+                      style={{ background: step.done ? `linear-gradient(135deg,${ORB.mint},#0d9488)` : isGlobal ? 'rgba(140,242,255,0.35)' : AI.rankBg }}>
                       {isGlobal ? '①' : step.iteration}
                     </div>
                     <span className="text-[11px] font-mono font-bold text-on-surface/80 flex-1 truncate">
@@ -467,7 +519,7 @@ function AIIterationPanel({ iterationData, domainSelection, streaming, hasLLM })
                     <div className="px-3 py-2 flex items-start gap-2"
                       style={{ borderTop: '1px solid rgba(109,40,217,0.08)' }}>
                       <span className="material-symbols-outlined text-sm shrink-0 mt-0.5"
-                        style={{ color: step.done ? '#10b981' : AI.accent, fontVariationSettings: '"FILL" 1' }}>
+                        style={{ color: step.done ? ORB.mint : AI.accent, fontVariationSettings: '"FILL" 1' }}>
                         {step.done ? 'check_circle' : 'psychology'}
                       </span>
                       <p className="text-[11px] text-on-surface-variant/65 leading-relaxed">{step.thought}</p>
@@ -527,6 +579,15 @@ export default function MainAI() {
   const [topK,              setTopK]              = useState(20)
   const [maxIter,           setMaxIter]           = useState(5)
   const abortRef = useRef(null)
+  const activeQueryRef = useRef('')
+
+  const dispatchAiSidebarView = useCallback((viewName) => {
+    try {
+      window.dispatchEvent(
+        new CustomEvent('ai-sidebar-view-changed', { detail: { view: viewName } }),
+      )
+    } catch {}
+  }, [])
 
   // 애니메이션
   const [homeExiting,  setHomeExiting]  = useState(false)
@@ -540,6 +601,7 @@ export default function MainAI() {
   // 포털 전환
   const [searchTransitioning, setSearchTransitioning] = useState(false)
   const [ripplePos, setRipplePos] = useState({ x: '50%', y: '50%' })
+  const [aiDockExpanded, setAiDockExpanded] = useState(false)
   const btnRef      = useRef(null)
   const formRef     = useRef(null)
   const inputRef    = useRef(null)
@@ -582,6 +644,92 @@ export default function MainAI() {
     if (view !== 'home') stopMic()
   }, [view, stopMic])
 
+  useEffect(() => {
+    if (view !== 'results' && aiDockExpanded) setAiDockExpanded(false)
+  }, [view, aiDockExpanded])
+
+  // 로컬 전용: AIMODE 결과·상세 레이아웃 프리뷰 (백엔드 없이)
+  useEffect(() => {
+    if (!_LOCAL_AI_DUMMY_HOST || location.pathname !== '/ai') return
+    const sp = new URLSearchParams(location.search || '')
+    if (sp.get('devDummy') !== '1') return
+
+    const userQ = '김라민 생년월일이 적힌 보고서를 찾아줘 (더미)'
+    const extracted = '김라민 보고서'
+    const rawItems = [
+      {
+        file_path: '/tmp/dev-dummy/report_kim.pdf',
+        file_name: 'report_kim.pdf',
+        file_type: 'doc',
+        confidence: 0.91,
+        similarity: 0.91,
+        snippet: '김라민 — 생년월일: 1995-03-12 (더미 텍스트)',
+        preview_url: null,
+        segments: [],
+        trichef_id: 'doc_dummy_1',
+        trichef_domain: 'doc_page',
+        dense: 0.82,
+        lexical: 0.44,
+      },
+      {
+        file_path: '/tmp/dev-dummy/meeting_photo.jpg',
+        file_name: 'meeting_photo.jpg',
+        file_type: 'image',
+        confidence: 0.76,
+        similarity: 0.76,
+        snippet: '회의 장면 스냅 — 배경에 이름표 (더미)',
+        preview_url: null,
+        segments: [],
+        trichef_id: 'img_dummy_1',
+        trichef_domain: 'image',
+        dense: 0.71,
+        lexical: null,
+      },
+      {
+        file_path: '/tmp/dev-dummy/interview_clip.mp4',
+        file_name: 'interview_clip.mp4',
+        file_type: 'video',
+        confidence: 0.68,
+        similarity: 0.68,
+        snippet: '인터뷰 구간 — 자막에 김라민 언급 (더미)',
+        preview_url: null,
+        segments: [],
+        trichef_id: 'mov_dummy_1',
+        trichef_domain: 'movie',
+        dense: 0.65,
+        rerank_score: 0.2,
+      },
+    ]
+    const mappedItems = rawItems.map(mapItem)
+
+    activeQueryRef.current = userQ
+    setStreaming(false)
+    setAiError('')
+    setQuery(userQ)
+    setInputValue(userQ)
+    setFinalQuery(extracted)
+    setAimodeQuery(extracted)
+    setAimodeContentKws(['생년월일', '보고서'])
+    setAimodeDetailKws(['김라민', '생년월일'])
+    setAimodeSources(mappedItems)
+    setAimodeSelected(0)
+    setAimodeAnswer(
+      '[더미] 첫 번째 PDF 보고서에서 김라민의 생년월일을 확인했습니다. (실제 데이터 아님)',
+    )
+    setAimodeDone(true)
+    setAimodeSteps([
+      { step: 1, label: '✓ 검색어 추출', done: true, query: extracted },
+      { step: 2, label: `✓ ${rawItems.length}건 발견`, done: true },
+      { step: 3, label: '✓ #1 자동 선택', done: true, selected_idx: 0 },
+      { step: 4, label: '✓ 답변', done: true },
+    ])
+    setResults(mappedItems)
+    setResultsReady(false)
+    setView('results')
+    window.history.replaceState({ view: 'results' }, '')
+    requestAnimationFrame(() => setResultsReady(true))
+  }, [location.pathname, location.search])
+
   // 뒤로가기
   useEffect(() => {
     const handle = () => {
@@ -611,6 +759,7 @@ export default function MainAI() {
     setDomainSelection(null)
     setAiError('')
     setFinalQuery(q)
+    activeQueryRef.current = q
     setHasLLM(undefined)
 
     // AIMODE 시각화 상태 초기화
@@ -684,25 +833,48 @@ export default function MainAI() {
   }, [topK, maxIter, useAimode])
 
   const mapItem = (item) => {
-    const isDocPage = item.domain === 'doc_page'
+    const dom =
+      item.domain ??
+      item.trichef_domain ??
+      (item.file_type === 'doc'
+        ? 'doc_page'
+        : item.file_type === 'video'
+          ? 'movie'
+          : item.file_type === 'audio'
+            ? 'music'
+            : item.file_type === 'image'
+              ? 'image'
+              : null)
+    const isDocPage = dom === 'doc_page'
+    const pathKey =
+      item.file_path || item.source_path || item.id || item.trichef_id || ''
+    const idKey = item.trichef_id ?? item.id ?? pathKey
+    let ft = item.file_type
+    if (!ft && dom === 'image') ft = 'image'
+    else if (!ft && isDocPage) ft = 'doc'
+    else if (!ft && dom === 'movie') ft = 'video'
+    else if (!ft && dom === 'music') ft = 'audio'
+    else if (!ft) ft = 'doc'
+    const conf =
+      item.confidence ?? item.similarity ?? 0
     return {
-      file_path:      item.source_path || item.id,
-      trichef_id:     item.id,
-      file_name:      item.file_name || (item.id || '').split(/[/\\]/).pop(),
+      file_path:      pathKey,
+      trichef_id:     idKey,
+      file_name:      item.file_name || String(pathKey).split(/[/\\]/).pop() || '?',
       page_num:       item.page_num ?? null,
-      file_type:      item.domain === 'image' ? 'image'
-                    : isDocPage ? 'doc'
-                    : item.domain === 'movie' ? 'video' : 'audio',
-      confidence:     item.confidence ?? 0,
-      similarity:     item.confidence ?? 0,
+      file_type:      ft,
+      confidence:     conf,
+      similarity:     item.similarity ?? conf,
       dense:          item.dense ?? 0,
       lexical:        item.lexical ?? null,
       asf:            item.asf ?? null,
-      snippet:        '',
+      snippet:        item.snippet ?? '',
       preview_url:    item.preview_url ?? null,
       segments:       item.segments ?? [],
       low_confidence: item.low_confidence ?? false,
-      trichef_domain: item.domain,
+      trichef_domain: dom ?? undefined,
+      rerank_score:   item.rerank_score ?? item.rerank ?? null,
+      z_score:        item.z_score ?? null,
     }
   }
 
@@ -747,14 +919,24 @@ export default function MainAI() {
       case 'sources': {
         // AIMODE 검색 결과 — 작은 단계 패널용 + MainSearch 와 동일한 큰 카드 그리드용
         const items = ev.items || []
-        setAimodeSources(items)
+        const mapped = items.map(mapItem)
+        setAimodeSources(mapped)
         // ★ 동일 데이터를 큰 카드 그리드로도 렌더 (MainSearch 와 동일한 UX)
-        setResults(items)
+        setResults(mapped)
+        const histQ =
+          activeQueryRef.current ||
+          ev.query ||
+          finalQuery ||
+          ''
         // 검색 기록 저장
         fetch(`${API_BASE}/api/history`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query: q, method: 'aimode', result_count: items.length }),
+          body: JSON.stringify({
+            query: histQ,
+            method: 'aimode',
+            result_count: mapped.length,
+          }),
         }).then(() => {
           window.dispatchEvent(new Event('history-updated'))
         }).catch(() => {})
@@ -857,11 +1039,14 @@ export default function MainAI() {
         setResultsReady(false)
         setView('results')
         window.history.pushState({ view: 'results' }, '')
+        dispatchAiSidebarView('results')
         requestAnimationFrame(() => setResultsReady(true))
         runAISearch(q)
       }, 420)
     } else {
       setView('results')
+      window.history.pushState({ view: 'results' }, '')
+      dispatchAiSidebarView('results')
       runAISearch(q)
     }
   }
@@ -878,6 +1063,7 @@ export default function MainAI() {
     setDetailVisible(false)
     setView('detail')
     window.history.pushState({ view: 'detail' }, '')
+    dispatchAiSidebarView('detail')
     requestAnimationFrame(() => requestAnimationFrame(() => setDetailVisible(true)))
     const isAV = file.file_type === 'video' || file.file_type === 'audio'
     if (!isAV) {
@@ -888,7 +1074,12 @@ export default function MainAI() {
     }
   }
 
-  const handleBackToResults = () => { setDetailVisible(false); setTimeout(() => setView('results'), 320) }
+  const handleBackToResults = () => {
+    setDetailVisible(false)
+    window.history.pushState({ view: 'results' }, '')
+    dispatchAiSidebarView('results')
+    setTimeout(() => setView('results'), 320)
+  }
 
   // 새 대화 — 서버 history + localStorage thread_id 모두 비움
   const handleNewConversation = useCallback(async () => {
@@ -931,11 +1122,16 @@ export default function MainAI() {
   return (
     <div className={view === 'home' ? 'overflow-hidden h-screen relative' : 'min-h-screen relative text-on-surface'}
       style={{
-        background: view === 'home' ? AI.bg : '#0a0514',
+        backgroundColor: view === 'home' ? AI.bg : AI.bg,
         backgroundImage: view !== 'home'
-          ? 'radial-gradient(circle at 2px 2px, rgba(109,40,217,0.08) 1px, transparent 0)'
+          ? [
+              'radial-gradient(ellipse 100% 72% at 50% -18%, rgba(124,58,237,0.38), transparent 56%)',
+              'radial-gradient(ellipse 55% 48% at 92% 38%, rgba(192,38,211,0.16), transparent 52%)',
+              'radial-gradient(ellipse 50% 44% at 8% 72%, rgba(76,29,149,0.42), transparent 52%)',
+              'radial-gradient(circle at 2px 2px, rgba(109,40,217,0.09) 1px, transparent 0)',
+            ].join(', ')
           : undefined,
-        backgroundSize: view !== 'home' ? '32px 32px' : undefined,
+        backgroundSize: view !== 'home' ? '100% 100%, 100% 100%, 100% 100%, 32px 32px' : undefined,
       }}>
 
       {/* 검색 모드 전환 오버레이 */}
@@ -947,7 +1143,7 @@ export default function MainAI() {
               background: 'radial-gradient(circle, #1c253e 0%, #0c1326 60%, #070d1f 100%)',
               boxShadow: '0 0 30px 10px rgba(133,173,255,0.15)' }} />
           {[0, 200].map((delay, i) => (
-            <div key={i} className="portal-ring absolute rounded-full border border-[#85adff]/25"
+            <div key={i} className="portal-ring absolute rounded-full border border-[#8cf2ff]/28"
               style={{ width: '160px', height: '160px', left: ripplePos.x, top: ripplePos.y,
                 transform: 'translate(-50%, -50%)', animationDelay: `${delay}ms` }} />
           ))}
@@ -1051,13 +1247,20 @@ export default function MainAI() {
                   ref={btnRef}
                   onClick={handleGoToSearch}
                   disabled={searchTransitioning}
-                  className="group flex items-center gap-3 rounded-full border border-white/10 bg-white/[0.06] px-8 py-3 text-sm font-bold uppercase tracking-widest text-neutral-400 transition-all duration-300 hover:border-white/20 hover:text-neutral-200 disabled:pointer-events-none"
+                  className="group flex items-center gap-3 rounded-full border border-white/20 px-8 py-3 text-sm font-bold uppercase tracking-widest text-neutral-300 transition-all duration-300 hover:border-white/40 hover:text-white hover:shadow-lg disabled:pointer-events-none"
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.1)',
+                    backdropFilter: 'blur(10px)',
+                    boxShadow: '0 8px 32px rgba(139, 92, 246, 0.1), inset 0 1px 1px rgba(255, 255, 255, 0.2)',
+                  }}
                   onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
                     e.currentTarget.style.boxShadow =
-                      "0 0 24px rgba(139, 92, 246, 0.15)";
+                      "0 8px 32px rgba(139, 92, 246, 0.3), inset 0 1px 1px rgba(255, 255, 255, 0.3), 0 0 30px rgba(139, 92, 246, 0.25)";
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.boxShadow = "none";
+                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                    e.currentTarget.style.boxShadow = '0 8px 32px rgba(139, 92, 246, 0.1), inset 0 1px 1px rgba(255, 255, 255, 0.2)';
                   }}
                 >
                   <span
@@ -1080,8 +1283,10 @@ export default function MainAI() {
       ════════════════════════════════ */}
       {view !== "home" && (
         <header
-          className={`fixed top-8 ${leftEdge} right-0 z-40 bg-[#070d1f]/60 backdrop-blur-xl flex items-center px-8 h-16 gap-6 shadow-[0_4px_30px_rgba(172,138,255,0.1)] transition-[left] duration-300`}
+          className={`fixed top-8 ${leftEdge} right-0 z-40 transition-[left] duration-300`}
         >
+          <div className="mx-auto max-w-[1600px] px-8">
+            <div className="relative flex h-16 items-center gap-6 rounded-[22px] border border-[#41567f]/35 bg-[#0b1326]/72 px-8 shadow-[0_4px_30px_rgba(34,98,214,0.12)] backdrop-blur-xl">
           <button
             onClick={() => {
               setView("home");
@@ -1089,14 +1294,11 @@ export default function MainAI() {
             }}
             className={`text-xl font-bold tracking-tighter bg-gradient-to-r from-violet-400 to-fuchsia-400 bg-clip-text text-transparent shrink-0 hover:opacity-70 transition-opacity ${!open ? "ml-10" : ""}`}
           >
-            Obsidian AI
+            Insight AI
           </button>
 
           <form onSubmit={handleSearch} className="flex-1">
             <div className="relative group flex items-center">
-              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-violet-400/50">
-                search
-              </span>
               <input
                 ref={inputRef}
                 autoFocus
@@ -1135,94 +1337,430 @@ export default function MainAI() {
 
           <div className="absolute bottom-0 left-0 w-full h-[1px] opacity-30"
             style={{ background: `linear-gradient(to right, transparent, ${AI.accent}, transparent)` }} />
+            </div>
+          </div>
         </header>
       )}
 
-      {/* ════ RESULTS VIEW ════ */}
+      {/* ════ RESULTS VIEW — 노멀 상세와 동일 12-col 그리드, 팔레트는 AI 오브 톤 ════ */}
       {view === 'results' && (
-        <main className={`${ml} min-h-screen transition-[margin] duration-300`}
-          style={{ paddingTop: '128px', opacity: resultsReady ? 1 : 0, transform: resultsReady ? 'translateY(0)' : 'translateY(24px)',
-            transition: 'opacity 0.38s ease, transform 0.38s ease, margin 0.3s' }}>
-          <div className="px-8 pb-8 pt-5 max-w-[1400px] mx-auto">
+        <main
+          className={`${ml} relative min-h-screen transition-[margin] duration-300`}
+          style={{
+            paddingTop: '128px',
+            opacity: resultsReady ? 1 : 0,
+            transform: resultsReady ? 'translateY(0)' : 'translateY(24px)',
+            transition: 'opacity 0.38s ease, transform 0.38s ease, margin 0.3s',
+          }}
+        >
+          <section className="mx-auto max-w-[1600px] px-8 pb-12">
+            <div className="rounded-[30px] border border-[#41567f]/35 bg-[#0b1326]/66 p-6 shadow-[0_24px_70px_rgba(14,40,84,0.36)] backdrop-blur-xl sm:p-8">
+            {/* 대시보드형 2컬럼: 좌 = 요약·KPI·목록 / 우 = AI 사이드 도크(sticky) */}
+            <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:gap-10">
 
-            {/* 쿼리 헤더 */}
-            <div className="flex justify-between items-end mb-6">
-              <div className="space-y-2">
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest border"
-                  style={{ background: 'rgba(109,40,217,0.1)', color: AI.accentLight, borderColor: AI.border }}>
-                  AI 쿼리
-                </span>
-                <h1 className="text-4xl font-extrabold tracking-tighter text-on-surface">{query}</h1>
-                {finalQuery && finalQuery !== query && (
-                  <p className="text-xs flex items-center gap-1.5" style={{ color: 'rgba(167,139,250,0.6)' }}>
-                    <span className="material-symbols-outlined text-sm">arrow_forward</span>
-                    최종 쿼리: <span className="font-mono font-bold" style={{ color: AI.accentLight }}>"{finalQuery}"</span>
+              {/* ── 좌측 메인 컬럼 ── */}
+              <div className="min-w-0 flex-1 space-y-6">
+
+                {/* 상단 헤더 — 인사 영역처럼 얇게 */}
+                <div className="space-y-1">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-on-surface-variant/50">
+                    Insight AI<span className="mx-2 text-on-surface-variant/25">/</span>
+                    검색 결과
                   </p>
-                )}
-                {streaming
-                  ? <p className="text-on-surface-variant flex items-center gap-2">
-                      <span className="material-symbols-outlined text-lg animate-spin" style={{ color: AI.accent }}>progress_activity</span>
+                  <span
+                    className="inline-flex rounded-md border border-violet-400/25 bg-violet-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest mt-3"
+                    style={{ color: AI.accentLight }}
+                  >
+                    AI 쿼리
+                  </span>
+                  <h1 className="mt-2 break-words text-3xl font-extrabold tracking-tight text-on-surface sm:text-4xl lg:text-[2.25rem] lg:leading-tight">
+                    {query}
+                  </h1>
+                  {finalQuery && finalQuery !== query && (
+                    <p className="flex flex-wrap items-center gap-1.5 pt-1 text-xs" style={{ color: 'rgba(167,139,250,0.65)' }}>
+                      <span className="material-symbols-outlined shrink-0 text-sm">arrow_forward</span>
+                      최종 쿼리:{' '}
+                      <span className="break-all font-mono font-bold" style={{ color: AI.accentLight }}>
+                        &quot;{finalQuery}&quot;
+                      </span>
+                    </p>
+                  )}
+                  {streaming ? (
+                    <p className="flex items-center gap-2 pt-2 text-sm text-on-surface-variant">
+                      <span className="material-symbols-outlined animate-spin text-lg" style={{ color: AI.accent }}>
+                        progress_activity
+                      </span>
                       AI가 검색·분석 중...
                     </p>
-                  : aiError
-                    ? <p className="text-red-400 text-sm">{aiError}</p>
-                    : <p className="text-on-surface-variant">
-                        <span className="font-bold" style={{ color: AI.accentLight }}>{results.length}건</span>을 찾았습니다.
-                      </p>
-                }
-              </div>
-            </div>
-
-            {/* AIMODE 시각화 4-step 패널 — 컴팩트 progress strip */}
-            {useAimode && aimodeSteps.length > 0 && (
-              <div className="mb-6 rounded-2xl border px-5 py-4 space-y-3"
-                style={{ background: AI.card, borderColor: AI.border }}>
-                {/* 상단: AI MODE + 스텝 인디케이터 */}
-                <div className="flex items-center gap-4 overflow-x-auto">
-                  <span className="material-symbols-outlined text-lg shrink-0" style={{ color: AI.accentLight }}>auto_awesome</span>
-                  <span className="text-[10px] uppercase tracking-widest font-bold shrink-0"
-                    style={{ color: AI.accentLight }}>AI MODE</span>
-                  {[1, 2, 3, 4].map(stepNum => {
-                    const s = aimodeSteps.find(s => s.step === stepNum)
-                    const labels = { 1: '분류', 2: '검색', 3: '선택', 4: '답변' }
-                    const active = !!s
-                    const done = s?.done
-                    return (
-                      <div key={stepNum} className="flex items-center gap-1.5 text-[11px] shrink-0">
-                        <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold border ${
-                          done ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300' :
-                          active ? 'border-purple-400 text-purple-300 animate-pulse' :
-                          'border-white/15 text-on-surface-variant/40'
-                        }`}>
-                          {done ? '✓' : stepNum}
-                        </div>
-                        <span className={done ? 'text-emerald-300' : active ? 'text-on-surface' : 'text-on-surface-variant/40'}>
-                          {labels[stepNum]}
-                        </span>
-                        {stepNum < 4 && <span className="text-on-surface-variant/20">→</span>}
-                      </div>
-                    )
-                  })}
+                  ) : aiError ? (
+                    <p className="pt-2 text-sm text-red-400">{aiError}</p>
+                  ) : (
+                    <p className="pt-2 text-sm text-on-surface-variant">
+                      로컬 보관소에서{' '}
+                      <span className="font-bold" style={{ color: AI.accentLight }}>
+                        {results.length}건
+                      </span>
+                      을 찾았습니다.
+                    </p>
+                  )}
                 </div>
 
-                {/* 하단: Step 1 완료 후 3종 키워드 표시 */}
-                {aimodeSteps.find(s => s.step === 1 && s.done) && (
-                  <div className="flex flex-wrap gap-3 pt-1 border-t" style={{ borderColor: AI.border }}>
-                    {[
-                      { label: '파일검색', value: aimodeQuery, icon: 'folder_search', color: AI.accentLight },
-                      { label: '내용검색', value: aimodeContentKws.join(' · '), icon: 'manage_search', color: '#34d399' },
-                      { label: '상세내용', value: aimodeDetailKws.join(' · '), icon: 'lightbulb', color: '#f59e0b' },
-                    ].map(({ label, value, icon, color }) => value ? (
-                      <div key={label} className="flex items-center gap-1.5 text-[11px]">
-                        <span className="material-symbols-outlined text-sm" style={{ color }}>{icon}</span>
-                        <span className="text-on-surface-variant/50">{label}:</span>
-                        <span className="font-mono font-semibold" style={{ color }}>"{value}"</span>
+                {/* KPI 3카드 행 */}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  {(
+                    [
+                      {
+                        label: '총 결과',
+                        value: streaming && results.length === 0 ? '—' : `${results.length}건`,
+                        icon: 'dataset',
+                      },
+                      {
+                        label: '최고 신뢰도',
+                        value:
+                          streaming && results.length === 0
+                            ? '—'
+                            : results.length > 0
+                              ? `${Math.round((results[0]?.confidence ?? 0) * 100)}%`
+                              : '—',
+                        icon: 'trending_up',
+                      },
+                      {
+                        label: '미디어',
+                        value:
+                          streaming && results.length === 0
+                            ? '—'
+                            : `${results.filter((r) => r.file_type === 'video' || r.file_type === 'audio').length}건`,
+                        icon: 'smart_display',
+                      },
+                    ]
+                  ).map(({ label, value, icon }) => (
+                    <div
+                      key={label}
+                      className="rounded-2xl border border-white/[0.08] bg-white/[0.035] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]"
+                    >
+                      <div className="mb-3 flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant/45">
+                          {label}
+                        </span>
+                        <span className="material-symbols-outlined text-[22px] opacity-70" style={{ color: AI.accentLight }}>
+                          {icon}
+                        </span>
                       </div>
-                    ) : null)}
+                      <p className="text-2xl font-extrabold tabular-nums tracking-tight text-on-surface">{value}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* 대형 목록 패널 */}
+                <div
+                  className="flex min-h-[360px] flex-col overflow-hidden rounded-[22px] border border-white/[0.07] bg-white/[0.02] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-[40px]"
+                >
+                  <div className="flex items-center justify-between border-b border-white/[0.08] px-6 pb-4 pt-5 sm:px-8 sm:pb-5 sm:pt-7">
+                    <span className="text-sm font-bold uppercase tracking-[0.2em]" style={{ color: AI.accentLight }}>
+                      매칭 파일
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {streaming && results.length === 0 && (
+                        <span className="material-symbols-outlined animate-spin text-lg" style={{ color: AI.accent }}>
+                          progress_activity
+                        </span>
+                      )}
+                      <span className="h-2 w-2 animate-pulse rounded-full bg-[#52fac7]/90" />
+                      <span className="h-2 w-2 rounded-full bg-white/15" />
+                    </div>
                   </div>
-                )}
+
+                  <div className="flex flex-1 flex-col p-4 sm:p-5">
+                    {streaming && results.length === 0 && (
+                      <div className="flex flex-1 flex-col items-center justify-center gap-4 py-20">
+                        <span className="material-symbols-outlined animate-spin text-5xl" style={{ color: AI.accent }}>
+                          psychology
+                        </span>
+                        <p className="text-on-surface-variant">
+                          <span style={{ color: AI.accentLight, fontWeight: 700 }}>AI</span>가 검색어를 분석하고 결과를
+                          가져오는 중...
+                        </p>
+                      </div>
+                    )}
+
+                    {!streaming && !aiError && results.length === 0 && (
+                      <div className="flex flex-1 flex-col items-center justify-center gap-4 py-20">
+                        <span className="material-symbols-outlined text-6xl text-on-surface-variant/20">search_off</span>
+                        <p className="text-on-surface-variant">일치하는 파일을 찾지 못했습니다.</p>
+                      </div>
+                    )}
+
+                    {results.length > 0 && (
+                      <div
+                        className="grid gap-4"
+                        style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}
+                      >
+                        {results.map((r, i) => {
+                          const isAiPick = aimodeSelected === i
+                          return (
+                            <div key={r.file_path + i} className="relative">
+                              {isAiPick && (
+                                <>
+                                  <div
+                                    className="pointer-events-none absolute inset-[-4px] z-10 animate-pulse rounded-[14px]"
+                                    style={{
+                                      background: 'transparent',
+                                      boxShadow: `0 0 0 3px ${AI.accentLight}, 0 0 30px 5px rgba(168,85,247,0.55)`,
+                                    }}
+                                  />
+                                  <div
+                                    className="absolute -top-3 left-3 z-20 animate-bounce rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-white"
+                                    style={{ background: AI.rankBg, boxShadow: AI.glow }}
+                                  >
+                                    🤖 AI 선택중...
+                                  </div>
+                                </>
+                              )}
+                              <AiResultCard result={r} rank={i + 1} onClick={() => handleSelectFile(r)} />
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
-            )}
+
+              {/* ── 우측 사이드 패널 (Exchange 스타일 단일 컬럼) ── */}
+              {aiDockExpanded && (
+                <button
+                  type="button"
+                  aria-label="AI 상태 확대 닫기"
+                  onClick={() => setAiDockExpanded(false)}
+                  className="fixed inset-0 z-[85] bg-black/55 backdrop-blur-[2px]"
+                />
+              )}
+              <aside
+                className={
+                  aiDockExpanded
+                    ? `fixed z-[90] ${leftEdge} right-0 top-24 bottom-6 px-6`
+                    : 'w-full shrink-0 space-y-5 lg:sticky lg:top-[7.5rem] lg:w-[min(100%,380px)] xl:w-[400px]'
+                }
+              >
+                <div className={aiDockExpanded
+                  ? "h-full overflow-y-auto rounded-[24px] border border-white/[0.11] bg-[#120b23]/90 p-5 shadow-[0_30px_80px_rgba(0,0,0,0.55)] backdrop-blur-xl"
+                  : "rounded-[24px] border border-white/[0.09] bg-white/[0.03] p-5 shadow-[0_24px_60px_rgba(0,0,0,0.35)] backdrop-blur-xl"}>
+                  <div className="mb-5 flex items-center justify-between border-b border-white/[0.08] pb-4">
+                    <div className="flex items-center gap-2">
+                      <span className="material-symbols-outlined text-xl" style={{ color: AI.accentLight }}>
+                        tune
+                      </span>
+                      <span className="text-sm font-bold uppercase tracking-[0.12em] text-on-surface">AI 상태</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setAiDockExpanded(v => !v)}
+                      className="flex h-8 w-8 items-center justify-center rounded-full text-on-surface-variant/60 transition hover:bg-white/10 hover:text-on-surface"
+                      title={aiDockExpanded ? '축소' : '확대'}
+                    >
+                      <span className="material-symbols-outlined text-xl" aria-hidden>
+                        {aiDockExpanded ? 'close_fullscreen' : 'open_in_full'}
+                      </span>
+                    </button>
+                  </div>
+
+                  <div className="space-y-6">
+                    {useAimode && aimodeSteps.length > 0 ? (
+                      <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
+                          <span className="material-symbols-outlined shrink-0 text-lg" style={{ color: AI.accentLight }}>
+                            auto_awesome
+                          </span>
+                          <span className="shrink-0 text-[10px] font-bold uppercase tracking-widest" style={{ color: AI.accentLight }}>
+                            AI MODE
+                          </span>
+                        </div>
+                        <div className="mt-3 flex flex-wrap items-center gap-x-1 gap-y-1">
+                          {[1, 2, 3, 4].map((stepNum) => {
+                            const s = aimodeSteps.find((st) => st.step === stepNum)
+                            const labels = { 1: '분류', 2: '검색', 3: '선택', 4: '답변' }
+                            const active = !!s
+                            const done = s?.done
+                            return (
+                              <div key={stepNum} className="flex shrink-0 items-center gap-1.5 text-[11px]">
+                                <div
+                                  className={`flex h-5 w-5 items-center justify-center rounded-full border text-[10px] font-bold ${
+                                    done
+                                      ? 'border-[#52fac7] bg-teal-500/15 text-[#7af5d9]'
+                                      : active
+                                        ? 'animate-pulse border-fuchsia-400/80 text-fuchsia-200'
+                                        : 'border-white/15 text-on-surface-variant/40'
+                                  }`}
+                                >
+                                  {done ? '✓' : stepNum}
+                                </div>
+                                <span
+                                  className={done ? 'text-[#7af5d9]' : active ? 'text-on-surface' : 'text-on-surface-variant/40'}
+                                >
+                                  {labels[stepNum]}
+                                </span>
+                                {stepNum < 4 && <span className="text-on-surface-variant/20">→</span>}
+                              </div>
+                            )
+                          })}
+                        </div>
+                        {aimodeSteps.find((s) => s.step === 1 && s.done) && (
+                          <div className="mt-3 flex flex-col gap-2 border-t border-white/[0.08] pt-3">
+                            {[
+                              { label: '파일검색', value: aimodeQuery, icon: 'folder_search', color: AI.accentLight },
+                              { label: '내용검색', value: aimodeContentKws.join(' · '), icon: 'manage_search', color: ORB.mint },
+                              { label: '상세내용', value: aimodeDetailKws.join(' · '), icon: 'lightbulb', color: ORB.coral },
+                            ].map(({ label, value, icon, color }) =>
+                              value ? (
+                                <div key={label} className="flex min-w-0 flex-wrap items-baseline gap-1.5 text-[11px]">
+                                  <span className="material-symbols-outlined shrink-0 text-sm" style={{ color }}>
+                                    {icon}
+                                  </span>
+                                  <span className="shrink-0 text-on-surface-variant/50">{label}:</span>
+                                  <span className="min-w-0 break-all font-mono font-semibold" style={{ color }}>
+                                    &quot;{value}&quot;
+                                  </span>
+                                </div>
+                              ) : null,
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ) : null}
+
+                    {results.length > 0 &&
+                      (() => {
+                        const bestPct = Math.round((results[0]?.confidence ?? 0) * 100)
+                        const avgConfPct = Math.round(
+                          (results.reduce((a, r) => a + (r.confidence ?? 0), 0) / results.length) * 100,
+                        )
+                        const avgSimPct = Math.round(
+                          (results.reduce((a, r) => {
+                            const d =
+                              r.dense != null ? Math.max(0, Math.min(1, r.dense)) : (r.confidence ?? r.similarity ?? 0)
+                            return a + d
+                          }, 0) /
+                            results.length) *
+                            100,
+                        )
+                        const bars = [
+                          { label: '신뢰도', pct: bestPct, text: 'text-[#ff59e0]' },
+                          { label: '정확도', pct: avgConfPct, text: 'text-[#8cf2ff]' },
+                          { label: '유사도', pct: avgSimPct, text: 'text-[#52fac7]' },
+                        ]
+                        return (
+                          <div className="flex min-w-0 divide-x divide-white/[0.08] rounded-2xl border border-white/[0.06] bg-white/[0.02] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                            {bars.map(({ label, pct, text }) => (
+                              <div key={label} className="flex flex-1 flex-col items-center gap-1 px-2">
+                                <span className={`text-xl font-extrabold tabular-nums leading-none ${text}`}>
+                                  {pct}
+                                  <span className="text-xs font-bold">%</span>
+                                </span>
+                                <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-on-surface-variant/55">
+                                  {label}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )
+                      })()}
+
+                    {results.length > 0 && (
+                      <div>
+                        <h4 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.15em]" style={{ color: AI.accentLight }}>
+                          <span className="material-symbols-outlined text-[18px]">analytics</span>
+                          결과 분포
+                        </h4>
+                        <div className="grid grid-cols-2 gap-2">
+                          {[
+                            ['총 결과', `${results.length}건`],
+                            ['최고 신뢰도', `${Math.round((results[0]?.confidence ?? 0) * 100)}%`],
+                            [
+                              '문서·이미지',
+                              `${results.filter((r) => r.file_type === 'doc' || r.file_type === 'image').length}건`,
+                            ],
+                            [
+                              '영상·음성',
+                              `${results.filter((r) => r.file_type === 'video' || r.file_type === 'audio').length}건`,
+                            ],
+                          ].map(([k, v]) => (
+                            <div key={k} className="rounded-xl border border-white/[0.06] bg-black/25 p-2.5">
+                              <p className="mb-0.5 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant/50">
+                                {k}
+                              </p>
+                              <p className="text-base font-bold text-on-surface">{v}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {(aimodeQuery || aimodeContentKws.length > 0 || aimodeDetailKws.length > 0) && (
+                      <div>
+                        <h4 className="mb-3 text-xs font-bold uppercase tracking-[0.15em]" style={{ color: AI.accentLight }}>
+                          검색 컨텍스트
+                        </h4>
+                        <div className="space-y-0 rounded-xl border border-white/[0.06] bg-black/20 px-3">
+                          {[
+                            ['파일검색', aimodeQuery || '—'],
+                            ['내용검색', aimodeContentKws.length ? aimodeContentKws.join(' · ') : '—'],
+                            ['상세내용', aimodeDetailKws.length ? aimodeDetailKws.join(' · ') : '—'],
+                          ].map(([k, v]) => (
+                            <div
+                              key={k}
+                              className="flex items-start justify-between gap-2 border-b border-white/[0.06] py-2.5 text-[11px] last:border-0"
+                            >
+                              <span className="shrink-0 text-on-surface-variant/70">{k}</span>
+                              <span className="break-all text-right font-semibold text-on-surface">{v}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {streaming && results.length === 0 && (
+                      <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] px-4 py-3 text-center text-xs text-on-surface-variant">
+                        AIMODE 파이프라인이 실행 중입니다. 잠시만 기다려 주세요.
+                      </div>
+                    )}
+
+                    {useAimode && aimodeAnswer && !streaming && (
+                      <div className="relative overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.03]">
+                        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-fuchsia-500/[0.07] via-transparent to-violet-500/[0.08]" />
+                        <div className="relative flex items-center gap-3 border-b border-white/[0.08] px-4 py-2.5">
+                          <span className="material-symbols-outlined text-lg" style={{ color: AI.accentLight }}>
+                            stylus
+                          </span>
+                          <span className="text-[11px] font-bold uppercase tracking-widest" style={{ color: AI.accentLight }}>
+                            초안 답변
+                          </span>
+                          {aimodeDone ? (
+                            <span className="ml-auto flex items-center gap-1 text-[11px] text-[#7af5d9]">
+                              <span className="material-symbols-outlined text-base">check_circle</span> 완료
+                            </span>
+                          ) : (
+                            <span className="ml-auto flex items-center gap-1 text-[11px]" style={{ color: AI.accentLight }}>
+                              <span className="material-symbols-outlined animate-spin text-base">progress_activity</span>
+                              작성 중
+                            </span>
+                          )}
+                        </div>
+                        <div className="relative px-4 py-3 text-xs leading-relaxed text-on-surface/95 whitespace-pre-wrap">
+                          {stripMarkdown(aimodeAnswer)}
+                          {!aimodeDone && (
+                            <span
+                              className="ml-1 inline-block h-4 w-0.5 animate-pulse align-middle"
+                              style={{ background: AI.accentLight }}
+                            />
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </aside>
+            </div>
+            </div>
 
             {/* HIDDEN — old detailed panel preserved for backward compat (do not render) */}
             {false && useAimode && (aimodeSteps.length > 0 || aimodeAnswer) && (
@@ -1246,10 +1784,10 @@ export default function MainAI() {
                 {aimodeSteps.find(s => s.step === 1) && (
                   <div>
                     <div className="text-xs text-on-surface-variant mb-1 flex items-center gap-1">
-                      <span className="material-symbols-outlined text-base" style={{ color: '#fbbf24' }}>search</span>
+                      <span className="material-symbols-outlined text-base" style={{ color: ORB.electric }}>search</span>
                       Step 1 — 검색어 추출
                       {aimodeSteps.find(s => s.step === 1 && s.done) && (
-                        <span className="material-symbols-outlined text-base text-emerald-400 ml-auto">check_circle</span>
+                        <span className="material-symbols-outlined ml-auto text-base text-[#7af5d9]">check_circle</span>
                       )}
                     </div>
                     <div className="px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 font-mono text-sm">
@@ -1262,10 +1800,10 @@ export default function MainAI() {
                 {aimodeSteps.find(s => s.step === 2) && (
                   <div>
                     <div className="text-xs text-on-surface-variant mb-2 flex items-center gap-1">
-                      <span className="material-symbols-outlined text-base" style={{ color: '#85adff' }}>folder_open</span>
+                      <span className="material-symbols-outlined text-base" style={{ color: ORB.electric }}>folder_open</span>
                       Step 2 — 데이터베이스 검색 ({aimodeSources.length}건)
                       {aimodeSteps.find(s => s.step === 2 && s.done) && (
-                        <span className="material-symbols-outlined text-base text-emerald-400 ml-auto">check_circle</span>
+                        <span className="material-symbols-outlined ml-auto text-base text-[#7af5d9]">check_circle</span>
                       )}
                     </div>
                     <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
@@ -1282,7 +1820,7 @@ export default function MainAI() {
                                 #{i + 1}
                               </span>
                               <span className="text-on-surface-variant uppercase">{s.file_type || s.domain || ''}</span>
-                              <span className="ml-auto text-emerald-400 font-mono font-bold">
+                              <span className="ml-auto font-mono font-bold text-[#7af5d9]">
                                 {((s.confidence ?? 0) * 100).toFixed(0)}%
                               </span>
                             </div>
@@ -1305,7 +1843,7 @@ export default function MainAI() {
                     <div className="text-xs text-on-surface-variant mb-1 flex items-center gap-1">
                       <span className="material-symbols-outlined text-base text-purple-400">center_focus_strong</span>
                       Step 3 — #{(aimodeSelected ?? 0) + 1} 자동 선택
-                      <span className="material-symbols-outlined text-base text-emerald-400 ml-auto">check_circle</span>
+                      <span className="material-symbols-outlined ml-auto text-base text-[#7af5d9]">check_circle</span>
                     </div>
                     <div className="px-3 py-2 rounded-lg bg-purple-500/10 border border-purple-500/30 text-sm">
                       <span className="text-purple-300 font-bold">선택:</span>{' '}
@@ -1320,7 +1858,7 @@ export default function MainAI() {
                     <div className="text-xs text-on-surface-variant mb-1 flex items-center gap-1">
                       <span className="material-symbols-outlined text-base text-pink-400 animate-pulse">stylus</span>
                       Step 4 — 답변 정리 {aimodeDone && (
-                        <span className="material-symbols-outlined text-base text-emerald-400 ml-auto">check_circle</span>
+                        <span className="material-symbols-outlined ml-auto text-base text-[#7af5d9]">check_circle</span>
                       )}
                     </div>
                     <div className="px-4 py-3 rounded-lg bg-gradient-to-br from-pink-500/10 to-purple-500/10 border border-pink-500/20 text-sm whitespace-pre-wrap leading-relaxed">
@@ -1336,93 +1874,7 @@ export default function MainAI() {
               </div>
             )}
 
-            {/* 로딩 — AIMODE 4단계 진행 중 */}
-            {streaming && results.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-32 gap-4">
-                <span className="material-symbols-outlined text-5xl animate-spin" style={{ color: AI.accent }}>psychology</span>
-                <p className="text-on-surface-variant">
-                  <span style={{ color: AI.accentLight, fontWeight: 700 }}>AI</span>가 검색어를 분석하고 결과를 가져오는 중...
-                </p>
-              </div>
-            )}
-
-            {/* 결과 없음 */}
-            {!streaming && !aiError && results.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-32 gap-4">
-                <span className="material-symbols-outlined text-on-surface-variant/20 text-6xl">search_off</span>
-                <p className="text-on-surface-variant">일치하는 파일을 찾지 못했습니다.</p>
-              </div>
-            )}
-
-            {/* 결과 카드 — MainSearch 와 동일한 grid. AI 선택 카드는 펄스 강조 */}
-            {results.length > 0 && (
-              <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
-                {results.map((r, i) => {
-                  const isAiPick = aimodeSelected === i
-                  return (
-                    <div key={r.file_path + i} className="relative">
-                      {/* AI 자동 선택 — 카드 펄스 + 'AI 클릭 중...' 라벨 */}
-                      {isAiPick && (
-                        <>
-                          <div className="absolute -inset-1 rounded-[14px] pointer-events-none animate-pulse z-10"
-                            style={{ background: 'transparent',
-                              boxShadow: `0 0 0 3px ${AI.accentLight}, 0 0 30px 5px rgba(168,85,247,0.6)` }} />
-                          <div className="absolute -top-3 left-3 z-20 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest text-white animate-bounce"
-                            style={{ background: AI.rankBg, boxShadow: AI.glow }}>
-                            🤖 AI 선택중...
-                          </div>
-                        </>
-                      )}
-                      <AiResultCard result={r} rank={i + 1} onClick={() => handleSelectFile(r)} />
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-
-            {/* 요약 통계 */}
-            {!streaming && results.length > 0 && (
-              <div className="mt-12 rounded-[1.5rem] p-6 border relative overflow-hidden"
-                style={{ background: AI.card, borderColor: AI.border }}>
-                <div className="absolute -right-20 -top-20 w-64 h-64 rounded-full blur-[80px]"
-                  style={{ background: 'rgba(109,40,217,0.1)' }} />
-                <div className="relative z-10">
-                  <h3 className="text-sm font-bold mb-4 flex items-center gap-2 uppercase tracking-widest"
-                    style={{ color: AI.accentLight }}>
-                    <span className="material-symbols-outlined text-lg">analytics</span>AI 검색 요약
-                  </h3>
-                  <div className="grid grid-cols-2 gap-3 mb-3">
-                    {[
-                      ['총 결과', `${results.length}건`],
-                      ['최고 신뢰도', `${Math.round((results[0]?.confidence ?? 0) * 100)}%`],
-                    ].map(([label, val]) => (
-                      <div key={label} className="p-4 rounded-2xl border"
-                        style={{ background: 'rgba(109,40,217,0.05)', borderColor: AI.border }}>
-                        <p className="text-[10px] uppercase tracking-widest mb-1" style={{ color: 'rgba(167,139,250,0.4)' }}>{label}</p>
-                        <p className="text-xl font-bold text-on-surface">{val}</p>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-3 gap-3">
-                    {[
-                      { label: '파일검색', value: aimodeQuery, icon: 'folder_search', color: AI.accentLight },
-                      { label: '내용검색', value: aimodeContentKws.join(' · '), icon: 'manage_search', color: '#34d399' },
-                      { label: '상세내용', value: aimodeDetailKws.join(' · '), icon: 'lightbulb', color: '#f59e0b' },
-                    ].map(({ label, value, icon, color }) => (
-                      <div key={label} className="p-3 rounded-2xl border"
-                        style={{ background: 'rgba(109,40,217,0.05)', borderColor: AI.border }}>
-                        <div className="flex items-center gap-1 mb-1">
-                          <span className="material-symbols-outlined text-sm" style={{ color }}>{icon}</span>
-                          <p className="text-[10px] uppercase tracking-widest" style={{ color: 'rgba(167,139,250,0.4)' }}>{label}</p>
-                        </div>
-                        <p className="text-sm font-mono font-bold truncate" style={{ color }}>{value || '—'}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+          </section>
         </main>
       )}
 
@@ -1433,7 +1885,7 @@ export default function MainAI() {
         const isAV    = selectedFile.file_type === 'video' || selectedFile.file_type === 'audio'
 
         return (
-          <main className={`${ml} min-h-screen relative transition-[margin] duration-300`}
+          <main className={`${ml} relative min-h-screen bg-gradient-to-b from-transparent via-transparent to-[#0d0718]/45 transition-[margin] duration-300`}
             style={{ opacity: detailVisible ? 1 : 0, transform: detailVisible ? 'translateX(0)' : 'translateX(36px)',
               transition: 'opacity 0.35s ease, transform 0.35s ease, margin 0.3s' }}>
 
@@ -1508,7 +1960,7 @@ export default function MainAI() {
                       AI 답변 — 본문에서 찾은 내용
                     </span>
                     {aimodeDone ? (
-                      <span className="ml-auto text-[10px] flex items-center gap-1 text-emerald-400">
+                      <span className="ml-auto flex items-center gap-1 text-[10px] text-[#7af5d9]">
                         <span className="material-symbols-outlined text-base">check_circle</span> 완료
                       </span>
                     ) : (
@@ -1536,15 +1988,15 @@ export default function MainAI() {
                       </>}
                       {aimodeContentKws.length > 0 && <>
                         <span className="text-on-surface-variant/20">|</span>
-                        <span className="material-symbols-outlined text-sm" style={{ color: '#34d399' }}>manage_search</span>
+                        <span className="material-symbols-outlined text-sm" style={{ color: ORB.mint }}>manage_search</span>
                         <span className="text-on-surface-variant/50">내용검색:</span>
-                        <span className="font-mono font-semibold" style={{ color: '#34d399' }}>"{aimodeContentKws.join(' · ')}"</span>
+                        <span className="font-mono font-semibold" style={{ color: ORB.mint }}>"{aimodeContentKws.join(' · ')}"</span>
                       </>}
                       {aimodeDetailKws.length > 0 && <>
                         <span className="text-on-surface-variant/20">|</span>
-                        <span className="material-symbols-outlined text-sm" style={{ color: '#f59e0b' }}>lightbulb</span>
+                        <span className="material-symbols-outlined text-sm" style={{ color: ORB.coral }}>lightbulb</span>
                         <span className="text-on-surface-variant/50">상세내용:</span>
-                        <span className="font-mono font-semibold" style={{ color: '#f59e0b' }}>"{aimodeDetailKws.join(' · ')}"</span>
+                        <span className="font-mono font-semibold" style={{ color: ORB.coral }}>"{aimodeDetailKws.join(' · ')}"</span>
                       </>}
                     </div>
                   )}
@@ -1642,12 +2094,12 @@ export default function MainAI() {
                       {
                         label: '정확도', value: acc, source: rerank != null ? 'BGE-reranker-v2-m3' : (zScore != null ? 'z-score' : 'sparse·lexical'),
                         desc: 'Cross-encoder 재정렬 확률',
-                        gradFrom: '#10b981', gradTo: '#34d399',
+                        gradFrom: '#0d9488', gradTo: ORB.mint,
                       },
                       {
                         label: '유사도', value: sim, source: 'SigLIP2 / BGE-M3 dense',
                         desc: '벡터 임베딩 코사인 유사도 (정규화)',
-                        gradFrom: '#3b82f6', gradTo: '#60a5fa',
+                        gradFrom: ORB.navy, gradTo: ORB.electric,
                       },
                     ]
                     return (

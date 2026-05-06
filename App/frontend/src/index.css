@@ -21,6 +21,14 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
+/* AI 모드 — 타이틀바는 기능만 유지, 시각적으로는 숨김 */
+.titlebar-chrome-ai {
+  background-color: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-bottom: 0;
+}
+
 /*
  * 색은 “파일명”이 아니라 스포이드로 찍은 값으로 맞춤 (예: RGB 5,16,79 = #05104F).
  * 중요 — 브라우저는 위에서 아래로 “겹쳐 그림”. 첫 번째 그라데이션이 맨 앞 레이어.

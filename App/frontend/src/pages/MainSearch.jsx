@@ -634,7 +634,7 @@ function ResultCard({ result, rank, onClick, securityMode = false, query = '' })
 
         {/* 1. 도메인 배지 */}
         <div className="flex gap-1 flex-wrap">
-          <span className={`text-[10px] px-2 py-0.5 rounded-full border ${DOMAIN_CLS[domainLabel] ?? 'bg-[#0b1220] text-[#64748b] border-[#334155]'}`}>
+          <span className={`text-[10px] px-2 py-0.5 rounded-full border transform origin-left transition-transform duration-200 ease-out hover:scale-x-105 ${DOMAIN_CLS[domainLabel] ?? 'bg-[#0b1220] text-[#64748b] border-[#334155]'}`}>
             {domainLabel}
           </span>
           {isAV && (
