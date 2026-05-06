@@ -115,6 +115,18 @@ def compute_mplc_score(r: dict, domain: str, query: str) -> float:
                 0.10 * feats.get("filename_substr", 0)
         return float(min(1.0, base + bonus))
 
+    # [Y+ 시도] Audio hand-tune — cluster 페널티 + 키워드/파일명 매칭 보정.
+    # audio dense 0.98 cluster 본질 → 단순 dense 기반 sigmoid 는 과대 평가.
+    # 의도 매칭 (z_dense + keyword) 가중으로 진짜 매칭 강조.
+    if domain == "audio":
+        z_dense = feats.get("z_dense", 0.0)
+        # z_dense 기반 (raw 1~5 범위, 큰 값 = 도메인 내 두드러짐)
+        # z_dense ≥ 3.0 → strong, ≤ 1.0 → weak
+        base = _sigmoid((z_dense - 2.0) * 1.5)
+        bonus = 0.15 * feats.get("keyword_count", 0) + \
+                0.15 * feats.get("filename_substr", 0)
+        return float(min(1.0, base + bonus))
+
     if domain not in MPLC_WEIGHTS:
         return float(r.get("confidence", 0) or 0)
 

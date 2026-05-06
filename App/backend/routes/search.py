@@ -97,14 +97,11 @@ def search():
                 "audio": 100,
                 "bgm":   100,
             }
-            # top_k 사용자 요청에 맞춰 도메인별 cap proportional scaling
-            scale = min(1.0, top_k / 500.0)
-            DOMAIN_CAP_BY_DOMAIN = {
-                d: max(10, int(c * scale * 1.0))   # min 10건 보장
-                for d, c in DOMAIN_OPTIMAL_TOPK.items()
-            }
+            # [v15.1 fix] scale factor 제거 — 항상 도메인 optimal cap 사용.
+            # top_k 가 작아도 (예: 30) 도메인별 50~100건 retrieve 후 quota
+            # 분배. 응답 시간 미세 증가 감수, 합격률 보장 우선.
+            DOMAIN_CAP_BY_DOMAIN = dict(DOMAIN_OPTIMAL_TOPK)
             TOTAL_CAP  = min(top_k, 500)
-            # legacy 호환 — 기존 DOMAIN_CAP 변수 유지 (후속 코드용)
             DOMAIN_CAP = max(DOMAIN_CAP_BY_DOMAIN.values())
 
             # ── 1. 5도메인 병렬 검색 (GPU+CPU 활용, 도메인별 최적 cap) ──
