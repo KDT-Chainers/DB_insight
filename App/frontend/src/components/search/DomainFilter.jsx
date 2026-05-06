@@ -31,7 +31,7 @@ export default function DomainFilter({ value, onChange, counts }) {
                 ? 'bg-primary text-on-primary shadow-md'
                 : 'bg-white/5 text-on-surface-variant hover:bg-white/10'}`}
           >
-            <span className={`material-symbols-outlined text-base ${active ? '' : item.color}`}>
+            <span className={`material-symbols-outlined translate-y-[1px] text-base ${active ? '' : item.color}`}>
               {item.icon}
             </span>
             <span>{item.label}</span>

@@ -974,22 +974,6 @@ function AVDetailContent({ result }) {
 /** v0 AIHero 퀵 서제스트 */
 const V0_HOME_SUGGESTIONS = ['Write an email', 'Summarize text', 'Translate', 'Generate ideas']
 
-// ── [DEV ONLY] 상세 레이아웃 목업 — 확인 후 이 블록 전체 삭제할 것 ─────────
-const DEV_MOCK_DETAIL_FILE = {
-  file_path: '/mock/preview-layout.pdf',
-  file_name: '[목업] 상세 화면 레이아웃.pdf',
-  file_type: 'doc',
-  confidence: 0.94,
-  similarity: 0.94,
-  rerank_score: 2.1,
-  dense: 0.65,
-  z_score: null,
-  snippet:
-    '목업 스니펫입니다. 미리보기 URL이 없어 본문 영역에는 이 텍스트만 보입니다. 확인 후 URL에서 mockDetail 을 제거하거나 아래 useEffect 블록을 삭제하세요.',
-  preview_url: null,
-  segments: [],
-}
-
 // ── 메인 컴포넌트 ────────────────────────────────────────
 export default function MainSearch() {
   const navigate = useNavigate()
@@ -1047,6 +1031,9 @@ export default function MainSearch() {
   const [homeExiting, setHomeExiting] = useState(false)
   const [resultsReady, setResultsReady] = useState(false)
   const [searchFocused, setSearchFocused] = useState(false)
+  const [summaryGlintKey, setSummaryGlintKey] = useState(0)
+  const summaryScrollActiveRef = useRef(false)
+  const summaryScrollIdleTimerRef = useRef(null)
 
   // results → detail 슬라이드
   const [detailVisible, setDetailVisible] = useState(false)
@@ -1076,6 +1063,30 @@ export default function MainSearch() {
     return () => clearTimeout(t)
   }, [view])
 
+  // results 화면 스크롤 시 검색 요약 카드에 유리 반짝(glint) 효과
+  useEffect(() => {
+    if (view !== 'results') return
+    const onScroll = () => {
+      // 스크롤 "시작" 시점에만 1회 실행
+      if (!summaryScrollActiveRef.current) {
+        summaryScrollActiveRef.current = true
+        setSummaryGlintKey(k => k + 1)
+      }
+      // 이벤트가 끊기면(정지) active 플래그 리셋
+      if (summaryScrollIdleTimerRef.current) clearTimeout(summaryScrollIdleTimerRef.current)
+      summaryScrollIdleTimerRef.current = setTimeout(() => {
+        summaryScrollActiveRef.current = false
+      }, 160)
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => {
+      window.removeEventListener('scroll', onScroll)
+      if (summaryScrollIdleTimerRef.current) clearTimeout(summaryScrollIdleTimerRef.current)
+      summaryScrollIdleTimerRef.current = null
+      summaryScrollActiveRef.current = false
+    }
+  }, [view])
+
   // 같은 /search 경로에서도 로고 클릭 시 홈 상태로 복귀
   useEffect(() => {
     if (!location.state?.goHomeAt) return
@@ -1087,43 +1098,6 @@ export default function MainSearch() {
     setSearchError('')
     setSearching(false)
   }, [location.state?.goHomeAt])
-
-  // [DEV ONLY] 상세 레이아웃 목업 — 삭제 시 DEV_MOCK_DETAIL_FILE 과 함께 제거
-  //
-  // HashRouter: http://localhost:3000/#/search?mockDetail=1 (포트 3000)
-  //
-  // URL에서 mockDetail 을 replace 로 지우면, React 18 Strict Mode(개발)에서
-  // 컴포넌트가 재마운트될 때 state 가 초기화되고 쿼리도 없어져 목업이 적용되지 않는다.
-  // 그래서 쿼리는 그대로 두고, 해시에서만 읽어 반복 적용해도 무방하다.
-  //
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    const host = window.location.hostname
-    if (host !== 'localhost' && host !== '127.0.0.1') return
-
-    const raw = window.location.hash || ''
-    const pathAndQuery = raw.startsWith('#') ? raw.slice(1) : raw
-    const qMark = pathAndQuery.indexOf('?')
-    const pathOnly = qMark === -1 ? pathAndQuery : pathAndQuery.slice(0, qMark)
-    const qStr = qMark === -1 ? '' : pathAndQuery.slice(qMark)
-    if (pathOnly !== '/search') return
-
-    const sp = new URLSearchParams(qStr || '')
-    if (sp.get('mockDetail') !== '1') return
-
-    setFlyStyle(null)
-    setHomeExiting(false)
-    setSelectedFile(DEV_MOCK_DETAIL_FILE)
-    setFileDetail(null)
-    setDetailLoading(false)
-    setView('detail')
-    setDetailVisible(true)
-    setQuery('목업')
-    setInputValue('목업')
-    setResults([])
-    setResultsReady(true)
-    setSearchError('')
-  }, [location.pathname, location.search, location.hash, location.key])
 
   // STT
   const doSearchRef = useRef(null)
@@ -1857,8 +1831,13 @@ export default function MainSearch() {
 
             {/* 하단 통계 */}
             {!searching && results.length > 0 && (
-              <div className="mt-12 glass-panel rounded-[1.5rem] p-6 border border-outline-variant/10 relative overflow-hidden">
-                <div className="absolute -right-20 -top-20 w-64 h-64 bg-primary/10 rounded-full blur-[80px]" />
+              <div className="mt-12 rounded-[1.5rem] bg-transparent p-6 border border-white/[0.16] shadow-[inset_0_1px_0_rgba(255,255,255,0.14)] relative overflow-hidden">
+                {summaryGlintKey > 0 && (
+                  <div
+                    key={summaryGlintKey}
+                    className="summary-glint-sweep pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 bg-gradient-to-r from-transparent via-white/20 to-transparent"
+                  />
+                )}
                 <div className="relative z-10">
                   <h3 className="text-sm font-bold text-primary mb-4 flex items-center gap-2 uppercase tracking-widest">
                     <span className="material-symbols-outlined text-lg">analytics</span>검색 요약
@@ -1905,35 +1884,40 @@ export default function MainSearch() {
 
             {/* 액션 바 — 헤더와 겹치지 않게 간격 두고, 본문과 동일 max-w 로 가로 정렬 */}
             <div
-              className={`fixed top-32 ${leftEdge} right-0 z-30 border-b border-white/[0.08] bg-white/[0.04] py-4 backdrop-blur-[40px] transition-[left] duration-300`}
+              className={`fixed top-32 ${leftEdge} right-0 z-30 bg-[#0b1220]/78 py-4 transition-[left] duration-300`}
             >
-              <div className="mx-auto flex w-full max-w-[1400px] flex-wrap items-center justify-end gap-3 px-8">
-                <button
-                  type="button"
-                  onClick={() => handleSummarize(selectedFile)}
-                  disabled={summarizing}
-                  title="이 파일의 핵심 내용을 AI가 요약합니다"
-                  className="inline-flex items-center gap-2 rounded-full border border-white/[0.1] bg-white/[0.06] px-5 py-2 text-sm font-bold uppercase tracking-widest text-slate-200 shadow-sm transition hover:border-primary/35 hover:bg-white/[0.1] hover:text-white active:scale-95 disabled:opacity-55"
-                >
-                  <span className={`material-symbols-outlined text-base text-[#85adff] ${summarizing ? 'animate-spin' : ''}`}>
-                    {summarizing ? 'progress_activity' : 'auto_awesome'}
-                  </span>
-                  {summarizing ? '요약 중...' : 'AI 요약'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => openFolder(selectedFile.file_path)}
-                  className="rounded-full border border-white/[0.1] bg-[#0f131a]/90 px-5 py-2 text-sm font-bold uppercase tracking-widest text-primary transition hover:border-primary/30 hover:bg-white/[0.06] active:scale-95"
-                >
-                  경로 열기
-                </button>
-                <button
-                  type="button"
-                  onClick={() => openFile(selectedFile.file_path)}
-                  className="rounded-full border border-primary/40 bg-primary px-5 py-2 text-sm font-bold uppercase tracking-widest text-on-primary shadow-[0_0_20px_rgba(133,173,255,0.22)] transition hover:brightness-110 active:scale-95"
-                >
-                  파일 열기
-                </button>
+              <div className="mx-auto w-full max-w-[1400px] px-8">
+                <div className="grid grid-cols-12 gap-6">
+                  <div className="col-span-8" />
+                  <div className="col-span-4 flex w-full items-center justify-start gap-3">
+                    <button
+                      type="button"
+                      onClick={() => handleSummarize(selectedFile)}
+                      disabled={summarizing}
+                      title="이 파일의 핵심 내용을 AI가 요약합니다"
+                      className="inline-flex h-10 min-w-0 items-center justify-center gap-1.5 rounded-full border border-white/[0.1] bg-white/[0.06] px-4 text-xs font-bold uppercase tracking-[0.08em] text-slate-200 shadow-sm transition hover:border-primary/35 hover:bg-white/[0.1] hover:text-white active:scale-95 disabled:opacity-55"
+                    >
+                      <span className={`material-symbols-outlined text-[15px] text-[#85adff] ${summarizing ? 'animate-spin' : ''}`}>
+                        {summarizing ? 'progress_activity' : 'auto_awesome'}
+                      </span>
+                      <span className="whitespace-nowrap">{summarizing ? '요약 중...' : 'AI 요약'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openFolder(selectedFile.file_path)}
+                      className="inline-flex h-10 min-w-0 items-center justify-center rounded-full border border-white/[0.1] bg-[#0f131a]/90 px-4 text-xs font-bold uppercase tracking-[0.08em] text-primary transition hover:border-primary/30 hover:bg-white/[0.06] active:scale-95"
+                    >
+                      <span className="whitespace-nowrap">경로 열기</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openFile(selectedFile.file_path)}
+                      className="inline-flex h-10 min-w-0 items-center justify-center rounded-full border border-primary/40 bg-primary px-4 text-xs font-bold uppercase tracking-[0.08em] text-on-primary shadow-[0_0_20px_rgba(133,173,255,0.22)] transition hover:brightness-110 active:scale-95"
+                    >
+                      <span className="whitespace-nowrap">파일 열기</span>
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -2013,7 +1997,7 @@ export default function MainSearch() {
                 </div>
               )}
 
-              <div className="grid grid-cols-12 gap-6">
+              <div className="grid grid-cols-12 gap-6 border-t border-white/[0.08] pt-6">
 
                 {/* 메인 컨텐츠 */}
                 <div className="col-span-8 space-y-6">
@@ -2158,8 +2142,6 @@ export default function MainSearch() {
 
             </section>
 
-            <div className="pointer-events-none fixed bottom-[-10%] left-[18%] h-[42%] w-[42%] rounded-full bg-primary/8 blur-[120px]" />
-            <div className="pointer-events-none fixed top-[12%] right-[-8%] h-[30%] w-[30%] rounded-full bg-[#85adff]/7 blur-[100px]" />
           </main>
         )
       })()}
