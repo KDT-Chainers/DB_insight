@@ -113,6 +113,27 @@ CASES: list[Case] = [
          "exercise sports", None, min_top1_sim=0.50),
     Case("img-nat-wildlife",   "image", "자연", "야생동물 자연",
          "wildlife nature", None, min_top1_sim=0.50),
+    # ── Phase 3 추가 (image 강건성 +10) ──────────────────────────────
+    Case("img-nat-river",      "image", "자연", "강 호수 풍경",
+         "river lake landscape", None, min_top1_sim=0.50),
+    Case("img-nat-forest",     "image", "자연", "숲 나무 풍경",
+         "forest trees scenery", None, min_top1_sim=0.50),
+    Case("img-per-baby",       "image", "인물", "아기 신생아",
+         "baby infant", None, min_top1_sim=0.50),
+    Case("img-per-portrait",   "image", "인물", "흑백 인물 사진",
+         "black white portrait", None, min_top1_sim=0.50),
+    Case("img-act-eating",     "image", "활동", "음식 먹는 사람",
+         "eating person", None, min_top1_sim=0.50),
+    Case("img-obj-book",       "image", "사물", "책 도서",
+         "book reading", None, min_top1_sim=0.50),
+    Case("img-color-red",      "image", "색상", "빨간 사물",
+         "red object", None, min_top1_sim=0.50, min_top1_conf=0.50),
+    Case("img-night-light",    "image", "도시", "밤 조명 야경",
+         "night light cityscape", None, min_top1_sim=0.50),
+    Case("img-emo-smile",      "image", "감정", "웃는 행복한 사람",
+         "smiling happy person", None, min_top1_sim=0.50),
+    Case("img-travel",         "image", "활동", "여행 풍경",
+         "travel landscape", None, min_top1_sim=0.50),
 
     # ════════════════════════════════════════════════════════════════════════
     # 🎬 MOV — 영상 (15)
