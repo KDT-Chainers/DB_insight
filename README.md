@@ -15,10 +15,10 @@
 
 본 프로젝트의 핵심 알고리즘은 다음 논문으로 공개되어 있습니다 (Zenodo, CC BY 4.0).
 
-**Tri-CHEF: Complex-Hermitian Embedding Fusion for Korean Multimodal Retrieval**
-Young-Sang Song, Hwon Lee, Ju Yeon Jang, Young Jin Hwang, Tae Yoon Lee, Jeong Hye Gim.
-Team Chainers, Korea IT Academy (KDT, Ministry of Employment and Labor), Independent Researchers.
-Zenodo, May 2026. https://doi.org/10.5281/zenodo.20034370
+- 제목 : **Tri-CHEF: Complex-Hermitian Embedding Fusion for Korean Multimodal Retrieval**
+- 저자 : Young-Sang Song, Hwon Lee, Ju Yeon Jang, Young Jin Hwang, Tae Yoon Lee, Jeong Hye Gim.
+- 소속 : Team Chainers, Korea IT Academy (KDT, Ministry of Employment and Labor), Independent Researchers.
+- 저널 : Zenodo, May 2026. https://doi.org/10.5281/zenodo.20034370
 
 | 항목                                        | 값                                                                   |
 | ------------------------------------------- | -------------------------------------------------------------------- |
