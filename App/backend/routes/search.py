@@ -34,8 +34,12 @@ def search():
 
     if not query:
         return jsonify({"error": "q is required"}), 400
+    # [v9] top_k <= 0 → 무제한 (매칭된 모든 결과 반환).
+    #   신뢰도/정확도/유사도 계산이 정확해지면서 무관한 결과는 자체적으로
+    #   낮은 점수로 후순위에 위치 → top_k 자르기보다 모든 매칭 노출이 더 직관적.
+    #   향후 top_k=n 선택 UI 추가 시 0 = "전체 보기" 의미로 사용.
     if top_k <= 0:
-        top_k = 10
+        top_k = 10**6   # 실질 무제한 (메모리 안전한 큰 값)
 
     # 한↔영 양방향 쿼리 확장 — sparse/ASF 채널이 다국어 토큰 모두 커버
     # (BGE-M3 dense 는 다국어 OK 지만 sparse 는 정확 토큰 매칭만)
@@ -169,12 +173,21 @@ def search():
     #   AV 도메인은 file_path 기반 의미 매칭이 더 강하므로 floor 면제.
     if _rr_enabled():
         _RERANK_FLOOR = -5.0
+        _STRONG_DENSE_CONF = 0.70  # dense+sparse 강매칭 임계값
         def _keep_after_rerank(r):
             # AV(movie/music): passage 가 STT 일부라 reranker 점수가 본질적으로 낮음 → 면제
             if r.get("file_type") in ("video", "audio"):
                 return True
             # BGM: 자체 점수 체계 사용 → 면제
             if r.get("file_type") == "bgm":
+                return True
+            # [v8] doc/image: dense conf 가 강매칭(>=0.70) 이면 floor 무시.
+            #   짧은 passage(파일명+snippet) 에서 cross-encoder logit -5~-10 흔함.
+            #   '어린이' 검색 시 도서관이야기/OECD교육지표 등 conf 0.95+ 결과가
+            #   rerank_score=-6~-8 로 모두 잘려나가는 부작용 해결.
+            #   dense+sparse 가 충분히 매칭하면 cross-encoder 의 짧은-passage 약점
+            #   무시하고 결과 보존.
+            if float(r.get("confidence") or 0.0) >= _STRONG_DENSE_CONF:
                 return True
             return r.get("rerank_score", 0.0) >= _RERANK_FLOOR
         results = [r for r in results if _keep_after_rerank(r)]
@@ -221,6 +234,14 @@ def search():
             # doc: page_num backfill
             if r.get("page_num") is None and loc.get("page"):
                 r["page_num"] = loc["page"]
+
+    # [v9] 무제한 모드(top_k=10**6 즉, 사용자 입력 top_k<=0) 일 때 floor 적용.
+    #   confidence < 0.20 약매칭 노이즈 제거 (코스모스 image 2390건 → ~50건).
+    #   유한 top_k 요청 시는 사용자가 명시적으로 N개를 원했으므로 floor 없이
+    #   그대로 N개 반환 (강매칭/약매칭 모두 사용자가 보길 원할 수 있음).
+    UNLIMITED_MODE = top_k >= 10**6
+    if UNLIMITED_MODE:
+        results = [r for r in results if (r.get("confidence") or 0) >= 0.20]
 
     # [v7] 최종 top_k 컷 — combined[:top_k*2] dedup 여유분으로 받았으나
     # 사용자 요청 top_k 정확히 맞춰 반환. (이전 v6 까지는 자르지 않아 30 요청에
