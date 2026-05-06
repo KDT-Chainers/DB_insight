@@ -569,7 +569,8 @@ function ResultCard({ result, rank, onClick, securityMode = false, query = '' })
   return (
     <div
       onClick={isAV ? undefined : onClick}
-      className={`bg-[#1e293b] border border-[#334155] rounded-[10px] overflow-hidden flex flex-col relative transition-transform duration-150
+      style={{ animationDelay: `${Math.min(Math.max(rank - 1, 0), 14) * 58}ms` }}
+      className={`result-card-enter bg-[#1e293b] border border-[#334155] rounded-[10px] overflow-hidden flex flex-col relative transition-transform duration-150
         ${isAV ? '' : 'cursor-pointer hover:-translate-y-0.5 hover:border-[#059669]'}`}
     >
       {/* 랭크 배지 */}
@@ -1726,7 +1727,7 @@ export default function MainSearch() {
               <div
                 className={`pointer-events-auto fixed ${leftEdge} right-0 top-0 bottom-0 z-[80] flex items-center justify-center bg-[#01030c]/88 transition-[left] duration-300`}
               >
-                <div className="-translate-x-14 translate-y-64">
+                <div className="-translate-x-16 translate-y-64">
                   <FileStackSearchMotion />
                 </div>
               </div>

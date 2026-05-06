@@ -927,10 +927,35 @@ body {
   animation: file-stack-hand-search 3.2s ease-in-out infinite;
 }
 
+/* 검색 결과 카드 — 배경 톤에 묻혀 있다가(저채도·어둡게) 전면으로 떠오름 */
+@keyframes result-card-enter {
+  from {
+    opacity: 0.2;
+    transform: translateY(28px) scale(0.92);
+    filter: brightness(0.38) saturate(0.5) blur(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: brightness(1) saturate(1) blur(0);
+  }
+}
+
+.result-card-enter {
+  animation: result-card-enter 1.15s cubic-bezier(0.2, 0.95, 0.22, 1) both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .file-stack-search .file-stack-card,
   .file-stack-search .file-stack-scan-line,
   .file-stack-search .file-stack-hand {
     animation: none !important;
+  }
+
+  .result-card-enter {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
   }
 }
