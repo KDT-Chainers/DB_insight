@@ -5,7 +5,7 @@
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20034370.svg)](https://doi.org/10.5281/zenodo.20034370)
 [![License: CC BY 4.0](https://img.shields.io/badge/Paper%20License-CC%20BY%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by/4.0/)
-[![Preprint: Zenodo](https://img.shields.io/badge/Preprint-Zenodo-blue.svg)](https://zenodo.org/records/20034371)
+[![Preprint: Zenodo](https://img.shields.io/badge/Preprint-Zenodo-blue.svg)](https://zenodo.org/records/20046344)
 [![ORCID](https://img.shields.io/badge/ORCID-0009--0001--4636--9896-A6CE39.svg?logo=orcid&logoColor=white)](https://orcid.org/0009-0001-4636-9896)
 
 ---
@@ -21,13 +21,18 @@ Zenodo, May 2026. https://doi.org/10.5281/zenodo.20034370
 
 | 항목 | 값 |
 |------|-----|
-| Concept DOI (인용 권장, 항상 최신 버전) | [`10.5281/zenodo.20034370`](https://doi.org/10.5281/zenodo.20034370) |
-| Version DOI (v1.0) | [`10.5281/zenodo.20034371`](https://doi.org/10.5281/zenodo.20034371) |
-| Record URL | https://zenodo.org/records/20034371 |
-| 영문 PDF | `publication/paper/Tri-CHEF_paper_v1-9.pdf` (12 pp) |
-| 국문 PDF | `publication/paper/Tri-CHEF_paper_Korean_v1-9.pdf` (13 pp) |
-| 라이선스 | CC BY 4.0 (논문) |
-| 게재일 | 2026-05-06 |
+| **Concept DOI** (인용 권장, 항상 최신 버전) | [`10.5281/zenodo.20034370`](https://doi.org/10.5281/zenodo.20034370) |
+| **Latest Record URL** | https://zenodo.org/records/20046344 |
+| **현재 라이선스** | CC BY 4.0 (논문) |
+
+### Versions
+
+| 버전 | Version DOI | Record URL | PDF (영문) | PDF (국문) | 게재일 | 비고 |
+|------|-------------|------------|-----------|-----------|--------|------|
+| **v1.1** (latest) | [`10.5281/zenodo.20046344`](https://doi.org/10.5281/zenodo.20046344) | https://zenodo.org/records/20046344 | `publication/paper/제출용/Tri-CHEF_paper_v1.1.pdf` (12 pp) | `publication/paper/제출용/Tri-CHEF_paper_Korean_v1.1.pdf` (13 pp) | 2026-05-06 | 모든 페이지 푸터에 DOI/라이선스 표시 |
+| v1.0 | [`10.5281/zenodo.20034371`](https://doi.org/10.5281/zenodo.20034371) | https://zenodo.org/records/20034371 | `publication/paper/Tri-CHEF_paper_v1-9.pdf` (12 pp) | `publication/paper/Tri-CHEF_paper_Korean_v1-9.pdf` (13 pp) | 2026-05-06 | 최초 게재 |
+
+> 본문 콘텐츠와 그림/표 레이아웃, 페이지 분할은 v1.0 = v1.1 바이트 단위로 동일합니다 (v1.1은 v1.0 PDF에 페이지 푸터만 오버레이).
 
 ### Citation (BibTeX)
 
@@ -38,16 +43,18 @@ Zenodo, May 2026. https://doi.org/10.5281/zenodo.20034370
   year          = {2026},
   month         = may,
   publisher     = {Zenodo},
-  version       = {1.0},
+  version       = {1.1},
   doi           = {10.5281/zenodo.20034370},
-  url           = {https://zenodo.org/records/20034371},
-  note          = {Preprint, CC BY 4.0}
+  url           = {https://zenodo.org/records/20046344},
+  note          = {Preprint, CC BY 4.0. Concept DOI resolves to the latest version.}
 }
 ```
 
 ### Citation (APA)
 
-> Song, Y.-S., Lee, H., Jang, J. Y., Hwang, Y. J., Lee, T. Y., & Gim, J. H. (2026). *Tri-CHEF: Complex-Hermitian Embedding Fusion for Korean Multimodal Retrieval* (Version 1.0) [Preprint]. Zenodo. https://doi.org/10.5281/zenodo.20034370
+> Song, Y.-S., Lee, H., Jang, J. Y., Hwang, Y. J., Lee, T. Y., & Gim, J. H. (2026). *Tri-CHEF: Complex-Hermitian Embedding Fusion for Korean Multimodal Retrieval* (Version 1.1) [Preprint]. Zenodo. https://doi.org/10.5281/zenodo.20034370
+
+> 인용 권장: 위 BibTeX/APA 모두 **Concept DOI** (`10.5281/zenodo.20034370`) 를 사용합니다. 이 DOI는 항상 최신 버전으로 자동 리졸브되므로 향후 v1.2, v2.0 등 추가 게재 시에도 별도 수정이 필요 없습니다. 특정 버전을 못박을 때만 Version DOI(`10.5281/zenodo.20046344` 등)를 사용하세요.
 
 GitHub은 저장소 루트의 `CITATION.cff` 를 자동 인식하여 우측 상단에 **"Cite this repository"** 버튼을 표시합니다.
 
