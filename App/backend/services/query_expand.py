@@ -43,6 +43,46 @@ _KO_EN: dict[str, list[str]] = {
     "흡연":         ["smoking", "smoke", "cigarette", "tobacco", "담배"],
     "담배피는":     ["smoking", "cigarette", "흡연"],
     "흡연자":       ["smoker", "smoking person"],
+
+    # ── 동물 ───────────────────────────────────────────────────────
+    "강아지":       ["dog", "puppy"],
+    "개":           ["dog", "puppy"],
+    "고양이":       ["cat", "kitten", "kitty"],
+    "새":           ["bird"],
+    "토끼":         ["rabbit", "bunny"],
+    "동물":         ["animal", "wildlife"],
+
+    # ── 가족 / 인물 ────────────────────────────────────────────────
+    "가족":         ["family"],
+    "노인":         ["elderly", "senior", "old person", "고령자"],
+    "고령자":       ["elderly", "senior", "노인"],
+    "고령화":       ["aging", "aging population", "노령화"],
+    "인류":         ["mankind", "humanity", "human"],
+
+    # ── 사물 / 교통 ────────────────────────────────────────────────
+    "자동차":       ["car", "automobile", "vehicle"],
+    "자전거":       ["bicycle", "bike"],
+    "건물":         ["building", "structure"],
+    "도시":         ["city", "urban"],
+
+    # ── 산업 / 기술 ────────────────────────────────────────────────
+    "반도체":       ["semiconductor", "chip", "memory chip"],
+    "전기차":       ["electric vehicle", "EV", "electric car"],
+    "배터리":       ["battery"],
+
+    # ── 음악 장르 (k-pop 등) ───────────────────────────────────────
+    "케이팝":       ["kpop", "k-pop", "korean pop", "K-pop"],
+    "K-pop":       ["kpop", "k-pop", "케이팝", "아이돌"],
+    "아이돌":       ["idol", "kpop idol"],
+    "댄스":         ["dance"],
+    "발라드":       ["ballad", "love song"],
+    "재즈":         ["jazz"],
+    "록":           ["rock"],
+
+    # ── 인물 (한국 연예/스포츠) ────────────────────────────────────
+    "박나래":       ["Park Nara", "comedian Park Nara"],
+    "변기수":       ["Byun Kisoo", "comedian Byun"],
+    "마이클 조던":  ["Michael Jordan", "Jordan", "MJ"],
     "선생":         ["teacher"],
     "교사":           ["teacher", "educator"],
     "노인":         ["elderly", "senior"],
@@ -447,6 +487,41 @@ _KO_EN: dict[str, list[str]] = {
     "smoke":        ["담배", "흡연", "연기"],
     "tobacco":      ["담배", "흡연"],
     "smoker":       ["흡연자", "담배 피우는 사람"],
+    # 동물
+    "dog":          ["개", "강아지"],
+    "puppy":        ["강아지"],
+    "cat":          ["고양이"],
+    "kitten":       ["고양이", "새끼고양이"],
+    "rabbit":       ["토끼"],
+    "bird":         ["새"],
+    "animal":       ["동물"],
+    # 가족/인물
+    "family":       ["가족"],
+    "elderly":      ["노인", "고령자"],
+    "senior":       ["노인", "고령자"],
+    "aging":        ["고령화", "노령화"],
+    "mankind":      ["인류"],
+    "humanity":     ["인류"],
+    # 사물/교통
+    "car":          ["자동차"],
+    "automobile":   ["자동차"],
+    "vehicle":      ["차량", "자동차"],
+    "bicycle":      ["자전거"],
+    "building":     ["건물"],
+    "city":         ["도시"],
+    # 산업/기술
+    "semiconductor": ["반도체"],
+    "chip":         ["반도체", "칩"],
+    "ev":           ["전기차"],
+    "battery":      ["배터리"],
+    # 음악
+    "kpop":         ["케이팝", "K-pop", "아이돌"],
+    "k-pop":        ["케이팝", "아이돌"],
+    "idol":         ["아이돌"],
+    "dance":        ["댄스"],
+    "ballad":       ["발라드"],
+    "jazz":         ["재즈"],
+    "rock":         ["록"],
 
     # ── 연예 / 엔터테인먼트 ────────────────────────────────────────
     "드라마":       ["drama", "TV show", "series"],

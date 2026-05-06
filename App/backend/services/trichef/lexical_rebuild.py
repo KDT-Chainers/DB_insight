@@ -178,6 +178,21 @@ _DOMAIN_FORCED_KEYWORDS: dict[str, list[str]] = {
         # 색상/시각 특성
         "빨간", "파란", "노란", "초록", "하얀", "검은",
         "빛나는", "반짝이는",
+        # ── Phase 2 보강 (단일 한국어 토큰 약매칭 해결) ────────────────
+        # 흡연/담배 (526DCB19 caption)
+        "담배", "흡연", "흡연자", "담배피는", "담뱃불",
+        "cigarette", "smoking", "smoke", "tobacco", "smoker",
+        # 동물 영어 (강아지/개/고양이는 한국어 위에 있음)
+        "dog", "puppy", "cat", "kitten", "rabbit", "bird", "puppy",
+        # 가족 / 인물 (영어)
+        "family", "child", "kid", "smile", "smiling",
+        "woman", "man", "elderly", "senior",
+        # 사물 영어
+        "car", "automobile", "vehicle", "bicycle", "bike", "building",
+        # 식사/요리 영어
+        "food", "cooking", "meal", "dish", "restaurant",
+        # 운동/스포츠 영어
+        "exercise", "sport", "sports", "fitness", "gym",
     ],
     "doc": [
         # 문서 구조 (영어)

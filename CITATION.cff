@@ -2,12 +2,30 @@ cff-version: 1.2.0
 title: "Tri-CHEF: Complex-Hermitian Embedding Fusion for Korean Multimodal Retrieval"
 message: "If you use this software or paper, please cite it using the metadata below."
 type: software
-version: "1.0"
+version: "1.1"
 date-released: "2026-05-06"
 license: CC-BY-4.0
 repository-code: "https://github.com/KDT-Chainers/DB_insight"
-url: "https://zenodo.org/records/20034371"
+url: "https://zenodo.org/records/20046344"
+# Concept DOI: always resolves to the latest version on Zenodo. Use this DOI
+# in citations unless you specifically need to pin a version.
 doi: "10.5281/zenodo.20034370"
+identifiers:
+  - type: doi
+    value: "10.5281/zenodo.20034370"
+    description: "Concept DOI (always resolves to the latest Zenodo version)"
+  - type: doi
+    value: "10.5281/zenodo.20046344"
+    description: "Version DOI for v1.1 (2026-05-06, every-page DOI footer)"
+  - type: doi
+    value: "10.5281/zenodo.20034371"
+    description: "Version DOI for v1.0 (2026-05-06, initial release)"
+  - type: url
+    value: "https://zenodo.org/records/20046344"
+    description: "Zenodo record (v1.1, current)"
+  - type: url
+    value: "https://zenodo.org/records/20034371"
+    description: "Zenodo record (v1.0, archived)"
 authors:
   - family-names: "Song"
     given-names: "Young-Sang"

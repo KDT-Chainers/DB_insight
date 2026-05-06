@@ -80,7 +80,7 @@ export default function SearchSidebar({ entranceOn } = {}) {
   }
 
   const runQuery = (query) => {
-    navigate('/search', { state: { query } })
+    navigate('/search', { state: { query, historyNonce: Date.now() } })
   }
 
   const ai = location.pathname === '/ai' || location.pathname.startsWith('/ai/')
@@ -215,7 +215,6 @@ export default function SearchSidebar({ entranceOn } = {}) {
           </div>
           <div className="overflow-hidden">
             <p className={`truncate text-sm font-bold ${ai ? 'text-neutral-100' : 'text-on-surface'}`}>관리자</p>
-            <p className={`text-[0.65rem] ${ai ? 'text-neutral-500' : 'text-on-surface-variant'}`}>심층 분석 접근 권한</p>
           </div>
         </button>
         </div>
