@@ -49,10 +49,36 @@ function freePort(port) {
 // Flask 백엔드 실행
 // ---------------------------------------------------------------------------
 
+// 5001 포트가 이미 살아있는 백엔드(외부 detached 또는 이전 세션) 인지 확인.
+// 정상 응답 시 freePort + spawn python 스킵 → 부팅 30~60s 단축.
+function _checkBackendAlive(port = 5001) {
+  return new Promise((resolve) => {
+    const http = require('http')
+    const req = http.request({
+      host: '127.0.0.1', port, path: '/api/search?q=ping&top_k=1',
+      method: 'GET', timeout: 1500,
+    }, (res) => {
+      // 200 또는 400(빈 쿼리 등) 모두 살아있는 신호
+      resolve(res.statusCode >= 200 && res.statusCode < 500)
+      res.resume()
+    })
+    req.on('error', () => resolve(false))
+    req.on('timeout', () => { req.destroy(); resolve(false) })
+    req.end()
+  })
+}
+
 async function startBackend() {
   if (isDev) return
 
-  await freePort(5001)  // 이전 인스턴스가 포트를 쥐고 있으면 먼저 해제
+  // [v9] 기존 백엔드 재사용 — 모델/sparse 인덱스 로드 비용(30~60s) 회피.
+  // 외부 detached 백엔드 또는 이전 Electron 세션의 백엔드가 살아있으면 그대로 사용.
+  if (await _checkBackendAlive(5001)) {
+    console.log('[startBackend] port 5001 백엔드 응답 OK → 재사용 (spawn 스킵)')
+    return
+  }
+
+  await freePort(5001)  // 응답 없는 stale 점유자만 해제
 
   const backendExe = path.join(process.resourcesPath, 'backend', 'backend.exe')
 
