@@ -26,12 +26,15 @@ export default function DomainFilter({ value, onChange, counts }) {
             key={item.value || 'all'}
             onClick={() => onChange(item.value)}
             title={item.value ? `${item.label}만 보기` : '도메인 필터 해제'}
-            className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-bold transition-all
+            className={`group flex items-center justify-between overflow-hidden whitespace-nowrap rounded-full text-sm font-bold transform-gpu
+              py-1 w-[96px] transition-[width,transform,box-shadow,background-color,color] duration-250 ease-out
+              ${active ? 'w-[132px] scale-105 px-3.5' : 'px-3 hover:w-[132px] hover:scale-105'}
               ${active
-                ? 'bg-primary text-on-primary shadow-md'
+                ? 'bg-primary text-on-primary shadow-md shadow-primary/25'
                 : 'bg-white/5 text-on-surface-variant hover:bg-white/10'}`}
           >
-            <span className={`material-symbols-outlined translate-y-[1px] text-base ${active ? '' : item.color}`}>
+            <span className={`material-symbols-outlined translate-y-[1px] text-base transition-transform duration-200
+              ${active ? 'scale-110' : 'group-hover:scale-110'} ${active ? '' : item.color}`}>
               {item.icon}
             </span>
             <span>{item.label}</span>
