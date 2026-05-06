@@ -51,20 +51,30 @@ function freePort(port) {
 
 // 5001 포트가 이미 살아있는 백엔드(외부 detached 또는 이전 세션) 인지 확인.
 // 정상 응답 시 freePort + spawn python 스킵 → 부팅 30~60s 단축.
+//
+// [v9 자동복구] timeout 5s + retry 2회. 백엔드가 Ollama 추론 / 인덱싱 등
+//   잠시 busy 한 경우(GIL 점유) 1.5s 로는 false 판정 → 멀쩡한 백엔드 죽이고
+//   30~60s 재시작하는 부작용. 5s 로 충분히 대기 + 1회 재시도하여 진짜 죽은
+//   경우만 spawn 트리거.
 function _checkBackendAlive(port = 5001) {
-  return new Promise((resolve) => {
-    const http = require('http')
+  const http = require('http')
+  const tryOnce = () => new Promise((resolve) => {
     const req = http.request({
       host: '127.0.0.1', port, path: '/api/search?q=ping&top_k=1',
-      method: 'GET', timeout: 1500,
+      method: 'GET', timeout: 5000,
     }, (res) => {
-      // 200 또는 400(빈 쿼리 등) 모두 살아있는 신호
       resolve(res.statusCode >= 200 && res.statusCode < 500)
       res.resume()
     })
     req.on('error', () => resolve(false))
     req.on('timeout', () => { req.destroy(); resolve(false) })
     req.end()
+  })
+  return new Promise(async (resolve) => {
+    if (await tryOnce()) return resolve(true)
+    // busy 가능성 — 1초 후 1회 재시도
+    await new Promise((r) => setTimeout(r, 1000))
+    resolve(await tryOnce())
   })
 }
 
