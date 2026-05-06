@@ -751,6 +751,10 @@ class TriChefEngine:
                 metadata={
                     "low_confidence": weak_evidence,
                     "dense_agg":  round(dense_agg, 4),
+                    # [v12] raw cosine top1 — 진짜 segment-level 최고 cosine.
+                    # dense_agg 는 top-3 평균이라 audio 0.98 cluster 발생.
+                    # cosine_top1 은 단일 segment max cosine → 도메인 비교용.
+                    "cosine_top1": round(float(d_ranked[0][1]) if d_ranked else 0.0, 4),
                     "z_dense":    round(z_dense, 4),
                     "sparse_agg": round(sparse_agg, 4),
                     "asf_agg":    round(asf_agg, 4),

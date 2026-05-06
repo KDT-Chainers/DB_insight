@@ -110,10 +110,10 @@ def search():
                 audio    = fut_aud.result() or []
                 bgm      = fut_bgm.result() or []
 
-            # ── 2. [v7 Phase 4 복원] 품질 기반 동적 quota ──────────────────
-            # v10/v11 (CMP/Blended/Round-robin) 시도 결과 audio dense cluster
-            # 본질적 한계로 도메인 비교 정확도 baseline (88%) 미달. 안정적인
-            # v7 quota 로 복원. (CMP 도구는 cmp_scoring.py 에 보존)
+            # ── 2. [v7 Phase 4] 품질 기반 동적 quota (안정 baseline) ───────
+            # v10/v11/v12 시도 (CMP/Blended/RoundRobin/정규화) 모두 audio
+            # dense cluster 본질 한계로 baseline (79%) 미달 또는 trade-off.
+            # v7 quota 가 시나리오 균형 + 합격률에서 가장 안정적.
             for lst in (img_only, doc_only, video, audio, bgm):
                 lst.sort(key=lambda r: r.get("confidence", 0), reverse=True)
 
@@ -430,6 +430,7 @@ def _search_trichef_av(query: str, domains: list[str], top_k: int) -> list[dict]
                 "trichef_domain": av_domain,
                 # 점수 상세 (UI 메트릭 표시용)
                 "dense":          round(float(av_meta.get("dense_agg",  0.0)), 4),
+                "cosine_top1":    round(float(av_meta.get("cosine_top1", 0.0)), 4),  # raw segment max cosine
                 "z_score":        round(float(av_meta.get("z_dense",    0.0)), 4),
                 "asf":            round(float(av_meta.get("asf_agg",    0.0)), 4),
                 "lexical":        round(float(av_meta.get("sparse_agg", 0.0)), 4),

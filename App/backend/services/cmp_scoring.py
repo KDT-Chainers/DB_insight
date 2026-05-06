@@ -96,6 +96,35 @@ def domain_relevance(query: str, domain: str) -> float:
     return 1.0 + DOMAIN_WEIGHT_BOOST * hits
 
 
+# [v12] 도메인별 raw cosine 실측 분포 — min-max 정규화용.
+# 측정: 7쿼리 × 도메인별 top-20 raw cosine (dense / cosine_top1).
+#   doc:   raw cosine 0.55 ~ 0.87  (BGE-M3 doc page)
+#   image: raw cosine 0.55 ~ 0.82  (SigLIP2)
+#   video: cosine_top1 0.20 ~ 0.55  (BGE-M3 + STT segments, 좁고 낮음)
+#   audio: cosine_top1 0.64 ~ 1.03  (Whisper/STT, 자연 cluster 0.8+)
+#   bgm:   CLAP cosine 0.33 ~ 0.65
+DOMAIN_RAW_DIST: dict[str, tuple[float, float]] = {
+    "doc":   (0.55, 0.90),
+    "image": (0.55, 0.85),
+    "video": (0.20, 0.55),
+    "audio": (0.64, 1.05),
+    "bgm":   (0.33, 0.70),
+}
+
+
+def normalize_raw_to_unit(raw: float, domain: str) -> float:
+    """도메인별 min-max 정규화 → [0, 1] 범위.
+
+    audio raw 0.85 → 0.50 (도메인 분포 중간)
+    video raw 0.45 → 0.71 (도메인 분포 상위)
+    이렇게 하면 도메인 무관 비교 가능.
+    """
+    lo, hi = DOMAIN_RAW_DIST.get(domain, (0.0, 1.0))
+    if hi <= lo:
+        return 0.0
+    return max(0.0, min(1.0, (float(raw) - lo) / (hi - lo)))
+
+
 def global_percentile_rank(raw_score: float, all_raws: Iterable[float]) -> float:
     """5도메인 합산 풀에서 raw_score 의 percentile rank (0~1).
 
