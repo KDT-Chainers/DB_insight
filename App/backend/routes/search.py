@@ -110,10 +110,22 @@ def search():
                 audio    = fut_aud.result() or []
                 bgm      = fut_bgm.result() or []
 
-            # ── 2. [v7 Phase 4] 품질 기반 동적 quota (안정 baseline) ───────
-            # v10/v11/v12 시도 (CMP/Blended/RoundRobin/정규화) 모두 audio
-            # dense cluster 본질 한계로 baseline (79%) 미달 또는 trade-off.
-            # v7 quota 가 시나리오 균형 + 합격률에서 가장 안정적.
+            # ── 2. [v13 MPLC] 학습된 multi-feature linear combination ────
+            # XRD Bragg peak Rietveld refinement 비유:
+            #   단일 raw cosine = 단일 wavelength (분리 불가)
+            #   → multi-feature (dense+sparse+asf+rerank+keyword+filename+z_dense)
+            #     의 학습된 선형 조합 = 다중 wavelength → 분리 가능
+            # CV AUC: doc 0.972 / image 0.924 / video 0.986 / audio 0.989 / bgm 0.912
+            # 도메인 무관 [0,1] score → 통합 ranking 정확.
+            from services.mplc_scoring import apply_mplc_to_results, MPLC_WEIGHTS
+            results_by_domain_pre = {
+                "doc":   doc_only, "image": img_only,
+                "video": video,    "audio": audio,
+                "bgm":   bgm,
+            }
+            if MPLC_WEIGHTS:
+                apply_mplc_to_results(results_by_domain_pre, query)
+
             for lst in (img_only, doc_only, video, audio, bgm):
                 lst.sort(key=lambda r: r.get("confidence", 0), reverse=True)
 
