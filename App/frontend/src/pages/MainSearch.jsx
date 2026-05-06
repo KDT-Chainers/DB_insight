@@ -1024,6 +1024,9 @@ export default function MainSearch() {
   const [summaryDone,  setSummaryDone]  = useState(false)
   const [summaryError, setSummaryError] = useState('')
   const [summaryMeta,  setSummaryMeta]  = useState(null) // {model, length, kind}
+  // 보안 모드: SecurityCritic 차단/마스킹 결과
+  const [summaryBlocked,  setSummaryBlocked]  = useState(null) // {stage, reason, pii_types}
+  const [summarySecurity, setSummarySecurity] = useState(null) // {masked, pii_types, reason}
   const summaryAbortRef = useRef(null)
 
   // home → results 애니메이션
@@ -1184,6 +1187,8 @@ export default function MainSearch() {
     setSummaryDone(false)
     setSummaryError('')
     setSummaryMeta(null)
+    setSummaryBlocked(null)
+    setSummarySecurity(null)
     try {
       const body = {
         file_type:  file.file_type,
@@ -1191,6 +1196,7 @@ export default function MainSearch() {
         file_path:  file.file_path  || '',
         file_name:  file.file_name  || '',
         segments:   file.segments   || [],
+        secure:     securityMode,
       }
       const res = await fetch(`${API_BASE}/api/aimode/summarize`, {
         method: 'POST',
@@ -1215,7 +1221,19 @@ export default function MainSearch() {
           if (ev.type === 'token')          setSummaryText(prev => prev + (ev.text || ''))
           else if (ev.type === 'content_loaded') setSummaryMeta(m => ({ ...(m||{}), length: ev.length, kind: ev.kind }))
           else if (ev.type === 'info')      setSummaryMeta(m => ({ ...(m||{}), model: ev.model }))
-          else if (ev.type === 'done')      { setSummaryDone(true); if (ev.summary) setSummaryText(ev.summary) }
+          else if (ev.type === 'done')      {
+            setSummaryDone(true)
+            if (ev.summary) setSummaryText(ev.summary)
+            if (ev.security) setSummarySecurity(ev.security)
+          }
+          else if (ev.type === 'blocked')   {
+            setSummaryBlocked({
+              stage: ev.stage || 'final',
+              reason: ev.reason || '보안 정책상 요약이 차단되었습니다.',
+              pii_types: ev.pii_types || [],
+            })
+            setSummaryDone(true)
+          }
           else if (ev.type === 'error')     setSummaryError(ev.message || '오류')
         }
       }
@@ -1224,7 +1242,7 @@ export default function MainSearch() {
     } finally {
       setSummarizing(false)
     }
-  }, [])
+  }, [securityMode])
 
   const closeSummary = useCallback(() => {
     if (summaryAbortRef.current) summaryAbortRef.current.abort()
@@ -1233,6 +1251,8 @@ export default function MainSearch() {
     setSummaryDone(false)
     setSummaryError('')
     setSummaryMeta(null)
+    setSummaryBlocked(null)
+    setSummarySecurity(null)
   }, [])
 
   const handleBgmIdentify = useCallback(async (file) => {
@@ -1849,7 +1869,7 @@ export default function MainSearch() {
             <section className="pt-44 pb-12 px-8 max-w-7xl mx-auto space-y-8">
 
               {/* ── ✨ AI 요약 인라인 패널 (상세 페이지 최상단) ──────────────── */}
-              {(summarizing || summaryText || summaryError) && (
+              {(summarizing || summaryText || summaryError || summaryBlocked) && (
                 <div className="rounded-2xl overflow-hidden relative"
                   style={{
                     background: 'linear-gradient(135deg, rgba(13,7,24,0.85), rgba(20,12,40,0.85))',
@@ -1871,7 +1891,11 @@ export default function MainSearch() {
                         </p>
                       )}
                     </div>
-                    {summaryDone ? (
+                    {summaryBlocked ? (
+                      <span className="flex items-center gap-1 text-rose-300 text-xs">
+                        <span className="material-symbols-outlined text-base" style={{ fontVariationSettings: '"FILL" 1' }}>shield</span> 차단됨
+                      </span>
+                    ) : summaryDone ? (
                       <span className="flex items-center gap-1 text-emerald-400 text-xs">
                         <span className="material-symbols-outlined text-base">check_circle</span> 완료
                       </span>
@@ -1894,7 +1918,20 @@ export default function MainSearch() {
                   </div>
                   {/* 본문 */}
                   <div className="px-7 py-6 text-base">
-                    {summaryError ? (
+                    {summaryBlocked ? (
+                      <div className="rounded-xl bg-rose-500/10 border border-rose-500/40 p-4 text-rose-200">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="material-symbols-outlined text-base" style={{ fontVariationSettings: '"FILL" 1' }}>shield</span>
+                          <span className="font-bold">보안 모드: 요약이 차단되었습니다</span>
+                        </div>
+                        <p className="text-sm opacity-90">{summaryBlocked.reason}</p>
+                        {summaryBlocked.pii_types?.length > 0 && (
+                          <p className="text-xs opacity-70 mt-2">
+                            탐지: {summaryBlocked.pii_types.join(', ')} · 단계: {summaryBlocked.stage}
+                          </p>
+                        )}
+                      </div>
+                    ) : summaryError ? (
                       <div className="rounded-xl bg-rose-500/10 border border-rose-500/30 p-4 text-rose-300">
                         <div className="flex items-center gap-2 mb-1">
                           <span className="material-symbols-outlined text-base">error</span>
@@ -1904,6 +1941,12 @@ export default function MainSearch() {
                       </div>
                     ) : summaryText ? (
                       <div className="relative">
+                        {summarySecurity?.masked && (
+                          <div className="mb-3 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/35 text-amber-200 text-xs flex items-center gap-2">
+                            <span className="material-symbols-outlined text-base" style={{ fontVariationSettings: '"FILL" 1' }}>shield</span>
+                            보안 모드: 개인정보({(summarySecurity.pii_types || []).join(', ')})가 마스킹되었습니다.
+                          </div>
+                        )}
                         <MarkdownLite text={summaryText} />
                         {!summaryDone && (
                           <span className="inline-block w-2 h-4 bg-purple-300 ml-1 animate-pulse align-middle" />

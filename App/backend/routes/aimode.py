@@ -1486,9 +1486,16 @@ def _run_nodes_fallback(state: dict) -> None:
         update = generate_node(state);    state.update(update)
 
 
-def _rag_sse(question: str, topk: int, thread_id: str) -> Generator[str, None, None]:
-    """LangGraph 그래프를 별도 스레드에서 실행하고, 노드가 투척한 이벤트를 SSE로 전달."""
+def _rag_sse(question: str, topk: int, thread_id: str,
+             secure: bool = False) -> Generator[str, None, None]:
+    """LangGraph 그래프를 별도 스레드에서 실행하고, 노드가 투척한 이벤트를 SSE로 전달.
+
+    secure=True 일 때 SecurityCritic 가드:
+      - token 누적 버퍼에 빠른 PII 정규식 → 적발 시 스트림 중단 + 'blocked' 송출
+      - done 직전 review_final 1회 → reject면 done을 'blocked'로 대체, mask면 마스킹된 답변 송출
+    """
     from queue import Queue, Empty
+    from services.security_bridge import quick_pii_scan, review_final, mask_pii
 
     def emit(obj: dict) -> str:
         return f"data: {json.dumps(obj, ensure_ascii=False)}\n\n"
@@ -1546,6 +1553,12 @@ def _rag_sse(question: str, topk: int, thread_id: str) -> Generator[str, None, N
     threading.Thread(target=run_graph, daemon=True).start()
 
     # 큐에서 이벤트 꺼내서 SSE로 전달
+    # secure 모드: token 누적 버퍼 + 빠른 PII 스캔 + done 시 최종 심사
+    token_buf = ""
+    last_scan_len = 0
+    blocked_emitted = False
+    SCAN_INTERVAL = 200  # 누적 200자마다 스캔
+
     while True:
         try:
             ev = q.get(timeout=180)
@@ -1554,6 +1567,59 @@ def _rag_sse(question: str, topk: int, thread_id: str) -> Generator[str, None, N
             break
         if ev is None:
             break
+
+        # secure 모드: 이미 차단된 후엔 토큰/done을 흘리지 않음
+        if secure and blocked_emitted:
+            if ev.get("type") in ("token", "done"):
+                continue
+            yield emit(ev)
+            continue
+
+        # secure 모드: 토큰 가드
+        if secure and ev.get("type") == "token":
+            token_buf += ev.get("text") or ""
+            if len(token_buf) - last_scan_len >= SCAN_INTERVAL:
+                last_scan_len = len(token_buf)
+                hits = quick_pii_scan(token_buf)
+                if hits:
+                    blocked_emitted = True
+                    yield emit({
+                        "type": "blocked",
+                        "stage": "stream",
+                        "reason": f"응답에 보호 개인정보({', '.join(hits)})가 감지되어 출력을 중단했습니다.",
+                        "pii_types": hits,
+                    })
+                    continue
+            yield emit(ev)
+            continue
+
+        # secure 모드: 종료 직전 최종 심사
+        if secure and ev.get("type") == "done":
+            full_answer = ev.get("answer") or token_buf
+            verdict = review_final(question, full_answer, session_id=thread_id)
+            if verdict.get("blocked"):
+                yield emit({
+                    "type": "blocked",
+                    "stage": "final",
+                    "reason": verdict.get("reason") or "보안 정책상 응답이 차단되었습니다.",
+                    "pii_types": verdict.get("pii_found_in_output", []),
+                })
+                blocked_emitted = True
+                continue
+            if verdict.get("masked") and verdict.get("pii_found_in_output"):
+                masked = mask_pii(full_answer, verdict.get("pii_found_in_output"))
+                ev = dict(ev)
+                ev["answer"] = masked
+                ev["security"] = {"masked": True, "pii_types": verdict["pii_found_in_output"],
+                                  "reason": verdict.get("reason")}
+            elif verdict.get("needs_regenerate"):
+                # MVP: 재생성은 미지원 → 마스킹으로 fallback
+                masked = mask_pii(full_answer, verdict.get("pii_found_in_output", []))
+                ev = dict(ev)
+                ev["answer"] = masked
+                ev["security"] = {"masked": True, "pii_types": verdict.get("pii_found_in_output", []),
+                                  "reason": verdict.get("reason"), "note": "regenerate→mask fallback"}
+
         yield emit(ev)
 
 
@@ -1567,13 +1633,14 @@ def chat():
     question  = (body.get("query") or "").strip()
     topk      = max(1, min(int(body.get("topk", 5)), 10))
     thread_id = (body.get("thread_id") or "default").strip()
+    secure    = bool(body.get("secure", False))
     if not _THREAD_ID_RE.match(thread_id):
         thread_id = "default"
     if not question:
         return jsonify({"error": "query 필수"}), 400
 
     return Response(
-        _rag_sse(question, topk, thread_id),
+        _rag_sse(question, topk, thread_id, secure=secure),
         mimetype="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
@@ -2233,9 +2300,17 @@ def _build_summary_prompt(file_type: str, fname: str, content: str) -> str:
 
 
 def _summarize_sse(file_type: str, trichef_id: str, file_path: str,
-                   segments: list | None, file_name: str | None
+                   segments: list | None, file_name: str | None,
+                   secure: bool = False,
                    ) -> Generator[str, None, None]:
-    """파일 요약 SSE 제너레이터."""
+    """파일 요약 SSE 제너레이터.
+
+    secure=True 일 때 SecurityCritic 가드:
+      - token 누적 버퍼에 빠른 PII 정규식 → 적발 시 스트림 중단 + 'blocked' 송출
+      - done 직전 review_final 1회 → reject면 done을 'blocked'로 대체, mask면 마스킹된 요약 송출
+    """
+    from services.security_bridge import quick_pii_scan, review_final, mask_pii
+
     def emit(obj: dict) -> str:
         return f"data: {json.dumps(obj, ensure_ascii=False)}\n\n"
 
@@ -2264,9 +2339,25 @@ def _summarize_sse(file_type: str, trichef_id: str, file_path: str,
     full = ""
     t0 = time.time()
     stream_error: str | None = None
+    blocked = False
+    last_scan_len = 0
+    SCAN_INTERVAL = 200
     try:
         for tok in _ollama_stream(messages, model, num_predict=7500, temperature=0.25):
             full += tok
+            if secure:
+                if len(full) - last_scan_len >= SCAN_INTERVAL:
+                    last_scan_len = len(full)
+                    hits = quick_pii_scan(full)
+                    if hits:
+                        blocked = True
+                        yield emit({
+                            "type": "blocked",
+                            "stage": "stream",
+                            "reason": f"요약에 보호 개인정보({', '.join(hits)})가 감지되어 출력을 중단했습니다.",
+                            "pii_types": hits,
+                        })
+                        break
             yield emit({"type": "token", "text": tok})
     except Exception as e:
         stream_error = str(e)
@@ -2276,19 +2367,48 @@ def _summarize_sse(file_type: str, trichef_id: str, file_path: str,
         logger.info(
             f"[summarize] file={fname[:40]!r} type={file_type} "
             f"content_len={len(content)} summary_len={len(full)} "
-            f"dt={time.time()-t0:.2f}s err={stream_error!r}"
+            f"dt={time.time()-t0:.2f}s err={stream_error!r} secure={secure} blocked={blocked}"
         )
     except Exception:
         pass
 
-    yield emit({
+    if blocked:
+        # 스트림 단계에서 이미 차단 — done 송출 안 함
+        return
+
+    final_summary = full
+    security_meta = None
+    if secure and full:
+        verdict = review_final(f"파일 요약 요청: {fname}", full,
+                               session_id=f"summarize:{trichef_id or fname}")
+        if verdict.get("blocked"):
+            yield emit({
+                "type": "blocked",
+                "stage": "final",
+                "reason": verdict.get("reason") or "보안 정책상 요약이 차단되었습니다.",
+                "pii_types": verdict.get("pii_found_in_output", []),
+            })
+            return
+        if verdict.get("masked") and verdict.get("pii_found_in_output"):
+            final_summary = mask_pii(full, verdict.get("pii_found_in_output"))
+            security_meta = {"masked": True, "pii_types": verdict["pii_found_in_output"],
+                             "reason": verdict.get("reason")}
+        elif verdict.get("needs_regenerate"):
+            final_summary = mask_pii(full, verdict.get("pii_found_in_output", []))
+            security_meta = {"masked": True, "pii_types": verdict.get("pii_found_in_output", []),
+                             "reason": verdict.get("reason"), "note": "regenerate→mask fallback"}
+
+    done_ev = {
         "type":    "done",
-        "summary": full,
+        "summary": final_summary,
         "model":   model,
         "length":  len(content),
         "kind":    kind,
         "error":   stream_error,
-    })
+    }
+    if security_meta is not None:
+        done_ev["security"] = security_meta
+    yield emit(done_ev)
 
 
 @aimode_bp.post("/summarize")
@@ -2300,12 +2420,13 @@ def summarize():
     file_path  = (body.get("file_path") or "").strip()
     file_name  = (body.get("file_name") or "").strip()
     segments   = body.get("segments") or []
+    secure     = bool(body.get("secure", False))
 
     if not file_type:
         return jsonify({"error": "file_type 필수"}), 400
 
     return Response(
-        _summarize_sse(file_type, trichef_id, file_path, segments, file_name),
+        _summarize_sse(file_type, trichef_id, file_path, segments, file_name, secure=secure),
         mimetype="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
