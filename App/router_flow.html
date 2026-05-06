@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Obsidian AI — Router Flow</title>
+<title>Obsidian AI — Router Flow v8.3</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap');
 
@@ -20,6 +20,7 @@
     --teal:      #06b6d4;
     --rose:      #f43f5e;
     --amber:     #f59e0b;
+    --orange:    #fb923c;
     --border:    rgba(139,92,246,0.18);
     --text:      #e2e8f0;
     --muted:     #64748b;
@@ -51,7 +52,7 @@
   @keyframes orb-drift { from { transform: translate(0,0) scale(1); } to { transform: translate(40px,30px) scale(1.1); } }
 
   /* ── 레이아웃 ── */
-  .wrap { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; padding: 60px 24px 100px; }
+  .wrap { position: relative; z-index: 1; max-width: 1200px; margin: 0 auto; padding: 60px 24px 100px; }
 
   /* ── 헤더 ── */
   .hero {
@@ -74,7 +75,13 @@
     -webkit-background-clip: text; -webkit-text-fill-color: transparent;
   }
   .hero p {
-    font-size: 18px; color: #94a3b8; max-width: 580px; margin: 0 auto; line-height: 1.7;
+    font-size: 18px; color: #94a3b8; max-width: 660px; margin: 0 auto; line-height: 1.7;
+  }
+  .version-badge {
+    display: inline-block; margin-top: 16px;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.1em;
+    color: var(--amber); background: rgba(245,158,11,0.1);
+    border: 1px solid rgba(245,158,11,0.25); padding: 3px 12px; border-radius: 999px;
   }
 
   /* ── 섹션 제목 ── */
@@ -92,7 +99,7 @@
     background: var(--card);
     border: 1px solid var(--border);
     border-radius: 24px;
-    padding: 48px 40px;
+    padding: 48px 32px;
     margin-bottom: 64px;
     backdrop-filter: blur(20px);
     position: relative;
@@ -166,49 +173,9 @@
     font-family: 'JetBrains Mono', monospace;
   }
 
-  /* 분기선 */
-  .branch-lines {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 0;
-    margin: 0 -20px 0;
-    position: relative;
-  }
-  .branch-lines::before {
-    content: '';
-    position: absolute;
-    top: 0; left: calc(50% - 1px);
-    width: 2px; height: 100%;
-    background: transparent;
-  }
-
-  .branch-col {
-    display: flex; flex-direction: column; align-items: center;
-    padding: 0 12px;
-    position: relative;
-  }
-
-  /* 분기 상단 연결선 */
-  .branch-top-line {
-    height: 40px; width: 2px;
-    background: linear-gradient(to bottom, transparent, var(--accent));
-    margin-bottom: 0;
-    position: relative;
-  }
-  .branch-top-label {
-    position: absolute; top: 50%;
-    font-size: 9px; font-weight: 700; letter-spacing: 0.1em;
-    text-transform: uppercase; transform: translateY(-50%);
-    padding: 2px 8px; border-radius: 999px;
-    white-space: nowrap;
-  }
-  .branch-top-label.rag   { color: var(--accent2); background: rgba(139,92,246,0.15); border: 1px solid rgba(139,92,246,0.3); right: calc(100% + 4px); }
-  .branch-top-label.chat  { color: var(--green);   background: rgba(16,185,129,0.1);  border: 1px solid rgba(16,185,129,0.25); left: calc(100% + 4px); }
-  .branch-top-label.followup { color: var(--teal); background: rgba(6,182,212,0.1);   border: 1px solid rgba(6,182,212,0.25); right: calc(100% + 4px); }
-
   /* 모드 카드 */
   .mode-card {
-    width: 100%; border-radius: 16px; padding: 20px 16px;
+    width: 100%; border-radius: 16px; padding: 18px 14px;
     border: 1px solid; position: relative; overflow: hidden;
     transition: transform 0.2s, box-shadow 0.2s;
     cursor: default;
@@ -226,12 +193,17 @@
     background: rgba(6,182,212,0.08); border-color: rgba(6,182,212,0.25);
     box-shadow: 0 4px 24px rgba(6,182,212,0.12);
   }
+  .mode-card.qa-gen {
+    background: rgba(251,146,60,0.08); border-color: rgba(251,146,60,0.28);
+    box-shadow: 0 4px 24px rgba(251,146,60,0.12);
+  }
   .mode-card::before {
     content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
   }
   .mode-card.rag::before      { background: linear-gradient(90deg, transparent, var(--accent), transparent); }
   .mode-card.chat::before     { background: linear-gradient(90deg, transparent, var(--green), transparent); }
   .mode-card.followup::before { background: linear-gradient(90deg, transparent, var(--teal), transparent); }
+  .mode-card.qa-gen::before   { background: linear-gradient(90deg, transparent, var(--orange), transparent); }
 
   .mode-badge {
     display: inline-flex; align-items: center; gap: 5px;
@@ -241,10 +213,11 @@
   .mode-badge.rag      { background: rgba(139,92,246,0.2); color: var(--accent2); border: 1px solid rgba(139,92,246,0.35); }
   .mode-badge.chat     { background: rgba(16,185,129,0.15); color: var(--green);  border: 1px solid rgba(16,185,129,0.3); }
   .mode-badge.followup { background: rgba(6,182,212,0.12); color: var(--teal);   border: 1px solid rgba(6,182,212,0.28); }
+  .mode-badge.qa-gen   { background: rgba(251,146,60,0.15); color: var(--orange); border: 1px solid rgba(251,146,60,0.35); }
 
   .mode-icon { font-size: 11px; }
-  .mode-title { font-size: 15px; font-weight: 800; color: #fff; margin-bottom: 6px; }
-  .mode-desc  { font-size: 11px; color: #64748b; line-height: 1.5; margin-bottom: 12px; }
+  .mode-title { font-size: 14px; font-weight: 800; color: #fff; margin-bottom: 6px; }
+  .mode-desc  { font-size: 10.5px; color: #64748b; line-height: 1.5; margin-bottom: 12px; }
 
   /* 파이프라인 스텝 */
   .pipeline {
@@ -268,9 +241,10 @@
     display: flex; align-items: center; justify-content: center;
     font-size: 8px; font-weight: 800;
   }
-  .rag   .pipe-num { background: rgba(139,92,246,0.3); color: var(--accent2); }
-  .chat  .pipe-num { background: rgba(16,185,129,0.25); color: var(--green); }
+  .rag    .pipe-num { background: rgba(139,92,246,0.3); color: var(--accent2); }
+  .chat   .pipe-num { background: rgba(16,185,129,0.25); color: var(--green); }
   .followup .pipe-num { background: rgba(6,182,212,0.2); color: var(--teal); }
+  .qa-gen .pipe-num { background: rgba(251,146,60,0.25); color: var(--orange); }
 
   /* ══ SCENARIO 카드 ══ */
   .scenarios {
@@ -299,6 +273,7 @@
   .scenario-icon.rag      { background: rgba(139,92,246,0.2); }
   .scenario-icon.chat     { background: rgba(16,185,129,0.15); }
   .scenario-icon.followup { background: rgba(6,182,212,0.12); }
+  .scenario-icon.qa-gen   { background: rgba(251,146,60,0.15); }
   .scenario-title { font-size: 14px; font-weight: 700; color: #e2e8f0; }
   .scenario-sub   { font-size: 11px; color: #475569; }
 
@@ -323,6 +298,7 @@
   .route-tag.rag      { background: rgba(139,92,246,0.15); color: var(--accent2); }
   .route-tag.chat     { background: rgba(16,185,129,0.12); color: var(--green); }
   .route-tag.followup { background: rgba(6,182,212,0.1);  color: var(--teal); }
+  .route-tag.qa-gen   { background: rgba(251,146,60,0.12); color: var(--orange); }
 
   /* ══ SSE EVENTS 표 ══ */
   .sse-table-wrap {
@@ -346,8 +322,8 @@
   .sse-table-wrap tbody tr:last-child { border-bottom: none; }
   .sse-table-wrap tbody tr:hover { background: rgba(139,92,246,0.05); }
   .sse-table-wrap td { padding: 12px 20px; font-size: 12px; vertical-align: top; }
-  .sse-table-wrap td:first-child { width: 26%; }
-  .sse-table-wrap td:nth-child(2){ width: 38%; }
+  .sse-table-wrap td:first-child { width: 24%; }
+  .sse-table-wrap td:nth-child(2){ width: 36%; }
 
   .ev-type {
     font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700;
@@ -369,6 +345,7 @@
   .ev-badge.rag      { background: rgba(139,92,246,0.15); color: var(--accent2); }
   .ev-badge.chat     { background: rgba(16,185,129,0.1);  color: var(--green); }
   .ev-badge.followup { background: rgba(6,182,212,0.1);   color: var(--teal); }
+  .ev-badge.qa-gen   { background: rgba(251,146,60,0.12); color: var(--orange); }
   .ev-badge.all      { background: rgba(255,255,255,0.07); color: #94a3b8; }
 
   code {
@@ -376,6 +353,26 @@
     background: rgba(0,0,0,0.4); border: 1px solid rgba(139,92,246,0.15);
     padding: 1px 6px; border-radius: 4px; color: #a78bfa;
   }
+
+  /* ══ INTENT 예시 박스 ══ */
+  .intent-examples {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 20px; padding: 32px; margin-bottom: 64px;
+    backdrop-filter: blur(16px);
+  }
+  .intent-title {
+    font-size: 14px; font-weight: 800; color: var(--accent2); margin-bottom: 20px;
+  }
+  .intent-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+  }
+  .intent-item {
+    padding: 14px 16px; border-radius: 12px;
+    background: rgba(0,0,0,0.3); border: 1px solid rgba(139,92,246,0.12);
+  }
+  .intent-q  { font-size: 11px; color: #c4b5fd; margin-bottom: 6px; }
+  .intent-a  { font-size: 12px; color: #10b981; font-weight: 600; }
+  .intent-label { font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #475569; margin-bottom: 4px; }
 
   /* ══ FOOTER ══ */
   .footer {
@@ -387,13 +384,6 @@
     display: inline-flex; align-items: center; gap: 8px;
     font-size: 13px; font-weight: 700; color: var(--accent2);
     margin-bottom: 8px;
-  }
-
-  /* ══ 연결선 SVG ══ */
-  .connector-row {
-    display: grid; grid-template-columns: 1fr 1fr 1fr;
-    height: 48px; margin: 0;
-    position: relative;
   }
 </style>
 </head>
@@ -411,8 +401,9 @@
       <span class="dot"></span>
       Obsidian AI · LangGraph Router
     </div>
-    <h1>세 가지 대화<br>하나의 흐름</h1>
-    <p>모든 질문을 파일 검색으로 처리하던 구조를 개선 — LLM이 직접 맥락을 판단해 <strong>RAG · Chat · Followup</strong> 세 경로로 분기합니다.</p>
+    <h1>네 가지 대화<br>하나의 흐름</h1>
+    <p>모든 질문을 파일 검색으로 처리하던 구조를 개선 — LLM이 직접 맥락을 판단해 <strong>RAG · Chat · Followup · QA Gen</strong> 네 경로로 분기합니다.</p>
+    <div class="version-badge">v8.3 · Gemma3:12b · forced-quote · key_facts</div>
   </div>
 
   <!-- ── ROUTER FLOW ── -->
@@ -438,32 +429,30 @@
     <div class="node-router">
       <div class="label">Node 0</div>
       <div class="title">🔀 Router</div>
-      <div class="sub">LLM이 대화 맥락 분석 → 경로 결정</div>
+      <div class="sub">LLM이 대화 맥락 분석 → 경로 결정 + 폴백 룰 적용</div>
     </div>
 
     <!-- 분기 연결선 (SVG) -->
-    <div style="position:relative;height:52px;margin:0 0 0;">
-      <svg width="100%" height="52" style="position:absolute;top:0;left:0">
-        <defs>
-          <marker id="arr" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto">
-            <path d="M0,0 L0,6 L6,3 z" fill="rgba(139,92,246,0.5)"/>
-          </marker>
-        </defs>
-        <!-- 중앙선 (RAG) -->
-        <line x1="50%" y1="0" x2="50%" y2="52" stroke="rgba(139,92,246,0.4)" stroke-width="1.5" stroke-dasharray="4,3"/>
-        <!-- 왼쪽선 (RAG) -->
-        <path d="M50%,0 Q17%,0 17%,52" stroke="rgba(139,92,246,0.35)" stroke-width="1.5" fill="none" stroke-dasharray="4,3"/>
-        <!-- 오른쪽선 (followup) -->
-        <path d="M50%,0 Q83%,0 83%,52" stroke="rgba(6,182,212,0.35)" stroke-width="1.5" fill="none" stroke-dasharray="4,3"/>
+    <div style="position:relative;height:56px;margin:0 0 0;">
+      <svg width="100%" height="56" style="position:absolute;top:0;left:0">
+        <!-- RAG 왼쪽 -->
+        <path d="M50%,0 Q12%,0 12%,56" stroke="rgba(139,92,246,0.4)" stroke-width="1.5" fill="none" stroke-dasharray="4,3"/>
+        <!-- Chat 중앙 왼쪽 -->
+        <path d="M50%,0 Q37%,0 37%,56" stroke="rgba(16,185,129,0.35)" stroke-width="1.5" fill="none" stroke-dasharray="4,3"/>
+        <!-- Followup 중앙 오른쪽 -->
+        <path d="M50%,0 Q63%,0 63%,56" stroke="rgba(6,182,212,0.35)" stroke-width="1.5" fill="none" stroke-dasharray="4,3"/>
+        <!-- QA Gen 오른쪽 -->
+        <path d="M50%,0 Q88%,0 88%,56" stroke="rgba(251,146,60,0.4)" stroke-width="1.5" fill="none" stroke-dasharray="4,3"/>
       </svg>
       <!-- 라벨 -->
-      <span style="position:absolute;left:9%;top:50%;transform:translateY(-50%);font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#a78bfa;background:rgba(109,40,217,0.15);border:1px solid rgba(139,92,246,0.3);padding:2px 8px;border-radius:999px;white-space:nowrap">rag</span>
-      <span style="position:absolute;left:50%;transform:translate(-50%,-50%);top:50%;font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#10b981;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.25);padding:2px 8px;border-radius:999px;white-space:nowrap">chat</span>
-      <span style="position:absolute;right:9%;top:50%;transform:translateY(-50%);font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#06b6d4;background:rgba(6,182,212,0.1);border:1px solid rgba(6,182,212,0.25);padding:2px 8px;border-radius:999px;white-space:nowrap">followup</span>
+      <span style="position:absolute;left:4%;top:50%;transform:translateY(-50%);font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#a78bfa;background:rgba(109,40,217,0.15);border:1px solid rgba(139,92,246,0.3);padding:2px 7px;border-radius:999px;white-space:nowrap">rag</span>
+      <span style="position:absolute;left:28%;top:50%;transform:translateY(-50%);font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#10b981;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.25);padding:2px 7px;border-radius:999px;white-space:nowrap">chat</span>
+      <span style="position:absolute;left:52%;top:50%;transform:translateY(-50%);font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#06b6d4;background:rgba(6,182,212,0.1);border:1px solid rgba(6,182,212,0.25);padding:2px 7px;border-radius:999px;white-space:nowrap">followup</span>
+      <span style="position:absolute;right:3%;top:50%;transform:translateY(-50%);font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#fb923c;background:rgba(251,146,60,0.12);border:1px solid rgba(251,146,60,0.3);padding:2px 7px;border-radius:999px;white-space:nowrap">qa_gen</span>
     </div>
 
-    <!-- 세 카드 -->
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">
+    <!-- 네 카드 -->
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px">
 
       <!-- RAG -->
       <div class="mode-card rag">
@@ -472,10 +461,13 @@
         <div class="mode-desc">로컬 파일을 새로 찾아야 하는 질문. 벡터 검색 전 파이프라인 실행.</div>
         <div class="pipeline">
           <div class="pipe-step"><div class="pipe-num">1</div>Intent — 키워드 추출</div>
-          <div class="pipe-step"><div class="pipe-num">2</div>Search — 벡터 DB 검색</div>
-          <div class="pipe-step"><div class="pipe-num">3</div>Scan — 파일 내용 확인</div>
-          <div class="pipe-step"><div class="pipe-num">4</div>Select — 관련 파일 선택</div>
-          <div class="pipe-step"><div class="pipe-num">5</div>Generate — LLM 답변</div>
+          <div class="pipe-step"><div class="pipe-num">2</div>Search — 벡터 DB</div>
+          <div class="pipe-step"><div class="pipe-num">3</div>Scan — 파일 확인</div>
+          <div class="pipe-step"><div class="pipe-num">4</div>Select — 파일 선택</div>
+          <div class="pipe-step"><div class="pipe-num">5</div>Generate — 답변</div>
+        </div>
+        <div style="margin-top:10px;padding:8px;border-radius:8px;background:rgba(139,92,246,0.07);border:1px solid rgba(139,92,246,0.18);font-size:10px;color:#a78bfa">
+          📌 key_facts 강제 인용 추출
         </div>
       </div>
 
@@ -498,17 +490,71 @@
       <div class="mode-card followup">
         <div class="mode-badge followup"><span class="mode-icon">🔗</span> Followup</div>
         <div class="mode-title">후속 질문 모드</div>
-        <div class="mode-desc">이전 턴에서 찾은 파일에 대한 추가 질문. 파일 재검색 없음.</div>
+        <div class="mode-desc">이전 턴 파일에 대한 추가 질문. 파일 재검색 없이 이전 답변 컨텍스트 재사용.</div>
         <div class="pipeline">
           <div class="pipe-step" style="background:rgba(6,182,212,0.08);border-color:rgba(6,182,212,0.18)"><div class="pipe-num" style="background:rgba(6,182,212,0.2);color:#06b6d4">↩</div>이전 파일 재사용</div>
-          <div class="pipe-step" style="background:rgba(6,182,212,0.08);border-color:rgba(6,182,212,0.18)"><div class="pipe-num" style="background:rgba(6,182,212,0.2);color:#06b6d4">5</div>Generate — LLM 답변</div>
+          <div class="pipe-step" style="background:rgba(6,182,212,0.08);border-color:rgba(6,182,212,0.18)"><div class="pipe-num" style="background:rgba(6,182,212,0.2);color:#06b6d4">📜</div>이전 Q&amp;A 컨텍스트 주입</div>
+          <div class="pipe-step" style="background:rgba(6,182,212,0.08);border-color:rgba(6,182,212,0.18)"><div class="pipe-num" style="background:rgba(6,182,212,0.2);color:#06b6d4">5</div>Generate — 답변</div>
           <div class="pipe-step" style="background:rgba(6,182,212,0.04);border-color:rgba(6,182,212,0.08);opacity:0.5"><div class="pipe-num" style="background:rgba(100,116,139,0.2);color:#475569">—</div><s style="color:#334155">벡터 검색 없음</s></div>
         </div>
         <div style="margin-top:10px;padding:8px;border-radius:8px;background:rgba(6,182,212,0.06);border:1px solid rgba(6,182,212,0.18);font-size:10px;color:#06b6d4">
-          🔗 이전 matched_sources 재사용
+          🔗 [이전 대화 참고] 앞에 명시
         </div>
       </div>
 
+      <!-- QA GEN -->
+      <div class="mode-card qa-gen">
+        <div class="mode-badge qa-gen"><span class="mode-icon">🧪</span> QA Gen</div>
+        <div class="mode-title">QA 생성 모드</div>
+        <div class="mode-desc">파일 기반 Q&amp;A 쌍 자동 생성. 테스트셋 구축 / 학습 데이터 생성.</div>
+        <div class="pipeline">
+          <div class="pipe-step" style="background:rgba(251,146,60,0.08);border-color:rgba(251,146,60,0.18)"><div class="pipe-num" style="background:rgba(251,146,60,0.25);color:#fb923c">1</div>파일 선택 / 청킹</div>
+          <div class="pipe-step" style="background:rgba(251,146,60,0.08);border-color:rgba(251,146,60,0.18)"><div class="pipe-num" style="background:rgba(251,146,60,0.25);color:#fb923c">2</div>Q&amp;A 쌍 LLM 생성</div>
+          <div class="pipe-step" style="background:rgba(251,146,60,0.08);border-color:rgba(251,146,60,0.18)"><div class="pipe-num" style="background:rgba(251,146,60,0.25);color:#fb923c">3</div>결과 스트리밍 출력</div>
+          <div class="pipe-step" style="background:rgba(251,146,60,0.04);border-color:rgba(251,146,60,0.08);opacity:0.5"><div class="pipe-num" style="background:rgba(100,116,139,0.2);color:#475569">—</div><s style="color:#334155">벡터 검색 없음</s></div>
+        </div>
+        <div style="margin-top:10px;padding:8px;border-radius:8px;background:rgba(251,146,60,0.07);border:1px solid rgba(251,146,60,0.2);font-size:10px;color:#fb923c">
+          📤 qa_generating / qa_result 이벤트
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── INTENT 메시지 스타일 ── -->
+  <div class="section-label">
+    <div class="line"></div>
+    <span>의도 메시지 스타일</span>
+    <div class="line"></div>
+  </div>
+
+  <div class="intent-examples">
+    <div class="intent-title">🗣️ 의도메시지 — "~해드릴게요 / ~찾아볼게요 / ~확인해드릴게요" 형식</div>
+    <div class="intent-grid">
+      <div class="intent-item">
+        <div class="intent-label">질문</div>
+        <div class="intent-q">삼성전자 재생에너지 전환율이랑 탄소중립 목표 알려줘</div>
+        <div class="intent-label" style="margin-top:8px">의도메시지</div>
+        <div class="intent-a">삼성전자 탄소중립 목표와 재생에너지 전환율을 문서에서 바로 확인해드릴게요.</div>
+      </div>
+      <div class="intent-item">
+        <div class="intent-label">질문</div>
+        <div class="intent-q">계약서에서 위약금 조항 찾아줘</div>
+        <div class="intent-label" style="margin-top:8px">의도메시지</div>
+        <div class="intent-a">계약서에서 위약금 관련 조항을 찾아볼게요.</div>
+      </div>
+      <div class="intent-item">
+        <div class="intent-label">질문</div>
+        <div class="intent-q">2026년 3월 FAO 세계식량가격지수 알려줘</div>
+        <div class="intent-label" style="margin-top:8px">의도메시지</div>
+        <div class="intent-a">2026년 3월 FAO 세계식량가격지수를 문서에서 찾아드릴게요.</div>
+      </div>
+      <div class="intent-item">
+        <div class="intent-label">질문</div>
+        <div class="intent-q">이 보고서 Q&A 만들어줘</div>
+        <div class="intent-label" style="margin-top:8px">의도메시지</div>
+        <div class="intent-a">보고서 기반으로 Q&amp;A 쌍을 생성해드릴게요.</div>
+      </div>
     </div>
   </div>
 
@@ -531,12 +577,12 @@
         </div>
       </div>
       <div class="chat-bubble user">삼성 ESG 보고서에서 탄소 감축 목표 알려줘</div>
-      <div class="route-tag rag">🔍 rag — 파일 새로 검색</div>
+      <div class="route-tag rag">🔍 rag — 파일 새로 검색 + key_facts 추출</div>
       <div class="chat-bubble ai">삼성전자는 2030년까지 탄소 배출을 42% 감축하는 목표를 수립했습니다. [출처1]</div>
       <div style="height:12px"></div>
-      <div class="chat-bubble user">거기서 2040년 Net Zero 계획은?</div>
-      <div class="route-tag followup">🔗 followup — 이전 파일 재사용</div>
-      <div class="chat-bubble ai">동 보고서에서 2040년 Net Zero 달성을 위해 재생에너지 100% 전환을 명시하고 있습니다. [출처1]</div>
+      <div class="chat-bubble user">쉽게 설명해줘</div>
+      <div class="route-tag followup">🔗 followup — 이전 Q&amp;A 컨텍스트 주입</div>
+      <div class="chat-bubble ai">쉽게 말하면, 삼성전자가 2030년까지 탄소를 지금보다 절반 가까이 줄이겠다는 목표예요. [출처1 재사용]</div>
     </div>
 
     <!-- 시나리오 2 -->
@@ -560,19 +606,20 @@
     <!-- 시나리오 3 -->
     <div class="scenario-card">
       <div class="scenario-header">
-        <div class="scenario-icon chat">✨</div>
+        <div class="scenario-icon qa-gen">🧪</div>
         <div>
-          <div class="scenario-title">순수 대화</div>
-          <div class="scenario-sub">처음부터 Chat 모드</div>
+          <div class="scenario-title">QA 쌍 자동 생성</div>
+          <div class="scenario-sub">qa_gen 모드</div>
         </div>
       </div>
-      <div class="chat-bubble user">RAG가 뭐야?</div>
-      <div class="route-tag chat">💬 chat — 파일 검색 없음</div>
-      <div class="chat-bubble ai">RAG(Retrieval-Augmented Generation)는 외부 문서를 검색해 LLM 답변 품질을 높이는 기법입니다. 파일을 컨텍스트로 주입해 환각(hallucination)을 줄이는 것이 핵심입니다.</div>
-      <div style="height:12px"></div>
-      <div class="chat-bubble user">우리 시스템에서는 어떻게 써?</div>
-      <div class="route-tag followup">🔗 followup — 대화 맥락 유지</div>
-      <div class="chat-bubble ai">이 시스템에서는 ChromaDB 벡터 검색으로 관련 파일을 찾고, 파일 전체 텍스트를 Ollama에 컨텍스트로 전달합니다.</div>
+      <div class="chat-bubble user">이 ESG 보고서로 Q&A 테스트셋 만들어줘</div>
+      <div class="route-tag qa-gen">🧪 qa_gen — Q&amp;A 자동 생성</div>
+      <div class="chat-bubble ai" style="font-size:11px">
+        <strong style="color:#fb923c">Q1.</strong> 삼성전자의 2030년 탄소 감축 목표는?<br>
+        <strong style="color:#94a3b8">A1.</strong> 42% 감축 (2018년 대비)<br><br>
+        <strong style="color:#fb923c">Q2.</strong> 재생에너지 전환 목표 연도는?<br>
+        <strong style="color:#94a3b8">A2.</strong> 2050년 100% 전환 목표
+      </div>
     </div>
 
   </div>
@@ -602,8 +649,8 @@
           <td>연결 확인, 모델명</td>
         </tr>
         <tr>
-          <td><span class="ev-type">route</span> <span class="ev-new">new</span></td>
-          <td><code>mode: "rag"|"chat"|"followup"</code></td>
+          <td><span class="ev-type">route</span></td>
+          <td><code>mode: "rag"|"chat"|"followup"|"qa_gen"</code></td>
           <td><div class="ev-mode"><span class="ev-badge all">all</span></div></td>
           <td>라우터 판단 결과. 프론트는 이걸 보고 UI 분기</td>
         </tr>
@@ -611,7 +658,7 @@
           <td><span class="ev-type">intent</span></td>
           <td><code>message, file_keywords, detail_keywords</code></td>
           <td><div class="ev-mode"><span class="ev-badge rag">rag</span><span class="ev-badge followup">followup</span></div></td>
-          <td>의도 파악 결과 + 검색 키워드</td>
+          <td>의도 파악 결과 + 검색 키워드. message는 "~찾아볼게요" 형식</td>
         </tr>
         <tr>
           <td><span class="ev-type">candidates</span></td>
@@ -637,11 +684,35 @@
           <td><div class="ev-mode"><span class="ev-badge rag">rag</span><span class="ev-badge followup">followup</span></div></td>
           <td>최종 답변에 쓸 파일 선택 완료</td>
         </tr>
+        <tr style="background:rgba(16,185,129,0.04)">
+          <td><span class="ev-type">key_facts</span> <span class="ev-new">new</span></td>
+          <td><code>facts: ["문서에서 직접 추출한 수치 문장", ...]</code></td>
+          <td><div class="ev-mode"><span class="ev-badge rag">rag</span></div></td>
+          <td>Generate 직전 문서에서 숫자·수치 포함 문장 추출. LLM에게 강제 인용 제공. followup에서는 생략.</td>
+        </tr>
+        <tr style="background:rgba(16,185,129,0.04)">
+          <td><span class="ev-type">generating</span> <span class="ev-new">new</span></td>
+          <td><code>(페이로드 없음)</code></td>
+          <td><div class="ev-mode"><span class="ev-badge rag">rag</span><span class="ev-badge followup">followup</span></div></td>
+          <td>첫 token 전 "답변 생성 중…" 스피너 표시용 이벤트</td>
+        </tr>
         <tr>
           <td><span class="ev-type">token</span></td>
           <td><code>text: "..."</code></td>
           <td><div class="ev-mode"><span class="ev-badge all">all</span></div></td>
-          <td>LLM 스트리밍 토큰 (실시간 출력)</td>
+          <td>LLM 스트리밍 토큰 (실시간 출력). 첫 token 수신 시 generating 스피너 해제.</td>
+        </tr>
+        <tr style="background:rgba(251,146,60,0.04)">
+          <td><span class="ev-type">qa_generating</span> <span class="ev-new">new</span></td>
+          <td><code>index, total</code></td>
+          <td><div class="ev-mode"><span class="ev-badge qa-gen">qa_gen</span></div></td>
+          <td>QA 쌍 생성 진행 상황 (n번째 / 전체)</td>
+        </tr>
+        <tr style="background:rgba(251,146,60,0.04)">
+          <td><span class="ev-type">qa_result</span> <span class="ev-new">new</span></td>
+          <td><code>pairs: [{q, a, source_chunk}, ...]</code></td>
+          <td><div class="ev-mode"><span class="ev-badge qa-gen">qa_gen</span></div></td>
+          <td>생성된 Q&amp;A 쌍 배열 전달</td>
         </tr>
         <tr>
           <td><span class="ev-type">done</span></td>
@@ -659,10 +730,39 @@
     </table>
   </div>
 
+  <!-- ── FOLLWUP 폴백 룰 ── -->
+  <div class="section-label">
+    <div class="line"></div>
+    <span>Followup 폴백 룰</span>
+    <div class="line"></div>
+  </div>
+
+  <div style="background:var(--card);border:1px solid rgba(6,182,212,0.25);border-radius:20px;padding:32px;margin-bottom:64px;backdrop-filter:blur(16px)">
+    <div style="font-size:13px;font-weight:800;color:#06b6d4;margin-bottom:16px">🔗 LLM 판단 실패 시 코드 폴백 — 다음 조건 전부 충족 시 강제 followup 전환</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+      <div style="padding:14px;border-radius:12px;background:rgba(6,182,212,0.06);border:1px solid rgba(6,182,212,0.18)">
+        <div style="font-size:10px;font-weight:800;color:#06b6d4;margin-bottom:6px;text-transform:uppercase;letter-spacing:.1em">조건 1</div>
+        <div style="font-size:12px;color:#e2e8f0">Router가 <code>rag</code>로 판단했지만<br><code>prev_sources</code>가 존재</div>
+      </div>
+      <div style="padding:14px;border-radius:12px;background:rgba(6,182,212,0.06);border:1px solid rgba(6,182,212,0.18)">
+        <div style="font-size:10px;font-weight:800;color:#06b6d4;margin-bottom:6px;text-transform:uppercase;letter-spacing:.1em">조건 2</div>
+        <div style="font-size:12px;color:#e2e8f0">질문 길이 ≤ 30자 AND<br>트리거 키워드 포함<br><span style="font-size:10px;color:#475569">쉽게·다시·요약·설명해·자세히…</span></div>
+      </div>
+      <div style="padding:14px;border-radius:12px;background:rgba(6,182,212,0.06);border:1px solid rgba(6,182,212,0.18)">
+        <div style="font-size:10px;font-weight:800;color:#06b6d4;margin-bottom:6px;text-transform:uppercase;letter-spacing:.1em">조건 3</div>
+        <div style="font-size:12px;color:#e2e8f0">새로운 명사(4자 이상)가<br>질문에 없음<br><span style="font-size:10px;color:#475569">= 새 파일 검색 의도 없음</span></div>
+      </div>
+    </div>
+    <div style="margin-top:16px;padding:12px 16px;border-radius:10px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.05);font-family:'JetBrains Mono',monospace;font-size:11px;color:#64748b">
+      <span style="color:#a78bfa">if</span> route == <span style="color:#10b981">"rag"</span> <span style="color:#a78bfa">and</span> prev_sources <span style="color:#a78bfa">and</span> q_len &lt;= 30 <span style="color:#a78bfa">and</span> has_trigger <span style="color:#a78bfa">and</span> len(new_nouns) == 0:<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;route = <span style="color:#06b6d4">"followup"</span>
+    </div>
+  </div>
+
   <!-- ── FOOTER ── -->
   <div class="footer">
     <div class="team">✦ Team Chainers</div>
-    <p>Obsidian AI — LangGraph Router Flow · 2026</p>
+    <p>Obsidian AI — LangGraph Router Flow v8.3 · 2026</p>
   </div>
 
 </div>

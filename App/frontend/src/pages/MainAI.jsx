@@ -113,6 +113,9 @@ const makeTurn = (id, query) => ({
   qaValid: false,
   qaIssues: [],
   qaSources: [],
+  // 보안 모드: SecurityCritic 차단/마스킹 결과
+  blocked: null,    // { stage: 'stream'|'final', reason, pii_types }
+  security: null,   // { masked: bool, pii_types, reason }
 });
 
 // ── AI 아바타 ─────────────────────────────────────────────────────
@@ -516,6 +519,8 @@ function TurnView({ turn, isLatest, onClickSource, onClickFile }) {
     qaValid,
     qaIssues,
     qaSources,
+    blocked,
+    security,
   } = turn;
   const isChatMode = route === "chat";
   const isQaMode = route === "qa_gen";
@@ -966,8 +971,59 @@ function TurnView({ turn, isLatest, onClickSource, onClickFile }) {
               </div>
             )}
 
+            {/* 보안 차단 안내 */}
+            {blocked && (
+              <div
+                style={{
+                  padding: "10px 14px",
+                  marginBottom: 6,
+                  background: "rgba(127,29,29,0.18)",
+                  border: "1px solid rgba(248,113,113,0.4)",
+                  borderRadius: 10,
+                  fontSize: 13,
+                  color: "#fecaca",
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: 8,
+                  lineHeight: 1.6,
+                }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 18, color: "#f87171", marginTop: 1, fontVariationSettings: '"FILL" 1' }}>shield</span>
+                <div>
+                  <div style={{ fontWeight: 600, marginBottom: 2 }}>
+                    보안 모드: 응답이 차단되었습니다
+                  </div>
+                  <div style={{ opacity: 0.9 }}>{blocked.reason}</div>
+                  {blocked.pii_types && blocked.pii_types.length > 0 && (
+                    <div style={{ marginTop: 4, fontSize: 11, opacity: 0.7 }}>
+                      탐지: {blocked.pii_types.join(", ")} · 단계: {blocked.stage}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            {/* 보안 마스킹 안내 */}
+            {security?.masked && !blocked && (
+              <div
+                style={{
+                  padding: "8px 12px",
+                  marginBottom: 6,
+                  background: "rgba(120,53,15,0.18)",
+                  border: "1px solid rgba(251,191,36,0.35)",
+                  borderRadius: 10,
+                  fontSize: 12,
+                  color: "#fde68a",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 16, color: "#fbbf24", fontVariationSettings: '"FILL" 1' }}>shield</span>
+                <span>보안 모드: 개인정보({(security.pii_types || []).join(", ")})가 마스킹되었습니다.</span>
+              </div>
+            )}
             {/* 답변 (qa_gen이 아닌 경우만 표시) */}
-            {answer && !isQaMode && (
+            {answer && !isQaMode && !blocked && (
               <div
                 style={{
                   padding: "13px 16px",
@@ -1425,6 +1481,8 @@ export default function MainAI() {
   const [selectedScanChunks, setSelectedScanChunks] = useState({});
 
   const [topK, setTopK] = useState(5);
+  // 보안 모드 — 활성 시 LLM 응답이 SecurityCritic 통과 후 송출
+  const [securityMode, setSecurityMode] = useState(false);
   const abortRef = useRef(null);
 
   // home animation
@@ -1560,7 +1618,7 @@ export default function MainAI() {
           method: "POST",
           signal: controller.signal,
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query: q, topk: topK, thread_id: tid }),
+          body: JSON.stringify({ query: q, topk: topK, thread_id: tid, secure: securityMode }),
         });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 
@@ -1678,7 +1736,19 @@ export default function MainAI() {
                   answer: ev.answer || t.answer,
                   done: true,
                   streaming: false,
+                  security: ev.security || t.security,
                 }));
+                break;
+              case "blocked":
+                patchTurn(turnId, {
+                  blocked: {
+                    stage: ev.stage || "final",
+                    reason: ev.reason || "보안 정책상 응답이 차단되었습니다.",
+                    pii_types: ev.pii_types || [],
+                  },
+                  streaming: false,
+                  done: true,
+                });
                 break;
               case "error":
                 patchTurn(turnId, {
@@ -1698,7 +1768,7 @@ export default function MainAI() {
         else patchTurn(turnId, { streaming: false });
       }
     },
-    [topK, patchTurn, patchTurnFn],
+    [topK, patchTurn, patchTurnFn, securityMode],
   );
 
   // ── doSearch ────────────────────────────────────────────────────
@@ -1923,6 +1993,16 @@ export default function MainAI() {
                       >
                         <span className="material-symbols-outlined text-[20px]">
                           mic
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSecurityMode((v) => !v)}
+                        title={securityMode ? "보안 모드 켜짐: LLM 응답이 SecurityCritic 통과 후 송출됨" : "보안 모드 꺼짐"}
+                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border backdrop-blur-md transition-colors ${securityMode ? "border-red-400/40 bg-red-950/40 text-red-300 shadow-[0_0_18px_rgba(248,113,113,0.28)]" : "border-violet-300/18 bg-violet-950/35 text-violet-200/80 hover:text-red-300"}`}
+                      >
+                        <span className="material-symbols-outlined text-[20px]" style={securityMode ? { fontVariationSettings: '"FILL" 1' } : {}}>
+                          shield
                         </span>
                       </button>
                     </div>
@@ -2273,6 +2353,31 @@ export default function MainAI() {
                           }}
                         >
                           mic
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSecurityMode((v) => !v)}
+                        title={securityMode ? "보안 모드 켜짐: LLM 응답이 SecurityCritic 통과 후 송출됨" : "보안 모드 꺼짐"}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          cursor: "pointer",
+                          padding: 0,
+                          flexShrink: 0,
+                          color: securityMode ? "#f87171" : "rgba(139,92,246,0.3)",
+                          transition: "color 0.2s",
+                        }}
+                      >
+                        <span
+                          className="material-symbols-outlined"
+                          style={{
+                            fontSize: 16,
+                            fontVariationSettings: securityMode ? '"FILL" 1' : '"FILL" 0',
+                            filter: securityMode ? "drop-shadow(0 0 6px rgba(248,113,113,0.6))" : "none",
+                          }}
+                        >
+                          shield
                         </span>
                       </button>
                     </div>
