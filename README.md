@@ -1,4 +1,5 @@
 # KDT Project (2026)
+
 - Team : Chainers
 - Korea IT Academy (KDT, Ministry of Employment and Labor)
 - Independent Researchers, Republic of Korea
@@ -19,22 +20,22 @@ Young-Sang Song, Hwon Lee, Ju Yeon Jang, Young Jin Hwang, Tae Yoon Lee, Jeong Hy
 Team Chainers, Korea IT Academy (KDT, Ministry of Employment and Labor), Independent Researchers.
 Zenodo, May 2026. https://doi.org/10.5281/zenodo.20034370
 
-| 항목 | 값 |
-|------|-----|
+| 항목                                        | 값                                                                   |
+| ------------------------------------------- | -------------------------------------------------------------------- |
 | **Concept DOI** (인용 권장, 항상 최신 버전) | [`10.5281/zenodo.20034370`](https://doi.org/10.5281/zenodo.20034370) |
-| **Latest Record URL** | https://zenodo.org/records/20046344 |
-| **현재 라이선스** | CC BY 4.0 (논문) |
+| **Latest Record URL**                       | https://zenodo.org/records/20046344                                  |
+| **현재 라이선스**                           | CC BY 4.0 (논문)                                                     |
 
 ### Versions
 
-| 항목 | **v1.1** (latest) | v1.0 |
-|------|-------------------|------|
+| 항목            | **v1.1** (latest)                                                    | v1.0                                                                 |
+| --------------- | -------------------------------------------------------------------- | -------------------------------------------------------------------- |
 | **Version DOI** | [`10.5281/zenodo.20046344`](https://doi.org/10.5281/zenodo.20046344) | [`10.5281/zenodo.20034371`](https://doi.org/10.5281/zenodo.20034371) |
-| **Record URL** | https://zenodo.org/records/20046344 | https://zenodo.org/records/20034371 |
-| **PDF (영문)** | `publication/paper/제출용/Tri-CHEF_paper_v1.1.pdf` (12 pp) | `publication/paper/Tri-CHEF_paper_v1-9.pdf` (12 pp) |
-| **PDF (국문)** | `publication/paper/제출용/Tri-CHEF_paper_Korean_v1.1.pdf` (13 pp) | `publication/paper/Tri-CHEF_paper_Korean_v1-9.pdf` (13 pp) |
-| **게재일** | 2026-05-06 | 2026-05-06 |
-| **비고** | 모든 페이지 푸터에 DOI/라이선스 표시 | 최초 게재 |
+| **Record URL**  | https://zenodo.org/records/20046344                                  | https://zenodo.org/records/20034371                                  |
+| **PDF (영문)**  | `publication/paper/제출용/Tri-CHEF_paper_v1.1.pdf` (12 pp)           | `publication/paper/Tri-CHEF_paper.pdf` (12 pp)                       |
+| **PDF (국문)**  | `publication/paper/제출용/Tri-CHEF_paper_Korean_v1.1.pdf` (13 pp)    | `publication/paper/Tri-CHEF_paper_Korean.pdf` (13 pp)                |
+| **게재일**      | 2026-05-06                                                           | 2026-05-06                                                           |
+| **비고**        | 모든 페이지 푸터에 DOI/라이선스 표시                                 | 최초 게재                                                            |
 
 > 본문 콘텐츠와 그림/표 레이아웃, 페이지 분할은 v1.0 = v1.1 바이트 단위로 동일합니다 (v1.1은 v1.0 PDF에 페이지 푸터만 오버레이).
 
@@ -56,7 +57,7 @@ Zenodo, May 2026. https://doi.org/10.5281/zenodo.20034370
 
 ### Citation (APA)
 
-> Song, Y.-S., Lee, H., Jang, J. Y., Hwang, Y. J., Lee, T. Y., & Gim, J. H. (2026). *Tri-CHEF: Complex-Hermitian Embedding Fusion for Korean Multimodal Retrieval* (Version 1.1) [Preprint]. Zenodo. https://doi.org/10.5281/zenodo.20034370
+> Song, Y.-S., Lee, H., Jang, J. Y., Hwang, Y. J., Lee, T. Y., & Gim, J. H. (2026). _Tri-CHEF: Complex-Hermitian Embedding Fusion for Korean Multimodal Retrieval_ (Version 1.1) [Preprint]. Zenodo. https://doi.org/10.5281/zenodo.20034370
 
 > 인용 권장: 위 BibTeX/APA 모두 **Concept DOI** (`10.5281/zenodo.20034370`) 를 사용합니다. 이 DOI는 항상 최신 버전으로 자동 리졸브되므로 향후 v1.2, v2.0 등 추가 게재 시에도 별도 수정이 필요 없습니다. 특정 버전을 못박을 때만 Version DOI(`10.5281/zenodo.20046344` 등)를 사용하세요.
 
@@ -440,11 +441,11 @@ DB_insight/
 
 Please contact team leader, e-mail : sjowun@gmail.com.
 
-| 역할            | 이름                     | 연락처                                      |
-| --------------- | ------------------------ | ------------------------------------------- |
-| **Team Leader** | 송영상 (Young-Sang SONG) | Project Manager                              |
-| Team Member     | 이훤 (Hwon LEE)          | Technical Master                            |
-| Team Member     | 장주연 (Ju Yeon JANG)    | Technical Support & Security                |
-| Team Member     | 황영진 (Young Jin HWANG) | Technical Support                           |
-| Team Member     | 이태윤 (Tae Yoon LEE)    | Technical Support                           |
-| Team Member     | 김정혜 (Jeong Hye GIM)   | Technical Support                           |
+| 역할            | 이름                     | 연락처                       |
+| --------------- | ------------------------ | ---------------------------- |
+| **Team Leader** | 송영상 (Young-Sang SONG) | Project Manager              |
+| Team Member     | 이훤 (Hwon LEE)          | Technical Master             |
+| Team Member     | 장주연 (Ju Yeon JANG)    | Technical Support & Security |
+| Team Member     | 황영진 (Young Jin HWANG) | Technical Support            |
+| Team Member     | 이태윤 (Tae Yoon LEE)    | Technical Support            |
+| Team Member     | 김정혜 (Jeong Hye GIM)   | Technical Support            |
