@@ -1551,7 +1551,15 @@ export default function DataIndexing() {
   const [jobStatus, setJobStatus] = useState(null);
   const [jobError, setJobError] = useState("");
   const [modalVisible, setModalVisible] = useState(false);
+  const [autoModalEnabled, setAutoModalEnabled] = useState(() => {
+    try {
+      return localStorage.getItem("indexing:auto-modal-enabled") !== "0";
+    } catch {
+      return true;
+    }
+  });
   const pollRef = useRef(null);
+  const modalOpenTimerRef = useRef(null);
 
   const stopPolling = () => {
     // setInterval 폴링(레거시) 또는 EventSource 모두 정리.
@@ -1566,6 +1574,45 @@ export default function DataIndexing() {
       pollRef.current = null;
     }
   };
+
+  const scheduleModalOpen = useCallback(
+    (delayMs = 260) => {
+      if (!autoModalEnabled) return;
+      if (modalOpenTimerRef.current) {
+        clearTimeout(modalOpenTimerRef.current);
+        modalOpenTimerRef.current = null;
+      }
+      modalOpenTimerRef.current = setTimeout(() => {
+        setModalVisible(true);
+        modalOpenTimerRef.current = null;
+      }, delayMs);
+    },
+    [autoModalEnabled],
+  );
+
+  const hideProgressModalByUser = useCallback(() => {
+    if (modalOpenTimerRef.current) {
+      clearTimeout(modalOpenTimerRef.current);
+      modalOpenTimerRef.current = null;
+    }
+    setAutoModalEnabled(false);
+    try {
+      localStorage.setItem("indexing:auto-modal-enabled", "0");
+    } catch {}
+    setModalVisible(false);
+  }, []);
+
+  const showProgressModalByUser = useCallback(() => {
+    if (modalOpenTimerRef.current) {
+      clearTimeout(modalOpenTimerRef.current);
+      modalOpenTimerRef.current = null;
+    }
+    setAutoModalEnabled(true);
+    try {
+      localStorage.setItem("indexing:auto-modal-enabled", "1");
+    } catch {}
+    setModalVisible(true);
+  }, []);
 
   // ── 영속화: 마운트 시 이전 선택 복원 ──────────────────────────────────
   useEffect(() => {
@@ -1611,7 +1658,7 @@ export default function DataIndexing() {
   // 돌아왔을 때, 현재 진행 상황을 즉시 확인할 수 있도록 보장.
   useEffect(() => {
     if (tab === "indexing" && indexing && !modalVisible) {
-      setModalVisible(true);
+      scheduleModalOpen(220);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
@@ -1717,7 +1764,7 @@ export default function DataIndexing() {
     setIndexing(true);
     setJobError("");
     setJobStatus(null);
-    setModalVisible(true);
+    scheduleModalOpen(320);
     try {
       const { job_id } = await startIndexing([...checkedPaths]);
       setJobId(job_id);
@@ -1750,7 +1797,7 @@ export default function DataIndexing() {
           setJobId(savedJobId);
           setJobStatus(status);
           setIndexing(true);
-          setModalVisible(true);
+          scheduleModalOpen(240);
           attachJobStream(savedJobId);
         } else {
           // 종료/존재X → localStorage 정리
@@ -1771,6 +1818,10 @@ export default function DataIndexing() {
   // pollRef 청소(stopPolling) — backend 에 /stop 요청 보내지 않음 → job 살아있음.
   useEffect(() => {
     return () => {
+      if (modalOpenTimerRef.current) {
+        clearTimeout(modalOpenTimerRef.current);
+        modalOpenTimerRef.current = null;
+      }
       stopPolling();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1781,13 +1832,6 @@ export default function DataIndexing() {
     : null;
 
   const selectedCount = checkedPaths.size;
-
-  const listSectionTitle =
-    tab === "indexing"
-      ? "리소스 탐색기"
-      : tab === "sources"
-        ? "연결된 소스"
-        : "저장소";
 
   const navItems = useMemo(
     () => [
@@ -2022,7 +2066,7 @@ export default function DataIndexing() {
         {jobStatus ? (
           <button
             type="button"
-            onClick={() => setModalVisible(true)}
+            onClick={showProgressModalByUser}
             className={`inline-flex h-10 items-center gap-1.5 rounded-full px-4 text-[12px] font-semibold uppercase tracking-wide ring-1 transition hover:brightness-110 ${
               jobStatus.status === "done"
                 ? "bg-emerald-500/15 text-emerald-200 ring-emerald-400/25"
@@ -2050,7 +2094,7 @@ export default function DataIndexing() {
         <button
           type="button"
           onClick={() => {
-            if (indexing) setModalVisible(true);
+            if (indexing) showProgressModalByUser();
             else handleStartIndexing();
           }}
           disabled={!indexing && selectedCount === 0}
@@ -2124,7 +2168,7 @@ export default function DataIndexing() {
           }
           hero={studioHero}
           actionBar={studioActionBar}
-          listSectionTitle={listSectionTitle}
+          listSectionTitle={null}
         >
           {tab === "sources" && (
             <div className="min-h-0 flex-1 p-4 sm:p-5">
@@ -2247,7 +2291,7 @@ export default function DataIndexing() {
           selectedCount={selectedCount}
           jobStatus={jobStatus}
           jobId={jobId}
-          onClose={() => setModalVisible(false)}
+          onClose={hideProgressModalByUser}
           onStop={() => {
             stopPolling();
             setIndexing(false);

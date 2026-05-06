@@ -280,7 +280,7 @@ export default function Settings() {
           }
           toolbarRight={settingsToolbarRight}
           hero={settingsHero}
-          listSectionTitle="구성"
+          listSectionTitle={null}
         >
           <div className="relative z-10 mx-auto max-w-[46rem] px-4 py-5 sm:px-6 sm:py-6">
             <div className="flex flex-col gap-5">

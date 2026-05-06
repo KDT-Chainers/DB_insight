@@ -108,7 +108,7 @@ export default function SearchSidebar({ entranceOn } = {}) {
         {/* Logo + 토글 버튼 — h-8 드래그 바 아래에서 시작 */}
         <div className="mb-10 flex items-center justify-between px-2">
           <button
-            onClick={() => navigate('/search')}
+            onClick={() => navigate('/search', { state: { goHomeAt: Date.now() } })}
             className="flex items-center gap-3 hover:opacity-80 transition-opacity"
           >
             <TeamLogoMark />
@@ -201,8 +201,10 @@ export default function SearchSidebar({ entranceOn } = {}) {
         </div>
 
         {/* Footer profile */}
-        <div
-          className={`mt-auto flex items-center gap-3 border-t px-2 pt-6 ${ai ? 'border-white/10' : 'border-outline-variant/10'}`}
+        <button
+          type="button"
+          onClick={() => navigate('/data')}
+          className={`mt-auto flex w-full items-center gap-3 border-t px-2 pt-6 text-left transition-opacity hover:opacity-85 ${ai ? 'border-white/10' : 'border-outline-variant/10'}`}
         >
           <div
             className={`flex h-10 w-10 items-center justify-center rounded-full border-2 ${ai ? 'border-violet-500/25 bg-violet-950/40' : 'border-primary-fixed-dim/20 bg-surface-container-highest'}`}
@@ -215,7 +217,7 @@ export default function SearchSidebar({ entranceOn } = {}) {
             <p className={`truncate text-sm font-bold ${ai ? 'text-neutral-100' : 'text-on-surface'}`}>관리자</p>
             <p className={`text-[0.65rem] ${ai ? 'text-neutral-500' : 'text-on-surface-variant'}`}>심층 분석 접근 권한</p>
           </div>
-        </div>
+        </button>
         </div>
         </aside>
       </div>
