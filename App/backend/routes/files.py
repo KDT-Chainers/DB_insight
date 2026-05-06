@@ -63,6 +63,43 @@ def _trichef_indexed_files() -> list[dict]:
         except Exception:
             pass
 
+    # 동영상 (TRI-CHEF AV) — 이전 누락 버그 수정.
+    # /api/files/stats 의 _trichef_stats() 는 npy 에서 직접 집계하지만
+    # /api/files/indexed (이 함수) 는 movie registry 를 안 들여다봐서
+    # 데이터 소스 카드가 영상 0개로 표시되던 문제.
+    movie_reg_path = Path(PATHS["TRICHEF_MOVIE_CACHE"]) / "registry.json"
+    if movie_reg_path.exists():
+        try:
+            reg = json.loads(movie_reg_path.read_text(encoding="utf-8"))
+            for _key, info in reg.items():
+                orig = resolve_raw_path(_key, "movie", info)
+                items.append({
+                    "file_path":  orig,
+                    "file_name":  Path(orig).name if orig else _key,
+                    "file_type":  "video",
+                    "chunk_count": int(info.get("chunks", 0) or info.get("segments", 0) or 1),
+                    "source":     "trichef",
+                })
+        except Exception:
+            pass
+
+    # 음성 (TRI-CHEF AV) — 동일 패턴
+    music_reg_path = Path(PATHS["TRICHEF_MUSIC_CACHE"]) / "registry.json"
+    if music_reg_path.exists():
+        try:
+            reg = json.loads(music_reg_path.read_text(encoding="utf-8"))
+            for _key, info in reg.items():
+                orig = resolve_raw_path(_key, "music", info)
+                items.append({
+                    "file_path":  orig,
+                    "file_name":  Path(orig).name if orig else _key,
+                    "file_type":  "audio",
+                    "chunk_count": int(info.get("chunks", 0) or info.get("segments", 0) or 1),
+                    "source":     "trichef",
+                })
+        except Exception:
+            pass
+
     return items
 
 
