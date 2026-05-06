@@ -2008,36 +2008,13 @@ export default function DataIndexing() {
     );
   }, [tab, selectedCount, estimateData, estimateLoading]);
 
-  const handleGoBack = useCallback(() => {
-    // 요청 UX: 벡터 저장소 -> 데이터 소스 -> 관리자(시스템 설정) -> 공용페이지
-    if (tab === "store") {
-      setTab("sources");
-      return;
-    }
-    if (tab === "sources") {
-      navigate("/settings");
-      return;
-    }
-    navigate("/settings");
-  }, [navigate, tab]);
-
   const studioHero = useMemo(() => {
     if (tab === "indexing") {
       return (
         <div className="min-w-0">
-          <div className="inline-flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleGoBack}
-              title="이전 페이지로 이동"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/[0.08] text-white/80 ring-1 ring-white/[0.12] transition hover:bg-white/[0.14] hover:text-white"
-            >
-              <span className="material-symbols-outlined text-[18px]">arrow_back</span>
-            </button>
-            <span className="inline-flex items-center rounded-full bg-sky-500/18 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-sky-100/90 ring-1 ring-sky-300/25">
-              로컬 워크스페이스
-            </span>
-          </div>
+          <span className="inline-flex items-center rounded-full bg-sky-500/18 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-sky-100/90 ring-1 ring-sky-300/25">
+            로컬 워크스페이스
+          </span>
           <h2 className="mt-2 text-[1.65rem] font-bold tracking-tight text-white sm:text-[1.85rem]">
             인덱싱
           </h2>
@@ -2059,19 +2036,9 @@ export default function DataIndexing() {
     if (tab === "sources") {
       return (
         <div className="min-w-0">
-          <div className="inline-flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleGoBack}
-              title="이전 페이지로 이동"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/[0.08] text-white/80 ring-1 ring-white/[0.12] transition hover:bg-white/[0.14] hover:text-white"
-            >
-              <span className="material-symbols-outlined text-[18px]">arrow_back</span>
-            </button>
-            <span className="inline-flex items-center rounded-full bg-violet-500/18 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-violet-100/90 ring-1 ring-violet-400/25">
-              소스
-            </span>
-          </div>
+          <span className="inline-flex items-center rounded-full bg-violet-500/18 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-violet-100/90 ring-1 ring-violet-400/25">
+            소스
+          </span>
           <h2 className="mt-2 text-[1.65rem] font-bold tracking-tight text-white sm:text-[1.85rem]">
             데이터 소스
           </h2>
@@ -2083,19 +2050,9 @@ export default function DataIndexing() {
     }
     return (
       <div className="min-w-0">
-        <div className="inline-flex items-center gap-2">
-          <button
-            type="button"
-            onClick={handleGoBack}
-            title="이전 페이지로 이동"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/[0.08] text-white/80 ring-1 ring-white/[0.12] transition hover:bg-white/[0.14] hover:text-white"
-          >
-            <span className="material-symbols-outlined text-[18px]">arrow_back</span>
-          </button>
-          <span className="inline-flex items-center rounded-full bg-emerald-500/18 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-100/90 ring-1 ring-emerald-400/22">
-            저장소
-          </span>
-        </div>
+        <span className="inline-flex items-center rounded-full bg-emerald-500/18 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-100/90 ring-1 ring-emerald-400/22">
+          저장소
+        </span>
         <h2 className="mt-2 text-[1.65rem] font-bold tracking-tight text-white sm:text-[1.85rem]">
           벡터 저장소
         </h2>
@@ -2104,7 +2061,7 @@ export default function DataIndexing() {
         </p>
       </div>
     );
-  }, [tab, rootPath, selectedCount, handleGoBack]);
+  }, [tab, rootPath, selectedCount]);
 
   const studioActionBar = useMemo(() => {
     if (tab !== "indexing") return null;
