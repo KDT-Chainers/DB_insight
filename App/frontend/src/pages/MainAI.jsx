@@ -1961,9 +1961,7 @@ export default function MainAI() {
             }}
           >
             {/* SearchSidebar 타이틀바(fixed h-8=32px)를 위한 여백 */}
-            <div
-              style={{ height: 32, flexShrink: 0, WebkitAppRegion: "drag" }}
-            />
+            <div style={{ height: 32, flexShrink: 0 }} />
 
             {/* Header */}
             <header

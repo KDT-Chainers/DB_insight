@@ -23,7 +23,7 @@
     "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:3000 && electron .\"",
     "prepack": "npm run build",
     "pack": "electron-builder --dir",
-    "predist": "node -e \"const fs=require('fs');const {execSync}=require('child_process');try{execSync('rmdir /s /q out3\\\\win-unpacked',{shell:true,stdio:'pipe'})}catch(_){}\"",
+    "predist": "node -e \"const fs=require('fs');const {execSync}=require('child_process');try{execSync('rmdir /s /q out5\\\\win-unpacked',{shell:true,stdio:'pipe'})}catch(_){}\"",
     "dist": "npm run build && electron-builder"
   },
   "build": {
@@ -33,7 +33,7 @@
     "buildDependenciesFromSource": false,
     "electronDist": "node_modules/electron/dist",
     "directories": {
-      "output": "out3"
+      "output": "out5"
     },
     "files": [
       "dist/**/*",
