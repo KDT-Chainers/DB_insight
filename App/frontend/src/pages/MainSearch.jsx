@@ -36,7 +36,7 @@ function FileStackSearchMotion() {
     <div className="flex flex-col items-center justify-center py-20">
       <div className="relative w-full max-w-[680px] overflow-hidden rounded-[28px] border border-white/[0.1] bg-white/[0.035] px-6 py-7 shadow-[0_18px_54px_rgba(8,18,50,0.36)] backdrop-blur-[18px]">
         <div className="pointer-events-none absolute -left-10 -top-10 h-36 w-36 rounded-full bg-sky-400/18 blur-3xl" />
-        <div className="pointer-events-none absolute -right-12 -bottom-12 h-40 w-40 rounded-full bg-violet-400/18 blur-3xl" />
+        <div className="pointer-events-none absolute -right-12 -bottom-12 h-40 w-40 rounded-full bg-sky-500/14 blur-3xl" />
 
         <div className="mb-4 flex items-center justify-between">
           <div className="inline-flex items-center gap-2 rounded-full border border-sky-300/25 bg-sky-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-sky-100/90">
@@ -106,13 +106,13 @@ function MarkdownLite({ text }) {
       if (m.index > last) push(buf.slice(last, m.index))
       const tok = m[0]
       if (tok.startsWith('**'))      push(<strong className="text-white font-bold">{tok.slice(2, -2)}</strong>)
-      else if (tok.startsWith('`'))  push(<code className="px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-200 font-mono text-[0.92em]">{tok.slice(1, -1)}</code>)
+      else if (tok.startsWith('`'))  push(<code className="px-1.5 py-0.5 rounded bg-white/10 text-sky-100/95 font-mono text-[0.92em] border border-white/[0.08]">{tok.slice(1, -1)}</code>)
       else if (tok.startsWith('['))  {
         const mm = /\[([^\]]+)\]\(([^)]+)\)/.exec(tok)
-        if (mm) push(<a href={mm[2]} className="text-purple-300 underline" target="_blank" rel="noreferrer">{mm[1]}</a>)
+        if (mm) push(<a href={mm[2]} className="text-[#8ab4ff] underline decoration-[#8ab4ff]/40 hover:text-[#b3d4ff]" target="_blank" rel="noreferrer">{mm[1]}</a>)
         else push(tok)
       }
-      else if (tok.startsWith('*'))  push(<em className="italic text-purple-100">{tok.slice(1, -1)}</em>)
+      else if (tok.startsWith('*'))  push(<em className="italic text-slate-200">{tok.slice(1, -1)}</em>)
       else                            push(tok)
       last = m.index + tok.length
     }
@@ -139,7 +139,7 @@ function MarkdownLite({ text }) {
     if (list && list.items.length) {
       const Tag = list.type === 'ol' ? 'ol' : 'ul'
       blocks.push(
-        <Tag key={`l${blocks.length}`} className={`my-3 ml-5 space-y-1.5 ${list.type === 'ol' ? 'list-decimal' : 'list-disc'} marker:text-purple-400`}>
+        <Tag key={`l${blocks.length}`} className={`my-3 ml-5 space-y-1.5 ${list.type === 'ol' ? 'list-decimal' : 'list-disc'} marker:text-[#85adff]`}>
           {list.items.map((line, i) => (
             <li key={i} className="leading-[1.7] text-on-surface/95 pl-1">
               {renderInline(line, `l${blocks.length}-${i}`)}
@@ -166,7 +166,7 @@ function MarkdownLite({ text }) {
       h4Count++
       blocks.push(
         <div key={`h4${blocks.length}`} className="flex gap-3 my-3 items-baseline">
-          <span className="shrink-0 w-6 text-right font-bold text-purple-300 text-sm">{h4Count}.</span>
+          <span className="shrink-0 w-6 text-right font-bold text-[#8ab4ff] text-sm">{h4Count}.</span>
           <span className="leading-[1.85] text-on-surface/95">{renderInline(m[1], `h4${blocks.length}`)}</span>
         </div>
       )
@@ -177,8 +177,8 @@ function MarkdownLite({ text }) {
     if ((m = /^###\s+(.+)$/.exec(line))) {
       flushPara(); flushList()
       blocks.push(
-        <h3 key={`h${blocks.length}`} className="text-base font-bold text-purple-200 mt-5 mb-2 flex items-center gap-2">
-          <span className="w-1 h-4 rounded-full bg-purple-400" />
+        <h3 key={`h${blocks.length}`} className="text-base font-bold text-white mt-5 mb-2 flex items-center gap-2">
+          <span className="w-1 h-4 rounded-full bg-[#85adff]" />
           {renderInline(m[1], `h${blocks.length}`)}
         </h3>
       )
@@ -187,7 +187,7 @@ function MarkdownLite({ text }) {
     if ((m = /^##\s+(.+)$/.exec(line))) {
       flushPara(); flushList()
       blocks.push(
-        <h2 key={`h${blocks.length}`} className="text-lg font-bold text-purple-100 mt-6 mb-3 pb-1 border-b border-purple-500/30">
+        <h2 key={`h${blocks.length}`} className="text-lg font-bold text-white mt-6 mb-3 pb-1 border-b border-white/[0.12]">
           {renderInline(m[1], `h${blocks.length}`)}
         </h2>
       )
@@ -196,7 +196,7 @@ function MarkdownLite({ text }) {
     if ((m = /^#\s+(.+)$/.exec(line))) {
       flushPara(); flushList()
       blocks.push(
-        <h1 key={`h${blocks.length}`} className="text-xl font-bold text-purple-50 mt-7 mb-3">
+        <h1 key={`h${blocks.length}`} className="text-xl font-bold text-white mt-7 mb-3">
           {renderInline(m[1], `h${blocks.length}`)}
         </h1>
       )
@@ -206,7 +206,7 @@ function MarkdownLite({ text }) {
     // 수평선 ---
     if (/^[-*_]{3,}\s*$/.test(line)) {
       flushPara(); flushList()
-      blocks.push(<hr key={`hr${blocks.length}`} className="my-4 border-purple-500/20" />)
+      blocks.push(<hr key={`hr${blocks.length}`} className="my-4 border-white/[0.08]" />)
       continue
     }
 
@@ -214,7 +214,7 @@ function MarkdownLite({ text }) {
     if ((m = /^>\s+(.+)$/.exec(line))) {
       flushPara(); flushList()
       blocks.push(
-        <blockquote key={`q${blocks.length}`} className="border-l-4 border-purple-400/50 pl-4 my-3 italic text-purple-100/80">
+        <blockquote key={`q${blocks.length}`} className="border-l-4 border-[#85adff]/40 pl-4 my-3 italic text-slate-300/95">
           {renderInline(m[1], `q${blocks.length}`)}
         </blockquote>
       )
@@ -753,7 +753,7 @@ function ResultCard({ result, rank, onClick, securityMode = false, query = '' })
                 {result.bgm_source && result.bgm_source !== 'catalog' && (
                   <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
                     result.bgm_source === 'movie_lib'
-                      ? 'bg-purple-500/20 text-purple-300'
+                      ? 'bg-[#85adff]/15 text-[#b3d4ff] border border-[#85adff]/25'
                       : 'bg-amber-500/20 text-amber-300'
                   }`}>
                     {result.bgm_source === 'movie_lib' ? '🎬 영상 라이브러리' : '🎙 오디오 라이브러리'}
@@ -974,6 +974,22 @@ function AVDetailContent({ result }) {
 /** v0 AIHero 퀵 서제스트 */
 const V0_HOME_SUGGESTIONS = ['Write an email', 'Summarize text', 'Translate', 'Generate ideas']
 
+// ── [DEV ONLY] 상세 레이아웃 목업 — 확인 후 이 블록 전체 삭제할 것 ─────────
+const DEV_MOCK_DETAIL_FILE = {
+  file_path: '/mock/preview-layout.pdf',
+  file_name: '[목업] 상세 화면 레이아웃.pdf',
+  file_type: 'doc',
+  confidence: 0.94,
+  similarity: 0.94,
+  rerank_score: 2.1,
+  dense: 0.65,
+  z_score: null,
+  snippet:
+    '목업 스니펫입니다. 미리보기 URL이 없어 본문 영역에는 이 텍스트만 보입니다. 확인 후 URL에서 mockDetail 을 제거하거나 아래 useEffect 블록을 삭제하세요.',
+  preview_url: null,
+  segments: [],
+}
+
 // ── 메인 컴포넌트 ────────────────────────────────────────
 export default function MainSearch() {
   const navigate = useNavigate()
@@ -1071,6 +1087,43 @@ export default function MainSearch() {
     setSearchError('')
     setSearching(false)
   }, [location.state?.goHomeAt])
+
+  // [DEV ONLY] 상세 레이아웃 목업 — 삭제 시 DEV_MOCK_DETAIL_FILE 과 함께 제거
+  //
+  // HashRouter: http://localhost:3000/#/search?mockDetail=1 (포트 3000)
+  //
+  // URL에서 mockDetail 을 replace 로 지우면, React 18 Strict Mode(개발)에서
+  // 컴포넌트가 재마운트될 때 state 가 초기화되고 쿼리도 없어져 목업이 적용되지 않는다.
+  // 그래서 쿼리는 그대로 두고, 해시에서만 읽어 반복 적용해도 무방하다.
+  //
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const host = window.location.hostname
+    if (host !== 'localhost' && host !== '127.0.0.1') return
+
+    const raw = window.location.hash || ''
+    const pathAndQuery = raw.startsWith('#') ? raw.slice(1) : raw
+    const qMark = pathAndQuery.indexOf('?')
+    const pathOnly = qMark === -1 ? pathAndQuery : pathAndQuery.slice(0, qMark)
+    const qStr = qMark === -1 ? '' : pathAndQuery.slice(qMark)
+    if (pathOnly !== '/search') return
+
+    const sp = new URLSearchParams(qStr || '')
+    if (sp.get('mockDetail') !== '1') return
+
+    setFlyStyle(null)
+    setHomeExiting(false)
+    setSelectedFile(DEV_MOCK_DETAIL_FILE)
+    setFileDetail(null)
+    setDetailLoading(false)
+    setView('detail')
+    setDetailVisible(true)
+    setQuery('목업')
+    setInputValue('목업')
+    setResults([])
+    setResultsReady(true)
+    setSearchError('')
+  }, [location.pathname, location.search, location.hash, location.key])
 
   // STT
   const doSearchRef = useRef(null)
@@ -1318,6 +1371,32 @@ export default function MainSearch() {
 
   useEffect(() => { doSearchRef.current = doSearch })
 
+  // 사이드바「검색 기록」클릭 시 state.query 로 결과 화면 검색 실행 (historyNonce 로 동일 쿼리 재클릭도 동작)
+  useEffect(() => {
+    const raw = location.state?.query
+    if (typeof raw !== 'string') return
+    const trimmed = raw.trim()
+    if (!trimmed || aiTransitioning) return
+
+    const st = location.state ?? {}
+    const { query: _q, historyNonce: _n, ...rest } = st
+    const nextState = Object.keys(rest).length ? rest : undefined
+    navigate(
+      { pathname: location.pathname, search: location.search, hash: location.hash },
+      { replace: true, state: nextState },
+    )
+    doSearch(trimmed)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 기록 진입 한 번 처리; 도메인 필터 등은 현재 렌더의 doSearch
+  }, [
+    location.state?.query,
+    location.state?.historyNonce,
+    aiTransitioning,
+    navigate,
+    location.pathname,
+    location.search,
+    location.hash,
+  ])
+
   const handleSearch = (e) => { e?.preventDefault(); doSearch(inputValue) }
 
   const handleSelectFile = (file) => {
@@ -1521,11 +1600,13 @@ export default function MainSearch() {
                       </div>
                     )}
                   </div>
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center text-on-surface-variant">
-                    <span className="material-symbols-outlined block text-[22px] leading-none">
-                      search
-                    </span>
-                  </div>
+                  <button
+                    type="submit"
+                    aria-label="검색"
+                    className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-on-surface-variant transition-colors hover:bg-white/10 hover:text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                  >
+                    <span className="material-symbols-outlined block text-[22px] leading-none">search</span>
+                  </button>
                   {/* 보안 모드 토글 — 마이크 옆에 위치 */}
                   <button type="button" onClick={() => setSecurityMode(v => !v)}
                     title={securityMode ? '보안 모드 켜짐: 결과 미리보기에 PII 마스킹 적용' : '보안 모드 꺼짐'}
@@ -1597,9 +1678,13 @@ export default function MainSearch() {
                   </div>
                 )}
               </div>
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center text-primary">
+              <button
+                type="submit"
+                aria-label="검색"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-primary transition-colors hover:bg-primary/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+              >
                 <span className="material-symbols-outlined block text-lg leading-none">search</span>
-              </div>
+              </button>
               </div>
             </form>
 
@@ -1809,94 +1894,103 @@ export default function MainSearch() {
         const isAV    = selectedFile.file_type === 'video' || selectedFile.file_type === 'audio'
 
         return (
-          <main className={`${ml} min-h-screen relative transition-[margin] duration-300`}
-            style={{ backgroundImage: 'radial-gradient(rgba(133,173,255,0.05) 1px, transparent 1px)', backgroundSize: '32px 32px',
-              opacity: detailVisible ? 1 : 0, transform: detailVisible ? 'translateX(0)' : 'translateX(36px)',
-              transition: 'opacity 0.35s ease, transform 0.35s ease, margin 0.3s' }}>
+          <main
+            className={`${ml} relative min-h-screen bg-gradient-to-b from-transparent via-transparent to-[#0a1424]/40 transition-[margin] duration-300`}
+            style={{
+              opacity: detailVisible ? 1 : 0,
+              transform: detailVisible ? 'translateX(0)' : 'translateX(36px)',
+              transition: 'opacity 0.35s ease, transform 0.35s ease, margin 0.3s',
+            }}
+          >
 
-            {/* 파일 정보 바 */}
-            <div className={`fixed top-[100px] ${leftEdge} right-0 z-30 bg-[#070d1f]/60 backdrop-blur-xl flex items-center justify-end px-8 py-3 border-b border-outline-variant/10 transition-[left] duration-300`}>
-              <div className="flex items-center gap-3 shrink-0">
-                {/* ✨ AI 요약 — Ollama qwen 스트리밍 */}
+            {/* 액션 바 — 헤더와 겹치지 않게 간격 두고, 본문과 동일 max-w 로 가로 정렬 */}
+            <div
+              className={`fixed top-32 ${leftEdge} right-0 z-30 border-b border-white/[0.08] bg-white/[0.04] py-4 backdrop-blur-[40px] transition-[left] duration-300`}
+            >
+              <div className="mx-auto flex w-full max-w-[1400px] flex-wrap items-center justify-end gap-3 px-8">
                 <button
+                  type="button"
                   onClick={() => handleSummarize(selectedFile)}
                   disabled={summarizing}
                   title="이 파일의 핵심 내용을 AI가 요약합니다"
-                  className="px-5 py-2 text-base font-bold uppercase tracking-widest rounded-full transition-all active:scale-95 flex items-center gap-2 disabled:opacity-60"
-                  style={{
-                    background: 'linear-gradient(135deg, rgba(168,85,247,0.18), rgba(236,72,153,0.12))',
-                    border: '1px solid rgba(168,85,247,0.4)',
-                    color: '#e9d5ff',
-                  }}>
-                  <span className={`material-symbols-outlined text-base ${summarizing ? 'animate-spin' : ''}`}>
+                  className="inline-flex items-center gap-2 rounded-full border border-white/[0.1] bg-white/[0.06] px-5 py-2 text-sm font-bold uppercase tracking-widest text-slate-200 shadow-sm transition hover:border-primary/35 hover:bg-white/[0.1] hover:text-white active:scale-95 disabled:opacity-55"
+                >
+                  <span className={`material-symbols-outlined text-base text-[#85adff] ${summarizing ? 'animate-spin' : ''}`}>
                     {summarizing ? 'progress_activity' : 'auto_awesome'}
                   </span>
                   {summarizing ? '요약 중...' : 'AI 요약'}
                 </button>
                 <button
+                  type="button"
                   onClick={() => openFolder(selectedFile.file_path)}
-                  className="px-5 py-2 text-base font-bold uppercase tracking-widest text-primary bg-surface-container-high border border-outline-variant/15 rounded-full hover:bg-surface-variant transition-colors active:scale-95">
+                  className="rounded-full border border-white/[0.1] bg-[#0f131a]/90 px-5 py-2 text-sm font-bold uppercase tracking-widest text-primary transition hover:border-primary/30 hover:bg-white/[0.06] active:scale-95"
+                >
                   경로 열기
                 </button>
                 <button
+                  type="button"
                   onClick={() => openFile(selectedFile.file_path)}
-                  className="px-5 py-2 text-base font-bold uppercase tracking-widest text-on-primary bg-primary rounded-full hover:brightness-110 transition-all active:scale-95">
+                  className="rounded-full border border-primary/40 bg-primary px-5 py-2 text-sm font-bold uppercase tracking-widest text-on-primary shadow-[0_0_20px_rgba(133,173,255,0.22)] transition hover:brightness-110 active:scale-95"
+                >
                   파일 열기
                 </button>
               </div>
             </div>
 
-            <section className="pt-44 pb-12 px-8 max-w-7xl mx-auto space-y-8">
+            <section className="mx-auto max-w-[1400px] space-y-6 px-8 pb-12 pt-52">
 
-              {/* ── ✨ AI 요약 인라인 패널 (상세 페이지 최상단) ──────────────── */}
+              {/* AI 요약 패널 — 보라 제거 · 배경 따름 + 글래스 */}
               {(summarizing || summaryText || summaryError) && (
-                <div className="rounded-2xl overflow-hidden relative"
-                  style={{
-                    background: 'linear-gradient(135deg, rgba(13,7,24,0.85), rgba(20,12,40,0.85))',
-                    border: '1px solid rgba(168,85,247,0.4)',
-                    boxShadow: '0 0 30px rgba(168,85,247,0.15)',
-                  }}>
-                  {/* 헤더 */}
-                  <div className="px-6 py-4 flex items-center gap-3 border-b border-purple-500/20">
-                    <span className="material-symbols-outlined text-purple-300 animate-pulse">auto_awesome</span>
+                <div className="relative overflow-hidden rounded-[22px] border border-white/[0.07] bg-white/[0.03] shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_20px_50px_rgba(0,0,0,0.28)] backdrop-blur-[44px]">
+                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#85adff]/[0.06] via-transparent to-transparent" />
+                  <div className="relative flex items-center gap-3 px-6 py-4">
+                    <span className="material-symbols-outlined text-[#8ab4ff]" style={{ fontVariationSettings: '"FILL" 1' }}>
+                      auto_awesome
+                    </span>
                     <div className="min-w-0 flex-1">
-                      <h3 className="text-base font-bold text-purple-100 tracking-wide">
-                        AI 상세 요약
-                      </h3>
+                      <h3 className="text-base font-bold tracking-wide text-white">AI 상세 요약</h3>
                       {summaryMeta && (
-                        <p className="text-[11px] text-purple-300/60 mt-0.5">
-                          {summaryMeta.model && <>모델: <span className="font-mono">{summaryMeta.model}</span></>}
+                        <p className="mt-0.5 text-[11px] text-slate-500">
+                          {summaryMeta.model && (
+                            <>
+                              모델: <span className="font-mono text-slate-400">{summaryMeta.model}</span>
+                            </>
+                          )}
                           {summaryMeta.length != null && <> · 본문 {summaryMeta.length.toLocaleString()}자</>}
-                          {summaryMeta.kind && <> · <span className="opacity-70">{summaryMeta.kind}</span></>}
+                          {summaryMeta.kind && (
+                            <>
+                              {' '}
+                              · <span className="opacity-80">{summaryMeta.kind}</span>
+                            </>
+                          )}
                         </p>
                       )}
                     </div>
                     {summaryDone ? (
-                      <span className="flex items-center gap-1 text-emerald-400 text-xs">
+                      <span className="flex items-center gap-1 text-xs text-emerald-400/95">
                         <span className="material-symbols-outlined text-base">check_circle</span> 완료
                       </span>
                     ) : summaryError ? (
-                      <span className="text-rose-300 text-xs">실패</span>
+                      <span className="text-xs text-rose-300">실패</span>
                     ) : (
-                      <span className="flex items-center gap-1 text-purple-300 text-xs">
-                        <span className="material-symbols-outlined text-base animate-spin">progress_activity</span>
+                      <span className="flex items-center gap-1 text-xs text-[#8ab4ff]">
+                        <span className="material-symbols-outlined animate-spin text-base">progress_activity</span>
                         스트리밍
                       </span>
                     )}
                     <button
                       type="button"
                       onClick={closeSummary}
-                      className="w-7 h-7 rounded-full hover:bg-white/10 flex items-center justify-center text-on-surface-variant ml-2"
+                      className="ml-2 flex h-8 w-8 items-center justify-center rounded-full text-slate-500 transition hover:bg-white/10 hover:text-white"
                       title={summarizing ? '중단' : '닫기'}
                     >
                       <span className="material-symbols-outlined text-lg">close</span>
                     </button>
                   </div>
-                  {/* 본문 */}
-                  <div className="px-7 py-6 text-base">
+                  <div className="relative px-7 py-6 text-base text-on-surface/95">
                     {summaryError ? (
-                      <div className="rounded-xl bg-rose-500/10 border border-rose-500/30 p-4 text-rose-300">
-                        <div className="flex items-center gap-2 mb-1">
+                      <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-rose-200">
+                        <div className="mb-1 flex items-center gap-2">
                           <span className="material-symbols-outlined text-base">error</span>
                           <span className="font-bold">요약 실패</span>
                         </div>
@@ -1906,13 +2000,13 @@ export default function MainSearch() {
                       <div className="relative">
                         <MarkdownLite text={summaryText} />
                         {!summaryDone && (
-                          <span className="inline-block w-2 h-4 bg-purple-300 ml-1 animate-pulse align-middle" />
+                          <span className="ml-1 inline-block h-4 w-0.5 animate-pulse bg-[#8ab4ff] align-middle" />
                         )}
                       </div>
                     ) : (
-                      <div className="flex items-center gap-3 text-on-surface-variant/50">
-                        <span className="material-symbols-outlined animate-spin">progress_activity</span>
-                        <span>본문 추출 + AI 모델 호출 중... (PDF 18,000자 / 영상·음성 80개 세그먼트까지)</span>
+                      <div className="flex items-center gap-3 text-slate-500">
+                        <span className="material-symbols-outlined animate-spin text-[#8ab4ff]">progress_activity</span>
+                        <span>본문 추출 + AI 모델 호출 중...</span>
                       </div>
                     )}
                   </div>
@@ -1923,16 +2017,17 @@ export default function MainSearch() {
 
                 {/* 메인 컨텐츠 */}
                 <div className="col-span-8 space-y-6">
-                  <div className="bg-surface-container-low rounded-xl glass-panel glow-primary min-h-[400px] flex flex-col"
-                    style={{ border: '1px solid rgba(65,71,91,0.15)' }}>
-                    <div className="flex items-center justify-between px-8 pt-7 pb-5 border-b border-outline-variant/10">
+                  <div
+                    className="flex min-h-[400px] flex-col overflow-hidden rounded-[22px] border border-white/[0.07] bg-white/[0.02] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-[40px]"
+                  >
+                    <div className="flex items-center justify-between border-b border-white/[0.08] px-8 pb-5 pt-7">
                       <span className="text-sm font-bold tracking-[0.2em] text-primary uppercase">
                         {isAV ? '미디어 플레이어 · 세그먼트 타임라인' : '추출된 콘텐츠 스트림'}
                       </span>
                       <div className="flex gap-2 items-center">
                         {detailLoading && <span className="material-symbols-outlined text-primary text-lg animate-spin">progress_activity</span>}
-                        <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
-                        <span className="h-2 w-2 rounded-full bg-secondary/50" />
+                        <span className="h-2 w-2 animate-pulse rounded-full bg-primary" />
+                        <span className="h-2 w-2 rounded-full bg-white/20" />
                       </div>
                     </div>
 
@@ -1979,7 +2074,7 @@ export default function MainSearch() {
                 </div>
 
                 {/* 메타데이터 패널 */}
-                <div className="col-span-4 space-y-5">
+                <div className="col-span-4 min-w-0 space-y-5">
 
                   {/* 신뢰도/정확도/유사도 3지표 */}
                   {(() => {
@@ -2000,10 +2095,10 @@ export default function MainSearch() {
                     const bars = [
                       { label: '신뢰도', pct: confPct,     text: 'text-emerald-400' },
                       { label: '정확도', pct: accuracyPct, text: 'text-[#85adff]' },
-                      { label: '유사도', pct: simPct,      text: 'text-[#ac8aff]' },
+                      { label: '유사도', pct: simPct,      text: 'text-sky-300' },
                     ]
                     return (
-                      <div className="bg-surface-container-high rounded-xl p-4 border border-outline-variant/10 flex divide-x divide-outline-variant/15">
+                      <div className="flex min-w-0 divide-x divide-white/[0.08] rounded-[22px] border border-white/[0.07] bg-white/[0.02] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-[36px]">
                         {bars.map(({ label, pct, text }) => (
                           <div key={label} className="flex-1 flex flex-col items-center gap-1 px-3">
                             <span className={`text-2xl font-extrabold tabular-nums leading-none ${text}`}>{pct}<span className="text-sm font-bold">%</span></span>
@@ -2016,7 +2111,7 @@ export default function MainSearch() {
 
                   {/* AV: 세그먼트 요약 */}
                   {isAV && selectedFile.segments?.length > 0 && (
-                    <div className="bg-surface-container-low rounded-xl p-5 border border-outline-variant/5">
+                    <div className="rounded-[22px] border border-white/[0.07] bg-white/[0.02] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-[36px]">
                       <h4 className="text-sm font-bold tracking-[0.15em] text-amber-400 mb-3 uppercase">매칭 세그먼트</h4>
                       <div className="space-y-2">
                         {selectedFile.segments.slice(0, 5).map((s, i) => {
@@ -2037,8 +2132,8 @@ export default function MainSearch() {
                   )}
 
                   {/* 파일 메타데이터 */}
-                  <div className="bg-surface-container-low rounded-xl p-6 border border-outline-variant/5">
-                    <h4 className="text-sm font-bold tracking-[0.15em] text-secondary mb-4 uppercase">파일 정보</h4>
+                  <div className="rounded-[22px] border border-white/[0.07] bg-white/[0.02] p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-[36px]">
+                    <h4 className="mb-4 text-sm font-bold uppercase tracking-[0.15em] text-[#85adff]">파일 정보</h4>
                     <div className="space-y-0">
                       {[
                         ['파일명', selectedFile.file_name],
@@ -2050,7 +2145,7 @@ export default function MainSearch() {
                         ),
                         ['경로',   selectedFile.file_path],
                       ].map(([k, v]) => (
-                        <div key={k} className="flex justify-between items-start py-2 border-b border-outline-variant/10 last:border-0 gap-2">
+                        <div key={k} className="flex items-start justify-between gap-2 border-b border-white/[0.06] py-2 last:border-0">
                           <span className="text-xs text-on-surface-variant shrink-0">{k}</span>
                           <span className="text-xs font-bold text-on-surface text-right break-all">{v}</span>
                         </div>
@@ -2063,8 +2158,8 @@ export default function MainSearch() {
 
             </section>
 
-            <div className="fixed bottom-[-10%] left-[20%] w-[40%] h-[40%] bg-primary/5 blur-[120px] pointer-events-none rounded-full" />
-            <div className="fixed top-[10%] right-[-5%] w-[30%] h-[30%] bg-secondary/5 blur-[100px] pointer-events-none rounded-full" />
+            <div className="pointer-events-none fixed bottom-[-10%] left-[18%] h-[42%] w-[42%] rounded-full bg-primary/8 blur-[120px]" />
+            <div className="pointer-events-none fixed top-[12%] right-[-8%] h-[30%] w-[30%] rounded-full bg-[#85adff]/7 blur-[100px]" />
           </main>
         )
       })()}

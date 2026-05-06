@@ -80,7 +80,7 @@ export default function SearchSidebar({ entranceOn } = {}) {
   }
 
   const runQuery = (query) => {
-    navigate('/search', { state: { query } })
+    navigate('/search', { state: { query, historyNonce: Date.now() } })
   }
 
   const ai = location.pathname === '/ai' || location.pathname.startsWith('/ai/')
