@@ -2587,7 +2587,7 @@ export default function MainSearch() {
 
               <section className="mx-auto max-w-[1400px] space-y-6 px-8 pb-12 pt-52">
                 {/* AI 요약 패널 — 보라 제거 · 배경 따름 + 글래스 */}
-                {(summarizing || summaryText || summaryError) && (
+                {(summarizing || summaryText || summaryError || summaryBlocked) && (
                   <div className="relative overflow-hidden rounded-[22px] border border-white/[0.07] bg-white/[0.03] shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_20px_50px_rgba(0,0,0,0.28)] backdrop-blur-[44px]">
                     <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#85adff]/[0.06] via-transparent to-transparent" />
                     <div className="relative flex items-center gap-3 px-6 py-4">
@@ -2629,7 +2629,17 @@ export default function MainSearch() {
                           </p>
                         )}
                       </div>
-                      {summaryDone ? (
+                      {summaryBlocked ? (
+                        <span className="flex items-center gap-1 text-xs text-rose-300">
+                          <span
+                            className="material-symbols-outlined text-base"
+                            style={{ fontVariationSettings: '"FILL" 1' }}
+                          >
+                            shield
+                          </span>{" "}
+                          차단됨
+                        </span>
+                      ) : summaryDone ? (
                         <span className="flex items-center gap-1 text-xs text-emerald-400/95">
                           <span className="material-symbols-outlined text-base">
                             check_circle
@@ -2658,7 +2668,30 @@ export default function MainSearch() {
                       </button>
                     </div>
                     <div className="relative px-7 py-6 text-base text-on-surface/95">
-                      {summaryError ? (
+                      {summaryBlocked ? (
+                        <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 p-4 text-rose-200">
+                          <div className="mb-1 flex items-center gap-2">
+                            <span
+                              className="material-symbols-outlined text-base"
+                              style={{ fontVariationSettings: '"FILL" 1' }}
+                            >
+                              shield
+                            </span>
+                            <span className="font-bold">
+                              보안 모드: 요약이 차단되었습니다
+                            </span>
+                          </div>
+                          <p className="text-sm opacity-90">
+                            {summaryBlocked.reason}
+                          </p>
+                          {summaryBlocked.pii_types?.length > 0 && (
+                            <p className="mt-2 text-xs opacity-70">
+                              탐지: {summaryBlocked.pii_types.join(", ")} · 단계:{" "}
+                              {summaryBlocked.stage}
+                            </p>
+                          )}
+                        </div>
+                      ) : summaryError ? (
                         <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-rose-200">
                           <div className="mb-1 flex items-center gap-2">
                             <span className="material-symbols-outlined text-base">
