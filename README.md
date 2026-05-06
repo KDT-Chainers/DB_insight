@@ -16,7 +16,7 @@
 본 프로젝트의 핵심 알고리즘은 다음 논문으로 공개되어 있습니다 (Zenodo, CC BY 4.0).
 
 - 제목 : **Tri-CHEF: Complex-Hermitian Embedding Fusion for Korean Multimodal Retrieval**
-- 저자 : Young-Sang Song*, Hwon Lee, Ju Yeon Jang, Young Jin Hwang, Tae Yoon Lee, Jeong Hye Gim.
+- 저자 : Young-Sang Song\*, Hwon Lee, Ju Yeon Jang, Young Jin Hwang, Tae Yoon Lee, Jeong Hye Gim.
 - 소속 : Team Chainers, Korea IT Academy (KDT, Ministry of Employment and Labor), Independent Researchers.
 - 저널 : Zenodo, May 2026. https://doi.org/10.5281/zenodo.20034370
 
@@ -219,8 +219,12 @@ Query ──► SigLIP2 (시각축)  ─┐
 **Ollama 모델 설치 (AI 모드 사용 시):**
 
 ```bash
-ollama pull gemma3:7b
+ollama pull gemma3:12b (8.1GB)
 ```
+
+- 기존의 3b 모델 제거 방법 : 윈도우 cmd 창에서 'ollama rm qwen2.5:3b' 실행
+
+- 새로운 7b 모델 다운 방법 : 윈도우 cmd 창에서 'ollama pull qwen2.5:7b' 실행
 
 **Python 패키지 설치:**
 

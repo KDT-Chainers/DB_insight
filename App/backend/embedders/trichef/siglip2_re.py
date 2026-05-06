@@ -44,8 +44,9 @@ def _load() -> None:
                 from transformers import BitsAndBytesConfig
                 bnb_cfg = BitsAndBytesConfig(load_in_8bit=True)
                 logger.info(f"[siglip2_re] INT8 양자화 로드: {_MODEL_ID} (~0.50 GB VRAM)")
+                # [v9 GPU-strict] device_map="auto" → CPU offload 위험. GPU 강제.
                 _model = AutoModel.from_pretrained(
-                    _MODEL_ID, quantization_config=bnb_cfg, device_map="auto",
+                    _MODEL_ID, quantization_config=bnb_cfg, device_map={"": 0},
                 ).eval()
             except ImportError:
                 logger.warning("[siglip2_re] bitsandbytes 없음 — FP16 fallback")

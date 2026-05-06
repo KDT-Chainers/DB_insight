@@ -41,8 +41,10 @@ def _load():
                 from transformers import BitsAndBytesConfig
                 bnb_cfg = BitsAndBytesConfig(load_in_8bit=True)
                 logger.info(f"[dinov2_z] INT8 양자화 로드: {_MODEL_ID} (~0.65 GB VRAM)")
+                # [v9 GPU-strict] device_map="auto" 시 accelerate 가 메모리 추정
+                #   보수적 → 일부 layer CPU offload → ValueError. {"": 0} 강제.
                 _model = AutoModel.from_pretrained(
-                    _MODEL_ID, quantization_config=bnb_cfg, device_map="auto",
+                    _MODEL_ID, quantization_config=bnb_cfg, device_map={"": 0},
                 ).eval()
             except ImportError:
                 logger.warning("[dinov2_z] bitsandbytes 없음 — FP16 fallback")

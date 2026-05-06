@@ -101,7 +101,15 @@ class QwenKoCaptioner:
                     f"(quantize={self.quantize}, dtype={self.dtype})")
         self._processor = AutoProcessor.from_pretrained(self.model_id)
 
-        load_kwargs: dict = {"device_map": "auto" if bnb_cfg else device}
+        # [v9 GPU-strict] device_map="auto" 시 accelerate 가 GPU 메모리 추정을
+        #   보수적으로 잡아 일부 layer 를 CPU 로 offload → 추론 시 device mismatch
+        #   RuntimeError ("Expected all tensors to be on the same device").
+        #   Qwen2-VL-2B + NF4 는 ~2GB → RTX 4070 8GB 에 충분히 적재 가능.
+        #   {"": 0} 으로 root module 을 GPU 0 에 명시 매핑 → CPU offload 차단.
+        if bnb_cfg and device == "cuda":
+            load_kwargs: dict = {"device_map": {"": 0}}
+        else:
+            load_kwargs: dict = {"device_map": device}
         if bnb_cfg:
             load_kwargs["quantization_config"] = bnb_cfg
         else:
