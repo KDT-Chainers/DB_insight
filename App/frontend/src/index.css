@@ -220,6 +220,25 @@ body {
   background-color: rgba(28, 37, 62, 0.6);
 }
 
+/* 검색 요약 카드: 스크롤 시 유리 반짝 스윕 */
+.summary-glint-sweep {
+  animation: summary-glint-sweep 620ms ease-out both;
+}
+
+@keyframes summary-glint-sweep {
+  from {
+    transform: translateX(0);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.65;
+  }
+  to {
+    transform: translateX(460%);
+    opacity: 0;
+  }
+}
+
 /* 데이터 인덱싱·설정 — 순블랙 베이스 위 모노 글래스 */
 .di-glass-shell {
   background: linear-gradient(
