@@ -1,55 +1,94 @@
 cff-version: 1.2.0
 title: "Tri-CHEF: Complex-Hermitian Embedding Fusion for Korean Multimodal Retrieval"
-message: "If you use this software, please cite it as below."
+message: "If you use this software or paper, please cite it using the metadata below."
 type: software
+version: "1.0"
+date-released: "2026-05-06"
+license: CC-BY-4.0
+repository-code: "https://github.com/KDT-Chainers/DB_insight"
+url: "https://zenodo.org/records/20034371"
+doi: "10.5281/zenodo.20034370"
 authors:
-  - family-names: "SONG"
+  - family-names: "Song"
     given-names: "Young-Sang"
     email: "sjowun@gmail.com"
-  - family-names: "LEE"
+    orcid: "https://orcid.org/0009-0001-4636-9896"
+    affiliation: "Team Chainers, Korea IT Academy (KDT, Ministry of Employment and Labor), Independent Researchers"
+  - family-names: "Lee"
     given-names: "Hwon"
-  - family-names: "JANG"
+    affiliation: "Team Chainers, Korea IT Academy (KDT, Ministry of Employment and Labor), Independent Researchers"
+  - family-names: "Jang"
     given-names: "Ju Yeon"
-  - family-names: "HWANG"
+    affiliation: "Team Chainers, Korea IT Academy (KDT, Ministry of Employment and Labor), Independent Researchers"
+  - family-names: "Hwang"
     given-names: "Young Jin"
-  - family-names: "LEE"
+    affiliation: "Team Chainers, Korea IT Academy (KDT, Ministry of Employment and Labor), Independent Researchers"
+  - family-names: "Lee"
     given-names: "Tae Yoon"
-  - family-names: "GIM"
+    affiliation: "Team Chainers, Korea IT Academy (KDT, Ministry of Employment and Labor), Independent Researchers"
+  - family-names: "Gim"
     given-names: "Jeong Hye"
-repository-code: "https://github.com/KDT-Chainers/DB_insight"
-url: "https://github.com/KDT-Chainers/DB_insight"
+    affiliation: "Team Chainers, Korea IT Academy (KDT, Ministry of Employment and Labor), Independent Researchers"
 abstract: >-
-  Tri-CHEF is a Korean multimodal retrieval system that runs on a single
-  consumer GPU. It assigns three pretrained encoders (SigLIP2, BGE-M3,
-  DINOv2) to three orthogonal axes of a complex-valued embedding, then
-  combines them with a Hermitian-style modulus rather than a weighted sum.
-  Per-domain absolute thresholds are fit from random non-matching
-  query-document pairs and protected against drift during incremental
-  ingestion.
+  Tri-CHEF is a Korean multimodal retrieval system designed to run on a single
+  consumer GPU (RTX 4070 Laptop, 8 GB VRAM). It assigns three pretrained
+  encoders (SigLIP2, BGE-M3, DINOv2) to three orthogonal axes of a
+  complex-valued embedding and combines them through a Hermitian-style modulus
+  rather than a weighted sum. This design preserves each encoder's evidence
+  axis and prevents any single channel from dominating the score. A per-domain
+  absolute threshold is fitted from random non-matching query-document pairs,
+  and a drift guard rejects any new mu_null that falls outside half-to-double
+  of the previous value during incremental ingestion. A Korean-aware
+  character-bigram lexical filter and SHA-256 content-addressed caches complete
+  the pipeline across four domains: documents, images, video, and audio. We
+  further extend the deployed system with a fifth domain (background music,
+  BGM) via a deliberately decoupled CLAP+Chromaprint pipeline, demonstrating
+  when not to fuse - a complementary design lesson to the Tri-CHEF Hermitian
+  fusion. On the in-house corpus (2,390 images, 34,661 document pages, 205
+  video files, 117 audio files), the deployed system attains 77 ms p95 image
+  latency, leave-one-out Doc R@5=96.00% with MRR=0.8893 (both dense+sparse at
+  alpha_IM=0.20), and 93% Top-1 confidence on a 15-query Korean evaluation
+  set. On the public MIRACL-ko benchmark (213 dev queries, 1.486 M Wikipedia
+  passages), the Im-axis sub-system achieves nDCG@10=77.82%, surpassing the
+  published BGE-M3 dense baseline by +7.92 pp through exact FAISS IndexFlatIP
+  search.
 keywords:
   - "multimodal retrieval"
-  - "complex embeddings"
-  - "Hermitian-style scoring"
+  - "embedding fusion"
+  - "Hermitian operators"
   - "Korean NLP"
-  - "cross-modal calibration"
-  - "reciprocal rank fusion"
-license: Apache-2.0
+  - "artificial intelligence"
+  - "information retrieval"
+  - "SigLIP2"
+  - "BGE-M3"
+  - "DINOv2"
+  - "phase filter"
+  - "RRF"
+  - "audio fingerprinting"
+  - "CLAP"
+  - "Chromaprint"
+  - "cross-disciplinary"
 preferred-citation:
   type: article
   title: "Tri-CHEF: Complex-Hermitian Embedding Fusion for Korean Multimodal Retrieval"
   authors:
-    - family-names: "SONG"
+    - family-names: "Song"
       given-names: "Young-Sang"
-    - family-names: "LEE"
+      orcid: "https://orcid.org/0009-0001-4636-9896"
+    - family-names: "Lee"
       given-names: "Hwon"
-    - family-names: "JANG"
+    - family-names: "Jang"
       given-names: "Ju Yeon"
-    - family-names: "HWANG"
+    - family-names: "Hwang"
       given-names: "Young Jin"
-    - family-names: "LEE"
+    - family-names: "Lee"
       given-names: "Tae Yoon"
-    - family-names: "GIM"
+    - family-names: "Gim"
       given-names: "Jeong Hye"
   year: 2026
-  journal: "arXiv preprint"
-  notes: "arXiv ID will be added after submission"
+  month: 5
+  publisher:
+    name: Zenodo
+  doi: "10.5281/zenodo.20034370"
+  url: "https://zenodo.org/records/20034371"
+  notes: "Preprint, Zenodo (CC BY 4.0). Concept DOI 10.5281/zenodo.20034370 always resolves to the latest version."

@@ -37,6 +37,12 @@ _KO_EN: dict[str, list[str]] = {
     "여성":         ["woman", "female", "women"],
     "남성":         ["man", "male", "men"],
     "학생":           ["student", "pupil"],
+
+    # ── 흡연 / 담배 ────────────────────────────────────────────────
+    "담배":         ["cigarette", "smoking", "smoke", "tobacco", "흡연"],
+    "흡연":         ["smoking", "smoke", "cigarette", "tobacco", "담배"],
+    "담배피는":     ["smoking", "cigarette", "흡연"],
+    "흡연자":       ["smoker", "smoking person"],
     "선생":         ["teacher"],
     "교사":           ["teacher", "educator"],
     "노인":         ["elderly", "senior"],
@@ -436,6 +442,11 @@ _KO_EN: dict[str, list[str]] = {
     "man":          ["남성", "남자"],
     "child":        ["아이", "어린이"],
     "children":     ["아이들", "어린이"],
+    "cigarette":    ["담배", "흡연"],
+    "smoking":      ["담배", "흡연"],
+    "smoke":        ["담배", "흡연", "연기"],
+    "tobacco":      ["담배", "흡연"],
+    "smoker":       ["흡연자", "담배 피우는 사람"],
 
     # ── 연예 / 엔터테인먼트 ────────────────────────────────────────
     "드라마":       ["drama", "TV show", "series"],

@@ -175,18 +175,16 @@ def search():
         _RERANK_FLOOR = -5.0
         _STRONG_DENSE_CONF = 0.70  # dense+sparse 강매칭 임계값
         def _keep_after_rerank(r):
-            # AV(movie/music): passage 가 STT 일부라 reranker 점수가 본질적으로 낮음 → 면제
-            if r.get("file_type") in ("video", "audio"):
+            # [v8] AV(movie/music) + BGM: passage 가 STT 일부라 reranker 점수가
+            #   본질적으로 낮음 → 면제.
+            # [v9] image: caption 도 한국어 짧은 description 이라 CLIP+cross-
+            #   encoder 모두 약함. 특히 단일 토큰 한국어 쿼리('담배', '꽃' 등)에서
+            #   dense conf 가 0.5 근처로 수렴 → floor 통과 못해 0건 반환되는
+            #   부작용 발생. image 도메인도 면제.
+            if r.get("file_type") in ("video", "audio", "bgm", "image"):
                 return True
-            # BGM: 자체 점수 체계 사용 → 면제
-            if r.get("file_type") == "bgm":
-                return True
-            # [v8] doc/image: dense conf 가 강매칭(>=0.70) 이면 floor 무시.
-            #   짧은 passage(파일명+snippet) 에서 cross-encoder logit -5~-10 흔함.
-            #   '어린이' 검색 시 도서관이야기/OECD교육지표 등 conf 0.95+ 결과가
-            #   rerank_score=-6~-8 로 모두 잘려나가는 부작용 해결.
-            #   dense+sparse 가 충분히 매칭하면 cross-encoder 의 짧은-passage 약점
-            #   무시하고 결과 보존.
+            # doc: dense conf 가 강매칭(>=0.70) 이면 floor 무시 (어린이 doc 정상화).
+            #   doc 은 page 단위 텍스트가 충분히 길어서 cross-encoder 신호 신뢰 가능.
             if float(r.get("confidence") or 0.0) >= _STRONG_DENSE_CONF:
                 return True
             return r.get("rerank_score", 0.0) >= _RERANK_FLOOR
