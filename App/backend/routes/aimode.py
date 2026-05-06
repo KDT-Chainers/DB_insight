@@ -176,11 +176,24 @@ _prev_sources_lock = threading.Lock()
 
 
 # ── Ollama 함수 ────────────────────────────────────────────────────
-def _get_ollama_model() -> str | None:
+def _get_ollama_model(task: str | None = None) -> str | None:
+    """task 별 모델 분기 (하이브리드 모드).
+
+    - task='generate' : 답변/요약 생성용 → 작은 빠른 모델 우선 (gemma3:4b 등)
+    - 그 외(검색/intent/scan/router) : 정확도 우선 큰 모델 (gemma3:12b 등)
+
+    동일 머신에 여러 모델 보유 시 자동 선택. VRAM 부족하면 Ollama가 모델 스왑.
+    """
     try:
         r = _req.get(f"{OLLAMA_URL}/api/tags", timeout=3)
         models = r.json().get("models", [])
-        preferred = ["gemma3", "qwen2.5", "llama3.2", "llama3", "mistral", "phi4"]
+        if task == "generate":
+            # 답변 생성: 작은 모델 우선 (속도 우선). 4b 없으면 fallback 으로 큰 모델
+            preferred = ["gemma3:4b", "gemma3:1b", "qwen2.5:1.5b", "qwen2.5:3b",
+                         "gemma3", "qwen2.5", "llama3.2", "llama3", "mistral", "phi4"]
+        else:
+            # 검색/intent/scan/router: 정확도 우선 큰 모델
+            preferred = ["gemma3:12b", "gemma3", "qwen2.5", "llama3.2", "llama3", "mistral", "phi4"]
         for pref in preferred:
             for m in models:
                 if pref in m.get("name", "").lower():
@@ -1053,8 +1066,10 @@ def direct_generate_node(state: dict) -> dict:
 
     full_answer  = ""
     stream_error = None
+    # 하이브리드: 답변 생성은 작은 모델(4b) 사용. fallback 으로 state model 유지.
+    gen_model = _get_ollama_model("generate") or model
     try:
-        for tok in _ollama_stream(messages, model, num_predict=-1):
+        for tok in _ollama_stream(messages, gen_model, num_predict=-1):
             full_answer += tok
             _emit({"type": "token", "text": tok})
     except Exception as e:
@@ -1348,8 +1363,10 @@ def generate_node(state: dict) -> dict:
 
     full_answer  = ""
     stream_error = None
+    # 하이브리드: 답변 생성은 작은 모델(4b). 검색/intent/scan 은 state["model"](12b) 유지.
+    gen_model = _get_ollama_model("generate") or model
     try:
-        for tok in _ollama_stream(messages, model, num_predict=-1):  # 토큰 제한 없음
+        for tok in _ollama_stream(messages, gen_model, num_predict=-1):  # 토큰 제한 없음
             full_answer += tok
             _emit({"type": "token", "text": tok})
     except Exception as e:
@@ -2314,7 +2331,8 @@ def _summarize_sse(file_type: str, trichef_id: str, file_path: str,
     def emit(obj: dict) -> str:
         return f"data: {json.dumps(obj, ensure_ascii=False)}\n\n"
 
-    model = _get_ollama_model()
+    # 하이브리드: 요약은 답변 생성과 동일하게 작은 모델(4b) 사용
+    model = _get_ollama_model("generate")
     if not model:
         yield emit({"type": "error", "message": "Ollama 미연결 또는 모델 없음."})
         return
