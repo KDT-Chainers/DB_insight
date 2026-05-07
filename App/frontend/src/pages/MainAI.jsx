@@ -39,6 +39,146 @@ function fmtTime(sec) {
   return `${m}:${String(s % 60).padStart(2, '0')}`
 }
 
+function avStreamUrl(result) {
+  const domain =
+    result.trichef_domain ?? (result.file_type === 'video' ? 'movie' : 'music')
+  return `${API_BASE}/api/admin/file?domain=${domain}&id=${encodeURIComponent(result.file_path)}`
+}
+
+function AVDetailContent({ result }) {
+  const isVideo = result.file_type === 'video'
+  const playerRef = useRef(null)
+  const streamUrl = avStreamUrl(result)
+  const segments = result.segments ?? []
+
+  const seekTo = (startSec) => {
+    const p = playerRef.current
+    if (!p) return
+    p.currentTime = startSec
+    p.play().catch(() => {})
+  }
+
+  return (
+    <div className="flex flex-1 flex-col">
+      <div className="px-8 pb-4 pt-6">
+        <div className="overflow-hidden rounded-xl border border-white/10 bg-black/60">
+          {isVideo ? (
+            <video
+              ref={playerRef}
+              src={streamUrl}
+              controls
+              preload="metadata"
+              className="max-h-[280px] w-full object-contain"
+              onError={() => {}}
+            />
+          ) : (
+            <div className="flex flex-col items-center justify-center gap-3 p-6">
+              <span
+                className="material-symbols-outlined text-4xl text-amber-400"
+                style={{ fontVariationSettings: '"FILL" 1' }}
+              >
+                volume_up
+              </span>
+              <audio
+                ref={playerRef}
+                src={streamUrl}
+                controls
+                preload="metadata"
+                className="w-full"
+                onError={() => {}}
+              />
+            </div>
+          )}
+        </div>
+      </div>
+
+      {segments.length > 0 && (
+        <div className="flex-1 overflow-y-auto px-8 pb-4">
+          <p className="mb-3 flex items-center gap-1 text-sm font-bold uppercase tracking-widest text-slate-400">
+            <span className="material-symbols-outlined text-base">timeline</span>
+            매칭 구간 ({segments.length}개)
+          </p>
+          <div className="space-y-2">
+            {segments.map((seg, i) => {
+              const t0 = seg.start ?? seg.start_sec ?? 0
+              const t1 = seg.end ?? seg.end_sec ?? 0
+              const sc = seg.score ?? 0
+              const text = seg.text || seg.caption || ''
+              const pct = Math.round(sc * 100)
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => seekTo(t0)}
+                  className="group/seg w-full rounded-xl border border-white/10 bg-white/[0.04] p-3 text-left transition hover:border-violet-400/40 hover:bg-violet-500/10"
+                >
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="material-symbols-outlined text-base text-violet-300 transition-transform group-hover/seg:scale-110">
+                        play_circle
+                      </span>
+                      <span className="font-mono text-lg font-bold text-violet-200">{fmtTime(t0)}</span>
+                      <span className="text-sm text-slate-500">→</span>
+                      <span className="font-mono text-lg text-slate-400">{fmtTime(t1)}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <div className="h-1 w-16 overflow-hidden rounded-full bg-white/10">
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-amber-500 to-violet-500"
+                          style={{ width: `${Math.min(pct * 2, 100)}%` }}
+                        />
+                      </div>
+                      <span className="font-mono text-sm tabular-nums text-slate-500">{sc.toFixed(3)}</span>
+                    </div>
+                  </div>
+                  {text && (
+                    <p className="line-clamp-2 pl-7 text-xs leading-relaxed text-slate-400">{text}</p>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {segments.length === 0 && (
+        <div className="flex flex-1 items-center justify-center px-8 text-lg text-slate-500">
+          세그먼트 정보 없음
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** 우측 후보 패널 — 컴팩트 카드 (MainSearch ResultCard 단순화) */
+function FileCard({ source, index, scanState, selected, onClick }) {
+  const meta = getTypeMeta(source.file_type)
+  const pct = (((source.confidence ?? source.similarity ?? 0) * 100) || 0).toFixed(0)
+  return (
+    <button
+      type="button"
+      onClick={() => onClick(source)}
+      className={`flex flex-col gap-2 rounded-xl border p-3 text-left transition ${
+        selected
+          ? 'border-violet-400/55 bg-violet-500/[0.12] shadow-[0_0_24px_rgba(139,92,246,0.2)]'
+          : 'border-white/[0.12] bg-white/[0.03] hover:border-violet-300/35 hover:bg-white/[0.05]'
+      }`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <span className={`material-symbols-outlined shrink-0 text-xl ${meta.color}`} style={{ fontVariationSettings: '"FILL" 1' }}>
+          {meta.icon}
+        </span>
+        <span className="rounded-full bg-emerald-600/90 px-2 py-0.5 text-[10px] font-bold text-white">#{index + 1}</span>
+      </div>
+      <div className="line-clamp-2 text-[12px] font-semibold text-slate-100">{source.file_name}</div>
+      <div className="flex items-center justify-between text-[10px] text-slate-500">
+        <span className="uppercase tracking-wide">{scanState === 'scanning' ? '스캔…' : scanState}</span>
+        <span className="font-mono text-violet-200/90">{pct}%</span>
+      </div>
+    </button>
+  )
+}
+
 // AI 답변 안전장치 — 시스템 프롬프트로 마크다운 금지했지만,
 // LLM 이 이를 어길 경우를 대비한 프론트엔드 폴리필.
 // 별표/헤딩/백틱/인용/하이픈 불릿 → 평문 변환
@@ -1339,6 +1479,12 @@ export default function MainAI() {
   const inputRef    = useRef(null)
   const orbSinkRef  = useRef(null)
   const orbVoiceRef = useRef(0)
+  const conversationEndRef = useRef(null)
+
+  const [turns, setTurns] = useState([])
+  const [rightMode, setRightMode] = useState('cards')
+  const [selectedScanChunks, setSelectedScanChunks] = useState({})
+  const [securityMode, setSecurityMode] = useState(false)
 
   // aiHomeEntranceOn 제어
   useEffect(() => {
@@ -1382,7 +1528,7 @@ export default function MainAI() {
 
   // 로컬 전용: AIMODE 결과·상세 레이아웃 프리뷰 (백엔드 없이)
   useEffect(() => {
-    if (!_LOCAL_AI_DUMMY_HOST || location.pathname !== '/ai') return
+    if (import.meta.env?.VITE_LOCAL_AI_DUMMY !== '1' || location.pathname !== '/ai') return
     const sp = new URLSearchParams(location.search || '')
     if (sp.get('devDummy') !== '1') return
 
@@ -1487,6 +1633,7 @@ export default function MainAI() {
 
     setStreaming(true)
     setResults([])
+    setTurns([])
     setIterationData([])
     setDomainSelection(null)
     setAiError('')
@@ -1835,6 +1982,9 @@ export default function MainAI() {
     setAimodeDone(false)
     setResults([])
     setIterationData([])
+    setTurns([])
+    setRightMode('cards')
+    setSelectedScanChunks({})
     setSelectedFile(null)
     setFileDetail(null)
     setAiError('')
@@ -1853,8 +2003,13 @@ export default function MainAI() {
     setTimeout(() => navigate("/search"), 900);
   };
 
-  // 우측 패널: 최신 턴의 candidates
-  const rightCandidates = latestTurn?.candidates ?? [];
+  const latestTurn = turns.length ? turns[turns.length - 1] : null
+  const isAnyStreaming = streaming || turns.some((t) => t.streaming)
+
+  // 우측 패널: 에이전트 턴 후보 → 없으면 AIMODE `results` 폴백
+  const rightCandidates = latestTurn?.candidates?.length
+    ? latestTurn.candidates
+    : results;
   const rightScanStates = latestTurn?.scanStates ?? {};
   const shouldShowCenterNoInfoAlert =
     latestTurn?.done &&
@@ -1865,7 +2020,6 @@ export default function MainAI() {
   return (
     <div className={view === 'home' ? 'overflow-hidden h-screen relative' : 'min-h-screen relative text-on-surface'}
       style={{
-        display: "flex",
         height: "100vh",
         background: AI.bg,
         backgroundImage:
@@ -1898,14 +2052,14 @@ export default function MainAI() {
       {/* ════ HOME VIEW ════ */}
       {view === 'home' && (
         <>
-          <main className={`${ml} relative flex h-full min-h-0 flex-col overflow-x-hidden overflow-y-auto bg-transparent transition-[margin] duration-300 pt-8`}>
+          <main className={`${ml} relative flex h-full min-h-0 w-full flex-col overflow-x-visible overflow-y-auto bg-transparent transition-[margin] duration-300 pt-8`}>
             <div
-              className="ai-home-orbit-bg pointer-events-none absolute inset-0 z-0 min-h-0"
+              className={`ai-home-orbit-bg pointer-events-none absolute top-0 bottom-0 z-0 min-h-0 ${open ? '-left-64 w-[calc(100%+16rem)]' : 'inset-x-0'}`}
               style={{ '--ai-orbit-assemble': `${AI_ORB_ASSEMBLE_SECONDS}s` }}
               aria-hidden
             />
             {/* Orb */}
-            <div ref={orbSinkRef} className="absolute inset-0 z-0 min-h-0" aria-hidden>
+            <div ref={orbSinkRef} className={`absolute top-0 bottom-0 z-0 min-h-0 ${open ? '-left-64 w-[calc(100%+16rem)]' : 'inset-x-0'} `} aria-hidden>
               <AnimatedOrb
                 layout="fill"
                 colorMode="ai"
@@ -1921,7 +2075,7 @@ export default function MainAI() {
               />
             </div>
 
-            <div className={`pointer-events-none relative z-10 flex h-full min-h-0 w-full flex-col ${aiHomeEntranceOn ? 'main-search-entrance-on' : 'main-search-entrance-off'}`}>
+            <div className={`pointer-events-none relative z-10 flex h-full min-h-0 w-full flex-col ${open ? '-translate-x-32' : ''} ${aiHomeEntranceOn ? 'main-search-entrance-on' : 'main-search-entrance-off'}`}>
               <div className="relative z-10 flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-6 py-8 md:px-8">
                 <div className="relative flex w-full max-w-lg flex-col items-center justify-center">
                   <div className="relative z-10 flex w-full flex-col items-center gap-9 text-center md:gap-10">
@@ -1985,7 +2139,8 @@ export default function MainAI() {
                   ref={btnRef}
                   onClick={handleGoToSearch}
                   disabled={searchTransitioning}
-                  className="group flex items-center gap-3 rounded-full border border-white/20 px-8 py-3 text-sm font-bold uppercase tracking-widest text-neutral-300 transition-all duration-300 hover:border-white/40 hover:text-white hover:shadow-lg disabled:pointer-events-none"
+                  type="button"
+                  className="ai-home-search-mode-btn group flex items-center gap-3 rounded-full border border-white/20 px-8 py-3 text-sm font-bold uppercase tracking-widest text-neutral-300 transition-all duration-300 hover:border-white/40 hover:text-white hover:shadow-lg disabled:pointer-events-none"
                   style={{
                     background: 'rgba(255, 255, 255, 0.1)',
                     backdropFilter: 'blur(10px)',
@@ -2016,9 +2171,10 @@ export default function MainAI() {
         </>
         )}
 
-        {/* ══ CHAT ══ */}
-        {view === "chat" && (
+        {/* ══ CHAT ══ (검색/대화 결과 — doSearch·popstate 에서는 'results' 사용) */}
+        {(view === "chat" || view === "results" || view === "detail") && (
           <div
+            className={`${ml} min-h-0 w-full transition-[margin] duration-300`}
             style={{
               display: "flex",
               flexDirection: "column",

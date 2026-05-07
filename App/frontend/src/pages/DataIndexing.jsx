@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import WindowControls from "../components/WindowControls";
 import StudioThreePaneShell from "../components/StudioThreePaneShell";
@@ -1497,8 +1497,24 @@ function VectorStoreTab() {
 // ── 메인 ────────────────────────────────────────────────
 export default function DataIndexing() {
   const navigate = useNavigate();
+  const location = useLocation();
 
-  const [tab, setTab] = useState("indexing"); // 'sources' | 'indexing' | 'store'
+  const resolveInitialTab = useCallback(() => {
+    const stateTab = location.state?.tab;
+    if (stateTab === "sources" || stateTab === "indexing" || stateTab === "store") {
+      return stateTab;
+    }
+    return "sources";
+  }, [location.state]);
+  const [tab, setTab] = useState(resolveInitialTab); // 'sources' | 'indexing' | 'store'
+  const tabHistoryRef = useRef([]);
+  const setTabWithHistory = useCallback((nextTab) => {
+    setTab((prev) => {
+      if (prev === nextTab) return prev;
+      tabHistoryRef.current.push(prev);
+      return nextTab;
+    });
+  }, []);
 
   const [rootPath, setRootPath] = useState("");
   const [rootItems, setRootItems] = useState([]);
@@ -1849,7 +1865,7 @@ export default function DataIndexing() {
         label: "데이터 소스",
         subtitle: "원본 경로 및 등록",
         active: tab === "sources",
-        onClick: () => setTab("sources"),
+        onClick: () => setTabWithHistory("sources"),
       },
       {
         key: "indexing",
@@ -1857,7 +1873,7 @@ export default function DataIndexing() {
         label: "인덱싱",
         subtitle: "파일 선택 및 임베딩",
         active: tab === "indexing",
-        onClick: () => setTab("indexing"),
+        onClick: () => setTabWithHistory("indexing"),
       },
       {
         key: "store",
@@ -1865,10 +1881,10 @@ export default function DataIndexing() {
         label: "벡터 저장소",
         subtitle: "저장 상태 및 통계",
         active: tab === "store",
-        onClick: () => setTab("store"),
+        onClick: () => setTabWithHistory("store"),
       },
     ],
-    [navigate, tab],
+    [navigate, tab, setTabWithHistory],
   );
 
   const studioBreadcrumb = useMemo(
@@ -1994,16 +2010,22 @@ export default function DataIndexing() {
   }, [tab, selectedCount, estimateData, estimateLoading]);
 
   const handleGoBack = useCallback(() => {
-    // 요청 UX: 벡터 저장소 -> 데이터 소스 -> 관리자(시스템 설정) -> 공용페이지
+    // 탭 이동 히스토리가 있으면 마지막 누른 탭으로 복귀.
+    const prev = tabHistoryRef.current.pop();
+    if (prev) {
+      setTab(prev);
+      return;
+    }
+    // 기본 순차 복귀: 벡터 저장소 → 인덱싱 → 데이터 소스 → 메인(검색)
     if (tab === "store") {
+      setTab("indexing");
+      return;
+    }
+    if (tab === "indexing") {
       setTab("sources");
       return;
     }
-    if (tab === "sources") {
-      navigate("/settings");
-      return;
-    }
-    navigate("/settings");
+    navigate("/search");
   }, [navigate, tab]);
 
   const studioHero = useMemo(() => {
