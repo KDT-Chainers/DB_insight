@@ -243,7 +243,10 @@ def calibrate_image_crossmodal(captions: list[str],
 
 def _load_all() -> dict:
     if _CALIB_PATH.exists():
-        return json.loads(_CALIB_PATH.read_text(encoding="utf-8"))
+        try:
+            return json.loads(_CALIB_PATH.read_text(encoding="utf-8-sig"))
+        except Exception:
+            pass
     return {}
 
 

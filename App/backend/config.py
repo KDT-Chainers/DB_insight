@@ -107,7 +107,7 @@ TRICHEF_CFG = {
     #   α=0.35 → R@5 0.880 (dense), 0.900 (+sparse)  — 이전 기본값
     #   α=1.00 → R@5 0.000  (Im_body 무시 시 본문 검색 완전 실패)
     # proxy keyword bench 와 non-regression 동시 달성.
-    "DOC_IM_ALPHA": 0.20,
+    "DOC_IM_ALPHA": 0.35,
 
     # [ASF default] LOO/E2E/local_bench 모든 벤치에서 ASF on이 -3~20pp 손해 (2026-04-25 분석).
     #   LOO R@1: dense+sparse 83.3% → +ASF 63.3% (-20pp)

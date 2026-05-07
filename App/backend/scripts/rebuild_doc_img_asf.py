@@ -37,10 +37,36 @@ img_ids_path = img_cache / "img_ids.json"
 img_ids = json.loads(img_ids_path.read_text(encoding="utf-8"))["ids"]
 cap_dir = img_extract / "captions"
 
+# [v17] captions_triple.jsonl 우선 사용 (Qwen tags_kr/tags_en 포함)
+# 이전: load_caption → 구형 BLIP .caption.json만 읽음 (tags_kr 제외)
+# 개선: merge 후 captions_triple.jsonl에 L2=tagline+tags_kr, L3=synopsis+[EN]tags_en 포함
+# → ASF vocab/sparse가 한국어 tags 포함 → MPLC retrain 시 image sparse/asf weight 활성화
+TRIPLE_JSONL = img_cache / "captions_triple.jsonl"
+triple_by_key: dict[str, str] = {}
+if TRIPLE_JSONL.exists():
+    with TRIPLE_JSONL.open(encoding="utf-8", errors="replace") as _f:
+        for _line in _f:
+            _line = _line.strip()
+            if not _line:
+                continue
+            try:
+                _d = json.loads(_line)
+                _k = _d.get("key") or _d.get("id", "")
+                if _k:
+                    # L1+L2+L3 합산 (tags_kr in L2, tags_en in L3)
+                    _parts = [_d.get("L1",""), _d.get("L2",""), _d.get("L3","")]
+                    triple_by_key[_k] = " ".join(x for x in _parts if x)
+            except Exception:
+                continue
+    print(f"  captions_triple.jsonl 로드: {len(triple_by_key)}건 (L1+L2+L3+tags)")
+
 img_docs = []
 img_empty = 0
 for i in img_ids:
-    txt = load_caption(cap_dir, stem_key_for(i))
+    # captions_triple.jsonl 우선, 없으면 기존 load_caption fallback
+    txt = triple_by_key.get(i, "")
+    if not txt:
+        txt = load_caption(cap_dir, stem_key_for(i))
     if not txt:
         txt = load_caption(cap_dir, Path(i).stem)
     if not txt:

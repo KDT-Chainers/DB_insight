@@ -41,13 +41,31 @@ def search():
     if top_k <= 0:
         top_k = 10**6   # 실질 무제한 (메모리 안전한 큰 값)
 
+    # [Phase 3 v3] 자연어 노이즈 제거 — 어미/조사/동사 제거 후 명사구 보존.
+    # "재정건전화법안에 대한 입법과제와 쟁점이 정리된 자료를 찾아줘"
+    # → "재정건전화법안 입법과제 쟁점 자료 정리" (doc 매칭 향상).
+    _NOISE_PATTERNS = [
+        "에 대한", "에 관한", "에 관련된", "을 위한", "를 위한",
+        "을 찾아줘", "를 찾아줘", "을 찾아", "를 찾아",
+        "이 있나", "가 있나", "이 있을까", "가 있을까", "이 있어", "가 있어",
+        "보고싶어", "보여줘", "알려줘", "찾아봐", "필요해",
+        "이 정리된", "가 정리된", "이 포함된", "가 포함된",
+        " 좀 ", " 좀", " 같은 ", " 같은",
+    ]
+    _q_clean = query
+    for pat in _NOISE_PATTERNS:
+        _q_clean = _q_clean.replace(pat, " ")
+    _q_clean = " ".join(_q_clean.split())
+    if not _q_clean:
+        _q_clean = query
+
     # 한↔영 양방향 쿼리 확장 — sparse/ASF 채널이 다국어 토큰 모두 커버
     # (BGE-M3 dense 는 다국어 OK 지만 sparse 는 정확 토큰 매칭만)
     try:
         from services.query_expand import expand_bilingual
-        expanded_query = expand_bilingual(query)
+        expanded_query = expand_bilingual(_q_clean)
     except Exception:
-        expanded_query = query
+        expanded_query = _q_clean
 
     try:
         results: list[dict] = []
@@ -83,20 +101,17 @@ def search():
             from concurrent.futures import ThreadPoolExecutor
             from services.cmp_scoring import apply_cmp_to_results, CMP_THRESHOLD_NONE
 
-            # [v15] 도메인별 데이터 기반 최적 cap (의미 매칭 측정 결과):
-            #   doc:   평균 32 강매칭 → cap 50 (50% 여유, 응답 시간 단축)
-            #   image: 평균 57 강매칭 → cap 100
-            #   video: 평균 91 강매칭 → cap 100 (가장 풍부)
-            #   audio: 평균 80 강매칭 → cap 100
-            #   bgm:   평균 62 강매칭 → cap 100
-            # 합계 max 450 (사용자 요청 500 이내).
+            # [v15.2] 사용자 요구: 각 도메인 100, 전체 500.
+            #   measure_raw_distribution 측정에서 doc 의미 매칭 평균은 32건이지만
+            #   사용자 요구사항 일관성 우선 → 모든 도메인 cap 100 통일.
             DOMAIN_OPTIMAL_TOPK = {
-                "doc":   50,
+                "doc":   100,
                 "image": 100,
                 "video": 100,
                 "audio": 100,
                 "bgm":   100,
             }
+            # 합계 max 500 (=사용자 요청)
             # [v15.1 fix] scale factor 제거 — 항상 도메인 optimal cap 사용.
             # top_k 가 작아도 (예: 30) 도메인별 50~100건 retrieve 후 quota
             # 분배. 응답 시간 미세 증가 감수, 합격률 보장 우선.
@@ -144,16 +159,43 @@ def search():
                 from services.bsws_scoring import apply_bsws_to_results
                 apply_bsws_to_results(results_by_domain_pre, query)
             else:
-                from services.mplc_scoring import apply_mplc_to_results, MPLC_WEIGHTS
+                from services.mplc_scoring import (
+                    apply_mplc_to_results, MPLC_WEIGHTS, query_intent_boost,
+                )
                 if MPLC_WEIGHTS:
-                    apply_mplc_to_results(results_by_domain_pre, query)
+                    # [v17] Cross-lingual fix: pass bilingual-expanded query so
+                    # keyword_count fires for English queries that match Korean content.
+                    # e.g. "artificial intelligence" → expanded_query includes "인공지능"
+                    # → f5 (keyword_count) = 1.0 instead of 0.0 → MPLC scores doc correctly.
+                    # query_intent_boost still uses original query (domain language detection).
+                    apply_mplc_to_results(results_by_domain_pre, expanded_query)
+                # [Phase 3 v2] Query intent boost — 자연어 도메인 키워드 매칭 시
+                # 해당 도메인 confidence × full domain_relevance (1.0~2.0).
+                # cut 없이 ranking 만 영향. v16 (boost+cut) 회귀의 교훈으로
+                # cut 제거 + boost 만 full 적용.
+                #
+                # [v17.2] _rank_score 분리: min(1.0, c*boost) 클리핑으로
+                #   서로 다른 도메인 boost가 동일 1.0에 몰려 ranking 구분 불가 문제 수정.
+                #   _rank_score = c*boost (언캡, 정렬 전용)
+                #   confidence  = min(1.0, c*boost) (캡, UI 표시용)
+                for lst in results_by_domain_pre.values():
+                    for r in lst:
+                        r["_rank_score"] = float(r.get("confidence", 0) or 0)
+                for dom, lst in results_by_domain_pre.items():
+                    boost = query_intent_boost(query, dom)   # 1.0~2.0 (original query)
+                    if boost <= 1.0:
+                        continue
+                    for r in lst:
+                        c = float(r.get("confidence", 0) or 0)
+                        r["_rank_score"] = c * boost           # uncapped — for sort
+                        r["confidence"] = round(min(1.0, c * boost), 4)
 
             for lst in (img_only, doc_only, video, audio, bgm):
-                lst.sort(key=lambda r: r.get("confidence", 0), reverse=True)
+                lst.sort(key=lambda r: r.get("_rank_score", r.get("confidence", 0)), reverse=True)
 
             base_quota = max(1, TOTAL_CAP // 10)
             def _max_conf(lst):
-                return float(lst[0].get("confidence", 0.0)) if lst else 0.0
+                return float(lst[0].get("_rank_score", lst[0].get("confidence", 0.0))) if lst else 0.0
             def _adj_quota(mc):
                 if mc >= 0.80: return base_quota * 2
                 if mc >= 0.50: return base_quota
@@ -171,19 +213,26 @@ def search():
                              ("video", video), ("audio", audio), ("bgm", bgm)):
                 guaranteed.extend(lst[:quotas[key]])
 
-            _DOMAIN_W = {"image": 1.0, "doc": 1.0, "video": 0.75,
+            # [v14] doc 가중치 0.80 하향 — 새 한국어 요약 Im 캐시로 doc MPLC가
+            # 과도하게 높아져 extra 슬롯을 독식하는 현상 방지.
+            _DOMAIN_W = {"image": 1.0, "doc": 0.80, "video": 0.75,
                           "audio": 0.75, "bgm": 0.75}
             extras: list[dict] = []
             for key, lst in (("doc", doc_only), ("image", img_only),
                              ("video", video), ("audio", audio), ("bgm", bgm)):
                 extras.extend(lst[quotas[key]:])
             extras.sort(
-                key=lambda r: r.get("confidence", 0) *
+                key=lambda r: r.get("_rank_score", r.get("confidence", 0)) *
                               _DOMAIN_W.get(r.get("file_type", ""), 1.0),
                 reverse=True,
             )
 
             combined = guaranteed + extras
+            # [v14 fix] guaranteed 이터레이션 순서(doc→image→...)로 doc 이
+            # 항상 results[0] 을 차지하는 버그 수정.
+            # [v17.2] _rank_score 사용: uncapped boost 값으로 정렬하여
+            # 서로 다른 도메인 boost(doc×1.2 vs audio×1.3)가 올바르게 반영되도록.
+            combined.sort(key=lambda r: r.get("_rank_score", r.get("confidence", 0)), reverse=True)
             results = combined[:TOTAL_CAP]
 
     except Exception as e:
@@ -631,16 +680,24 @@ def _read_img_caption(cap_root: Path, key: str) -> str:
     simple_stem = Path(key).stem
 
     result = _try_stems([hash_stem])
-    if result is not None:
-        return result
-
-    # hash_stem 과 simple_stem 이 다를 때만 추가 탐색
-    if simple_stem != hash_stem:
+    if result is None and simple_stem != hash_stem:
         result = _try_stems([simple_stem])
-        if result is not None:
-            return result
+    base_text = result or ""
 
-    return ""
+    # [v17] tags_kr stage 파일 포함 — Qwen 생성 한국어 키워드 → keyword_count feature 활성화.
+    # key = "YS_1차/img.jpg" → stage파일 = "YS_1차__img.jpg_tags_kr.txt"
+    # keyword_count(image) weight=0.86: 쿼리어가 tags_kr에 있으면 +0.86 logit → 이미지 MPLC ↑
+    try:
+        safe_key = key.replace("/", "__").replace("\\", "__")
+        tags_path = cap_root / f"{safe_key}_tags_kr.txt"
+        if tags_path.exists():
+            tags_kr = tags_path.read_text(encoding="utf-8", errors="replace").strip()
+            if tags_kr:
+                return (base_text + " " + tags_kr).strip()
+    except Exception:
+        pass
+
+    return base_text
 
 
 def _doc_page_to_source(stem_key: str, doc_reg: dict) -> tuple[str, str]:

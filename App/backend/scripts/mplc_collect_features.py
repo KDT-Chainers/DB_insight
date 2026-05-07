@@ -89,21 +89,40 @@ def main() -> None:
     out_md = project_root / "md" / "_mplc_separability.md"
     out_csv.parent.mkdir(exist_ok=True)
 
-    print(f"[mplc-collect] {len(CASES)} 케이스 × 5도메인 × top 100 수집...")
+    # [v17] expand_bilingual: 서빙과 동일한 bilingual 확장 쿼리로 피처 추출
+    # EN 쿼리 "artificial intelligence" → "artificial intelligence 인공지능" 로 확장
+    # → keyword_count 이 한국어 콘텐츠에서도 발화 → 학습/서빙 피처 일관성 확보
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+        from services.query_expand import expand_bilingual as _expand_bilingual
+    except Exception:
+        _expand_bilingual = lambda q: q  # type: ignore
+
+    print(f"[mplc-collect] {len(CASES)} 케이스 × 5도메인 × top 100 수집 (KO+EN)...")
     rows: list[dict] = []
     for i, case in enumerate(CASES):
+        # 한국어+영어 쿼리 모두 수집 → MPLC cross-lingual 학습
+        queries_to_run = [(case.ko_query, "ko")]
+        if getattr(case, "en_query", None):
+            queries_to_run.append((case.en_query, "en"))
         for dom in ("doc", "image", "video", "audio", "bgm"):
-            results = search(case.ko_query, dom, top_k=100)
-            for r in results:
-                feats = extract_features(r, case.ko_query)
-                rel = is_relevant(case.domain, case.expected_keyword, r, dom)
-                rows.append({
-                    "case_id": case.id, "case_domain": case.domain,
-                    "result_domain": dom, "query": case.ko_query,
-                    "expected_kw": case.expected_keyword or "",
-                    "file_name": (r.get("file_name") or "")[:80],
-                    "relevant": rel, **feats,
-                })
+            for query, lang in queries_to_run:
+                results = search(query, dom, top_k=100)
+                # [v17] 학습/서빙 피처 일관성:
+                # 서빙 시 MPLC는 expand_bilingual(query)로 keyword_count 계산
+                # (EN 쿼리 + 한국어 번역 토큰이 한국어 콘텐츠에서 keyword_count 발화)
+                # → 학습도 동일하게 expanded_query로 피처 추출해야 일관성 보장
+                expanded_q = _expand_bilingual(query)
+                for r in results:
+                    feats = extract_features(r, expanded_q)  # 서빙과 동일한 expanded query 사용
+                    rel = is_relevant(case.domain, case.expected_keyword, r, dom)
+                    rows.append({
+                        "case_id": f"{case.id}__{lang}", "case_domain": case.domain,
+                        "result_domain": dom, "query": query,
+                        "expected_kw": case.expected_keyword or "",
+                        "file_name": (r.get("file_name") or "")[:80],
+                        "relevant": rel, **feats,
+                    })
         if (i + 1) % 10 == 0:
             print(f"  {i+1}/{len(CASES)}")
 

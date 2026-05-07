@@ -228,6 +228,24 @@ class BGMEngine:
                     "바람소리": ["wind", "nature sounds", "ambient"],
                     "물소리":   ["water", "stream", "nature sounds"],
                     "자연소리": ["nature sounds", "ambient", "outdoor"],
+                    # 감정 형용사 (xlang eval: "행복한 느낌", "슬픈 음악" 등)
+                    "행복한":   ["happy", "cheerful", "joyful", "bright", "upbeat"],
+                    "행복":     ["happy", "cheerful", "joyful"],
+                    "슬픈":     ["sad", "melancholic", "sorrowful"],
+                    "슬픔":     ["sad", "melancholic", "sorrowful", "emotional"],
+                    "느낌":     ["feel", "mood", "vibe"],
+                    "분위기":   ["atmosphere", "mood", "vibe", "ambiance"],
+                    "활기찬":   ["lively", "vibrant", "energetic"],
+                    "우울한":   ["sad", "melancholic", "gloomy", "depressing"],
+                    "긴장감있는": ["tense", "suspenseful", "dramatic"],
+                    "공포":     ["horror", "scary", "dark", "intense"],
+                    "설레는":   ["excited", "romantic", "uplifting"],
+                    "따뜻한":   ["warm", "cozy", "tender"],
+                    "차가운":   ["cold", "dark", "tense"],
+                    "몽환적인": ["dreamy", "ethereal", "mysterious"],
+                    "희망찬":   ["hopeful", "uplifting", "inspiring"],
+                    "신비":     ["mysterious", "ethereal", "magical"],
+                    "신비로운": ["mysterious", "ethereal", "ambient"],
                     # 장르
                     "재즈":     ["jazz"],
                     "클래식":   ["classical", "orchestral"],
@@ -258,8 +276,87 @@ class BGMEngine:
                         english_parts.append("music")
                 clap_query = " ".join(english_parts) if english_parts else raw_text
             else:
-                # English query: use as-is (CLAP handles English natively)
-                clap_query = raw_text
+                # English query: expand mood keywords to match Korean expansion depth.
+                # e.g. "calm music" → "calm peaceful gentle relaxing music"
+                # This ensures Korean "잔잔한 음악"→"calm peaceful gentle music"
+                # and English "calm music"→"calm peaceful gentle relaxing music"
+                # produce similar CLAP embedding neighborhoods.
+                _EN_MOOD_EXPAND: dict[str, list[str]] = {
+                    # Mood / feel
+                    "calm":       ["calm", "peaceful", "gentle", "relaxing", "serene"],
+                    "peaceful":   ["peaceful", "calm", "gentle", "tranquil"],
+                    "relaxing":   ["relaxing", "calm", "soothing", "gentle"],
+                    "suspense":   ["suspense", "tense", "dramatic", "intense", "dark"],
+                    "tense":      ["tense", "tension", "dramatic", "intense"],
+                    "dramatic":   ["dramatic", "epic", "orchestral", "intense"],
+                    "happy":      ["happy", "cheerful", "upbeat", "joyful", "bright"],
+                    "cheerful":   ["cheerful", "happy", "upbeat", "lively"],
+                    "sad":        ["sad", "melancholic", "sorrowful", "emotional"],
+                    "melancholic":["melancholic", "sad", "sorrowful", "emotional"],
+                    "dark":       ["dark", "tense", "dramatic", "intense"],
+                    "bright":     ["bright", "cheerful", "upbeat", "lively"],
+                    "energetic":  ["energetic", "upbeat", "lively", "fast"],
+                    "upbeat":     ["upbeat", "energetic", "lively", "cheerful"],
+                    "epic":       ["epic", "grand", "orchestral", "dramatic"],
+                    "grand":      ["grand", "epic", "orchestral"],
+                    "mysterious": ["mysterious", "ethereal", "ambient", "dark"],
+                    "romantic":   ["romantic", "warm", "tender", "sentimental"],
+                    "emotional":  ["emotional", "sentimental", "heartfelt"],
+                    "heavy":      ["heavy", "intense", "powerful", "dark"],
+                    "light":      ["light", "gentle", "soft", "airy"],
+                    "soft":       ["soft", "gentle", "light", "calm"],
+                    "fast":       ["fast", "upbeat", "energetic", "lively"],
+                    "slow":       ["slow", "calm", "relaxing", "gentle"],
+                    "lively":     ["lively", "energetic", "upbeat", "joyful"],
+                    "joyful":     ["joyful", "happy", "cheerful", "festive"],
+                    "festive":    ["festive", "joyful", "lively", "upbeat"],
+                    "soothing":   ["soothing", "calm", "relaxing", "gentle"],
+                    "serene":     ["serene", "calm", "peaceful", "tranquil"],
+                    "tranquil":   ["tranquil", "serene", "peaceful", "calm"],
+                    "tense":      ["tense", "dramatic", "intense", "dark"],
+                    "intense":    ["intense", "powerful", "dramatic", "heavy"],
+                    "powerful":   ["powerful", "epic", "intense", "heavy"],
+                    # Genre / instrument
+                    "jazz":       ["jazz", "blues", "swing"],
+                    "classical":  ["classical", "orchestral", "symphonic"],
+                    "rock":       ["rock", "electric guitar", "energetic"],
+                    "pop":        ["pop", "popular", "upbeat"],
+                    "electronic": ["electronic", "EDM", "synth", "ambient"],
+                    "acoustic":   ["acoustic", "unplugged", "guitar"],
+                    "ambient":    ["ambient", "atmospheric", "ethereal"],
+                    "orchestral": ["orchestral", "classical", "epic", "symphonic"],
+                    "cinematic":  ["cinematic", "orchestral", "film score", "epic"],
+                    "piano":      ["piano", "keyboard"],
+                    "guitar":     ["guitar", "acoustic guitar"],
+                    "violin":     ["violin", "strings"],
+                    "drums":      ["drums", "percussion", "rhythm"],
+                    "nature":     ["nature sounds", "ambient", "outdoor"],
+                    # Context
+                    "background": ["background music", "ambient"],
+                    "suspenseful":["suspenseful", "tense", "dramatic", "intense"],
+                }
+                import re as _re_en
+                en_tokens = _re_en.findall(r"[a-zA-Z']+", raw_text.lower())
+                expanded_parts: list[str] = []
+                expanded_seen: set[str] = set()
+                # Track which tokens were expanded vs passed through
+                any_expanded = False
+                for tok in en_tokens:
+                    expansions = _EN_MOOD_EXPAND.get(tok)
+                    if expansions:
+                        any_expanded = True
+                        for exp in expansions:
+                            if exp not in expanded_seen:
+                                expanded_parts.append(exp)
+                                expanded_seen.add(exp)
+                    else:
+                        if tok not in expanded_seen:
+                            expanded_parts.append(tok)
+                            expanded_seen.add(tok)
+                if any_expanded:
+                    clap_query = " ".join(expanded_parts)
+                else:
+                    clap_query = raw_text
         except Exception:
             clap_query = raw_text
 

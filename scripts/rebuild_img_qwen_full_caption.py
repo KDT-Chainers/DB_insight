@@ -121,6 +121,11 @@ def main():
                     if Path(a).is_file():
                         ap = Path(a)
                         break
+        if ap is None:
+            # fallback: ROOT/Data/raw_DB/Img/<key>
+            candidate = ROOT / "Data" / "raw_DB" / "Img" / key.replace("/", "\\")
+            if candidate.is_file():
+                ap = candidate
         paths.append(ap)
     n_valid = sum(1 for p in paths if p)
     print(f"디스크 매핑: {n_valid}/{n}", flush=True)
