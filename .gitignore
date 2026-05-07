@@ -291,3 +291,7 @@ App/backend/scripts/next_improvement_summary.md
 
 # 캡션 거짓말 카테고리별 산출물
 App/backend/scripts/lies_by_category/
+
+# 캡션 품질 파이프라인 산출물
+App/backend/scripts/caption_quality.json
+App/backend/scripts/caption_priority_analysis.md
