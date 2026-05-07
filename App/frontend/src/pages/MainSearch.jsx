@@ -11,6 +11,17 @@ import LocationBadge from "../components/search/LocationBadge";
 import DomainFilter from "../components/search/DomainFilter";
 import ScoreBreakdown from "../components/search/ScoreBreakdown";
 
+// ── + 버튼 도메인 메타 (domainFilter state 별 시각/플레이스홀더) ────────────
+// "" (도메인 미선택) 일 때 + 버튼은 기본 add 아이콘. 도메인 선택 시 그 도메인
+// 아이콘·색·링 으로 변경되어 사용자가 "현재 어떤 도메인 모드인지" 한눈에 인지.
+const PLUS_DOMAIN_META = {
+  ""    : { icon: "add",         label: "전체",   bg18: "rgba(133,173,255,0.18)", bg50: "rgba(133,173,255,0.55)", glow: "rgba(133,173,255,0.35)", solid: "rgb(133,173,255)", placeholder: "Ask anything..." },
+  doc   : { icon: "description", label: "문서",   bg18: "rgba(96,165,250,0.18)",  bg50: "rgba(96,165,250,0.55)",  glow: "rgba(96,165,250,0.40)",  solid: "rgb(96,165,250)",  placeholder: "문서에서 검색..." },
+  image : { icon: "image",       label: "이미지", bg18: "rgba(34,211,238,0.18)",  bg50: "rgba(34,211,238,0.55)",  glow: "rgba(34,211,238,0.40)",  solid: "rgb(34,211,238)",  placeholder: "이미지에서 검색..." },
+  video : { icon: "movie",       label: "동영상", bg18: "rgba(167,139,250,0.18)", bg50: "rgba(167,139,250,0.55)", glow: "rgba(167,139,250,0.40)", solid: "rgb(167,139,250)", placeholder: "동영상에서 검색..." },
+  audio : { icon: "volume_up",   label: "음성",   bg18: "rgba(251,191,36,0.18)",  bg50: "rgba(251,191,36,0.55)",  glow: "rgba(251,191,36,0.40)",  solid: "rgb(251,191,36)",  placeholder: "음성에서 검색..." },
+};
+
 // ── 파일 타입 메타 ───────────────────────────────────────
 const TYPE_META = {
   doc: {
@@ -1899,6 +1910,7 @@ export default function MainSearch() {
                         label: "동영상",
                         ic: "text-violet-400",
                         bg: "bg-violet-500/20 border-violet-400/30",
+                        isActive: domainFilter === "video",
                         action: () =>
                           setDomainFilter((f) =>
                             f === "video" ? "" : "video",
@@ -1910,6 +1922,7 @@ export default function MainSearch() {
                         label: "음성",
                         ic: "text-amber-400",
                         bg: "bg-amber-500/20 border-amber-400/30",
+                        isActive: domainFilter === "audio",
                         action: () =>
                           setDomainFilter((f) =>
                             f === "audio" ? "" : "audio",
@@ -1921,6 +1934,7 @@ export default function MainSearch() {
                         label: "이미지",
                         ic: "text-cyan-400",
                         bg: "bg-cyan-500/20 border-cyan-400/30",
+                        isActive: domainFilter === "image",
                         action: () =>
                           setDomainFilter((f) =>
                             f === "image" ? "" : "image",
@@ -1932,6 +1946,7 @@ export default function MainSearch() {
                         label: "문서",
                         ic: "text-blue-400",
                         bg: "bg-blue-500/20 border-blue-400/30",
+                        isActive: domainFilter === "doc",
                         action: () =>
                           setDomainFilter((f) => (f === "doc" ? "" : "doc")),
                       },
@@ -1972,16 +1987,21 @@ export default function MainSearch() {
                                 }}
                               >
                                 <div
-                                  className={`flex h-11 w-11 items-center justify-center rounded-full border ${it.bg} transition-all duration-150 group-hover:scale-125 group-hover:shadow-lg`}
+                                  className={`flex h-11 w-11 items-center justify-center rounded-full border ${it.bg} transition-all duration-150 group-hover:scale-125 group-hover:shadow-lg ${
+                                    it.isActive
+                                      ? "ring-2 ring-white/80 scale-110 shadow-[0_0_18px_rgba(255,255,255,0.4)]"
+                                      : ""
+                                  }`}
                                 >
                                   <span
                                     className={`material-symbols-outlined text-[22px] ${it.ic}`}
+                                    style={it.isActive ? { fontVariationSettings: '"FILL" 1' } : undefined}
                                   >
                                     {it.icon}
                                   </span>
                                 </div>
-                                <span className="text-[10px] font-semibold text-white/80 whitespace-pre-wrap text-center leading-tight drop-shadow">
-                                  {it.label}
+                                <span className={`text-[10px] font-semibold whitespace-pre-wrap text-center leading-tight drop-shadow ${it.isActive ? "text-white" : "text-white/80"}`}>
+                                  {it.isActive ? `${it.label} ✓` : it.label}
                                 </span>
                               </button>
                             );
@@ -2010,34 +2030,54 @@ export default function MainSearch() {
                           : "border-white/10 hover:border-white/20"
                     }`}
                 >
-                  {/* + 버튼 */}
-                  <button
-                    ref={plusBtnRef}
-                    type="button"
-                    onMouseDown={(e) => {
-                      e.stopPropagation();
-                      if (!plusMenuOpen && plusBtnRef.current) {
-                        const r = plusBtnRef.current.getBoundingClientRect();
-                        setPlusBtnCenter({
-                          x: r.left + r.width / 2,
-                          y: r.top + r.height / 2,
-                        });
-                      }
-                      setPlusMenuOpen((v) => !v);
-                    }}
-                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-all duration-300 relative z-50
-                      ${
-                        plusMenuOpen
-                          ? "bg-primary text-on-primary shadow-[0_0_20px_rgba(133,173,255,0.5)]"
-                          : "bg-primary/15 text-primary hover:bg-primary/25"
-                      }`}
-                  >
-                    <span
-                      className={`material-symbols-outlined text-[20px] font-bold transition-transform duration-300 ${plusMenuOpen ? "rotate-45" : ""}`}
-                    >
-                      add
-                    </span>
-                  </button>
+                  {/* + 버튼 — domainFilter 활성 시 그 도메인 아이콘·색으로 변경.
+                      우클릭 = 도메인 즉시 해제. */}
+                  {(() => {
+                    const _meta = PLUS_DOMAIN_META[domainFilter] || PLUS_DOMAIN_META[""];
+                    const _hasDomain = !!domainFilter;
+                    return (
+                      <button
+                        ref={plusBtnRef}
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                          if (!plusMenuOpen && plusBtnRef.current) {
+                            const r = plusBtnRef.current.getBoundingClientRect();
+                            setPlusBtnCenter({
+                              x: r.left + r.width / 2,
+                              y: r.top + r.height / 2,
+                            });
+                          }
+                          setPlusMenuOpen((v) => !v);
+                        }}
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          if (domainFilter) setDomainFilter("");
+                        }}
+                        title={_hasDomain
+                          ? `${_meta.label} 도메인 검색 활성 — 우클릭으로 해제`
+                          : "필터 메뉴 열기"}
+                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-all duration-300 relative z-50 ${
+                          !_hasDomain
+                            ? plusMenuOpen
+                              ? "bg-primary text-on-primary shadow-[0_0_20px_rgba(133,173,255,0.5)]"
+                              : "bg-primary/15 text-primary hover:bg-primary/25"
+                            : ""
+                        }`}
+                        style={_hasDomain ? {
+                          backgroundColor: plusMenuOpen ? _meta.bg50 : _meta.bg18,
+                          color: plusMenuOpen ? "#fff" : _meta.solid,
+                          boxShadow: `0 0 ${plusMenuOpen ? 20 : 14}px ${_meta.glow}`,
+                        } : undefined}
+                      >
+                        <span
+                          className={`material-symbols-outlined text-[20px] font-bold transition-transform duration-300 ${plusMenuOpen ? "rotate-45" : ""}`}
+                        >
+                          {plusMenuOpen ? "add" : _meta.icon}
+                        </span>
+                      </button>
+                    );
+                  })()}
                   <div className="relative min-h-[3.25rem] flex-1">
                     <input
                       ref={homeInputRef}
@@ -2049,7 +2089,7 @@ export default function MainSearch() {
                       }
                       onFocus={() => setSearchFocused(true)}
                       onBlur={() => setSearchFocused(false)}
-                      placeholder={listening ? "" : "Ask anything..."}
+                      placeholder={listening ? "" : (PLUS_DOMAIN_META[domainFilter] || PLUS_DOMAIN_META[""]).placeholder}
                       className="h-full w-full bg-transparent py-3 text-base text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none md:py-4 md:text-base"
                       readOnly={listening}
                     />
@@ -2172,7 +2212,7 @@ export default function MainSearch() {
                   <input
                     ref={resultsInputRef}
                     className="bg-transparent border-none focus:ring-0 w-full text-on-surface placeholder-on-surface-variant text-lg outline-none"
-                    placeholder={listening ? "" : "인텔리전스에 질문하세요..."}
+                    placeholder={listening ? "" : (domainFilter ? (PLUS_DOMAIN_META[domainFilter] || PLUS_DOMAIN_META[""]).placeholder : "인텔리전스에 질문하세요...")}
                     value={listening ? "" : inputValue}
                     onChange={(e) =>
                       !listening && setInputValue(e.target.value)

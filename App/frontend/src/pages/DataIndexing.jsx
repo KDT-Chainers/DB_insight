@@ -1627,7 +1627,8 @@ export default function DataIndexing() {
         const items = await scanPath(saved.rootPath);
         if (cancelled) return;
         setRootItems(items);
-        setCheckedPaths(saved.checkedPaths);
+        // [policy] checkedPaths 는 복원하지 않음 — 매번 빈 상태로 시작.
+        // (rootPath 만 복원해서 폴더 다시 선택하는 부담은 회피)
         const supported = items
           .filter((i) => i.kind === "file" && i.type)
           .map((i) => i.path);
@@ -1648,10 +1649,11 @@ export default function DataIndexing() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── 영속화: rootPath / checkedPaths 변경 시 자동 저장 ─────────────────
+  // ── 영속화: rootPath 만 저장 (checkedPaths 는 의도적으로 비움) ──────────
+  // 사용자가 앱 재시작 후 같은 폴더에서 시작은 가능하지만 체크 상태는 매번 초기화.
   useEffect(() => {
-    if (rootPath) saveIndexingState({ rootPath, checkedPaths });
-  }, [rootPath, checkedPaths]);
+    if (rootPath) saveIndexingState({ rootPath, checkedPaths: new Set() });
+  }, [rootPath]);
 
   // [UX] 인덱싱 탭 진입 시 진행 중인 작업이 있으면 모달 자동 재오픈.
   // 사용자가 다른 페이지(워크스페이스 등)에서 인덱싱 사이드바를 클릭하여
