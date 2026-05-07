@@ -2,6 +2,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import WindowControls from "../components/WindowControls";
 import StudioThreePaneShell from "../components/StudioThreePaneShell";
+import TutorialOverlay from "../components/tutorial/TutorialOverlay";
 import { API_BASE as API } from "../api";
 import { checkIndexed, fetchOrphans } from "../api/registry";
 import IndexedBadge from "../components/indexing/IndexedBadge";
@@ -1489,6 +1490,9 @@ export default function DataIndexing() {
     return "sources";
   }, [location.state]);
   const [tab, setTab] = useState(resolveInitialTab); // 'sources' | 'indexing' | 'store'
+  const [tutorialOpen, setTutorialOpen] = useState(false);
+  const [tutorialStep, setTutorialStep] = useState(0);
+  const restoreHydratedRef = useRef(false);
   const tabHistoryRef = useRef([]);
   const setTabWithHistory = useCallback((nextTab) => {
     setTab((prev) => {
@@ -1612,8 +1616,18 @@ export default function DataIndexing() {
     setModalVisible(true);
   }, []);
 
-  // ── 영속화: 마운트 시 이전 선택 복원 ──────────────────────────────────
+  // ── 영속화: 인덱싱 탭 진입 시 이전 선택 복원(지연 로드) ──────────────────
+  // 데이터 페이지 첫 진입 체감 속도를 위해, 무거운 scanPath 복원은
+  // indexing 탭을 실제로 열었을 때 1회만 수행한다.
   useEffect(() => {
+    if (tab !== "indexing") return;
+    const tutorialRunning =
+      typeof window !== "undefined" &&
+      localStorage.getItem("tutorial_active_v1") === "1";
+    if (tutorialRunning) return;
+    if (restoreHydratedRef.current) return;
+    restoreHydratedRef.current = true;
+
     const saved = loadIndexingState();
     if (!saved || !saved.rootPath) return;
     let cancelled = false;
@@ -1644,8 +1658,7 @@ export default function DataIndexing() {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [tab, tutorialOpen, registerPaths, registerOrphans]);
 
   // ── 영속화: rootPath 만 저장 (checkedPaths 는 의도적으로 비움) ──────────
   // 사용자가 앱 재시작 후 같은 폴더에서 시작은 가능하지만 체크 상태는 매번 초기화.
@@ -1826,6 +1839,57 @@ export default function DataIndexing() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (localStorage.getItem("tutorial_seen_v1") === "1") return;
+    if (localStorage.getItem("tutorial_active_v1") !== "1") return;
+
+    setTab("indexing");
+    const t = window.setTimeout(() => {
+      setTutorialOpen(true);
+      setTutorialStep(0);
+    }, 260);
+    return () => window.clearTimeout(t);
+  }, []);
+
+  const tutorialSteps = useMemo(
+    () => [
+      {
+        selector: '[data-tutorial-id="indexing-folder-select"]',
+        title: "이제 폴더를 선택해볼게요.",
+        description:
+          "인덱싱은 파일 내용을 검색하기 좋은 형태로 정리해 두는 작업이에요. 먼저 폴더 선택 버튼으로 분석할 파일 위치를 지정해볼게요.",
+      },
+      {
+        selector: '[data-tutorial-id="indexing-start"]',
+        title: "다음은 인덱싱 시작입니다.",
+        description:
+          "지금 하는 작업은 선택한 파일을 읽어서 검색용 임베딩을 만드는 과정입니다. 파일을 체크한 뒤 인덱싱 시작 버튼을 눌러 실행해보세요.",
+      },
+      {
+        title: "튜토리얼이 끝났어요.",
+        description:
+          "이제 메인 검색 화면으로 돌아가 원하는 내용을 바로 찾아보세요! 제가 다시 필요할 경우 설정 탭에서 찾아주세요!",
+        center: true,
+      },
+    ],
+    [],
+  );
+
+  const closeTutorial = useCallback(() => {
+    setTutorialOpen(false);
+    localStorage.setItem("tutorial_seen_v1", "1");
+    localStorage.removeItem("tutorial_active_v1");
+  }, []);
+
+  const nextTutorialStep = useCallback(() => {
+    if (tutorialStep < tutorialSteps.length - 1) {
+      setTutorialStep((s) => s + 1);
+      return;
+    }
+    closeTutorial();
+  }, [closeTutorial, tutorialStep, tutorialSteps.length]);
 
   const jobResultMap = jobStatus?.results
     ? Object.fromEntries(jobStatus.results.map((r) => [r.path, r]))
@@ -2093,6 +2157,7 @@ export default function DataIndexing() {
         <button
           type="button"
           onClick={handleSelectFolder}
+          data-tutorial-id="indexing-folder-select"
           disabled={loading || indexing}
           className="inline-flex h-10 shrink-0 items-center gap-2 rounded-full bg-white/[0.1] px-4 text-[13px] font-semibold text-white/90 ring-1 ring-white/[0.12] transition hover:bg-white/[0.14] disabled:opacity-40"
         >
@@ -2133,6 +2198,7 @@ export default function DataIndexing() {
         <div className="min-w-[8px] flex-1" />
         <button
           type="button"
+          data-tutorial-id="indexing-start"
           onClick={() => {
             if (indexing) showProgressModalByUser();
             else handleStartIndexing();
@@ -2338,6 +2404,14 @@ export default function DataIndexing() {
           }}
         />
       )}
+
+      <TutorialOverlay
+        open={tutorialOpen}
+        stepIndex={tutorialStep}
+        steps={tutorialSteps}
+        onNext={nextTutorialStep}
+        onSkip={closeTutorial}
+      />
     </div>
   );
 }
