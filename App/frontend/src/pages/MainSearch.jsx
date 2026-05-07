@@ -4,6 +4,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import SearchSidebar from "../components/SearchSidebar";
 import AnimatedOrb from "../components/AnimatedOrb";
 import AmbientPageBackdrop from "../components/AmbientPageBackdrop";
+import TutorialOverlay from "../components/tutorial/TutorialOverlay";
 import { useSidebar } from "../context/SidebarContext";
 import { useSpeechRecognition } from "../hooks/useSpeechRecognition";
 import { API_BASE } from "../api";
@@ -1406,6 +1407,8 @@ export default function MainSearch() {
   // AI 포털 전환
   const [aiTransitioning, setAiTransitioning] = useState(false);
   const [ripplePos, setRipplePos] = useState({ x: "50%", y: "50%" });
+  const [tutorialOpen, setTutorialOpen] = useState(false);
+  const [tutorialStep, setTutorialStep] = useState(0);
 
   /** 홈 첫 진입 시 stagger 등장(보안 인증 포털 직후 메인과 이어지게) */
   const [searchEntranceOn, setSearchEntranceOn] = useState(
@@ -1493,6 +1496,56 @@ export default function MainSearch() {
     const t = window.setTimeout(() => setSearchEntranceOn(true), 180);
     return () => clearTimeout(t);
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (location.pathname !== "/search") return;
+    if (localStorage.getItem("tutorial_seen_v1") === "1") return;
+
+    const t = window.setTimeout(() => {
+      setTutorialOpen(true);
+      setTutorialStep(0);
+    }, 420);
+    return () => window.clearTimeout(t);
+  }, [location.pathname]);
+
+  const tutorialSteps = [
+    {
+      introLines: [
+        "안녕하세요! 저는 디비예요.",
+        "당신의 DB를 관리해주는 매니저입니다.",
+        "지금부터 데이터 관리법을 짧게 안내해드릴게요.",
+      ],
+    },
+    {
+      selector: '[data-tutorial-id="sidebar-data-tab"]',
+      title: "데이터 탭으로 이동합니다.",
+      description:
+        "왼쪽 사이드바의 데이터 버튼을 누르면 인덱싱 화면으로 이동할 수 있어요.",
+    },
+  ];
+
+  const skipTutorial = useCallback(() => {
+    setTutorialOpen(false);
+    localStorage.setItem("tutorial_seen_v1", "1");
+    localStorage.removeItem("tutorial_active_v1");
+  }, []);
+
+  const nextTutorialStep = useCallback(() => {
+    if (tutorialStep < tutorialSteps.length - 1) {
+      setTutorialStep((s) => s + 1);
+      return;
+    }
+    setTutorialOpen(false);
+    localStorage.setItem("tutorial_active_v1", "1");
+    navigate("/data", {
+      state: {
+        workspaceReturn: "/search",
+        tab: "indexing",
+        tutorialFromOnboarding: true,
+      },
+    });
+  }, [navigate, tutorialStep, tutorialSteps.length]);
 
   // 뒤로가기
   useEffect(() => {
@@ -1907,6 +1960,14 @@ export default function MainSearch() {
 
       {/* 사이드바 */}
       <SearchSidebar entranceOn={searchEntranceOn} />
+
+      <TutorialOverlay
+        open={tutorialOpen}
+        stepIndex={tutorialStep}
+        steps={tutorialSteps}
+        onNext={nextTutorialStep}
+        onSkip={skipTutorial}
+      />
 
       {/* ════ HOME — v0 AIHero 레이아웃 + 기존 검색/STT/플라이 로직 ════ */}
       {view === "home" && (

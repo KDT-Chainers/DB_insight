@@ -346,6 +346,7 @@ export default function SearchSidebar({ entranceOn } = {}) {
                 </button>
                 <button
                   onClick={goDataPage}
+                  data-tutorial-id="sidebar-data-tab"
                   className={`flex flex-1 items-center justify-center gap-2 rounded-xl border px-3 py-2 transition-all duration-200 ${
                     location.pathname === '/data' ? S.pillActive : S.pillIdle
                   }`}
