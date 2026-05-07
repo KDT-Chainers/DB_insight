@@ -44,6 +44,11 @@ export default function SearchSidebar({ entranceOn } = {}) {
   const location = useLocation()
   const { open, toggle } = useSidebar()
   const aiPath = location.pathname === '/ai' || location.pathname.startsWith('/ai/')
+  const workspaceReturn = aiPath ? '/ai' : '/search'
+  const goDataPage = useCallback(
+    () => navigate('/data', { state: { workspaceReturn } }),
+    [navigate, workspaceReturn],
+  )
 
   const [aiSidebarView, setAiSidebarView] = useState(() => {
     const st = (typeof window !== 'undefined' && window.history?.state) ? window.history.state : null
@@ -147,7 +152,7 @@ export default function SearchSidebar({ entranceOn } = {}) {
                         icon: 'database',
                         title: '데이터',
                         active: location.pathname === '/data',
-                        onClick: () => navigate('/data'),
+                        onClick: goDataPage,
                       },
                       {
                         key: 'history',
@@ -179,7 +184,7 @@ export default function SearchSidebar({ entranceOn } = {}) {
                     <div className="mt-2.5 flex items-center justify-center">
                       <button
                         type="button"
-                        onClick={() => navigate('/data')}
+                        onClick={goDataPage}
                         title="관리자"
                         className="h-10 w-10 rounded-full border border-white/12 bg-[#050507] text-violet-300 flex items-center justify-center hover:bg-[#0a0a0d] transition-all"
                       >
@@ -289,7 +294,7 @@ export default function SearchSidebar({ entranceOn } = {}) {
                   <span className="font-manrope uppercase tracking-[0.03em] text-sm whitespace-nowrap">설정</span>
                 </button>
                 <button
-                  onClick={() => navigate('/data')}
+                  onClick={goDataPage}
                   className={`flex flex-1 items-center justify-center gap-2 rounded-xl border px-3 py-2 transition-all duration-200 ${
                     location.pathname === '/data' ? S.pillActive : S.pillIdle
                   }`}
@@ -351,7 +356,7 @@ export default function SearchSidebar({ entranceOn } = {}) {
               {/* Footer profile */}
               <button
                 type="button"
-                onClick={() => navigate('/data')}
+                onClick={goDataPage}
                 className="mt-auto flex w-full items-center gap-3 border-t border-outline-variant/10 px-2 pt-6 text-left transition-opacity hover:opacity-85"
               >
                 <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-primary-fixed-dim/20 bg-surface-container-highest">
