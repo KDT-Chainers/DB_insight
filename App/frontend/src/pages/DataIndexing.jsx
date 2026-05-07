@@ -1498,6 +1498,10 @@ function VectorStoreTab() {
 export default function DataIndexing() {
   const navigate = useNavigate();
   const location = useLocation();
+  const workspaceReturn = useMemo(
+    () => (location.state?.workspaceReturn === "/ai" ? "/ai" : "/search"),
+    [location.state],
+  );
 
   const resolveInitialTab = useCallback(() => {
     const stateTab = location.state?.tab;
@@ -1857,7 +1861,7 @@ export default function DataIndexing() {
         label: "워크스페이스",
         subtitle: "검색 · 기록",
         active: false,
-        onClick: () => navigate("/search"),
+        onClick: () => navigate(workspaceReturn),
       },
       {
         key: "sources",
@@ -1884,7 +1888,7 @@ export default function DataIndexing() {
         onClick: () => setTabWithHistory("store"),
       },
     ],
-    [navigate, tab, setTabWithHistory],
+    [navigate, tab, setTabWithHistory, workspaceReturn],
   );
 
   const studioBreadcrumb = useMemo(
@@ -1892,7 +1896,7 @@ export default function DataIndexing() {
       <>
         <button
           type="button"
-          onClick={() => navigate("/search")}
+          onClick={() => navigate(workspaceReturn)}
           className="shrink-0 rounded-lg px-1.5 py-0.5 text-white/48 transition hover:bg-white/[0.08] hover:text-white/88"
         >
           홈
@@ -1919,7 +1923,7 @@ export default function DataIndexing() {
         </span>
       </>
     ),
-    [navigate, tab],
+    [navigate, tab, workspaceReturn],
   );
 
   const studioRightWidgets = useMemo(() => {
@@ -1978,14 +1982,6 @@ export default function DataIndexing() {
               소스 경로를 바꾼 뒤에는 인덱싱 탭에서 필요한 범위만 다시 임베딩하세요.
             </p>
           </div>
-          <div className="apple-widget-card flex aspect-[4/3] max-h-[140px] items-center justify-center rounded-[18px]">
-            <span
-              className="material-symbols-outlined text-5xl text-white/12"
-              style={{ fontVariationSettings: '"FILL" 1' }}
-            >
-              hub
-            </span>
-          </div>
         </>
       );
     }
@@ -2001,9 +1997,6 @@ export default function DataIndexing() {
           <p className="text-[12px] leading-relaxed text-white/38">
             아래 요약 카드에서 타입별 청크 수와 전체 용량을 확인할 수 있습니다.
           </p>
-        </div>
-        <div className="apple-widget-card flex aspect-[4/3] max-h-[140px] items-center justify-center rounded-[18px]">
-          <span className="material-symbols-outlined text-5xl text-white/12">memory</span>
         </div>
       </>
     );
@@ -2025,8 +2018,8 @@ export default function DataIndexing() {
       setTab("sources");
       return;
     }
-    navigate("/search");
-  }, [navigate, tab]);
+    navigate(workspaceReturn);
+  }, [navigate, tab, workspaceReturn]);
 
   const studioHero = useMemo(() => {
     if (tab === "indexing") {
