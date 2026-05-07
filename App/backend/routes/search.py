@@ -247,7 +247,11 @@ def search():
     #
     #   전체 탭은 5도메인 mix + quota 분배로 head 다양성 확보되므로 default(50) 유지.
     #   비용 영향: 도메인 탭 cross-encoder GPU 추론 ~2배 (+0.5~1초/쿼리).
-    _rerank_pool = top_k if file_type in ("image", "doc", "video", "audio", "bgm") else None
+    # [BGM 회귀 수정 2026-05-08] BGM 결과는 cross-encoder rerank 제외.
+    #   배경: BGM 메타데이터 ("artist · title · tags") 가 짧아 cross-encoder 가
+    #   처리 실패 또는 NaN 반환 → 정렬 후 결과 0건으로 회귀.
+    #   해결: BGM 제외. BGM 매칭은 CLAP audio-text cosine 자체가 신뢰 가능.
+    _rerank_pool = top_k if file_type in ("image", "doc", "video", "audio") else None
     results = maybe_rerank(query, results, top_k_pool=_rerank_pool)
 
     # [v6] 재순위 후 관련성 하한 필터 — reranker 활성 시만 작동.
@@ -362,7 +366,10 @@ def search():
         "doc":   0.68,   # 0.58 → 0.68 (보이저호/팝송 무관 67% 이하 차단)
         "video": 0.75,
         "audio": 0.85,   # AV CDF 부풀림으로 실효 floor 약함
-        "bgm":   0.80,
+        # [BGM 회귀 수정 2026-05-08] 0.80 → 0.55.
+        # 실측 (soft jazz/잔잔한 음악): dense 0.56~0.71 (정상 매칭).
+        # 무관 (보이저호/AI): dense 0.51~0.53 → 0.55 floor 로 차단.
+        "bgm":   0.55,
     }
     # raw dense cosine — 가장 정직한 신호. 모든 도메인 적용.
     # AV: cosine_top1 (segment 최고), 그 외: dense.
