@@ -2,6 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useScale } from "../context/ScaleContext";
 import { API_BASE } from "../api";
+import { clearActiveJob, clearIndexingState } from "../utils/indexingPersist";
 import WindowControls from "../components/WindowControls";
 import StudioThreePaneShell from "../components/StudioThreePaneShell";
 
@@ -19,6 +20,7 @@ export default function Settings() {
   const [bgmTesting, setBgmTesting] = useState(false);
   const [bgmSyncing, setBgmSyncing] = useState(false);
   const [bgmMsg, setBgmMsg] = useState("");
+  const [factoryResetLoading, setFactoryResetLoading] = useState(false);
 
   const refreshBgmStatus = useCallback(async () => {
     try {
@@ -72,6 +74,47 @@ export default function Settings() {
       setBgmMsg(`실패: ${e.message}`);
     } finally {
       setBgmSyncing(false);
+    }
+  };
+
+  const handleFactoryReset = async () => {
+    if (factoryResetLoading) return;
+
+    const confirmed = window.confirm(
+      "정말 모든 데이터를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.",
+    );
+    if (!confirmed) return;
+
+    let completed = false;
+    setFactoryResetLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/reset`, {
+        method: "DELETE",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data?.success === false) {
+        throw new Error(
+          data?.message || data?.error || "데이터 삭제에 실패했습니다.",
+        );
+      }
+
+      clearIndexingState();
+      clearActiveJob();
+      try {
+        localStorage.removeItem("aimode_thread_id");
+      } catch {}
+      window.__aimodeThreadId = null;
+
+      completed = true;
+      window.alert(data?.message || "모든 데이터가 삭제되었습니다.");
+      navigate("/setup", { replace: true });
+    } catch (error) {
+      console.error(error);
+      window.alert(error?.message || "데이터 삭제 중 오류가 발생했습니다.");
+    } finally {
+      if (!completed) {
+        setFactoryResetLoading(false);
+      }
     }
   };
 
@@ -583,8 +626,13 @@ export default function Settings() {
                       모든 인덱스, 로컬 파일, 설정을 영구적으로 삭제합니다.
                     </p>
                   </div>
-                  <button className="shrink-0 border border-red-500/40 text-red-400 font-bold py-2.5 px-6 rounded-full text-lg hover:bg-red-500 hover:text-white transition-all duration-200 active:scale-95 whitespace-nowrap">
-                    앱 및 데이터 삭제
+                  <button
+                    type="button"
+                    onClick={handleFactoryReset}
+                    disabled={factoryResetLoading}
+                    className="shrink-0 border border-red-500/40 text-red-400 font-bold py-2.5 px-6 rounded-full text-lg hover:bg-red-500 hover:text-white transition-all duration-200 active:scale-95 whitespace-nowrap"
+                  >
+                    {factoryResetLoading ? "삭제 중..." : "앱 및 데이터 삭제"}
                   </button>
                 </div>
               </section>
