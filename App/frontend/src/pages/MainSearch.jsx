@@ -11,6 +11,17 @@ import LocationBadge from "../components/search/LocationBadge";
 import DomainFilter from "../components/search/DomainFilter";
 import ScoreBreakdown from "../components/search/ScoreBreakdown";
 
+// ── + 버튼 도메인 메타 (domainFilter state 별 시각/플레이스홀더) ────────────
+// "" (도메인 미선택) 일 때 + 버튼은 기본 add 아이콘. 도메인 선택 시 그 도메인
+// 아이콘·색·링 으로 변경되어 사용자가 "현재 어떤 도메인 모드인지" 한눈에 인지.
+const PLUS_DOMAIN_META = {
+  ""    : { icon: "add",         label: "전체",   bg18: "rgba(133,173,255,0.18)", bg50: "rgba(133,173,255,0.55)", glow: "rgba(133,173,255,0.35)", solid: "rgb(133,173,255)", placeholder: "Ask anything..." },
+  doc   : { icon: "description", label: "문서",   bg18: "rgba(96,165,250,0.18)",  bg50: "rgba(96,165,250,0.55)",  glow: "rgba(96,165,250,0.40)",  solid: "rgb(96,165,250)",  placeholder: "문서에서 검색..." },
+  image : { icon: "image",       label: "이미지", bg18: "rgba(34,211,238,0.18)",  bg50: "rgba(34,211,238,0.55)",  glow: "rgba(34,211,238,0.40)",  solid: "rgb(34,211,238)",  placeholder: "이미지에서 검색..." },
+  video : { icon: "movie",       label: "동영상", bg18: "rgba(167,139,250,0.18)", bg50: "rgba(167,139,250,0.55)", glow: "rgba(167,139,250,0.40)", solid: "rgb(167,139,250)", placeholder: "동영상에서 검색..." },
+  audio : { icon: "volume_up",   label: "음성",   bg18: "rgba(251,191,36,0.18)",  bg50: "rgba(251,191,36,0.55)",  glow: "rgba(251,191,36,0.40)",  solid: "rgb(251,191,36)",  placeholder: "음성에서 검색..." },
+};
+
 // ── 파일 타입 메타 ───────────────────────────────────────
 const TYPE_META = {
   doc: {
@@ -463,7 +474,7 @@ async function searchBgm(query, topK = 20) {
 }
 
 // ── 검색 API ────────────────────────────────────────────
-async function searchFiles(query, topK = 20, type = "") {
+async function searchFiles(query, topK = 30, type = "") {
   // BGM 단독 도메인일 때는 /api/bgm/search 만 호출
   if (type === "bgm") {
     return await searchBgm(query, topK);
@@ -642,6 +653,9 @@ function ResultCard({
     result.preview_url;
   const [imgError, setImgError] = useState(false);
   const playerRef = useRef(null);
+  // [PERF] 미디어 플레이어 지연 로딩 — 카드 클릭 전까지 <video>/<audio> 마운트 안함.
+  // 검색 결과가 수백 건일 때 동시 마운트로 UI 스레드 점유 방지.
+  const [playerMounted, setPlayerMounted] = useState(false);
 
   // ── 보안 모드: 이미지/문서 미리보기에 PII 마스킹 적용 ──
   const [maskedSrc, setMaskedSrc] = useState(null);
@@ -714,7 +728,7 @@ function ResultCard({
   const acc =
     rerank != null
       ? `${(sigmCalibrated(rerank) * 100).toFixed(1)}%`
-      : `${(Math.max(0, Math.min(1, ((zScore ?? 0) + 3) / 6)) * 100).toFixed(1)}%`;
+      : `${(Math.max(0, Math.min(1, conf)) * 100).toFixed(1)}%`;
 
   const streamUrl = isAV ? avStreamUrl(result) : null;
   const domainLabel = result.trichef_domain ?? result.file_type ?? "unknown";
@@ -748,17 +762,36 @@ function ResultCard({
         #{rank}
       </div>
 
-      {/* AV: 플레이어 */}
+      {/* AV: 플레이어 — [PERF] 클릭 시에만 마운트 (지연 로딩) */}
       {isAV && (
         <div
           className="px-3 py-2 bg-[#0b1220] border-b border-[#334155]"
           onClick={(e) => e.stopPropagation()}
         >
-          {result.file_type === "video" ? (
+          {!playerMounted ? (
+            /* 플레이스홀더 — 클릭하면 실제 플레이어로 교체 */
+            <div
+              className="w-full flex items-center justify-center bg-black/60 rounded cursor-pointer hover:bg-black/80 transition-colors gap-2 text-white/40 hover:text-white/80"
+              style={{ height: result.file_type === "video" ? "120px" : "44px" }}
+              onClick={() => setPlayerMounted(true)}
+            >
+              <span
+                className="material-symbols-outlined"
+                style={{
+                  fontSize: result.file_type === "video" ? "44px" : "24px",
+                  fontVariationSettings: '"FILL" 1',
+                }}
+              >
+                play_circle
+              </span>
+              <span className="text-xs select-none">클릭하여 재생</span>
+            </div>
+          ) : result.file_type === "video" ? (
             <video
               ref={playerRef}
               src={streamUrl}
               controls
+              autoPlay
               preload="metadata"
               className="w-full block outline-none bg-black"
               style={{ maxHeight: "200px" }}
@@ -768,6 +801,7 @@ function ResultCard({
               ref={playerRef}
               src={streamUrl}
               controls
+              autoPlay
               preload="metadata"
               className="w-full block outline-none"
             />
@@ -828,7 +862,7 @@ function ResultCard({
         {/* 1. 도메인 배지 */}
         <div className="flex gap-1 flex-wrap">
           <span
-            className={`text-[10px] px-2 py-0.5 rounded-full border transform origin-left transition-transform duration-200 ease-out hover:scale-x-105 ${DOMAIN_CLS[domainLabel] ?? "bg-[#0b1220] text-[#64748b] border-[#334155]"}`}
+            className={`text-[10px] px-2 py-0.5 rounded-full border ${DOMAIN_CLS[domainLabel] ?? "bg-[#0b1220] text-[#64748b] border-[#334155]"}`}
           >
             {domainLabel}
           </span>
@@ -1310,6 +1344,9 @@ export default function MainSearch() {
   const [summaryDone, setSummaryDone] = useState(false);
   const [summaryError, setSummaryError] = useState("");
   const [summaryMeta, setSummaryMeta] = useState(null); // {model, length, kind}
+  // 보안 모드: SecurityCritic 차단/마스킹 결과
+  const [summaryBlocked, setSummaryBlocked] = useState(null); // {stage, reason, pii_types}
+  const [summarySecurity, setSummarySecurity] = useState(null); // {masked, pii_types, reason}
   const summaryAbortRef = useRef(null);
 
   // home → results 애니메이션
@@ -1435,7 +1472,9 @@ export default function MainSearch() {
     setSearching(true);
     setSearchError("");
     try {
-      const data = await searchFiles(q, 20, type);
+      const topK = type ? 100 : 500;  // 도메인 탭=100, 전체=500 — backend 도메인 cap과 일치
+                                       // (lazy loading으로 UI freeze 해결됨)
+      const data = await searchFiles(q, topK, type);
       setResults(data);
       // 검색 기록 저장 → 완료 후 사이드바 갱신 이벤트
       fetch(`${API_BASE}/api/history`, {
@@ -1507,70 +1546,85 @@ export default function MainSearch() {
   }, []);
 
   // ── 요약 시작 (Ollama qwen 스트리밍) ─────────────────────────
-  const handleSummarize = useCallback(async (file) => {
-    if (!file) return;
-    if (summaryAbortRef.current) summaryAbortRef.current.abort();
-    const ctrl = new AbortController();
-    summaryAbortRef.current = ctrl;
-    setSummarizing(true);
-    setSummaryText("");
-    setSummaryDone(false);
-    setSummaryError("");
-    setSummaryMeta(null);
-    try {
-      const body = {
-        file_type: file.file_type,
-        trichef_id: file.trichef_id || file.id || "",
-        file_path: file.file_path || "",
-        file_name: file.file_name || "",
-        segments: file.segments || [],
-      };
-      const res = await fetch(`${API_BASE}/api/aimode/summarize`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-        signal: ctrl.signal,
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop();
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          let ev;
-          try {
-            ev = JSON.parse(line.slice(6));
-          } catch {
-            continue;
+  const handleSummarize = useCallback(
+    async (file) => {
+      if (!file) return;
+      if (summaryAbortRef.current) summaryAbortRef.current.abort();
+      const ctrl = new AbortController();
+      summaryAbortRef.current = ctrl;
+      setSummarizing(true);
+      setSummaryText("");
+      setSummaryDone(false);
+      setSummaryError("");
+      setSummaryMeta(null);
+      setSummaryBlocked(null);
+      setSummarySecurity(null);
+      try {
+        const body = {
+          file_type: file.file_type,
+          trichef_id: file.trichef_id || file.id || "",
+          file_path: file.file_path || "",
+          file_name: file.file_name || "",
+          segments: file.segments || [],
+          secure: securityMode,
+        };
+        const res = await fetch(`${API_BASE}/api/aimode/summarize`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+          signal: ctrl.signal,
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop();
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            let ev;
+            try {
+              ev = JSON.parse(line.slice(6));
+            } catch {
+              continue;
+            }
+            if (ev.type === "token")
+              setSummaryText((prev) => prev + (ev.text || ""));
+            else if (ev.type === "content_loaded")
+              setSummaryMeta((m) => ({
+                ...(m || {}),
+                length: ev.length,
+                kind: ev.kind,
+              }));
+            else if (ev.type === "info")
+              setSummaryMeta((m) => ({ ...(m || {}), model: ev.model }));
+            else if (ev.type === "done") {
+              setSummaryDone(true);
+              if (ev.summary) setSummaryText(ev.summary);
+              if (ev.security) setSummarySecurity(ev.security);
+            } else if (ev.type === "blocked") {
+              setSummaryBlocked({
+                stage: ev.stage || "final",
+                reason: ev.reason || "보안 정책상 요약이 차단되었습니다.",
+                pii_types: ev.pii_types || [],
+              });
+              setSummaryDone(true);
+            } else if (ev.type === "error")
+              setSummaryError(ev.message || "오류");
           }
-          if (ev.type === "token")
-            setSummaryText((prev) => prev + (ev.text || ""));
-          else if (ev.type === "content_loaded")
-            setSummaryMeta((m) => ({
-              ...(m || {}),
-              length: ev.length,
-              kind: ev.kind,
-            }));
-          else if (ev.type === "info")
-            setSummaryMeta((m) => ({ ...(m || {}), model: ev.model }));
-          else if (ev.type === "done") {
-            setSummaryDone(true);
-            if (ev.summary) setSummaryText(ev.summary);
-          } else if (ev.type === "error") setSummaryError(ev.message || "오류");
         }
+      } catch (e) {
+        if (e.name !== "AbortError") setSummaryError(e.message || "요약 실패");
+      } finally {
+        setSummarizing(false);
       }
-    } catch (e) {
-      if (e.name !== "AbortError") setSummaryError(e.message || "요약 실패");
-    } finally {
-      setSummarizing(false);
-    }
-  }, []);
+    },
+    [securityMode],
+  );
 
   const closeSummary = useCallback(() => {
     if (summaryAbortRef.current) summaryAbortRef.current.abort();
@@ -1579,6 +1633,8 @@ export default function MainSearch() {
     setSummaryDone(false);
     setSummaryError("");
     setSummaryMeta(null);
+    setSummaryBlocked(null);
+    setSummarySecurity(null);
   }, []);
 
   const handleBgmIdentify = useCallback(async (file) => {
@@ -1826,10 +1882,10 @@ export default function MainSearch() {
                 className={`mse-hero-down mb-6 text-center transition-all duration-300 ${homeExiting ? "opacity-0 -translate-y-6" : ""}`}
               >
                 <h1 className="mb-3 text-3xl font-light tracking-tight text-on-surface text-balance md:text-5xl lg:text-6xl">
-                  나만의 데이터 인사이트
+                  Local Intelligence
                 </h1>
                 <p className="text-lg text-on-surface-variant md:text-xl">
-                  파일 이름 몰라도 괜찮아요, 내용만 떠올려보세요
+                  Your Data Stays Yours
                 </p>
               </div>
 
@@ -1879,6 +1935,7 @@ export default function MainSearch() {
                         label: "동영상",
                         ic: "text-violet-400",
                         bg: "bg-violet-500/20 border-violet-400/30",
+                        isActive: domainFilter === "video",
                         action: () =>
                           setDomainFilter((f) =>
                             f === "video" ? "" : "video",
@@ -1890,6 +1947,7 @@ export default function MainSearch() {
                         label: "음성",
                         ic: "text-amber-400",
                         bg: "bg-amber-500/20 border-amber-400/30",
+                        isActive: domainFilter === "audio",
                         action: () =>
                           setDomainFilter((f) =>
                             f === "audio" ? "" : "audio",
@@ -1901,6 +1959,7 @@ export default function MainSearch() {
                         label: "이미지",
                         ic: "text-cyan-400",
                         bg: "bg-cyan-500/20 border-cyan-400/30",
+                        isActive: domainFilter === "image",
                         action: () =>
                           setDomainFilter((f) =>
                             f === "image" ? "" : "image",
@@ -1912,6 +1971,7 @@ export default function MainSearch() {
                         label: "문서",
                         ic: "text-blue-400",
                         bg: "bg-blue-500/20 border-blue-400/30",
+                        isActive: domainFilter === "doc",
                         action: () =>
                           setDomainFilter((f) => (f === "doc" ? "" : "doc")),
                       },
@@ -1952,16 +2012,21 @@ export default function MainSearch() {
                                 }}
                               >
                                 <div
-                                  className={`flex h-11 w-11 items-center justify-center rounded-full border ${it.bg} transition-all duration-150 group-hover:scale-125 group-hover:shadow-lg`}
+                                  className={`flex h-11 w-11 items-center justify-center rounded-full border ${it.bg} transition-all duration-150 group-hover:scale-125 group-hover:shadow-lg ${
+                                    it.isActive
+                                      ? "ring-2 ring-white/80 scale-110 shadow-[0_0_18px_rgba(255,255,255,0.4)]"
+                                      : ""
+                                  }`}
                                 >
                                   <span
                                     className={`material-symbols-outlined text-[22px] ${it.ic}`}
+                                    style={it.isActive ? { fontVariationSettings: '"FILL" 1' } : undefined}
                                   >
                                     {it.icon}
                                   </span>
                                 </div>
-                                <span className="text-[10px] font-semibold text-white/80 whitespace-pre-wrap text-center leading-tight drop-shadow">
-                                  {it.label}
+                                <span className={`text-[10px] font-semibold whitespace-pre-wrap text-center leading-tight drop-shadow ${it.isActive ? "text-white" : "text-white/80"}`}>
+                                  {it.isActive ? `${it.label} ✓` : it.label}
                                 </span>
                               </button>
                             );
@@ -1990,34 +2055,54 @@ export default function MainSearch() {
                           : "border-white/10 hover:border-white/20"
                     }`}
                 >
-                  {/* + 버튼 */}
-                  <button
-                    ref={plusBtnRef}
-                    type="button"
-                    onMouseDown={(e) => {
-                      e.stopPropagation();
-                      if (!plusMenuOpen && plusBtnRef.current) {
-                        const r = plusBtnRef.current.getBoundingClientRect();
-                        setPlusBtnCenter({
-                          x: r.left + r.width / 2,
-                          y: r.top + r.height / 2,
-                        });
-                      }
-                      setPlusMenuOpen((v) => !v);
-                    }}
-                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-all duration-300 relative z-50
-                      ${
-                        plusMenuOpen
-                          ? "bg-primary text-on-primary shadow-[0_0_20px_rgba(133,173,255,0.5)]"
-                          : "bg-primary/15 text-primary hover:bg-primary/25"
-                      }`}
-                  >
-                    <span
-                      className={`material-symbols-outlined text-[20px] font-bold transition-transform duration-300 ${plusMenuOpen ? "rotate-45" : ""}`}
-                    >
-                      add
-                    </span>
-                  </button>
+                  {/* + 버튼 — domainFilter 활성 시 그 도메인 아이콘·색으로 변경.
+                      우클릭 = 도메인 즉시 해제. */}
+                  {(() => {
+                    const _meta = PLUS_DOMAIN_META[domainFilter] || PLUS_DOMAIN_META[""];
+                    const _hasDomain = !!domainFilter;
+                    return (
+                      <button
+                        ref={plusBtnRef}
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                          if (!plusMenuOpen && plusBtnRef.current) {
+                            const r = plusBtnRef.current.getBoundingClientRect();
+                            setPlusBtnCenter({
+                              x: r.left + r.width / 2,
+                              y: r.top + r.height / 2,
+                            });
+                          }
+                          setPlusMenuOpen((v) => !v);
+                        }}
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          if (domainFilter) setDomainFilter("");
+                        }}
+                        title={_hasDomain
+                          ? `${_meta.label} 도메인 검색 활성 — 우클릭으로 해제`
+                          : "필터 메뉴 열기"}
+                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-all duration-300 relative z-50 ${
+                          !_hasDomain
+                            ? plusMenuOpen
+                              ? "bg-primary text-on-primary shadow-[0_0_20px_rgba(133,173,255,0.5)]"
+                              : "bg-primary/15 text-primary hover:bg-primary/25"
+                            : ""
+                        }`}
+                        style={_hasDomain ? {
+                          backgroundColor: plusMenuOpen ? _meta.bg50 : _meta.bg18,
+                          color: plusMenuOpen ? "#fff" : _meta.solid,
+                          boxShadow: `0 0 ${plusMenuOpen ? 20 : 14}px ${_meta.glow}`,
+                        } : undefined}
+                      >
+                        <span
+                          className={`material-symbols-outlined text-[20px] font-bold transition-transform duration-300 ${plusMenuOpen ? "rotate-45" : ""}`}
+                        >
+                          {plusMenuOpen ? "add" : _meta.icon}
+                        </span>
+                      </button>
+                    );
+                  })()}
                   <div className="relative min-h-[3.25rem] flex-1">
                     <input
                       ref={homeInputRef}
@@ -2029,7 +2114,7 @@ export default function MainSearch() {
                       }
                       onFocus={() => setSearchFocused(true)}
                       onBlur={() => setSearchFocused(false)}
-                      placeholder={listening ? "" : "Ask anything..."}
+                      placeholder={listening ? "" : (PLUS_DOMAIN_META[domainFilter] || PLUS_DOMAIN_META[""]).placeholder}
                       className="h-full w-full bg-transparent py-3 text-base text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none md:py-4 md:text-base"
                       readOnly={listening}
                     />
@@ -2152,7 +2237,7 @@ export default function MainSearch() {
                   <input
                     ref={resultsInputRef}
                     className="bg-transparent border-none focus:ring-0 w-full text-on-surface placeholder-on-surface-variant text-lg outline-none"
-                    placeholder={listening ? "" : "인텔리전스에 질문하세요..."}
+                    placeholder={listening ? "" : (domainFilter ? (PLUS_DOMAIN_META[domainFilter] || PLUS_DOMAIN_META[""]).placeholder : "인텔리전스에 질문하세요...")}
                     value={listening ? "" : inputValue}
                     onChange={(e) =>
                       !listening && setInputValue(e.target.value)
@@ -2331,11 +2416,12 @@ export default function MainSearch() {
                 />
               </div>
 
-              {/* [노이즈 제거] 저신뢰도 결과 숨김 토글 — 신뢰도 < 5% 인 결과 자동 hide.
+              {/* [노이즈 제거] 저신뢰도 결과 숨김 토글 — 신뢰도 < 20% 인 결과 자동 hide.
                 Reranker 가 부적합 판정한 결과(예: '박태웅 의장' 검색에 신발 사진)를
-                기본 숨김 처리하여 노이즈 제거. 사용자는 토글로 전체 보기 가능. */}
+                기본 숨김 처리하여 노이즈 제거. 사용자는 토글로 전체 보기 가능.
+                [v10] 5% → 20% 상향: backend floor와 동일 기준으로 통일. */}
               {(() => {
-                const LOW = 0.05;
+                const LOW = 0.20;
                 const lowCount = results.filter(
                   (r) => (r.confidence ?? 0) < LOW,
                 ).length;
@@ -2395,7 +2481,7 @@ export default function MainSearch() {
               {!searching &&
                 results.length > 0 &&
                 (() => {
-                  const LOW = 0.05;
+                  const LOW = 0.20;
                   const visible = hideLowConf
                     ? results.filter((r) => (r.confidence ?? 0) >= LOW)
                     : results;
@@ -2567,7 +2653,7 @@ export default function MainSearch() {
 
               <section className="mx-auto max-w-[1400px] space-y-6 px-8 pb-12 pt-52">
                 {/* AI 요약 패널 — 보라 제거 · 배경 따름 + 글래스 */}
-                {(summarizing || summaryText || summaryError) && (
+                {(summarizing || summaryText || summaryError || summaryBlocked) && (
                   <div className="relative overflow-hidden rounded-[22px] border border-white/[0.07] bg-white/[0.03] shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_20px_50px_rgba(0,0,0,0.28)] backdrop-blur-[44px]">
                     <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#85adff]/[0.06] via-transparent to-transparent" />
                     <div className="relative flex items-center gap-3 px-6 py-4">
@@ -2609,7 +2695,17 @@ export default function MainSearch() {
                           </p>
                         )}
                       </div>
-                      {summaryDone ? (
+                      {summaryBlocked ? (
+                        <span className="flex items-center gap-1 text-xs text-rose-300">
+                          <span
+                            className="material-symbols-outlined text-base"
+                            style={{ fontVariationSettings: '"FILL" 1' }}
+                          >
+                            shield
+                          </span>{" "}
+                          차단됨
+                        </span>
+                      ) : summaryDone ? (
                         <span className="flex items-center gap-1 text-xs text-emerald-400/95">
                           <span className="material-symbols-outlined text-base">
                             check_circle
@@ -2638,7 +2734,30 @@ export default function MainSearch() {
                       </button>
                     </div>
                     <div className="relative px-7 py-6 text-base text-on-surface/95">
-                      {summaryError ? (
+                      {summaryBlocked ? (
+                        <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 p-4 text-rose-200">
+                          <div className="mb-1 flex items-center gap-2">
+                            <span
+                              className="material-symbols-outlined text-base"
+                              style={{ fontVariationSettings: '"FILL" 1' }}
+                            >
+                              shield
+                            </span>
+                            <span className="font-bold">
+                              보안 모드: 요약이 차단되었습니다
+                            </span>
+                          </div>
+                          <p className="text-sm opacity-90">
+                            {summaryBlocked.reason}
+                          </p>
+                          {summaryBlocked.pii_types?.length > 0 && (
+                            <p className="mt-2 text-xs opacity-70">
+                              탐지: {summaryBlocked.pii_types.join(", ")} · 단계:{" "}
+                              {summaryBlocked.stage}
+                            </p>
+                          )}
+                        </div>
+                      ) : summaryError ? (
                         <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-rose-200">
                           <div className="mb-1 flex items-center gap-2">
                             <span className="material-symbols-outlined text-base">
@@ -2650,6 +2769,19 @@ export default function MainSearch() {
                         </div>
                       ) : summaryText ? (
                         <div className="relative">
+                          {summarySecurity?.masked && (
+                            <div className="mb-3 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/35 text-amber-200 text-xs flex items-center gap-2">
+                              <span
+                                className="material-symbols-outlined text-base"
+                                style={{ fontVariationSettings: '"FILL" 1' }}
+                              >
+                                shield
+                              </span>
+                              보안 모드: 개인정보(
+                              {(summarySecurity.pii_types || []).join(", ")})가
+                              마스킹되었습니다.
+                            </div>
+                          )}
                           <MarkdownLite text={summaryText} />
                           {!summaryDone && (
                             <span className="ml-1 inline-block h-4 w-0.5 animate-pulse bg-[#8ab4ff] align-middle" />

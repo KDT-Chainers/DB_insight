@@ -7,183 +7,46 @@ import { useSpeechRecognition } from "../hooks/useSpeechRecognition";
 import { useMicLevelRef } from "../hooks/useMicLevelRef";
 import { API_BASE } from "../api";
 
-/** Orb `assembleIntro` 길이와 헤일로 PNG `ai-orbit-halo-emerge` 동기 (초) */
 const AI_ORB_ASSEMBLE_SECONDS = 8;
 
 const AI = {
   accent: "#8b5cf6",
   accentLight: "#a78bfa",
   accentDark: "#6d28d9",
-  bg: "rgb(1,1,4)",
-  leftBg: "rgb(1,1,4)",
-  rightBg: "rgb(1,1,4)",
-  card: "rgb(1,1,4)",
-  border: "rgba(167,139,250,0.24)",
+  bg: "#080514",
+  leftBg: "#0b0718",
+  rightBg: "#070310",
+  card: "#120d22",
+  border: "rgba(139,92,246,0.18)",
 };
 
 const TYPE_META = {
-  doc:   { icon: 'description', color: 'text-[#8cf2ff]', label: '문서',   grad: 'from-[#1e3a6e] to-[#5c9dff]' },
-  video: { icon: 'movie',       color: 'text-[#ff59e0]', label: '동영상', grad: 'from-[#581c87] to-[#be185d]' },
-  image: { icon: 'image',       color: 'text-[#52fac7]', label: '이미지', grad: 'from-[#0f766e] to-[#14b8a6]' },
-  audio: { icon: 'volume_up',   color: 'text-[#ff7a5c]', label: '음성',   grad: 'from-[#7c2d12] to-[#ea580c]' },
-  movie: { icon: 'movie',       color: 'text-[#ff59e0]', label: '동영상', grad: 'from-[#581c87] to-[#be185d]' },
-  music: { icon: 'volume_up',   color: 'text-[#ff7a5c]', label: '음성',   grad: 'from-[#7c2d12] to-[#ea580c]' },
-}
+  doc: { icon: "description", color: "#85adff", label: "문서" },
+  video: { icon: "movie", color: "#ac8aff", label: "동영상" },
+  image: { icon: "image", color: "#34d399", label: "이미지" },
+  audio: { icon: "volume_up", color: "#fbbf24", label: "음성" },
+  movie: { icon: "movie", color: "#ac8aff", label: "동영상" },
+  music: { icon: "volume_up", color: "#fbbf24", label: "음성" },
+};
 const getTypeMeta = (t) =>
-  TYPE_META[t] ?? { icon: 'insert_drive_file', color: 'text-on-surface-variant', label: t ?? '파일', grad: 'from-[#1c253e] to-[#263354]' }
+  TYPE_META[t] ?? {
+    icon: "insert_drive_file",
+    color: "#94a3b8",
+    label: t ?? "파일",
+  };
 
 function fmtTime(sec) {
-  if (!sec && sec !== 0) return '0:00'
-  const s = Math.floor(sec)
-  const m = Math.floor(s / 60)
-  return `${m}:${String(s % 60).padStart(2, '0')}`
+  if (!sec && sec !== 0) return "0:00";
+  const s = Math.floor(sec);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
-
-function avStreamUrl(result) {
+function avStreamUrl(r) {
   const domain =
-    result.trichef_domain ?? (result.file_type === 'video' ? 'movie' : 'music')
-  return `${API_BASE}/api/admin/file?domain=${domain}&id=${encodeURIComponent(result.file_path)}`
+    r.trichef_domain ?? (r.file_type === "video" ? "movie" : "music");
+  return `${API_BASE}/api/admin/file?domain=${domain}&id=${encodeURIComponent(r.file_path)}`;
 }
-
-function AVDetailContent({ result }) {
-  const isVideo = result.file_type === 'video'
-  const playerRef = useRef(null)
-  const streamUrl = avStreamUrl(result)
-  const segments = result.segments ?? []
-
-  const seekTo = (startSec) => {
-    const p = playerRef.current
-    if (!p) return
-    p.currentTime = startSec
-    p.play().catch(() => {})
-  }
-
-  return (
-    <div className="flex flex-1 flex-col">
-      <div className="px-8 pb-4 pt-6">
-        <div className="overflow-hidden rounded-xl border border-white/10 bg-black/60">
-          {isVideo ? (
-            <video
-              ref={playerRef}
-              src={streamUrl}
-              controls
-              preload="metadata"
-              className="max-h-[280px] w-full object-contain"
-              onError={() => {}}
-            />
-          ) : (
-            <div className="flex flex-col items-center justify-center gap-3 p-6">
-              <span
-                className="material-symbols-outlined text-4xl text-amber-400"
-                style={{ fontVariationSettings: '"FILL" 1' }}
-              >
-                volume_up
-              </span>
-              <audio
-                ref={playerRef}
-                src={streamUrl}
-                controls
-                preload="metadata"
-                className="w-full"
-                onError={() => {}}
-              />
-            </div>
-          )}
-        </div>
-      </div>
-
-      {segments.length > 0 && (
-        <div className="flex-1 overflow-y-auto px-8 pb-4">
-          <p className="mb-3 flex items-center gap-1 text-sm font-bold uppercase tracking-widest text-slate-400">
-            <span className="material-symbols-outlined text-base">timeline</span>
-            매칭 구간 ({segments.length}개)
-          </p>
-          <div className="space-y-2">
-            {segments.map((seg, i) => {
-              const t0 = seg.start ?? seg.start_sec ?? 0
-              const t1 = seg.end ?? seg.end_sec ?? 0
-              const sc = seg.score ?? 0
-              const text = seg.text || seg.caption || ''
-              const pct = Math.round(sc * 100)
-              return (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => seekTo(t0)}
-                  className="group/seg w-full rounded-xl border border-white/10 bg-white/[0.04] p-3 text-left transition hover:border-violet-400/40 hover:bg-violet-500/10"
-                >
-                  <div className="mb-1.5 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="material-symbols-outlined text-base text-violet-300 transition-transform group-hover/seg:scale-110">
-                        play_circle
-                      </span>
-                      <span className="font-mono text-lg font-bold text-violet-200">{fmtTime(t0)}</span>
-                      <span className="text-sm text-slate-500">→</span>
-                      <span className="font-mono text-lg text-slate-400">{fmtTime(t1)}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <div className="h-1 w-16 overflow-hidden rounded-full bg-white/10">
-                        <div
-                          className="h-full rounded-full bg-gradient-to-r from-amber-500 to-violet-500"
-                          style={{ width: `${Math.min(pct * 2, 100)}%` }}
-                        />
-                      </div>
-                      <span className="font-mono text-sm tabular-nums text-slate-500">{sc.toFixed(3)}</span>
-                    </div>
-                  </div>
-                  {text && (
-                    <p className="line-clamp-2 pl-7 text-xs leading-relaxed text-slate-400">{text}</p>
-                  )}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
-      {segments.length === 0 && (
-        <div className="flex flex-1 items-center justify-center px-8 text-lg text-slate-500">
-          세그먼트 정보 없음
-        </div>
-      )}
-    </div>
-  )
-}
-
-/** 우측 후보 패널 — 컴팩트 카드 (MainSearch ResultCard 단순화) */
-function FileCard({ source, index, scanState, selected, onClick }) {
-  const meta = getTypeMeta(source.file_type)
-  const pct = (((source.confidence ?? source.similarity ?? 0) * 100) || 0).toFixed(0)
-  return (
-    <button
-      type="button"
-      onClick={() => onClick(source)}
-      className={`flex flex-col gap-2 rounded-xl border p-3 text-left transition ${
-        selected
-          ? 'border-violet-400/55 bg-violet-500/[0.12] shadow-[0_0_24px_rgba(139,92,246,0.2)]'
-          : 'border-white/[0.12] bg-white/[0.03] hover:border-violet-300/35 hover:bg-white/[0.05]'
-      }`}
-    >
-      <div className="flex items-start justify-between gap-2">
-        <span className={`material-symbols-outlined shrink-0 text-xl ${meta.color}`} style={{ fontVariationSettings: '"FILL" 1' }}>
-          {meta.icon}
-        </span>
-        <span className="rounded-full bg-emerald-600/90 px-2 py-0.5 text-[10px] font-bold text-white">#{index + 1}</span>
-      </div>
-      <div className="line-clamp-2 text-[12px] font-semibold text-slate-100">{source.file_name}</div>
-      <div className="flex items-center justify-between text-[10px] text-slate-500">
-        <span className="uppercase tracking-wide">{scanState === 'scanning' ? '스캔…' : scanState}</span>
-        <span className="font-mono text-violet-200/90">{pct}%</span>
-      </div>
-    </button>
-  )
-}
-
-// AI 답변 안전장치 — 시스템 프롬프트로 마크다운 금지했지만,
-// LLM 이 이를 어길 경우를 대비한 프론트엔드 폴리필.
-// 별표/헤딩/백틱/인용/하이픈 불릿 → 평문 변환
 function stripMarkdown(text) {
-  if (!text) return text
+  if (!text) return text;
   return text
     .replace(/\*\*(.+?)\*\*/g, "$1")
     .replace(/(?<![*\w])\*(.+?)\*(?!\*)/g, "$1")
@@ -218,12 +81,6 @@ function renderAnswer(text) {
       <span key={i}>{part}</span>
     ),
   );
-}
-
-function isNoInfoCenterAlert(text) {
-  if (!text) return false;
-  const normalized = text.replace(/\s+/g, " ").trim();
-  return /제공\s*문서에\s*해당\s*정보가\s*없습니다/.test(normalized);
 }
 
 // turn 초기값
@@ -268,27 +125,14 @@ function AIAvatar({ isLatest, size = 30 }) {
     return (
       <div
         style={{
-          position: "relative",
           width: size,
           height: size,
           borderRadius: "50%",
           overflow: "hidden",
           flexShrink: 0,
-          marginTop: 4,
-          boxShadow: "0 0 0 1px rgba(167,139,250,0.34), 0 0 16px rgba(139,92,246,0.3)",
+          marginTop: 2,
         }}
       >
-        <div
-          style={{
-            position: "absolute",
-            inset: -2,
-            borderRadius: "50%",
-            border: "1px solid rgba(167,139,250,0.35)",
-            animation: "ai-avatar-pulse 1.8s ease-in-out infinite",
-            pointerEvents: "none",
-            zIndex: 2,
-          }}
-        />
         <AnimatedOrb
           size={size}
           layout="fill"
@@ -307,7 +151,7 @@ function AIAvatar({ isLatest, size = 30 }) {
         height: size,
         borderRadius: "50%",
         flexShrink: 0,
-        marginTop: 4,
+        marginTop: 2,
         background:
           "radial-gradient(circle at 36% 30%, #c4b5fd 0%, #7c3aed 50%, #3b0764 100%)",
         boxShadow:
@@ -680,19 +524,6 @@ function TurnView({ turn, isLatest, onClickSource, onClickFile }) {
   } = turn;
   const isChatMode = route === "chat";
   const isQaMode = route === "qa_gen";
-  const showCenterNotice = done && !streaming && isNoInfoCenterAlert(answer);
-  const shouldRenderInlineAnswer = answer && !isQaMode && !blocked && !showCenterNotice;
-  const hasAiBlockContent =
-    intentMessage ||
-    candidates.length > 0 ||
-    shouldRenderInlineAnswer ||
-    error ||
-    blocked ||
-    security?.masked ||
-    (done && sources.length > 0) ||
-    (!isChatMode && !isQaMode && generating && !answer) ||
-    (isQaMode && (qaGenerating || qaQuestion)) ||
-    (!isChatMode && !isQaMode && keyFacts && keyFacts.length > 0);
 
   return (
     <div style={{ marginBottom: 28 }}>
@@ -708,16 +539,13 @@ function TurnView({ turn, isLatest, onClickSource, onClickFile }) {
           style={{
             maxWidth: "78%",
             padding: "11px 16px",
-            background:
-              "linear-gradient(135deg, rgba(91,33,182,0.58), rgba(109,40,217,0.46), rgba(124,58,237,0.56))",
+            background: "linear-gradient(135deg,#3b1d7a,#4c1d95,#5b21b6)",
             borderRadius: "18px 18px 4px 18px",
             fontSize: 15,
-            color: "#f5f3ff",
-            lineHeight: 1.7,
+            color: "#ede9fe",
+            lineHeight: 1.6,
             boxShadow:
-              "0 10px 28px rgba(76,29,149,0.3), inset 0 1px 0 rgba(255,255,255,0.22)",
-            border: "1px solid rgba(196,181,253,0.26)",
-            backdropFilter: "blur(10px) saturate(1.08)",
+              "0 4px 20px rgba(109,40,217,0.3), inset 0 1px 0 rgba(255,255,255,0.08)",
             letterSpacing: "-0.01em",
           }}
         >
@@ -726,13 +554,43 @@ function TurnView({ turn, isLatest, onClickSource, onClickFile }) {
       </div>
 
       {/* AI 응답 블록 */}
-      {hasAiBlockContent && (
+      {(intentMessage || candidates.length > 0 || answer || error) && (
         <div style={{ display: "flex", gap: 10 }}>
           {/* 아바타 (실제 오브 또는 CSS 오브) */}
-          <AIAvatar isLatest={isLatest} size={28} />
+          <AIAvatar isLatest={isLatest} size={30} />
 
           <div style={{ flex: 1, minWidth: 0 }}>
             {/* route 뱃지 */}
+            {route === "rag" && (
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 5,
+                  marginBottom: 8,
+                  padding: "3px 10px",
+                  borderRadius: 999,
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  background: "rgba(139,92,246,0.12)",
+                  color: AI.accentLight,
+                  border: `1px solid rgba(139,92,246,0.22)`,
+                }}
+              >
+                <span
+                  style={{
+                    width: 4,
+                    height: 4,
+                    borderRadius: "50%",
+                    background: "currentColor",
+                    flexShrink: 0,
+                  }}
+                />
+                RAG · 파일 검색
+              </div>
+            )}
             {route === "chat" && (
               <div
                 style={{
@@ -828,19 +686,15 @@ function TurnView({ turn, isLatest, onClickSource, onClickFile }) {
             {!isChatMode && intentMessage && (
               <div
                 style={{
-                  display: "inline-block",
-                  width: "fit-content",
-                  maxWidth: "92%",
                   padding: "11px 15px",
                   marginBottom: 8,
                   background: "rgba(109,40,217,0.08)",
-                  border: "1px solid rgba(167,139,250,0.28)",
+                  border: "1px solid rgba(139,92,246,0.18)",
                   borderRadius: "4px 16px 16px 16px",
                   fontSize: 14.5,
                   color: "#c4b5fd",
                   lineHeight: 1.65,
                   fontWeight: 500,
-                  backdropFilter: "blur(8px) saturate(1.06)",
                 }}
               >
                 {intentMessage}
@@ -1169,12 +1023,9 @@ function TurnView({ turn, isLatest, onClickSource, onClickFile }) {
               </div>
             )}
             {/* 답변 (qa_gen이 아닌 경우만 표시) */}
-            {shouldRenderInlineAnswer && (
+            {answer && !isQaMode && !blocked && (
               <div
                 style={{
-                  display: "inline-block",
-                  width: "fit-content",
-                  maxWidth: "92%",
                   padding: "13px 16px",
                   marginBottom: 6,
                   background: isChatMode
@@ -1183,12 +1034,10 @@ function TurnView({ turn, isLatest, onClickSource, onClickFile }) {
                   border: `1px solid ${isChatMode ? "rgba(139,92,246,0.1)" : AI.border}`,
                   borderRadius: 10,
                   fontSize: 15,
-                  color: "#f1f5f9",
-                  lineHeight: 1.85,
+                  color: "#e2e8f0",
+                  lineHeight: 1.9,
                   whiteSpace: "pre-wrap",
                   letterSpacing: "-0.01em",
-                  backdropFilter: "blur(8px) saturate(1.05)",
-                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08)",
                 }}
               >
                 {renderAnswer(stripMarkdown(answer))}
@@ -1299,240 +1148,346 @@ function AIIterationPanel({ iterationData, domainSelection, streaming, hasLLM })
           <span className="material-symbols-outlined text-lg" style={{ color: AI.accentLight, fontVariationSettings: '"FILL" 1' }}>
             {streaming ? 'psychology' : 'auto_awesome'}
           </span>
-          <span className="text-sm font-bold" style={{ color: AI.accentLight }}>AI 탐색 과정</span>
-          <span className="text-[10px] px-2 py-0.5 rounded-full font-bold"
-            style={{ background: 'rgba(139,92,246,0.15)', color: AI.accentLight, border: `1px solid ${AI.border}` }}>
-            {iterationData.length}단계
-          </span>
-          {hasLLM !== undefined && (
-            <span className="text-[10px] px-2 py-0.5 rounded-full font-bold"
-              style={{ background: hasLLM ? 'rgba(139,92,246,0.1)' : 'rgba(100,116,139,0.1)',
-                       color: hasLLM ? AI.accentLight : '#94a3b8',
-                       border: `1px solid ${hasLLM ? AI.border : 'rgba(100,116,139,0.15)'}` }}>
-              {hasLLM ? '🤖 LLM' : '⚙️ 휴리스틱'}
-            </span>
-          )}
-          {streaming && <span className="material-symbols-outlined text-base animate-spin" style={{ color: AI.accent }}>progress_activity</span>}
+        )}
+        {isScan && (
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              background: "rgba(109,40,217,0.08)",
+              overflow: "hidden",
+            }}
+          >
+            <div className="ai-scan-line" />
+          </div>
+        )}
+        <div
+          style={{
+            position: "absolute",
+            top: 5,
+            left: 5,
+            background: "linear-gradient(135deg,#6d28d9,#7c3aed)",
+            color: "#fff",
+            fontSize: 9,
+            fontWeight: 700,
+            padding: "1px 6px",
+            borderRadius: 999,
+          }}
+        >
+          #{index + 1}
         </div>
-        <span className="material-symbols-outlined text-sm text-on-surface-variant/50">
-          {collapsed ? 'expand_more' : 'expand_less'}
-        </span>
-      </button>
+        {scanState !== "idle" && (
+          <div
+            style={{
+              position: "absolute",
+              top: 5,
+              right: 5,
+              background: isFound
+                ? "rgba(16,185,129,0.9)"
+                : isScan
+                  ? "rgba(109,40,217,0.9)"
+                  : "rgba(71,85,105,0.85)",
+              color: "#fff",
+              fontSize: 9,
+              fontWeight: 700,
+              padding: "1px 6px",
+              borderRadius: 999,
+              display: "flex",
+              alignItems: "center",
+              gap: 2,
+            }}
+          >
+            {isScan && (
+              <span
+                className="material-symbols-outlined ai-spin"
+                style={{ fontSize: 9 }}
+              >
+                progress_activity
+              </span>
+            )}
+            {isFound && (
+              <span
+                className="material-symbols-outlined"
+                style={{ fontSize: 9 }}
+              >
+                check_circle
+              </span>
+            )}
+            {isNF && (
+              <span
+                className="material-symbols-outlined"
+                style={{ fontSize: 9 }}
+              >
+                cancel
+              </span>
+            )}
+            {isScan ? "스캔" : isFound ? "발견" : "없음"}
+          </div>
+        )}
+      </div>
+      <div style={{ padding: "8px 10px" }}>
+        <div
+          style={{
+            fontSize: 11,
+            fontWeight: 600,
+            color: "#e2e8f0",
+            lineHeight: 1.3,
+            marginBottom: 5,
+            display: "-webkit-box",
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+          }}
+        >
+          {fname}
+        </div>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <span style={{ fontSize: 9, color: meta.color, fontWeight: 600 }}>
+            {meta.label}
+          </span>
+          <span
+            style={{
+              fontSize: 9,
+              fontFamily: "monospace",
+              fontWeight: 700,
+              color: AI.accentLight,
+            }}
+          >
+            {(conf * 100).toFixed(0)}%
+          </span>
+        </div>
+      </div>
+    </button>
+  );
+}
 
-      {!collapsed && (
-        <div className="p-4 space-y-3">
-          {iterationData.map((step, idx) => {
-            const isGlobal = step.iteration === 0
-            const dc = DOMAIN_META[step.domain] ?? DOMAIN_META.all
-
-            return (
-              <div key={idx}>
-                {/* 도메인 선택 안내 배너 (전체→집중 전환 시) */}
-                {!isGlobal && idx > 0 && iterationData[idx - 1]?.iteration === 0 && domainSelection && (
-                  <div className="flex items-start gap-2 mb-2 px-3 py-2 rounded-lg"
-                    style={{ background: 'rgba(109,40,217,0.08)', border: `1px dashed ${AI.border}` }}>
-                    <span className="material-symbols-outlined text-sm shrink-0 mt-0.5" style={{ color: AI.accent }}>arrow_forward</span>
-                    <div>
-                      <span className="text-[11px] font-bold" style={{ color: AI.accentLight }}>
-                        {dc.label} 도메인으로 집중합니다
-                      </span>
-                      <span className="text-[11px] text-on-surface-variant/50 ml-2">{domainSelection.reason}</span>
-                    </div>
-                  </div>
-                )}
-
-                {/* 단계 카드 */}
-                <div className="rounded-xl overflow-hidden"
-                  style={{ 
-                    border: `1.5px solid ${dc.border}28`, 
-                    background: 'rgba(13, 7, 24, 0.5)',
-                    backdropFilter: 'blur(12px)',
-                    boxShadow: `0 4px 16px rgba(0, 0, 0, 0.2), inset 0 1px 2px rgba(255, 255, 255, 0.08), inset 0 -1px 2px rgba(0, 0, 0, 0.3)`
-                  }}>
-
-                  {/* 단계 헤더 */}
-                  <div className="flex items-center gap-2 px-3 py-2"
-                    style={{ 
-                      background: `rgba(13, 7, 24, 0.6)`,
-                      backdropFilter: 'blur(12px)',
-                      borderBottom: `1.5px solid ${dc.border}28`
-                    }}>
-                    <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
-                      style={{ background: step.done ? `linear-gradient(135deg,${ORB.mint},#0d9488)` : isGlobal ? 'rgba(140,242,255,0.35)' : AI.rankBg }}>
-                      {isGlobal ? '①' : step.iteration}
-                    </div>
-                    <span className="text-[11px] font-mono font-bold text-on-surface/80 flex-1 truncate">
-                      "{step.query}"
-                    </span>
-                    <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold border shrink-0"
-                      style={{ background: dc.bg, color: dc.text, borderColor: dc.border }}>
-                      {dc.label}
-                    </span>
-                    <span className="text-[10px] text-on-surface-variant/40 shrink-0">{step.count ?? step.items?.length ?? 0}건</span>
-                  </div>
-
-                  {/* 결과 미리보기 카드 (top 3) */}
-                  {step.items?.length > 0 && (
-                    <div className="px-3 py-2.5 flex gap-2 overflow-x-auto"
-                      style={{ scrollbarWidth: 'thin', scrollbarColor: `${AI.border} transparent` }}>
-                      {step.items.slice(0, 5).map((item, i) => (
-                        <MiniResultPill key={i} item={item} rank={i + 1} />
-                      ))}
-                      {step.items.length > 5 && (
-                        <div className="shrink-0 flex items-center text-[10px] text-on-surface-variant/30 pl-1 whitespace-nowrap">
-                          +{step.items.length - 5}건
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* AI 사고 */}
-                  {step.thought && (
-                    <div className="px-3 py-2 flex items-start gap-2"
-                      style={{ borderTop: '1px solid rgba(109,40,217,0.08)' }}>
-                      <span className="material-symbols-outlined text-sm shrink-0 mt-0.5"
-                        style={{ color: step.done ? ORB.mint : AI.accent, fontVariationSettings: '"FILL" 1' }}>
-                        {step.done ? 'check_circle' : 'psychology'}
-                      </span>
-                      <p className="text-[11px] text-on-surface-variant/65 leading-relaxed">{step.thought}</p>
-                    </div>
-                  )}
+// ── AVDetailContent ────────────────────────────────────────────────
+function AVDetailContent({ result }) {
+  const isVideo = result.file_type === "video" || result.file_type === "movie";
+  const playerRef = useRef(null),
+    streamUrl = avStreamUrl(result),
+    segments = result.segments ?? [];
+  const seekTo = (t) => {
+    const p = playerRef.current;
+    if (!p) return;
+    p.currentTime = t;
+    p.play().catch(() => {});
+  };
+  return (
+    <div>
+      <div
+        style={{
+          borderRadius: 10,
+          overflow: "hidden",
+          background: "#000",
+          marginBottom: 12,
+        }}
+      >
+        {isVideo ? (
+          <video
+            ref={playerRef}
+            src={streamUrl}
+            controls
+            preload="metadata"
+            style={{ width: "100%", maxHeight: 200, display: "block" }}
+          />
+        ) : (
+          <div
+            style={{
+              padding: 16,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            <span
+              className="material-symbols-outlined"
+              style={{
+                fontSize: 30,
+                color: "#fbbf24",
+                fontVariationSettings: '"FILL" 1',
+              }}
+            >
+              volume_up
+            </span>
+            <audio
+              ref={playerRef}
+              src={streamUrl}
+              controls
+              preload="metadata"
+              style={{ width: "100%" }}
+            />
+          </div>
+        )}
+      </div>
+      {segments.length > 0 && (
+        <div>
+          <p
+            style={{
+              fontSize: 11,
+              fontWeight: 700,
+              color: AI.accentLight,
+              marginBottom: 8,
+              textTransform: "uppercase",
+              letterSpacing: 1,
+            }}
+          >
+            매칭 구간 ({segments.length}개)
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {segments.slice(0, 5).map((seg, i) => (
+              <button
+                key={i}
+                onClick={() => seekTo(seg.start ?? 0)}
+                style={{
+                  background: AI.card,
+                  border: `1px solid ${AI.border}`,
+                  borderRadius: 8,
+                  padding: "8px 10px",
+                  textAlign: "left",
+                  cursor: "pointer",
+                  width: "100%",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 6,
+                    alignItems: "center",
+                    marginBottom: 3,
+                  }}
+                >
+                  <span
+                    className="material-symbols-outlined"
+                    style={{ fontSize: 13, color: AI.accent }}
+                  >
+                    play_circle
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 13,
+                      fontFamily: "monospace",
+                      fontWeight: 700,
+                      color: AI.accentLight,
+                    }}
+                  >
+                    {fmtTime(seg.start ?? 0)} → {fmtTime(seg.end ?? 0)}
+                  </span>
                 </div>
-              </div>
-            )
-          })}
-
-          {/* 스트리밍 대기 표시 */}
-          {streaming && (
-            <div className="flex items-center gap-2 px-3 py-2 rounded-lg"
-              style={{ border: `1px dashed ${AI.border}`, background: 'rgba(109,40,217,0.05)' }}>
-              <span className="material-symbols-outlined text-sm animate-spin" style={{ color: AI.accentLight }}>progress_activity</span>
-              <span className="text-[11px] text-on-surface-variant/40 animate-pulse">AI가 결과를 분석하는 중...</span>
-            </div>
-          )}
+                {(seg.text || seg.caption) && (
+                  <p
+                    style={{
+                      fontSize: 11,
+                      color: "#94a3b8",
+                      lineHeight: 1.4,
+                      display: "-webkit-box",
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: "vertical",
+                      overflow: "hidden",
+                    }}
+                  >
+                    {seg.text || seg.caption}
+                  </p>
+                )}
+              </button>
+            ))}
+          </div>
         </div>
       )}
     </div>
-  )
+  );
 }
 
-// ── 메인 컴포넌트 ─────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════
 export default function MainAI() {
   const navigate  = useNavigate()
   const location  = useLocation()
   const { open }  = useSidebar()
 
-  const [view,         setView]         = useState('home')
-  const [query,        setQuery]        = useState('')
-  const [inputValue,   setInputValue]   = useState('')
-  const [selectedFile, setSelectedFile] = useState(null)
-  const [fileDetail,   setFileDetail]   = useState(null)
-  const [detailLoading,setDetailLoading]= useState(false)
+  const [view, setView] = useState("home");
+  const [inputValue, setInputValue] = useState("");
 
-  // AI 에이전트 상태
-  const [streaming,      setStreaming]      = useState(false)
-  const [results,        setResults]        = useState([])
-  const [iterationData,  setIterationData]  = useState([])
-  const [domainSelection,setDomainSelection]= useState(null)
-  const [aiError,        setAiError]        = useState('')
-  const [finalQuery,     setFinalQuery]     = useState('')
-  const [hasLLM,         setHasLLM]         = useState(undefined)
+  // 대화 기록 (턴 배열)
+  const [turns, setTurns] = useState([]);
+  const activeTurnId = useRef(null);
 
-  // ── AIMODE 시각화 4-step 상태 ─────────────────────────────
-  const [aimodeSteps,       setAimodeSteps]       = useState([])
-  const [aimodeQuery,       setAimodeQuery]       = useState('')
-  const [aimodeContentKws,  setAimodeContentKws]  = useState([])
-  const [aimodeDetailKws,   setAimodeDetailKws]   = useState([])
-  const [aimodeSources,     setAimodeSources]     = useState([])
-  const [aimodeSelected,    setAimodeSelected]    = useState(null)
-  const [aimodeAnswer,      setAimodeAnswer]      = useState('')
-  const [aimodeDone,        setAimodeDone]        = useState(false)
-  const [useAimode,         setUseAimode]         = useState(true)
-  const [topK,              setTopK]              = useState(20)
-  const [maxIter,           setMaxIter]           = useState(5)
-  const abortRef = useRef(null)
-  const activeQueryRef = useRef('')
+  // right panel
+  const [rightMode, setRightMode] = useState("cards");
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [fileDetail, setFileDetail] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [selectedScanChunks, setSelectedScanChunks] = useState({});
 
-  const dispatchAiSidebarView = useCallback((viewName) => {
-    try {
-      window.dispatchEvent(
-        new CustomEvent('ai-sidebar-view-changed', { detail: { view: viewName } }),
-      )
-    } catch {}
-  }, [])
+  const [topK, setTopK] = useState(5);
+  // 보안 모드 — 활성 시 LLM 응답이 SecurityCritic 통과 후 송출
+  const [securityMode, setSecurityMode] = useState(false);
+  const abortRef = useRef(null);
 
-  // 애니메이션
-  const [homeExiting,  setHomeExiting]  = useState(false)
-  const [resultsReady, setResultsReady] = useState(false)
-  const [detailVisible,setDetailVisible]= useState(false)
-  const [aiHomeInputFocused, setAiHomeInputFocused] = useState(false)
-  const [homeInputOverflow, setHomeInputOverflow] = useState(false)
+  // home animation
+  const [homeExiting, setHomeExiting] = useState(false);
+  const [aiHomeEntranceOn, setAiHomeEntranceOn] = useState(false);
+  const [searchTransitioning, setSearchTransitioning] = useState(false);
+  const [ripplePos, setRipplePos] = useState({ x: "50%", y: "50%" });
 
-  const [aiHomeEntranceOn, setAiHomeEntranceOn] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  )
+  const btnRef = useRef(null);
+  const inputRef = useRef(null);
+  const orbSinkRef = useRef(null);
+  const orbVoiceRef = useRef(0);
+  const conversationEndRef = useRef(null);
+  const doSearchRef = useRef(null);
 
-  // 포털 전환
-  const [searchTransitioning, setSearchTransitioning] = useState(false)
-  const [ripplePos, setRipplePos] = useState({ x: '50%', y: '50%' })
-  const [aiDockExpanded, setAiDockExpanded] = useState(false)
-  const btnRef      = useRef(null)
-  const formRef     = useRef(null)
-  const homeInputRef = useRef(null)
-  const chatInputRef = useRef(null)
-  const orbSinkRef  = useRef(null)
-  const orbVoiceRef = useRef(0)
-  const conversationEndRef = useRef(null)
-  const submitGuardRef = useRef({ q: "", ts: 0 })
+  const ml = open ? "ml-64" : "ml-0";
 
-  const [turns, setTurns] = useState([])
-  const [rightMode, setRightMode] = useState('cards')
-  const [selectedScanChunks, setSelectedScanChunks] = useState({})
-  const [securityMode, setSecurityMode] = useState(false)
+  // 최신 턴
+  const latestTurn = turns[turns.length - 1] ?? null;
+  const isAnyStreaming = latestTurn?.streaming ?? false;
 
-  // aiHomeEntranceOn 제어
-  useEffect(() => {
-    if (view !== 'home') { setAiHomeEntranceOn(false); return }
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { setAiHomeEntranceOn(true); return }
-    setAiHomeEntranceOn(false)
-    const t = window.setTimeout(() => setAiHomeEntranceOn(true), 180)
-    return () => clearTimeout(t)
-  }, [view])
-
-  // 뷰 변경 시 검색창 자동 포커스 (detail 제외 모든 뷰)
-  useEffect(() => {
-    if (view !== 'detail') {
-      const t = setTimeout(() => {
-        if (view === 'home') homeInputRef.current?.focus()
-        else chatInputRef.current?.focus()
-      }, 150)
-      return () => clearTimeout(t)
-    }
-  }, [view])
+  // 턴 업데이트 헬퍼
+  const patchTurn = useCallback((id, patch) => {
+    setTurns((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
+  }, []);
+  const patchTurnFn = useCallback((id, fn) => {
+    setTurns((prev) => prev.map((t) => (t.id === id ? { ...t, ...fn(t) } : t)));
+  }, []);
 
   useEffect(() => {
-    if (view !== 'home') {
-      setHomeInputOverflow(false)
-      return
+    if (view !== "home") {
+      setAiHomeEntranceOn(false);
+      return;
     }
-    const el = homeInputRef.current
-    if (!el) return
-    const checkOverflow = () => {
-      // input 내부 실제 문자열 렌더 폭이 visible 폭보다 큰지 확인
-      setHomeInputOverflow(el.scrollWidth - el.clientWidth > 2)
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setAiHomeEntranceOn(true);
+      return;
     }
-    checkOverflow()
-    window.addEventListener('resize', checkOverflow)
-    return () => window.removeEventListener('resize', checkOverflow)
-  }, [view, inputValue, aiHomeInputFocused])
+    setAiHomeEntranceOn(false);
+    const t = window.setTimeout(() => setAiHomeEntranceOn(true), 180);
+    return () => clearTimeout(t);
+  }, [view]);
 
-  const ml       = open ? 'ml-64' : 'ml-0'
-  const leftEdge = open ? 'left-64' : 'left-0'
-  const sidebarPx= open ? 256 : 0
+  // 새 메시지 오면 스크롤
+  useEffect(() => {
+    conversationEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [turns.length, latestTurn?.answer, latestTurn?.scannedCount]);
 
-  // STT
-  const doSearchRef = useRef(null)
-  const { listening, interim, toggle: toggleMic, stop: stopMic } = useSpeechRecognition({
+  useEffect(() => {
+    if (view !== "home") {
+      const t = setTimeout(() => inputRef.current?.focus(), 150);
+      return () => clearTimeout(t);
+    }
+  }, [view]);
+
+  const {
+    listening,
+    toggle: toggleMic,
+    stop: stopMic,
+  } = useSpeechRecognition({
     onFinal: useCallback((text) => {
       setInputValue(text)
       setTimeout(() => doSearchRef.current?.(text), 80)
@@ -1542,94 +1497,8 @@ export default function MainAI() {
   useMicLevelRef(view === 'home' && listening, orbVoiceRef, { startDelayMs: 420 })
 
   useEffect(() => {
-    if (view !== 'home') stopMic()
-  }, [view, stopMic])
-
-  useEffect(() => {
-    if (view !== 'results' && aiDockExpanded) setAiDockExpanded(false)
-  }, [view, aiDockExpanded])
-
-  // 로컬 전용: AIMODE 결과·상세 레이아웃 프리뷰 (백엔드 없이)
-  useEffect(() => {
-    if (import.meta.env?.VITE_LOCAL_AI_DUMMY !== '1' || location.pathname !== '/ai') return
-    const sp = new URLSearchParams(location.search || '')
-    if (sp.get('devDummy') !== '1') return
-
-    const userQ = '김라민 생년월일이 적힌 보고서를 찾아줘 (더미)'
-    const extracted = '김라민 보고서'
-    const rawItems = [
-      {
-        file_path: '/tmp/dev-dummy/report_kim.pdf',
-        file_name: 'report_kim.pdf',
-        file_type: 'doc',
-        confidence: 0.91,
-        similarity: 0.91,
-        snippet: '김라민 — 생년월일: 1995-03-12 (더미 텍스트)',
-        preview_url: null,
-        segments: [],
-        trichef_id: 'doc_dummy_1',
-        trichef_domain: 'doc_page',
-        dense: 0.82,
-        lexical: 0.44,
-      },
-      {
-        file_path: '/tmp/dev-dummy/meeting_photo.jpg',
-        file_name: 'meeting_photo.jpg',
-        file_type: 'image',
-        confidence: 0.76,
-        similarity: 0.76,
-        snippet: '회의 장면 스냅 — 배경에 이름표 (더미)',
-        preview_url: null,
-        segments: [],
-        trichef_id: 'img_dummy_1',
-        trichef_domain: 'image',
-        dense: 0.71,
-        lexical: null,
-      },
-      {
-        file_path: '/tmp/dev-dummy/interview_clip.mp4',
-        file_name: 'interview_clip.mp4',
-        file_type: 'video',
-        confidence: 0.68,
-        similarity: 0.68,
-        snippet: '인터뷰 구간 — 자막에 김라민 언급 (더미)',
-        preview_url: null,
-        segments: [],
-        trichef_id: 'mov_dummy_1',
-        trichef_domain: 'movie',
-        dense: 0.65,
-        rerank_score: 0.2,
-      },
-    ]
-    const mappedItems = rawItems.map(mapItem)
-
-    activeQueryRef.current = userQ
-    setStreaming(false)
-    setAiError('')
-    setQuery(userQ)
-    setInputValue(userQ)
-    setFinalQuery(extracted)
-    setAimodeQuery(extracted)
-    setAimodeContentKws(['생년월일', '보고서'])
-    setAimodeDetailKws(['김라민', '생년월일'])
-    setAimodeSources(mappedItems)
-    setAimodeSelected(0)
-    setAimodeAnswer(
-      '[더미] 첫 번째 PDF 보고서에서 김라민의 생년월일을 확인했습니다. (실제 데이터 아님)',
-    )
-    setAimodeDone(true)
-    setAimodeSteps([
-      { step: 1, label: '✓ 검색어 추출', done: true, query: extracted },
-      { step: 2, label: `✓ ${rawItems.length}건 발견`, done: true },
-      { step: 3, label: '✓ #1 자동 선택', done: true, selected_idx: 0 },
-      { step: 4, label: '✓ 답변', done: true },
-    ])
-    setResults(mappedItems)
-    setResultsReady(false)
-    setView('results')
-    window.history.replaceState({ view: 'results' }, '')
-    requestAnimationFrame(() => setResultsReady(true))
-  }, [location.pathname, location.search])
+    if (view !== "home") stopMic();
+  }, [view, stopMic]);
 
   // 뒤로가기
   useEffect(() => {
@@ -1644,41 +1513,16 @@ export default function MainAI() {
 
   // 사이드바 검색 기록 클릭
   useEffect(() => {
-    const q = location.state?.query
-    if (q) { window.history.replaceState({}, ''); doSearchRef.current?.(q) }
-  }, [location.state])
+    const q = location.state?.query;
+    if (q) {
+      window.history.replaceState({}, "");
+      doSearchRef.current?.(q);
+    }
+  }, [location.state]);
 
-  // ── SSE 실행 (AIMODE 시각화 또는 기존 에이전트) ─────────────
-  const runAISearch = useCallback(async (q) => {
-    if (abortRef.current) abortRef.current.abort()
-    const controller = new AbortController()
-    abortRef.current = controller
-
-    setStreaming(true)
-    setResults([])
-    setTurns([])
-    setIterationData([])
-    setDomainSelection(null)
-    setAiError('')
-    setFinalQuery(q)
-    activeQueryRef.current = q
-    setHasLLM(undefined)
-
-    // AIMODE 시각화 상태 초기화
-    setAimodeSteps([])
-    setAimodeQuery('')
-    setAimodeContentKws([])
-    setAimodeDetailKws([])
-    setAimodeSources([])
-    setAimodeSelected(null)
-    setAimodeAnswer('')
-    setAimodeDone(false)
-
-    const endpoint = useAimode
-      ? `${API_BASE}/api/aimode/chat`
-      : `${API_BASE}/api/ai/search`
-    // LangGraph thread_id — localStorage 영속 (24h TTL)
-    let tid = null
+  // ── thread_id 관리 ──────────────────────────────────────────────
+  const getOrCreateThreadId = () => {
+    let tid = null;
     try {
       const raw = localStorage.getItem('aimode_thread_id')
       if (raw) {
@@ -1712,329 +1556,218 @@ export default function MainAI() {
       const decoder = new TextDecoder()
       let   buffer  = ''
 
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop()
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue
-          try {
-            const ev = JSON.parse(line.slice(6))
-            handleSSEEvent(ev)
-          } catch {}
-        }
-      }
-    } catch (e) {
-      if (e.name !== 'AbortError') setAiError(e.message)
-    } finally {
-      setStreaming(false)
-    }
-  }, [topK, maxIter, useAimode])
-
-  const mapItem = (item) => {
-    const dom =
-      item.domain ??
-      item.trichef_domain ??
-      (item.file_type === 'doc'
-        ? 'doc_page'
-        : item.file_type === 'video'
-          ? 'movie'
-          : item.file_type === 'audio'
-            ? 'music'
-            : item.file_type === 'image'
-              ? 'image'
-              : null)
-    const isDocPage = dom === 'doc_page'
-    const pathKey =
-      item.file_path || item.source_path || item.id || item.trichef_id || ''
-    const idKey = item.trichef_id ?? item.id ?? pathKey
-    let ft = item.file_type
-    if (!ft && dom === 'image') ft = 'image'
-    else if (!ft && isDocPage) ft = 'doc'
-    else if (!ft && dom === 'movie') ft = 'video'
-    else if (!ft && dom === 'music') ft = 'audio'
-    else if (!ft) ft = 'doc'
-    const conf =
-      item.confidence ?? item.similarity ?? 0
-    return {
-      file_path:      pathKey,
-      trichef_id:     idKey,
-      file_name:      item.file_name || String(pathKey).split(/[/\\]/).pop() || '?',
-      page_num:       item.page_num ?? null,
-      file_type:      ft,
-      confidence:     conf,
-      similarity:     item.similarity ?? conf,
-      dense:          item.dense ?? 0,
-      lexical:        item.lexical ?? null,
-      asf:            item.asf ?? null,
-      snippet:        item.snippet ?? '',
-      preview_url:    item.preview_url ?? null,
-      segments:       item.segments ?? [],
-      low_confidence: item.low_confidence ?? false,
-      trichef_domain: dom ?? undefined,
-      rerank_score:   item.rerank_score ?? item.rerank ?? null,
-      z_score:        item.z_score ?? null,
-    }
-  }
-
-  const handleSSEEvent = (ev) => {
-    switch (ev.type) {
-      // ── AIMODE 시각화 이벤트 (/api/aimode/chat) ─────────────
-      case 'step':
-        setAimodeSteps(prev => {
-          const idx = prev.findIndex(s => s.step === ev.step)
-          const entry = {
-            step: ev.step,
-            label: ev.label,
-            done: ev.done === true,
-            query: ev.query,
-            selected_idx: ev.selected_idx,
-          }
-          if (idx >= 0) {
-            const next = [...prev]
-            next[idx] = { ...next[idx], ...entry }
-            return next
-          }
-          return [...prev, entry]
-        })
-        if (ev.step === 1 && ev.done) {
-          if (ev.query) setAimodeQuery(ev.query)
-          if (ev.content_keywords) setAimodeContentKws(ev.content_keywords)
-          if (ev.detail_keywords)  setAimodeDetailKws(ev.detail_keywords)
-        }
-        if (ev.step === 3 && typeof ev.selected_idx === 'number') {
-          setAimodeSelected(ev.selected_idx)
-          // Step 3 완료 — LangGraph 가 선택한 카드 자동 클릭 (1.4s 딜레이 후)
-          setAimodeSources(prev => {
-            const file = prev[ev.selected_idx]
-            if (file) {
-              setTimeout(() => handleSelectFile(file), 1400)
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          const lines = buf.split("\n");
+          buf = lines.pop() ?? "";
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            const raw = line.slice(6).trim();
+            if (!raw) continue;
+            let ev;
+            try {
+              ev = JSON.parse(raw);
+            } catch {
+              continue;
             }
-            return prev
-          })
-        }
-        break
-
-      case 'sources': {
-        // AIMODE 검색 결과 — 작은 단계 패널용 + MainSearch 와 동일한 큰 카드 그리드용
-        const items = ev.items || []
-        const mapped = items.map(mapItem)
-        setAimodeSources(mapped)
-        // ★ 동일 데이터를 큰 카드 그리드로도 렌더 (MainSearch 와 동일한 UX)
-        setResults(mapped)
-        const histQ =
-          activeQueryRef.current ||
-          ev.query ||
-          finalQuery ||
-          ''
-        // 검색 기록 저장
-        fetch(`${API_BASE}/api/history`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            query: histQ,
-            method: 'aimode',
-            result_count: mapped.length,
-          }),
-        }).then(() => {
-          window.dispatchEvent(new Event('history-updated'))
-        }).catch(() => {})
-        break
-      }
-
-      case 'token':
-        setAimodeAnswer(prev => prev + (ev.text || ''))
-        break
-
-      case 'done':
-        setAimodeDone(true)
-        if (ev.answer) setAimodeAnswer(ev.answer)
-        if (typeof ev.selected_idx === 'number') setAimodeSelected(ev.selected_idx)
-        break
-
-      case 'error':
-        setAiError(ev.message || '오류')
-        break
-
-      // ── 기존 ai_search 이벤트 (fallback) ─────────────────────
-      case 'info':
-        setHasLLM(ev.has_llm)
-        break
-
-      case 'iteration_results':
-        // 각 단계 결과 카드 저장/업데이트
-        setIterationData(prev => {
-          const idx = prev.findIndex(it => it.iteration === ev.iteration)
-          const entry = {
-            iteration: ev.iteration,
-            query:     ev.query,
-            domain:    ev.domain,
-            items:     ev.items ?? [],
-            count:     ev.items?.length ?? 0,
-            thought:   '',
-            done:      false,
-          }
-          if (idx >= 0) {
-            const next = [...prev]
-            next[idx] = { ...next[idx], ...entry }
-            return next
-          }
-          return [...prev, entry]
-        })
-        break
-
-      case 'domain_selected':
-        setDomainSelection({ domain: ev.domain, reason: ev.reason })
-        break
-
-      case 'thought':
-        // 마지막 focused 단계(iteration>0)의 thought 업데이트
-        setIterationData(prev => {
-          if (!prev.length) return prev
-          const updated = [...prev]
-          // 뒤에서부터 iteration>0인 항목 찾기
-          for (let i = updated.length - 1; i >= 0; i--) {
-            if (updated[i].iteration > 0) {
-              updated[i] = { ...updated[i], thought: ev.text, done: ev.done }
-              return updated
-            }
-          }
-          return prev
-        })
-        break
-
-      case 'results': {
-        const mapped = (ev.items ?? []).map(mapItem)
-        setResults(mapped)
-        setFinalQuery(ev.final_query || ev.query)
-        // 최종 history로 iterationData thought/done 동기화
-        if (ev.history?.length) {
-          setIterationData(prev => {
-            const updated = [...prev]
-            ev.history.forEach((h, hi) => {
-              const idx = updated.findIndex(it => it.iteration === hi + 1)
-              if (idx >= 0) {
-                updated[idx] = { ...updated[idx], thought: h.thought, done: h.done, count: h.count }
+            switch (ev.type) {
+              case "route":
+                patchTurn(turnId, { route: ev.mode || "rag" });
+                break;
+              case "intent":
+                patchTurn(turnId, {
+                  intentMessage: ev.message || "",
+                  fileKeywords: ev.file_keywords || [],
+                  detailKeywords: ev.detail_keywords || [],
+                });
+                break;
+              case "candidates": {
+                const items = ev.items || [];
+                const init = {};
+                items.forEach((s) => {
+                  init[s.trichef_id || s.file_name] = "idle";
+                });
+                patchTurn(turnId, {
+                  candidates: items,
+                  scanStates: init,
+                  scanChunks: {},
+                });
+                fetch(`${API_BASE}/api/history`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    query: q,
+                    method: "aimode",
+                    result_count: items.length,
+                  }),
+                })
+                  .then(() =>
+                    window.dispatchEvent(new Event("history-updated")),
+                  )
+                  .catch(() => {});
+                break;
               }
-            })
-            return updated
-          })
+              case "scanning":
+                patchTurnFn(turnId, (t) => ({
+                  scanStates: { ...t.scanStates, [ev.file_id]: "scanning" },
+                }));
+                break;
+              case "scan_result":
+                patchTurnFn(turnId, (t) => ({
+                  scanStates: {
+                    ...t.scanStates,
+                    [ev.file_id]: ev.found ? "found" : "not_found",
+                  },
+                  scanChunks:
+                    ev.found && ev.chunks?.length
+                      ? { ...t.scanChunks, [ev.file_id]: ev.chunks }
+                      : t.scanChunks,
+                  scannedCount: t.scannedCount + 1,
+                  foundCount: t.foundCount + (ev.found ? 1 : 0),
+                }));
+                break;
+              case "selected":
+                patchTurn(turnId, { sources: ev.sources || [] });
+                break;
+              case "key_facts":
+                patchTurn(turnId, { keyFacts: ev.facts || [] });
+                break;
+              case "generating":
+                patchTurn(turnId, { generating: true });
+                break;
+              case "token":
+                patchTurnFn(turnId, (t) => ({
+                  answer: t.answer + (ev.text || ""),
+                  generating: false,
+                }));
+                break;
+              case "qa_generating":
+                patchTurn(turnId, {
+                  qaGenerating: true,
+                  qaAttempt: ev.attempt || 1,
+                  qaMax: ev.max || 3,
+                });
+                break;
+              case "qa_result":
+                patchTurn(turnId, {
+                  qaGenerating: false,
+                  qaQuestion: ev.question || "",
+                  qaAnswer: ev.answer || "",
+                  qaAttempt: ev.attempts || 1,
+                  qaValid: ev.valid ?? false,
+                  qaIssues: ev.issues || [],
+                  qaSources: ev.sources || [],
+                });
+                break;
+              case "done":
+                patchTurnFn(turnId, (t) => ({
+                  answer: ev.answer || t.answer,
+                  done: true,
+                  streaming: false,
+                  security: ev.security || t.security,
+                }));
+                break;
+              case "blocked":
+                patchTurn(turnId, {
+                  blocked: {
+                    stage: ev.stage || "final",
+                    reason: ev.reason || "보안 정책상 응답이 차단되었습니다.",
+                    pii_types: ev.pii_types || [],
+                  },
+                  streaming: false,
+                  done: true,
+                });
+                break;
+              case "error":
+                patchTurn(turnId, {
+                  error: ev.message || "오류 발생",
+                  streaming: false,
+                });
+                break;
+            }
+          }
         }
-        break
+      } catch (e) {
+        if (e.name !== "AbortError")
+          patchTurn(turnId, {
+            error: e.message || "연결 오류",
+            streaming: false,
+          });
+        else patchTurn(turnId, { streaming: false });
       }
-      // case 'error' 는 위쪽에 이미 정의 (AIMODE/legacy 공용)
-    }
-  }
+    },
+    [topK, patchTurn, patchTurnFn, securityMode],
+  );
 
-  const doSearch = (q) => {
-    const searchQ = String(q ?? "").trim()
-    if (!searchQ || searchTransitioning || homeExiting) return
-    setQuery(searchQ)
-    setInputValue(searchQ)
-
-    if (view === 'home') {
-      setHomeExiting(true)
-      setTimeout(() => {
-        setHomeExiting(false)
-        setResultsReady(false)
-        setView('results')
-        // 검색 실행은 UI 보조 로직보다 우선 보장
-        runAISearch(searchQ)
-        try { window.history.pushState({ view: 'results' }, '') } catch {}
-        dispatchAiSidebarView('results')
-        requestAnimationFrame(() => setResultsReady(true))
-      }, 420)
-    } else {
-      setView('results')
-      runAISearch(searchQ)
-      try { window.history.pushState({ view: 'results' }, '') } catch {}
-      dispatchAiSidebarView('results')
-    }
-  }
+  // ── doSearch ────────────────────────────────────────────────────
+  const doSearch = useCallback(
+    (q) => {
+      if (!q.trim() || searchTransitioning) return;
+      setInputValue("");
+      if (view === "home") {
+        setHomeExiting(true);
+        setTimeout(() => {
+          setHomeExiting(false);
+          setView("chat");
+          window.history.pushState({ view: "chat" }, "");
+          runRAG(q);
+        }, 420);
+      } else {
+        runRAG(q);
+      }
+    },
+    [view, searchTransitioning, runRAG],
+  );
 
   doSearchRef.current = doSearch;
 
   useEffect(() => { doSearchRef.current = doSearch })
 
-  const submitQuery = (raw) => {
-    const q = String(raw ?? "").trim()
-    if (!q) return
-    const now = Date.now()
-    const prev = submitGuardRef.current
-    // Enter keydown + form submit 중복 호출 방지
-    if (prev.q === q && now - prev.ts < 450) return
-    submitGuardRef.current = { q, ts: now }
-    doSearch(q)
-  }
-
-  const handleSearch  = (e) => {
-    e?.preventDefault()
-    // 폼 submit 단일 경로: 해당 form의 query input 값을 1순위로 사용
-    const formInput = e?.currentTarget?.elements?.query?.value
-    const liveValue = formInput ?? (view === 'home'
-      ? homeInputRef.current?.value
-      : chatInputRef.current?.value) ?? inputValue
-    submitQuery(liveValue)
-  }
+  const handleSearch = (e) => {
+    e?.preventDefault();
+    doSearch(inputValue);
+  };
 
   const handleSelectFile = (file) => {
-    setSelectedFile(file)
-    setRightMode("detail")
-    setSelectedScanChunks(latestTurn?.scanChunks ?? {})
-    setFileDetail(null)
-    setDetailVisible(false)
-    setView('detail')
-    window.history.pushState({ view: 'detail' }, '')
-    dispatchAiSidebarView('detail')
-    requestAnimationFrame(() => requestAnimationFrame(() => setDetailVisible(true)))
-    const isAV = file.file_type === 'video' || file.file_type === 'audio'
-    if (!isAV) {
-      setDetailLoading(true)
-      fetch(`${API_BASE}/api/files/detail?path=${encodeURIComponent(file.file_path)}`)
-        .then(r => r.json()).then(d => { setFileDetail(d); setDetailLoading(false) })
-        .catch(() => setDetailLoading(false))
+    setSelectedFile(file);
+    setRightMode("detail");
+    // scanChunks는 최신 턴에서 가져오기
+    setSelectedScanChunks(latestTurn?.scanChunks ?? {});
+    const isAV = ["video", "audio", "movie", "music"].includes(file.file_type);
+    if (!isAV && file.file_path) {
+      setDetailLoading(true);
+      setFileDetail(null);
+      fetch(
+        `${API_BASE}/api/files/detail?path=${encodeURIComponent(file.file_path)}`,
+      )
+        .then((r) => r.json())
+        .then((d) => {
+          setFileDetail(d);
+          setDetailLoading(false);
+        })
+        .catch(() => setDetailLoading(false));
     }
-  }
+  };
 
-  const handleBackToResults = () => {
-    setRightMode("cards")
-    setDetailVisible(false)
-    window.history.pushState({ view: 'results' }, '')
-    dispatchAiSidebarView('results')
-    setTimeout(() => setView('results'), 320)
-  }
-
-  // 새 대화 — 서버 history + localStorage thread_id 모두 비움
   const handleNewConversation = useCallback(async () => {
     if (abortRef.current) abortRef.current.abort()
     const tid = window.__aimodeThreadId
     if (tid) {
       try { await fetch(`${API_BASE}/api/aimode/chat/${encodeURIComponent(tid)}`, { method: 'DELETE' }) } catch {}
     }
-    try { localStorage.removeItem('aimode_thread_id') } catch {}
-    window.__aimodeThreadId = null
-    setAimodeSteps([])
-    setAimodeQuery('')
-    setAimodeContentKws([])
-    setAimodeDetailKws([])
-    setAimodeSources([])
-    setAimodeSelected(null)
-    setAimodeAnswer('')
-    setAimodeDone(false)
-    setResults([])
-    setIterationData([])
-    setTurns([])
-    setRightMode('cards')
-    setSelectedScanChunks({})
-    setSelectedFile(null)
-    setFileDetail(null)
-    setAiError('')
-    setView('home')
-    setInputValue('')
-  }, [])
+    try {
+      localStorage.removeItem("aimode_thread_id");
+    } catch {}
+    window.__aimodeThreadId = null;
+    setTurns([]);
+    setView("home");
+    setInputValue("");
+    setSelectedFile(null);
+    setFileDetail(null);
+    setRightMode("cards");
+  }, []);
 
   const handleGoToSearch = () => {
     const rect = btnRef.current?.getBoundingClientRect();
@@ -2047,28 +1780,17 @@ export default function MainAI() {
     setTimeout(() => navigate("/search"), 900);
   };
 
-  const latestTurn = turns.length ? turns[turns.length - 1] : null
-  const isAnyStreaming = streaming || turns.some((t) => t.streaming)
-
-  // 우측 패널: 에이전트 턴 후보 → 없으면 AIMODE `results` 폴백
-  const rightCandidates = latestTurn?.candidates?.length
-    ? latestTurn.candidates
-    : results;
+  // 우측 패널: 최신 턴의 candidates
+  const rightCandidates = latestTurn?.candidates ?? [];
   const rightScanStates = latestTurn?.scanStates ?? {};
-  const shouldShowCenterNoInfoAlert =
-    latestTurn?.done &&
-    !latestTurn?.streaming &&
-    isNoInfoCenterAlert(latestTurn?.answer);
 
   // ── Render ──────────────────────────────────────────────────────
   return (
     <div className={view === 'home' ? 'overflow-hidden h-screen relative' : 'min-h-screen relative text-on-surface'}
       style={{
+        display: "flex",
         height: "100vh",
         background: AI.bg,
-        backgroundImage: view === 'home'
-          ? "radial-gradient(120% 90% at 0% 100%, rgba(109,40,217,0.1) 0%, transparent 60%), radial-gradient(100% 80% at 100% 0%, rgba(59,130,246,0.08) 0%, transparent 58%)"
-          : "none",
         overflow: "hidden",
       }}
     >
@@ -2080,9 +1802,18 @@ export default function MainAI() {
               background: 'radial-gradient(circle, #1c253e 0%, #0c1326 60%, #070d1f 100%)',
               boxShadow: '0 0 30px 10px rgba(133,173,255,0.15)' }} />
           {[0, 200].map((delay, i) => (
-            <div key={i} className="portal-ring absolute rounded-full border border-[#8cf2ff]/28"
-              style={{ width: '160px', height: '160px', left: ripplePos.x, top: ripplePos.y,
-                transform: 'translate(-50%, -50%)', animationDelay: `${delay}ms` }} />
+            <div
+              key={i}
+              className="portal-ring absolute rounded-full border border-[#85adff]/25"
+              style={{
+                width: 160,
+                height: 160,
+                left: ripplePos.x,
+                top: ripplePos.y,
+                transform: "translate(-50%,-50%)",
+                animationDelay: `${delay}ms`,
+              }}
+            />
           ))}
           <div className="portal-text absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-2">
             <span className="material-symbols-outlined text-[#a5aac2] text-4xl" style={{ fontVariationSettings: '"FILL" 1' }}>database</span>
@@ -2094,17 +1825,18 @@ export default function MainAI() {
       {/* 사이드바 */}
       <SearchSidebar entranceOn={view === 'home' ? aiHomeEntranceOn : undefined} />
 
-      {/* ════ HOME VIEW ════ */}
-      {view === 'home' && (
-        <>
-          <main className={`${ml} relative flex h-full min-h-0 w-full flex-col overflow-x-visible overflow-y-auto bg-transparent transition-[margin] duration-300 pt-8`}>
+      <div
+        className={`${ml} flex-1 flex flex-col overflow-hidden transition-[margin] duration-300`}
+      >
+        {/* ══ HOME ══ */}
+        {view === "home" && (
+          <main className="relative flex h-full flex-col overflow-hidden bg-transparent pt-8">
             <div
-              className={`ai-home-orbit-bg pointer-events-none absolute top-0 bottom-0 z-0 min-h-0 ${open ? '-left-64 w-[calc(100%+16rem)]' : 'inset-x-0'}`}
-              style={{ '--ai-orbit-assemble': `${AI_ORB_ASSEMBLE_SECONDS}s` }}
+              className="ai-home-orbit-bg pointer-events-none absolute inset-0 z-0"
+              style={{ "--ai-orbit-assemble": `${AI_ORB_ASSEMBLE_SECONDS}s` }}
               aria-hidden
             />
-            {/* Orb */}
-            <div ref={orbSinkRef} className={`absolute top-0 bottom-0 z-0 min-h-0 ${open ? '-left-64 w-[calc(100%+16rem)]' : 'inset-x-0'} `} aria-hidden>
+            <div ref={orbSinkRef} className="absolute inset-0 z-0" aria-hidden>
               <AnimatedOrb
                 layout="fill"
                 colorMode="ai"
@@ -2119,115 +1851,79 @@ export default function MainAI() {
                 voiceLevelRef={orbVoiceRef}
               />
             </div>
-
-            <div className={`pointer-events-none relative z-10 flex h-full min-h-0 w-full flex-col ${open ? '-translate-x-32' : ''} ${aiHomeEntranceOn ? 'main-search-entrance-on' : 'main-search-entrance-off'}`}>
-              <div className="relative z-10 flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-6 py-8 md:px-8">
-                <div className="relative flex w-full max-w-lg flex-col items-center justify-center">
-                  <div className="relative z-10 flex w-full flex-col items-center gap-9 text-center md:gap-10">
-                    <div className={`mse-hero-down pointer-events-auto max-w-lg shrink-0 transition-all duration-300 ${homeExiting ? 'opacity-0 -translate-y-6' : ''}`}>
-                      <h2 className="font-headline inline-flex flex-wrap items-baseline justify-center gap-0 text-4xl font-semibold tracking-tight md:text-5xl lg:text-6xl">
-                        <span className="font-headline inline-block bg-gradient-to-r from-[#5e5a52] from-[6%] via-[#b8b0a2] to-[#d4cec2] bg-clip-text text-transparent">B</span>
-                        <span className="font-headline text-[#cbc4b6] drop-shadow-[0_1px_5px_rgba(18,16,14,0.18)]">eyond Smarte</span>
-                        <span className="font-headline inline-block bg-gradient-to-r from-[#d4cec2] via-[#9e978a] to-[#45423c] to-[90%] bg-clip-text text-transparent">r</span>
-                      </h2>
-                    </div>
-                    <form
-                      onSubmit={handleSearch}
-                      className="mse-search-up group pointer-events-auto relative z-10 w-full max-w-[min(90vw,22rem)] shrink-0 md:max-w-[24rem]"
-                      style={homeExiting ? { visibility: 'hidden' } : {}}
-                    >
-                      {aiHomeInputFocused && homeInputOverflow && inputValue.trim() && (
-                        <>
-                          <div className="ai-home-query-preview-dim pointer-events-none fixed inset-0 z-20 bg-[rgba(3,2,10,0.45)] backdrop-blur-[2px]" />
-                          <div className="ai-home-query-preview-panel fixed left-1/2 top-1/2 z-30 flex w-[min(94vw,48rem)] items-end gap-3 rounded-2xl border border-white/22 bg-[rgba(8,7,18,0.92)] px-6 py-5 shadow-[0_22px_60px_rgba(0,0,0,0.58)] backdrop-blur-xl">
-                            <p className="max-h-[42vh] flex-1 overflow-y-auto whitespace-pre-wrap break-words pr-1 text-left text-[15px] leading-relaxed text-violet-50/95">
-                              {inputValue}
-                              <span
-                                className="ml-0.5 inline-block h-[1.05em] w-[2px] animate-pulse align-[-0.14em] bg-violet-200/95"
-                                aria-hidden
-                              />
-                            </p>
-                            <button
-                              type="button"
-                              onMouseDown={(e) => e.preventDefault()}
-                              onClick={() => submitQuery(inputValue)}
-                              className="pointer-events-auto inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-violet-300/35 bg-violet-500/20 text-violet-100 transition hover:bg-violet-500/30 hover:text-white"
-                              aria-label="검색 실행"
-                            >
-                              <span className="material-symbols-outlined text-[20px]">search</span>
-                            </button>
-                          </div>
-                        </>
-                      )}
-                      <div className="pointer-events-none absolute -inset-[2px] rounded-full bg-gradient-to-r from-fuchsia-500/0 via-violet-400/25 to-fuchsia-500/0 opacity-0 blur-md transition-opacity duration-500 group-focus-within:opacity-100" />
-                      <div className="relative flex items-center gap-2 rounded-full border border-violet-200/[0.14] bg-gradient-to-b from-violet-100/[0.09] to-violet-950/[0.28] px-1.5 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.16),inset_0_-1px_0_rgba(0,0,0,0.22),0_10px_44px_rgba(32,12,58,0.5)] backdrop-blur-2xl transition-all duration-300 group-focus-within:border-violet-200/25 group-focus-within:from-violet-100/[0.12] group-focus-within:to-violet-950/[0.34]">
-                        <button
-                          type="button"
-                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-900 to-purple-600 text-violet-50 shadow-[0_0_20px_rgba(124,58,237,0.32),inset_0_1px_0_rgba(255,255,255,0.18)] transition-transform hover:from-violet-800 hover:to-purple-500 active:scale-90"
-                        >
-                          <span className="material-symbols-outlined text-[20px] font-bold">add</span>
-                        </button>
-                        <input
-                          ref={homeInputRef}
-                          name="query"
-                          type="text"
-                          value={inputValue}
-                          onChange={(e) => setInputValue(e.target.value)}
-                          onFocus={() => setAiHomeInputFocused(true)}
-                          onBlur={() => setAiHomeInputFocused(false)}
-                          placeholder={
-                            listening ? "듣는 중…" : "Anything you need"
-                          }
-                          className="min-w-0 flex-1 border-none bg-transparent py-2 font-manrope text-sm text-violet-100/90 outline-none ring-0 placeholder:text-violet-300/45 md:py-2.5 md:text-base"
-                        />
-                        <button
-                          type="button"
-                          onClick={toggleMic}
-                          aria-pressed={listening}
-                          aria-label={
-                            listening ? "음성 입력 끄기" : "음성 입력"
-                          }
-                          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border backdrop-blur-md transition-colors ${
-                            listening
-                              ? "border-rose-400/35 bg-rose-950/40 text-rose-200 shadow-[0_0_16px_rgba(251,113,133,0.25)]"
-                              : "border-violet-300/18 bg-violet-950/35 text-violet-200/80 hover:border-violet-200/30 hover:bg-violet-900/40 hover:text-violet-100"
-                          }`}
-                        >
-                          <span className="material-symbols-outlined text-[20px]">
-                            mic
-                          </span>
-                        </button>
-                      </div>
-                      <button type="submit" aria-hidden className="hidden" tabIndex={-1} />
-                    </form>
+            <div
+              className={`pointer-events-none relative z-10 flex h-full flex-col ${aiHomeEntranceOn ? "main-search-entrance-on" : "main-search-entrance-off"}`}
+            >
+              <div className="relative z-10 flex min-h-0 flex-1 flex-col items-center justify-center px-6 py-8">
+                <div className="relative flex w-full max-w-lg flex-col items-center gap-9 text-center">
+                  <div
+                    className={`mse-hero-down pointer-events-auto transition-all duration-300 ${homeExiting ? "opacity-0 -translate-y-6" : ""}`}
+                  >
+                    <h2 className="font-headline inline-flex flex-wrap items-baseline justify-center gap-0 text-4xl font-semibold tracking-tight md:text-5xl lg:text-6xl">
+                      <span className="font-headline inline-block bg-gradient-to-r from-[#5e5a52] from-[6%] via-[#b8b0a2] to-[#d4cec2] bg-clip-text text-transparent">
+                        B
+                      </span>
+                      <span className="font-headline text-[#cbc4b6] drop-shadow-[0_1px_5px_rgba(18,16,14,0.18)]">
+                        eyond Smarte
+                      </span>
+                      <span className="font-headline inline-block bg-gradient-to-r from-[#d4cec2] via-[#9e978a] to-[#45423c] to-[90%] bg-clip-text text-transparent">
+                        r
+                      </span>
+                    </h2>
                   </div>
+                  <form
+                    onSubmit={handleSearch}
+                    className="mse-search-up group pointer-events-auto relative z-10 w-full max-w-[min(90vw,22rem)] shrink-0 md:max-w-[24rem]"
+                    style={homeExiting ? { visibility: "hidden" } : {}}
+                  >
+                    <div className="pointer-events-none absolute -inset-[2px] rounded-full bg-gradient-to-r from-fuchsia-500/0 via-violet-400/25 to-fuchsia-500/0 opacity-0 blur-md transition-opacity duration-500 group-focus-within:opacity-100" />
+                    <div className="relative flex items-center gap-2 rounded-full border border-violet-200/[0.14] bg-gradient-to-b from-violet-100/[0.09] to-violet-950/[0.28] px-1.5 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.16),inset_0_-1px_0_rgba(0,0,0,0.22),0_10px_44px_rgba(32,12,58,0.5)] backdrop-blur-2xl transition-all duration-300 group-focus-within:border-violet-200/25">
+                      <button
+                        type="button"
+                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-900 to-purple-600 text-violet-50 shadow-[0_0_20px_rgba(124,58,237,0.32),inset_0_1px_0_rgba(255,255,255,0.18)] transition-transform hover:from-violet-800 hover:to-purple-500 active:scale-90"
+                      >
+                        <span className="material-symbols-outlined text-[20px] font-bold">
+                          add
+                        </span>
+                      </button>
+                      <input
+                        type="text"
+                        value={inputValue}
+                        onChange={(e) => setInputValue(e.target.value)}
+                        placeholder={
+                          listening ? "듣는 중…" : "Anything you need"
+                        }
+                        className="min-w-0 flex-1 border-none bg-transparent py-2 font-manrope text-sm text-violet-100/90 outline-none ring-0 placeholder:text-violet-300/45 md:py-2.5 md:text-base"
+                      />
+                      <button
+                        type="button"
+                        onClick={toggleMic}
+                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border backdrop-blur-md transition-colors ${listening ? "border-rose-400/35 bg-rose-950/40 text-rose-200" : "border-violet-300/18 bg-violet-950/35 text-violet-200/80"}`}
+                      >
+                        <span className="material-symbols-outlined text-[20px]">
+                          mic
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSecurityMode((v) => !v)}
+                        title={securityMode ? "보안 모드 켜짐: LLM 응답이 SecurityCritic 통과 후 송출됨" : "보안 모드 꺼짐"}
+                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border backdrop-blur-md transition-colors ${securityMode ? "border-red-400/40 bg-red-950/40 text-red-300 shadow-[0_0_18px_rgba(248,113,113,0.28)]" : "border-violet-300/18 bg-violet-950/35 text-violet-200/80 hover:text-red-300"}`}
+                      >
+                        <span className="material-symbols-outlined text-[20px]" style={securityMode ? { fontVariationSettings: '"FILL" 1' } : {}}>
+                          shield
+                        </span>
+                      </button>
+                    </div>
+                  </form>
                 </div>
               </div>
-
-              <div
-                className="mse-search-up mse-search-up-delay-1 pointer-events-auto flex shrink-0 flex-col items-center justify-end px-6 pb-10 pt-2 md:px-8"
-                style={homeExiting ? { visibility: "hidden" } : {}}
-              >
+              <div className="mse-search-up mse-search-up-delay-1 pointer-events-auto flex shrink-0 flex-col items-center pb-10 pt-2">
                 <button
                   ref={btnRef}
                   onClick={handleGoToSearch}
                   disabled={searchTransitioning}
-                  type="button"
-                  className="ai-home-search-mode-btn group flex items-center gap-3 rounded-full border border-white/20 px-8 py-3 text-sm font-bold uppercase tracking-widest text-neutral-300 transition-all duration-300 hover:border-white/40 hover:text-white hover:shadow-lg disabled:pointer-events-none"
-                  style={{
-                    background: 'rgba(255, 255, 255, 0.1)',
-                    backdropFilter: 'blur(10px)',
-                    boxShadow: '0 8px 32px rgba(139, 92, 246, 0.1), inset 0 1px 1px rgba(255, 255, 255, 0.2)',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
-                    e.currentTarget.style.boxShadow =
-                      "0 8px 32px rgba(139, 92, 246, 0.3), inset 0 1px 1px rgba(255, 255, 255, 0.3), 0 0 30px rgba(139, 92, 246, 0.25)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
-                    e.currentTarget.style.boxShadow = '0 8px 32px rgba(139, 92, 246, 0.1), inset 0 1px 1px rgba(255, 255, 255, 0.2)';
-                  }}
+                  className="group flex items-center gap-3 rounded-full border border-white/10 bg-white/[0.06] px-8 py-3 text-sm font-bold uppercase tracking-widest text-neutral-400 transition-all duration-300 hover:border-white/20 hover:text-neutral-200 disabled:pointer-events-none"
                 >
                   <span
                     className="h-2 w-2 animate-pulse rounded-full bg-violet-500"
@@ -2241,13 +1937,11 @@ export default function MainAI() {
               </div>
             </div>
           </main>
-        </>
         )}
 
-        {/* ══ CHAT ══ (검색/대화 결과 — doSearch·popstate 에서는 'results' 사용) */}
-        {(view === "chat" || view === "results" || view === "detail") && (
+        {/* ══ CHAT ══ */}
+        {view === "chat" && (
           <div
-            className={`${ml} min-h-0 w-full transition-[margin] duration-300`}
             style={{
               display: "flex",
               flexDirection: "column",
@@ -2267,26 +1961,13 @@ export default function MainAI() {
                 padding: "0 18px",
                 height: 52,
                 flexShrink: 0,
-                background: "rgb(1,1,4)",
-                backdropFilter: "none",
-                borderBottom: "1px solid rgba(255,255,255,0.08)",
-                boxShadow: "none",
+                background: "rgba(6,3,15,0.94)",
+                backdropFilter: "blur(20px)",
+                borderBottom: "1px solid rgba(139,92,246,0.09)",
                 position: "relative",
                 zIndex: 10,
               }}
             >
-              <button
-                type="button"
-                onClick={() => {
-                  setView("home");
-                  setTurns([]);
-                  setInputValue("");
-                }}
-                title="AI 모드 홈으로 이동"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/[0.08] text-white/80 ring-1 ring-white/[0.12] transition hover:bg-white/[0.14] hover:text-white"
-              >
-                <span className="material-symbols-outlined text-[18px]">arrow_back</span>
-              </button>
               <button
                 onClick={() => {
                   setView("home");
@@ -2306,10 +1987,31 @@ export default function MainAI() {
                   padding: 0,
                 }}
               >
-                Insight AI
+                Obsidian AI
               </button>
 
               {/* 현재 route 뱃지 */}
+              {latestTurn?.route === "rag" && (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 4,
+                    fontSize: 10,
+                    fontWeight: 700,
+                    letterSpacing: "0.08em",
+                    textTransform: "uppercase",
+                    color: AI.accentLight,
+                    background: "rgba(139,92,246,0.12)",
+                    border: `1px solid rgba(139,92,246,0.25)`,
+                    padding: "3px 10px",
+                    borderRadius: 999,
+                    flexShrink: 0,
+                  }}
+                >
+                  🔍 RAG
+                </div>
+              )}
               {latestTurn?.route === "chat" && (
                 <div
                   style={{
@@ -2320,9 +2022,9 @@ export default function MainAI() {
                     fontWeight: 700,
                     letterSpacing: "0.08em",
                     textTransform: "uppercase",
-                    color: "#e5e7eb",
-                    background: "rgb(1,1,4)",
-                    border: "1px solid rgb(1,1,4)",
+                    color: "#10b981",
+                    background: "rgba(16,185,129,0.1)",
+                    border: "1px solid rgba(16,185,129,0.22)",
                     padding: "3px 10px",
                     borderRadius: 999,
                     flexShrink: 0,
@@ -2341,9 +2043,9 @@ export default function MainAI() {
                     fontWeight: 700,
                     letterSpacing: "0.08em",
                     textTransform: "uppercase",
-                    color: "#e5e7eb",
-                    background: "rgb(1,1,4)",
-                    border: "1px solid rgb(1,1,4)",
+                    color: "#06b6d4",
+                    background: "rgba(6,182,212,0.1)",
+                    border: "1px solid rgba(6,182,212,0.22)",
                     padding: "3px 10px",
                     borderRadius: 999,
                     flexShrink: 0,
@@ -2362,9 +2064,9 @@ export default function MainAI() {
                     fontWeight: 700,
                     letterSpacing: "0.08em",
                     textTransform: "uppercase",
-                    color: "#e5e7eb",
-                    background: "rgb(1,1,4)",
-                    border: "1px solid rgb(1,1,4)",
+                    color: "#eab308",
+                    background: "rgba(234,179,8,0.1)",
+                    border: "1px solid rgba(234,179,8,0.25)",
                     padding: "3px 10px",
                     borderRadius: 999,
                     flexShrink: 0,
@@ -2382,23 +2084,19 @@ export default function MainAI() {
                     gap: 5,
                     fontSize: 10,
                     fontWeight: 700,
-                    color: "#e5e7eb",
-                    background: "rgb(1,1,4)",
-                    border: "1px solid rgb(1,1,4)",
+                    color: AI.accentLight,
+                    background: "rgba(139,92,246,0.1)",
+                    border: `1px solid ${AI.border}`,
                     padding: "3px 10px",
                     borderRadius: 999,
                     flexShrink: 0,
                   }}
                 >
                   <span
-                    className="inline-flex rounded-md border border-violet-400/25 bg-violet-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest mt-3"
-                    style={{
-                      color: "#e5e7eb",
-                      border: "1px solid rgb(1,1,4)",
-                      background: "rgb(1,1,4)",
-                    }}
+                    className="material-symbols-outlined ai-spin"
+                    style={{ fontSize: 11 }}
                   >
-                    AI 쿼리
+                    sync
                   </span>
                   처리 중
                 </div>
@@ -2411,9 +2109,9 @@ export default function MainAI() {
                     gap: 5,
                     fontSize: 10,
                     fontWeight: 700,
-                    color: "#e5e7eb",
-                    background: "rgb(1,1,4)",
-                    border: "1px solid rgb(1,1,4)",
+                    color: "#10b981",
+                    background: "rgba(16,185,129,0.1)",
+                    border: "1px solid rgba(16,185,129,0.2)",
                     padding: "3px 10px",
                     borderRadius: 999,
                     flexShrink: 0,
@@ -2464,14 +2162,11 @@ export default function MainAI() {
               {/* ── LEFT: conversation ── */}
               <div
                 style={{
-                  width: "60%",
+                  width: "55%",
                   display: "flex",
                   flexDirection: "column",
-                  borderRight: "1px solid rgba(167,139,250,0.14)",
+                  borderRight: "1px solid rgba(139,92,246,0.07)",
                   background: AI.leftBg,
-                  backdropFilter: "blur(10px) saturate(1.06)",
-                  position: "relative",
-                  boxShadow: "inset -1px 0 0 rgba(255,255,255,0.04)",
                 }}
               >
                 <div
@@ -2492,40 +2187,6 @@ export default function MainAI() {
                   ))}
                   <div ref={conversationEndRef} />
                 </div>
-                {shouldShowCenterNoInfoAlert && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      inset: 0,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      pointerEvents: "none",
-                      zIndex: 4,
-                      padding: 20,
-                    }}
-                  >
-                    <div
-                      style={{
-                        maxWidth: 460,
-                        width: "min(92%, 460px)",
-                        textAlign: "center",
-                        padding: "14px 18px",
-                        borderRadius: 14,
-                        background: "rgba(17,10,35,0.78)",
-                        border: "1px solid rgba(167,139,250,0.34)",
-                        color: "#f5f3ff",
-                        fontSize: 16,
-                        fontWeight: 650,
-                        lineHeight: 1.45,
-                        backdropFilter: "blur(10px)",
-                        boxShadow: "0 14px 34px rgba(6,3,15,0.45)",
-                      }}
-                    >
-                      제공 문서에 해당 정보가 없습니다
-                    </div>
-                  </div>
-                )}
 
                 {/* 입력창 */}
                 <div
@@ -2533,9 +2194,8 @@ export default function MainAI() {
                     padding: "10px 14px",
                     flexShrink: 0,
                     borderTop: "1px solid rgba(139,92,246,0.07)",
-                    background: "rgba(10,6,24,0.78)",
-                    backdropFilter: "blur(12px) saturate(1.06)",
-                    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)",
+                    background: "rgba(6,3,15,0.92)",
+                    backdropFilter: "blur(12px)",
                   }}
                 >
                   <form
@@ -2552,16 +2212,11 @@ export default function MainAI() {
                         border: `1px solid ${AI.border}`,
                         borderRadius: 24,
                         padding: "8px 14px",
-                        backdropFilter: "blur(12px) saturate(1.08)",
-                        boxShadow:
-                          "inset 0 1px 0 rgba(255,255,255,0.12), 0 8px 24px rgba(6,3,15,0.3)",
                         transition: "border-color 0.2s",
                       }}
                     >
                       <input
-                        ref={chatInputRef}
-                        name="query"
-                        type="text"
+                        ref={inputRef}
                         value={listening ? "" : inputValue}
                         onChange={(e) =>
                           !listening && setInputValue(e.target.value)
@@ -2575,8 +2230,8 @@ export default function MainAI() {
                           background: "transparent",
                           border: "none",
                           outline: "none",
-                          fontSize: 14,
-                          color: "#f1f5f9",
+                          fontSize: 13,
+                          color: "#e2e8f0",
                           caretColor: AI.accentLight,
                           fontFamily: "inherit",
                           letterSpacing: "-0.01em",
@@ -2645,7 +2300,7 @@ export default function MainAI() {
                         flexShrink: 0,
                         border: "none",
                         background: inputValue.trim()
-                          ? "linear-gradient(135deg,rgba(109,40,217,0.95),rgba(124,58,237,0.88))"
+                          ? "linear-gradient(135deg,#6d28d9,#7c3aed)"
                           : "rgba(139,92,246,0.08)",
                         cursor: inputValue.trim() ? "pointer" : "default",
                         display: "flex",
@@ -2674,13 +2329,11 @@ export default function MainAI() {
               {/* ── RIGHT: cards / detail ── */}
               <div
                 style={{
-                  width: "40%",
+                  width: "45%",
                   display: "flex",
                   flexDirection: "column",
                   background: AI.rightBg,
-                  backdropFilter: "blur(10px) saturate(1.06)",
                   overflow: "hidden",
-                  boxShadow: "inset 1px 0 0 rgba(255,255,255,0.04)",
                 }}
               >
                 {rightMode === "cards" ? (
@@ -2703,7 +2356,7 @@ export default function MainAI() {
                           className="material-symbols-outlined"
                           style={{
                             fontSize: 40,
-                            color: "rgba(167,139,250,0.22)",
+                            color: "rgba(139,92,246,0.08)",
                           }}
                         >
                           folder_open
@@ -2711,7 +2364,7 @@ export default function MainAI() {
                         <p
                           style={{
                             fontSize: 11,
-                            color: "#94a3b8",
+                            color: "#0e0924",
                             textAlign: "center",
                           }}
                         >
@@ -2724,7 +2377,7 @@ export default function MainAI() {
                           style={{
                             fontSize: 10,
                             fontWeight: 700,
-                            color: "#a78bfa",
+                            color: "#1e1535",
                             letterSpacing: "0.12em",
                             textTransform: "uppercase",
                             marginBottom: 9,
@@ -2758,50 +2411,6 @@ export default function MainAI() {
                           })}
                         </div>
                       </>
-                    )}
-
-                    {streaming && results.length === 0 && (
-                      <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] px-4 py-3 text-center text-xs text-on-surface-variant">
-                        AIMODE 파이프라인이 실행 중입니다. 잠시만 기다려 주세요.
-                      </div>
-                    )}
-
-                    {useAimode && aimodeAnswer && !streaming && (
-                      <div className="relative overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.03]">
-                        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-fuchsia-500/[0.07] via-transparent to-violet-500/[0.08]" />
-                        <div className="relative flex items-center gap-3 border-b border-white/[0.08] px-4 py-2.5">
-                          <span className="material-symbols-outlined text-lg" style={{ color: AI.accentLight }}>
-                            stylus
-                          </span>
-                          <span className="text-[11px] font-bold uppercase tracking-widest" style={{ color: AI.accentLight }}>
-                            초안 답변
-                          </span>
-                          {aimodeDone ? (
-                            <span className="ml-auto flex items-center gap-1 text-[11px] text-[#7af5d9]">
-                              <span className="material-symbols-outlined text-base">check_circle</span> 완료
-                            </span>
-                          ) : (
-                            <span className="ml-auto flex items-center gap-1 text-[11px]" style={{ color: AI.accentLight }}>
-                              <span className="material-symbols-outlined animate-spin text-base">progress_activity</span>
-                              작성 중
-                            </span>
-                          )}
-                        </div>
-                        <div className="relative px-4 py-3 text-xs leading-relaxed text-on-surface/95 whitespace-pre-wrap">
-                          {stripMarkdown(aimodeAnswer)}
-                          {!aimodeDone && (
-                            <span className="inline-block w-2 h-4 bg-violet-400 ml-1 animate-pulse align-middle" />
-                          )}
-                        </div>
-                        {selectedFile &&
-                          ["video", "audio", "movie", "music"].includes(
-                            selectedFile.file_type,
-                          ) && (
-                            <div style={{ marginBottom: 13 }}>
-                              <AVDetailContent result={selectedFile} />
-                            </div>
-                          )}
-                      </div>
                     )}
                   </div>
                 ) : (
@@ -2840,6 +2449,7 @@ export default function MainAI() {
                     </div>
                     {selectedFile && (
                       <div style={{ padding: "13px" }}>
+                        {/* 파일 헤더 */}
                         <div
                           style={{
                             display: "flex",
@@ -2893,7 +2503,7 @@ export default function MainAI() {
                             <div
                               style={{
                                 fontSize: 9,
-                                color: "#94a3b8",
+                                color: "#2d2050",
                                 fontFamily: "monospace",
                                 overflow: "hidden",
                                 textOverflow: "ellipsis",
@@ -2916,7 +2526,7 @@ export default function MainAI() {
                               )}
                               %
                             </div>
-                            <div style={{ fontSize: 9, color: "#94a3b8" }}>
+                            <div style={{ fontSize: 9, color: "#2d2050" }}>
                               신뢰도
                             </div>
                           </div>
@@ -2956,6 +2566,7 @@ export default function MainAI() {
                             </div>
                           )}
 
+                        {/* 매칭 청크 */}
                         {(() => {
                           const fid =
                             selectedFile.trichef_id || selectedFile.file_name;
@@ -3062,7 +2673,7 @@ export default function MainAI() {
                                     >
                                       <span
                                         style={{
-                                          color: "#94a3b8",
+                                          color: "#2d2050",
                                           flexShrink: 0,
                                           width: 70,
                                         }}
@@ -3071,7 +2682,7 @@ export default function MainAI() {
                                       </span>
                                       <span
                                         style={{
-                                          color: "#e2e8f0",
+                                          color: "#4b3f6b",
                                           overflow: "hidden",
                                           textOverflow: "ellipsis",
                                           whiteSpace: "nowrap",
@@ -3093,12 +2704,12 @@ export default function MainAI() {
             </div>
           </div>
         )}
+      </div>
 
       <style>{`
         @keyframes ai-spin  { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
         @keyframes ai-blink { 0%,100%{opacity:1} 50%{opacity:0} }
         @keyframes ai-scan-line { 0%{transform:translateY(-100%);opacity:0.8} 100%{transform:translateY(100%);opacity:0.3} }
-        @keyframes ai-avatar-pulse { 0%,100%{transform:scale(1);opacity:0.55} 50%{transform:scale(1.08);opacity:0.18} }
         .ai-spin { animation: ai-spin 1s linear infinite; }
         .ai-scan-line {
           position:absolute;top:0;left:0;right:0;height:40%;
