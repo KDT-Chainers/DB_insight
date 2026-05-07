@@ -390,24 +390,34 @@ def search():
 
     results = [r for r in results if _passes_floor(r)]
 
-    # [v14] 최종 ranking — 정확도(rerank) > 유사도(dense) > 신뢰도(conf) 순.
-    #   배경: 신뢰도(MPLC + 가우시안 CDF + boost)는 캡션 키워드 부풀림에 취약 →
-    #   사자상/강아지 캡션이 "고양이" 키워드를 거짓 포함 시 99%+ 로 부풀려짐.
-    #   유사도(dense=fusion cosine) 도 캡션 영향 일부 있음.
-    #   정확도(BGE-reranker-v2-m3 cross-encoder) 가 가장 정직한 의미 매칭 신호.
-    #
+    # [v15] 시각 일치성 검증 — 캡션 거짓말 케이스 차단.
+    #   배경: 사자상/강아지가 거짓 "고양이" 캡션 보유 시 dense 부풀림 → top 노출.
+    #   해결: SigLIP2 image embedding ↔ 쿼리 text embedding raw cosine 직접 측정.
+    #   visual_match < 0.20 (사자상 + "고양이" cosine ~0.18) 인 image 결과는
+    #   confidence/dense/similarity 에 페널티 0.3 적용 → 정렬 후순위로 밀림.
+    #   image 도메인만 적용 (doc/audio/video/bgm 은 영향 없음).
+    try:
+        from services.visual_check import filter_by_visual_match
+        results = filter_by_visual_match(results, query)
+    except Exception as _e:
+        # 시각 검증 실패 시 결과 그대로 — 회귀 안전.
+        pass
+
+    # [v14.1] 최종 ranking — 사용자 지시: 유사도(dense) > 정확도(rerank) > 신뢰도(conf) 순.
     #   다중 키 정렬:
-    #     1순위: rerank_score (높을수록 의미 매칭 강함, None/0 fallback -999)
-    #     2순위: dense (시각+텍스트 fusion)
-    #     3순위: confidence (가장 부풀려진 값, 동률 처리용)
+    #     1순위: dense (시각+텍스트 fusion 코사인, UI '유사도')
+    #     2순위: rerank_score (cross-encoder 의미 매칭, UI '정확도', None fallback -999)
+    #     3순위: confidence (UI '신뢰도', 동률 처리용)
     #
-    #   효과: '박스 속 고양이' 검색 시 IMG_1710/IMG_1357 같은 진짜 고양이가 top,
-    #         사자상/강아지(rerank -5~-8)는 후순위로 밀림.
+    #   주의: dense 는 캡션 키워드 영향을 일부 받음 (사자상/강아지의 거짓 캡션이
+    #   "고양이" 키워드 포함 시 dense 가 부풀려짐). 1순위 키로 사용 시 사자상/
+    #   강아지가 진짜 박스 안 고양이보다 상위 노출될 수 있음.
+    #   캡션 거짓말 문제는 Beta 하이브리드 + 시각 일치성 검증(별도 작업) 필요.
     def _sort_key(r):
         rs = r.get("rerank_score")
         return (
-            float(rs) if rs is not None else -999.0,
             float(r.get("dense") or 0),
+            float(rs) if rs is not None else -999.0,
             float(r.get("confidence") or 0),
         )
     results.sort(key=_sort_key, reverse=True)

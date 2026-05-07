@@ -254,3 +254,7 @@ node_modules
 # Data/ 동기화 zip (USB/Teams 별도 공유 — git 에는 포함 X)
 registry_normalized.zip
 *_normalized.zip
+
+
+Figures_Results/
+Figures/
