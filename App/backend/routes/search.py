@@ -323,26 +323,30 @@ def search():
     #
     #   예: "코스모스 보이저호" → 무관한 doc 신뢰도 97% / 유사도 69% / raw 0.55
     #        → similarity floor 0.72 로 cut.
+    # [v11.1] 실측 데이터 (고양이/보이저호) 기반 보수적 조정.
+    # Doc 은 similarity 분리 곤란 (정상/무관 모두 60~65%) → 신뢰도+rerank 의존.
+    # Video 정상 매칭이 sim 80% 인 경우 있음 → floor 0.90 → 0.75 완화.
+    # AV/BGM 의 raw cosine_top1 floor 가 진짜 differentiator.
     _DOMAIN_MIN_CONF = {
         "image": 0.40,
-        "doc":   0.40,
-        "video": 0.50,
-        "audio": 0.50,
-        "bgm":   0.50,
+        "doc":   0.30,   # 0.40 → 0.30 (NIPS 같이 sim 65% 에 conf 96% 인 정상 케이스 보존)
+        "video": 0.40,   # 0.50 → 0.40
+        "audio": 0.40,
+        "bgm":   0.40,
     }
     _DOMAIN_MIN_SIM = {
-        "image": 0.72,   # SigLIP2 raw cosine 기준 무관련 ~0.65 이하
-        "doc":   0.72,   # BGE-M3 doc raw cosine 기준
-        "video": 0.90,   # AV CDF normalize 후 — 진짜 매칭은 0.95+
-        "audio": 0.90,
-        "bgm":   0.90,
+        "image": 0.72,   # SigLIP2 raw cosine — 정상 79%+, 무관 ~69%
+        "doc":   0.58,   # 0.72 → 0.58 (정상 NIPS 65% 보존)
+        "video": 0.75,   # 0.90 → 0.75 (정상 NGC 80% 보존, 무관 65% 컷)
+        "audio": 0.85,   # 0.90 → 0.85 (audio similarity 는 uniformly 높아 약한 floor)
+        "bgm":   0.80,   # 0.90 → 0.80
     }
-    # AV/BGM 의 raw cosine_top1 (z-score 정규화 우회).
-    # 실제 매칭이면 cosine ≥ 0.45, 무관이면 ~0.30 이하.
+    # AV/BGM 의 raw cosine_top1 (z-score CDF normalize 우회).
+    # 실제 매칭이면 cosine ≥ 0.45, 무관이면 ~0.30 이하 — 진짜 differentiator.
     _DOMAIN_MIN_DENSE = {
-        "video": 0.50,
-        "audio": 0.50,
-        "bgm":   0.30,   # CLAP cosine 은 BGE-M3 보다 낮음
+        "video": 0.45,
+        "audio": 0.45,
+        "bgm":   0.30,   # CLAP cosine 은 BGE-M3 보다 절대값 낮음
     }
 
     def _passes_floor(r: dict) -> bool:
