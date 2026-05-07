@@ -316,13 +316,22 @@ def search():
             if r.get("page_num") is None and loc.get("page"):
                 r["page_num"] = loc["page"]
 
-    # [v9] 무제한 모드(top_k=10**6 즉, 사용자 입력 top_k<=0) 일 때 floor 적용.
-    #   confidence < 0.20 약매칭 노이즈 제거 (코스모스 image 2390건 → ~50건).
-    #   유한 top_k 요청 시는 사용자가 명시적으로 N개를 원했으므로 floor 없이
-    #   그대로 N개 반환 (강매칭/약매칭 모두 사용자가 보길 원할 수 있음).
-    UNLIMITED_MODE = top_k >= 10**6
-    if UNLIMITED_MODE:
-        results = [r for r in results if (r.get("confidence") or 0) >= 0.20]
+    # [v10] 최소 신뢰도 floor — 모든 검색 모드에 적용 (유한 top_k 포함).
+    #   BGE-M3 벡터 검색은 항상 "가장 가까운 N개" 를 반환하므로
+    #   쿼리와 무관한 파일도 top-k에 포함됨 (예: "보이저호" → 관련 없는 이미지 100개).
+    #   도메인별 floor: image=0.25 (SigLIP2/DINOv2 z-score 기준 무관련 ~0.2 이하),
+    #   나머지=0.20.
+    _DOMAIN_MIN_CONF = {
+        "image": 0.25,
+        "doc":   0.20,
+        "video": 0.20,
+        "audio": 0.20,
+        "bgm":   0.20,
+    }
+    _def_min = 0.20
+    results = [r for r in results
+               if (r.get("confidence") or 0) >=
+               _DOMAIN_MIN_CONF.get(r.get("file_type", ""), _def_min)]
 
     # [v7] 최종 top_k 컷 — combined[:top_k*2] dedup 여유분으로 받았으나
     # 사용자 요청 top_k 정확히 맞춰 반환. (이전 v6 까지는 자르지 않아 30 요청에

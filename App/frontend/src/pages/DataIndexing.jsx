@@ -488,17 +488,30 @@ function IndexingModal({
     return () => clearInterval(id);
   }, [isRunning]);
 
+  // [B2] skipped 파일(이미 인덱싱)은 ETA 계산에서 제외.
+  // [B3] 5초 가드 — 초반 rate 불안정 구간 제거.
+  // [Phase 2] 백엔드 estimated_remaining + done_estimate 기반 보정 계수 방식.
+  //   correctionFactor = actualElapsed / doneEstimate  (최대 3배 클램프)
+  //   remainingSec     = estimated_remaining * correctionFactor
+  //   폴백: 백엔드 추정치 없으면 Phase 1 선형 외삽 유지.
+  const actualDone      = done + errors;              // skipped 제외 실제 처리 수
+  const actualRemaining = total - skipped - actualDone; // 실제 남은 신규 파일 수
   let remainingSec = null;
-  if (
-    isRunning &&
-    jobStatus?.started_at &&
-    processed > 0 &&
-    processed < total
-  ) {
+  if (isRunning && actualRemaining > 0 && jobStatus?.started_at) {
     const elapsedSec = Date.now() / 1000 - jobStatus.started_at;
-    if (elapsedSec > 0.5) {
-      const rate = processed / elapsedSec;
-      if (rate > 0) remainingSec = (total - processed) / rate;
+    if (elapsedSec > 5.0) {
+      const estRemaining     = jobStatus?.estimated_remaining;
+      const doneEstimate     = jobStatus?.done_estimate;
+      const curFileRemaining = jobStatus?.current_file_remaining ?? 0;
+      if (estRemaining != null && doneEstimate != null && doneEstimate > 0) {
+        // [Phase 2+3] 가중 평균 보정 + 현재 파일 스테이지 잔여 합산
+        const correctionFactor = Math.min(elapsedSec / doneEstimate, 3.0);
+        remainingSec = (estRemaining + curFileRemaining) * correctionFactor;
+      } else if (actualDone > 0) {
+        // 폴백: 선형 외삽
+        const rate = actualDone / elapsedSec;
+        if (rate > 0) remainingSec = actualRemaining / rate;
+      }
     }
   }
 

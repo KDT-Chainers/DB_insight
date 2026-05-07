@@ -296,6 +296,13 @@ def _run_job(job_id: str, file_paths: list[str], results: list[dict]) -> None:
     skipped = 0
     errors = 0
 
+    # [Phase 2] 남은 파일 추정 + 완료 파일 누적 추정 (보정 계수용)
+    from services.index_estimator import (
+        estimate as _est_remaining,
+        estimate_file as _est_file,
+    )
+    _done_est_acc = 0.0   # 실제 처리 완료된 파일들의 추정 합계
+
     # [P0 #A,B] 배치 종료 시 lexical rebuild 1회 + reload_engine 1회 적용용 추적.
     # 파일마다 호출되던 비싼 후처리(파일×N 비용)를 배치 끝에 1회 처리(고정 비용)로 통합.
     domains_dirty: set[str] = set()
@@ -337,8 +344,16 @@ def _run_job(job_id: str, file_paths: list[str], results: list[dict]) -> None:
             stopped_early = True
             break
 
+        # [Phase 2] i+1 이후 pending 파일들의 추정 시간 (현재 파일 제외)
+        _pending_ahead = [file_paths[j] for j in range(i + 1, len(file_paths))]
+        _est_info = (_est_remaining(_pending_ahead)
+                     if _pending_ahead else {"total_seconds": 0.0})
+
         results[i]["status"] = "running"
-        _update_job(job_id, done, skipped, errors, "running")
+        _update_job(job_id, done, skipped, errors, "running",
+                    estimated_remaining=_est_info["total_seconds"],
+                    done_estimate=_done_est_acc,
+                    current_file_remaining=_est_file(path))
 
         file_type = _get_file_type(path)
         embedder = EMBEDDERS.get(file_type) if file_type else None
@@ -357,16 +372,25 @@ def _run_job(job_id: str, file_paths: list[str], results: list[dict]) -> None:
             try:
                 # 단계별 진행 콜백 (video embedder만 사용)
                 # stop_flag 를 반환하면 embedder가 중단 처리
-                def _make_cb(_i, _job_id):
+                def _make_cb(_i, _job_id, _path):
                     def _cb(step, total, detail):
                         results[_i]["step"]       = step
                         results[_i]["step_total"]  = total
                         results[_i]["step_detail"] = detail
+                        # [Phase 3] 현재 스테이지 기반 잔여 시간 갱신
+                        try:
+                            from services.index_estimator import estimate_single as _es
+                            cur_rem = _es(_path, current_step=step)
+                            with _jobs_lock:
+                                if _job_id in _jobs:
+                                    _jobs[_job_id]["current_file_remaining"] = round(cur_rem, 1)
+                        except Exception:
+                            pass
                         return _is_stopped(_job_id)  # True 이면 중단 신호
                     return _cb
 
                 # progress_cb: 전 타입 지원 (video=5단계, audio=4단계, image/doc=3단계)
-                kwargs = {"progress_cb": _make_cb(i, job_id)}
+                kwargs = {"progress_cb": _make_cb(i, job_id, path)}
                 # [P0 #B] image/doc/movie/music 은 lexical rebuild 지연 → 배치 끝에 1회.
                 if file_type in ("image", "doc", "movie", "music"):
                     kwargs["defer_lexical_rebuild"] = True
@@ -411,7 +435,14 @@ def _run_job(job_id: str, file_paths: list[str], results: list[dict]) -> None:
                 print(f"[ERROR] {path}\n{tb}", flush=True)
                 errors += 1
 
-        _update_job(job_id, done, skipped, errors, "running")
+        # [Phase 2] 실제 처리(done/error)된 파일의 추정치 누적 → 보정 계수 계산용
+        if results[i]["status"] in ("done", "error"):
+            _done_est_acc += _est_file(path)
+
+        _update_job(job_id, done, skipped, errors, "running",
+                    estimated_remaining=_est_info["total_seconds"],
+                    done_estimate=_done_est_acc,
+                    current_file_remaining=0.0)   # [Phase 3] 파일 완료 → 초기화
 
     # ── [P0 #A,B] 배치 종료 후 후처리 (이전: 파일×N → 현재: 1회) ──────────────
     # image/doc 도메인 lexical 인덱스 1회 재구축, 검색 엔진 캐시 1회 reload.
@@ -472,10 +503,26 @@ def _run_job(job_id: str, file_paths: list[str], results: list[dict]) -> None:
     _update_job(job_id, done, skipped, errors, final_status)
 
 
-def _update_job(job_id: str, done: int, skipped: int, errors: int, status: str) -> None:
+def _update_job(
+    job_id: str,
+    done: int,
+    skipped: int,
+    errors: int,
+    status: str,
+    *,
+    estimated_remaining: float | None = None,
+    done_estimate: float | None = None,
+    current_file_remaining: float | None = None,
+) -> None:
     with _jobs_lock:
         if job_id in _jobs:
-            _jobs[job_id]["done"] = done
+            _jobs[job_id]["done"]    = done
             _jobs[job_id]["skipped"] = skipped
-            _jobs[job_id]["errors"] = errors
-            _jobs[job_id]["status"] = status
+            _jobs[job_id]["errors"]  = errors
+            _jobs[job_id]["status"]  = status
+            if estimated_remaining is not None:
+                _jobs[job_id]["estimated_remaining"] = round(estimated_remaining, 1)
+            if done_estimate is not None:
+                _jobs[job_id]["done_estimate"] = round(done_estimate, 1)
+            if current_file_remaining is not None:
+                _jobs[job_id]["current_file_remaining"] = round(current_file_remaining, 1)

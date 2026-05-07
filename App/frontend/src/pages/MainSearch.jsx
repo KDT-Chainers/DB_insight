@@ -653,6 +653,9 @@ function ResultCard({
     result.preview_url;
   const [imgError, setImgError] = useState(false);
   const playerRef = useRef(null);
+  // [PERF] 미디어 플레이어 지연 로딩 — 카드 클릭 전까지 <video>/<audio> 마운트 안함.
+  // 검색 결과가 수백 건일 때 동시 마운트로 UI 스레드 점유 방지.
+  const [playerMounted, setPlayerMounted] = useState(false);
 
   // ── 보안 모드: 이미지/문서 미리보기에 PII 마스킹 적용 ──
   const [maskedSrc, setMaskedSrc] = useState(null);
@@ -759,17 +762,36 @@ function ResultCard({
         #{rank}
       </div>
 
-      {/* AV: 플레이어 */}
+      {/* AV: 플레이어 — [PERF] 클릭 시에만 마운트 (지연 로딩) */}
       {isAV && (
         <div
           className="px-3 py-2 bg-[#0b1220] border-b border-[#334155]"
           onClick={(e) => e.stopPropagation()}
         >
-          {result.file_type === "video" ? (
+          {!playerMounted ? (
+            /* 플레이스홀더 — 클릭하면 실제 플레이어로 교체 */
+            <div
+              className="w-full flex items-center justify-center bg-black/60 rounded cursor-pointer hover:bg-black/80 transition-colors gap-2 text-white/40 hover:text-white/80"
+              style={{ height: result.file_type === "video" ? "120px" : "44px" }}
+              onClick={() => setPlayerMounted(true)}
+            >
+              <span
+                className="material-symbols-outlined"
+                style={{
+                  fontSize: result.file_type === "video" ? "44px" : "24px",
+                  fontVariationSettings: '"FILL" 1',
+                }}
+              >
+                play_circle
+              </span>
+              <span className="text-xs select-none">클릭하여 재생</span>
+            </div>
+          ) : result.file_type === "video" ? (
             <video
               ref={playerRef}
               src={streamUrl}
               controls
+              autoPlay
               preload="metadata"
               className="w-full block outline-none bg-black"
               style={{ maxHeight: "200px" }}
@@ -779,6 +801,7 @@ function ResultCard({
               ref={playerRef}
               src={streamUrl}
               controls
+              autoPlay
               preload="metadata"
               className="w-full block outline-none"
             />
@@ -1449,7 +1472,8 @@ export default function MainSearch() {
     setSearching(true);
     setSearchError("");
     try {
-      const data = await searchFiles(q, 30, type);
+      const topK = type ? 50 : 250;   // 도메인 탭=50, 전체=250 (5도메인×50) — UI 반응성 최적화
+      const data = await searchFiles(q, topK, type);
       setResults(data);
       // 검색 기록 저장 → 완료 후 사이드바 갱신 이벤트
       fetch(`${API_BASE}/api/history`, {
@@ -2391,11 +2415,12 @@ export default function MainSearch() {
                 />
               </div>
 
-              {/* [노이즈 제거] 저신뢰도 결과 숨김 토글 — 신뢰도 < 5% 인 결과 자동 hide.
+              {/* [노이즈 제거] 저신뢰도 결과 숨김 토글 — 신뢰도 < 20% 인 결과 자동 hide.
                 Reranker 가 부적합 판정한 결과(예: '박태웅 의장' 검색에 신발 사진)를
-                기본 숨김 처리하여 노이즈 제거. 사용자는 토글로 전체 보기 가능. */}
+                기본 숨김 처리하여 노이즈 제거. 사용자는 토글로 전체 보기 가능.
+                [v10] 5% → 20% 상향: backend floor와 동일 기준으로 통일. */}
               {(() => {
-                const LOW = 0.05;
+                const LOW = 0.20;
                 const lowCount = results.filter(
                   (r) => (r.confidence ?? 0) < LOW,
                 ).length;
@@ -2455,7 +2480,7 @@ export default function MainSearch() {
               {!searching &&
                 results.length > 0 &&
                 (() => {
-                  const LOW = 0.05;
+                  const LOW = 0.20;
                   const visible = hideLowConf
                     ? results.filter((r) => (r.confidence ?? 0) >= LOW)
                     : results;
