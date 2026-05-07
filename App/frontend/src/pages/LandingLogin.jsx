@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { useState, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import WindowControls from '../components/WindowControls'
 import { API_BASE } from '../api'
 
@@ -8,8 +8,12 @@ export default function LandingLogin() {
   const submitBtnRef = useRef(null)
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
-  const [portalToMain, setPortalToMain] = useState(false)
-  const [ripplePos, setRipplePos] = useState({ x: '50%', y: '50%' })
+  const [flashing, setFlashing] = useState(false)
+  const inputRef = useRef(null)
+
+  useEffect(() => {
+    inputRef.current?.focus()
+  }, [])
 
   const handleLogin = async (e) => {
     e.preventDefault()
@@ -24,21 +28,8 @@ export default function LandingLogin() {
 
       if (response.ok && data?.success === true) {
         setError('')
-        const reduceMotion =
-          typeof window !== 'undefined' &&
-          window.matchMedia('(prefers-reduced-motion: reduce)').matches
-        if (reduceMotion) {
-          navigate('/search')
-          return
-        }
-        const rect = submitBtnRef.current?.getBoundingClientRect()
-        if (rect) {
-          setRipplePos({ x: `${rect.left + rect.width / 2}px`, y: `${rect.top + rect.height / 2}px` })
-        } else {
-          setRipplePos({ x: '50%', y: '50%' })
-        }
-        setPortalToMain(true)
-        window.setTimeout(() => navigate('/search'), 900)
+        setFlashing(true)
+        setTimeout(() => navigate('/search'), 380)
         return
       }
 
@@ -68,17 +59,17 @@ export default function LandingLogin() {
       <main className="relative z-10 flex min-h-screen flex-col items-center justify-center p-6 pt-10">
         <div className="relative isolate w-full max-w-sm">
           <div
-            className="pointer-events-none absolute -inset-5 rounded-[1.65rem] bg-gradient-to-b from-sky-200/15 via-primary/10 to-[rgba(37,99,235,0.08)] opacity-90 blur-2xl"
+            className="pointer-events-none absolute -inset-4 rounded-[1.6rem] bg-gradient-to-b from-sky-200/8 via-primary/6 to-[rgba(37,99,235,0.04)] opacity-80 blur-[28px]"
             aria-hidden
           />
           <div
-            className="pointer-events-none absolute -inset-2 rounded-[1.35rem] border border-white/[0.08] bg-white/[0.05] shadow-[0_8px_40px_rgba(0,0,0,0.25),inset_0_1px_0_0_rgba(255,255,255,0.12)] backdrop-blur-2xl backdrop-saturate-150"
+            className="pointer-events-none absolute -inset-1.5 rounded-[1.25rem] border border-white/[0.13] bg-white/[0.025] shadow-[0_8px_30px_rgba(3,10,30,0.24),inset_0_1px_0_0_rgba(255,255,255,0.22)] backdrop-blur-[26px] backdrop-saturate-135"
             aria-hidden
           />
-          <div className="relative min-h-[34rem] overflow-hidden rounded-2xl shadow-[0_28px_80px_rgba(0,0,0,0.55)]">
+          <div className="relative min-h-[33rem] overflow-hidden rounded-[1.2rem] border border-white/[0.09] shadow-[0_14px_44px_rgba(0,0,0,0.38)]">
           <div className="pointer-events-none absolute inset-0 app-depth-bg" aria-hidden />
 
-          <div className="relative z-10 flex min-h-[34rem] flex-col justify-center bg-gradient-to-b from-white/[0.07] via-white/[0.02] to-transparent px-7 py-12 backdrop-blur-[56px] backdrop-saturate-150">
+          <div className="relative z-10 flex min-h-[33rem] flex-col justify-center bg-gradient-to-b from-white/[0.05] via-white/[0.015] to-transparent px-7 py-10 backdrop-blur-[34px] backdrop-saturate-130">
             <div className="flex w-full flex-col items-center gap-6">
               <div className="relative">
                 <div className="h-24 w-24 overflow-hidden rounded-full bg-gradient-to-tr from-[#060d1f] via-[#0f2847] to-[#2563eb] p-1 shadow-[0_0_28px_rgba(37,99,235,0.28)]">
@@ -97,7 +88,6 @@ export default function LandingLogin() {
 
               <div className="text-center">
                 <h2 className="text-xl font-bold tracking-tight text-white">보안 인증이 필요합니다</h2>
-                <p className="mt-1 text-sm text-white/65">신경망 탐색기 접근 인증</p>
               </div>
 
               <form onSubmit={handleLogin} className="w-full space-y-8">
@@ -111,6 +101,7 @@ export default function LandingLogin() {
                       key
                     </span>
                     <input
+                      ref={inputRef}
                       type="password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
@@ -153,13 +144,7 @@ export default function LandingLogin() {
 
         {/* Status footer */}
         <div className="mt-12 flex flex-wrap items-center justify-center gap-3">
-          <div className="flex items-center gap-2 rounded-full bg-white/[0.06] px-4 py-2 backdrop-blur-md">
-            <div className="h-2 w-2 animate-pulse rounded-full bg-sky-300 shadow-[0_0_10px_rgba(125,211,252,0.75)]" />
-            <span className="text-[10px] font-bold uppercase tracking-widest text-white/50">
-              노드 상태: <span className="text-sky-200">정상</span>
-            </span>
-          </div>
-          <div className="flex items-center gap-2 rounded-full bg-white/[0.06] px-4 py-2 backdrop-blur-md">
+          <div className="flex items-center gap-2 rounded-full bg-white/[0.06] px-4 py-1.5 backdrop-blur-md">
             <span className="material-symbols-outlined text-xs text-sky-200/90" style={{ fontVariationSettings: '"FILL" 1' }}>
               verified_user
             </span>
@@ -168,43 +153,6 @@ export default function LandingLogin() {
         </div>
       </main>
 
-      {/* 메인 검색 전환 — MainSearch AI 포털과 동일 오버레이 */}
-      {portalToMain && (
-        <div className="pointer-events-none fixed inset-0 z-[10000] overflow-hidden">
-          <div
-            className="portal-overlay absolute rounded-full"
-            style={{
-              width: '80px',
-              height: '80px',
-              left: ripplePos.x,
-              top: ripplePos.y,
-              transform: 'translate(-50%, -50%)',
-              background: 'radial-gradient(circle, #1c253e 0%, #0c1326 60%, #070d1f 100%)',
-              boxShadow: '0 0 30px 10px rgba(172,138,255,0.15)',
-            }}
-          />
-          {[0, 200].map((delay, i) => (
-            <div
-              key={i}
-              className="portal-ring absolute rounded-full border border-[#ac8aff]/25"
-              style={{
-                width: '160px',
-                height: '160px',
-                left: ripplePos.x,
-                top: ripplePos.y,
-                transform: 'translate(-50%, -50%)',
-                animationDelay: `${delay}ms`,
-              }}
-            />
-          ))}
-          <div className="portal-text absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-2">
-            <span className="material-symbols-outlined text-4xl text-[#a5aac2]" style={{ fontVariationSettings: '"FILL" 1' }}>
-              psychology
-            </span>
-            <span className="font-manrope text-xs uppercase tracking-[0.25em] text-[#a5aac2]">메인 화면</span>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

@@ -1,17 +1,27 @@
 # ============================================================
-# Node / React
+# Node / Vite / React / Electron (App/frontend)
 # ============================================================
 App/frontend/node_modules/
-App/frontend/dist/
-App/frontend/.vite/
-App/frontend/build/
 
-# Electron 빌드 결과물
+# Vite (`npm run build` → 기본 outDir `dist/`)
+App/frontend/dist/
+
+# electron-builder (`package.json` → directories.output `out/`)
 App/frontend/out/
+App/frontend/out2/
+App/frontend/out3/
+App/frontend/out4/
+App/frontend/out5/
+App/frontend/out6/
 App/frontend/dist-electron/
 App/frontend/release/
 App/frontend/builder-debug.yml
 App/frontend/builder-effective-config.yaml
+
+# 인스톨러 빌드 결과물
+App/installer/node_modules/
+App/installer/out/
+App/installer/dist/
 
 # ============================================================
 # Python / Flask
@@ -39,19 +49,9 @@ venv/
 env/
 
 # ============================================================
-# 임베딩 데이터 — 용량이 크므로 git에 포함하지 않음
+# Data/ — 전체 폴더 git 제외 (raw_DB / extracted_DB / embedded_DB / models 등 모두)
+# 데이터·인덱스는 Releases zip 또는 USB 로 공유.
 # ============================================================
-
-# 텍스트 캐시 (BLIP 캡션, Whisper STT, 청크 JSON)
-Data/extracted_DB/
-
-# 벡터 캐시 (.npy) + ChromaDB (chroma.sqlite3)
-Data/embedded_DB/
-
-# 원본 파일 메타데이터
-Data/raw_DB/
-
-# 혹시 Data/ 하위에 뭔가 추가되더라도 전체 제외
 Data/
 
 # ============================================================
@@ -83,16 +83,14 @@ weight_buckets.json
 .cache/
 models/
 model_cache/
+# (Data/models/ 는 Data/ 전체 ignore 로 이미 커버됨)
 
-# faster-whisper 모델 (로컬 다운로드 시)
+# faster-whisper / HF 모델 바이너리
+# ⚠️  config.json, tokenizer.json 등 전역 제외 금지 — 소스 파일과 충돌 위험.
+#     HF 캐시는 .cache/ / models/ 로 이미 커버됨 (Data/ 도 전체 ignore).
 *.pt
 *.bin
 *.safetensors
-tokenizer.json
-config.json
-special_tokens_map.json
-tokenizer_config.json
-vocab.json
 
 # ============================================================
 # Database
@@ -102,10 +100,23 @@ vocab.json
 *.sqlite3
 
 # ============================================================
+# 대용량 설치 파일
+# ============================================================
+*.msi
+*.exe
+*.iso
+*.dmg
+*.pkg
+
+# fpcalc.exe (Chromaprint 바이너리, 3.4MB) — BGM 검색에 필수, 깃에 포함
+!App/backend/bin/fpcalc.exe
+
+# ============================================================
 # Environment variables
 # ============================================================
 .env
 .env.local
+.env.*.local
 .env.development.local
 .env.test.local
 .env.production.local
@@ -122,6 +133,31 @@ yarn-error.log*
 build_out*.txt
 *_out.txt
 result.txt
+
+# top-level diagnostic logs (BGM ingest, doc rebuild queue 등)
+logs/
+
+# ============================================================
+# 사용자별 PC 설정 / DB (PC 마다 다름, push 안 함)
+# ============================================================
+# Flask backend 의 사용자 인증 / 검색 히스토리 SQLite
+App/backend/db/app.db
+App/backend/db/*.db-journal
+App/backend/db/__pycache__/
+
+# Electron 빌드 출력 + admin_ui 빌드 캐시
+App/admin_ui/__pycache__/
+App/admin_ui/dist/
+App/admin_ui/out/
+
+# 사용자 설정 (BGM ACR API key, 화면 크기 등) — PC 마다 다름
+App/data/
+# (Data/settings.json 은 Data/ 전체 ignore 로 이미 커버됨)
+
+# BGM audio_meta.json 의 path 필드 — PC 마다 다른 abs 경로
+# (감각적 차원에서는 가능하지만 push 시 매번 충돌 → normalize_registry_paths.py 로 PC 별 자동 갱신)
+# 메타 데이터 자체는 push (filename / acr_artist / tags 등 공유 가치 있음)
+# path 필드만 PC 별 차이를 ignore 할 수는 없으므로 normalize 워크플로우 사용
 
 # ============================================================
 # OS
@@ -147,3 +183,69 @@ out*
 installer
 Docs
 merge
+실행방법.txt
+실행메모.txt
+publication/
+LICENSE_DRAFT
+README_DRAFT.md
+DRAFT_SUMMARY.txt
+
+# oh-my-claudecode / Claude Code
+.omc/
+.claude/scheduled_tasks.lock
+.claude/settings.local.json
+
+# Bench 임시 산출물 (영구 보관은 DI_TriCHEF/results/, MR_TriCHEF/results/ 사용)
+bench_results/
+
+# MR_TriCHEF 자동 생성 calibration 데이터 (run_calibration.py 산출물)
+MR_TriCHEF/pipeline/_calibration.json
+
+# Admin UI (Gradio) 별도 venv
+App/admin_ui/.venv-admin/
+
+# pip 실수 산물 (e.g. `pip install … =1.0`)
+App/backend/=*
+
+merge
+기획서
+pipeline_details_260427_1420
+pipeline_details_260427_1420.md
+
+# md/ — 임시 로그/JSON 만 제외, 보고서 .md 는 보존
+md/_*
+md/*.log
+md/*.json
+md/*.txt
+md/*.html
+
+# 임시 디버깅 스크립트 (1회용 진단/테스트)
+scripts/_diag_*.py
+scripts/_test_*.py
+
+# ============================================================
+# LaTeX intermediate artifacts
+# ============================================================
+*.aux
+*.log
+*.out
+*.toc
+*.lof
+*.lot
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.synctex.gz
+*.nav
+*.snm
+*.vrb
+
+# Pandoc conversion intermediates
+publication/paper/main_korean_export.tex
+publication/paper/fig*_ko.tex
+publication/paper/fig*_ko.pdf
+publication/paper/fig*_ko.png
+
+.claude/
+node_modules

@@ -1,6 +1,51 @@
 # DB_insight
 
 로컬 파일(문서/영상/이미지/음성)을 자연어로 검색하는 AI 기반 데스크탑 앱.
+**Tri-CHEF**(Complex-Hermitian Embedding Fusion) 멀티모달 검색
+프레임워크의 reference 구현 저장소이다.
+
+## 📄 Research Paper
+
+> **Tri-CHEF: Complex-Hermitian Embedding Fusion for Korean Multimodal Retrieval**
+> Young-Sang Song, Hwon Lee, Ju Yeon Jang, Young Jin Hwang, Tae Yoon Lee, Jeong Hye Gim
+> *Team Chainers, Independent Researchers, Republic of Korea*, 2026
+> 📃 arXiv: *(submission ID 추후 갱신)*
+
+**핵심 기여:**
+- 사전학습된 세 인코더(SigLIP2, BGE-M3, DINOv2)를 복소(complex)
+  임베딩의 직교한 세 축에 배정하고, 가중합 대신 에르미트(Hermitian)형
+  절대값으로 결합하여 어느 한 인코더가 점수를 독점하는 문제를 차단
+- 도메인별 절대 임계값을 무작위 비매치 질의-문서 쌍에서 적합하고,
+  $2{\times}/0.5{\times}$ 드리프트 가드로 증분 색인 중의 임계값 변동을 보호
+- 단일 8\,GB 소비자용 GPU(RTX 4070)에서 4개 도메인(Doc/Img/Movie/Rec)
+  파이프라인 동작; MIRACL-ko에서 nDCG@10 = 77.82\% (BGE-M3 dense 기준치
+  대비 +7.92\,pp)
+
+**인용 (BibTeX):**
+```bibtex
+@article{trichef2026,
+  title   = {Tri-CHEF: Complex-Hermitian Embedding Fusion for Korean Multimodal Retrieval},
+  author  = {Song, Young-Sang and Lee, Hwon and Jang, Ju Yeon and Hwang, Young Jin and Lee, Tae Yoon and Gim, Jeong Hye},
+  journal = {arXiv preprint},
+  year    = {2026}
+}
+```
+
+`CITATION.cff` 파일을 통해 GitHub 우측 사이드바의
+"Cite this repository" 버튼으로도 인용 정보를 확인할 수 있다.
+
+## 📦 License
+
+본 저장소의 코드, 캘리브레이션 데이터(`Data/embedded_DB/trichef_calibration.json`),
+평가 스크립트는 **Apache License 2.0** 으로 공개된다 — `LICENSE` 파일 참조.
+
+원본 in-house 코퍼스(Doc/Img/Movie/Rec raw)는 라이선스 제약으로
+재배포되지 않으며, MIRACL-ko 기반 평가는 HuggingFace의
+`miracl/miracl-corpus`(`ko` config)와 `miracl/miracl`(queries, `ko` config)을
+참조한다.
+
+구현 코드는 [`DI_TriCHEF/`](DI_TriCHEF/) (Doc/Img) 와
+[`MR_TriCHEF/`](MR_TriCHEF/) (Movie/Rec, ~3,000 LOC) 에 있다.
 
 ---
 
@@ -54,23 +99,58 @@ DB_insight
 
 ### 사전 조건
 
-- Node.js 설치
-- Python 설치 (PATH에 등록)
+- **Node.js 18+** — https://nodejs.org
+- **Python 3.10+** — https://python.org (PATH 등록 필수)
+- **Git** — https://git-scm.com
+
+---
+
+### Step 0 — 저장소 클론 및 Python 패키지 설치
+
+```bash
+git clone <repo-url>
+cd DB_insight
+```
+
+**① PyTorch 설치 (GPU/CPU에 따라 선택)**
+
+```bash
+# GPU (NVIDIA, CUDA 12.4) — RTX 30/40 시리즈 권장
+pip install torch==2.6.0+cu124 torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+
+# CPU only (GPU 없는 경우 — 임베딩 속도 느림)
+pip install torch torchvision torchaudio
+```
+
+**② 나머지 패키지 설치**
+
+```bash
+pip install -r App/backend/requirements.txt
+```
 
 ---
 
 ### Step 1 — Electron 앱 빌드
 
+> **빌드 전 DB_insight 앱이 실행 중이라면 반드시 먼저 종료하세요.**  
+> 앱이 켜진 상태에서 빌드하면 `out/` 폴더가 잠겨 실패합니다.
+
 ```bash
 cd App/frontend
 npm install
-rmdir /s /q out              # 이전 빌드 있을 경우
-npm run dist
+npm run dist        # predist 스크립트가 이전 빌드를 자동 정리 후 빌드
 ```
 
 결과물: `App/frontend/out/DB_insight 0.1.0.exe`
 
 > Flask 백엔드 별도 빌드 불필요. Electron이 실행 시 `python app.py`를 자동 실행한다.
+
+#### 빌드 오류 대처
+
+| 오류 | 원인 | 해결 |
+|---|---|---|
+| `EBUSY: resource busy or locked` | 앱 실행 중 / Windows Defender 스캔 | 앱 종료 후 재시도. 반복 시 `out/` 폴더를 Defender 제외 목록에 추가 |
+| `클라이언트가 필요한 권한을 가지고 있지 않습니다` (심볼릭 링크 오류) | Windows 개발자 모드 비활성화 | **설정 → 개인 정보 및 보안 → 개발자용 → 개발자 모드 ON** 후 재시도 |
 
 ---
 

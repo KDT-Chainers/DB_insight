@@ -1,0 +1,131 @@
+{
+  "timestamp": "2026-04-25T01:19:18",
+  "domain": "doc_page",
+  "n_samples": 150,
+  "query_chars": 100,
+  "topk": 10,
+  "alphas": [
+    0.2,
+    0.35,
+    0.5,
+    0.65,
+    1.0
+  ],
+  "results": [
+    {
+      "alpha": 0.2,
+      "metrics": {
+        "dense": {
+          "r1": 0.72,
+          "r5": 0.9067,
+          "mrr": 0.7969,
+          "missing": 10
+        },
+        "dense+sparse": {
+          "r1": 0.8333,
+          "r5": 0.9,
+          "mrr": 0.8694,
+          "missing": 11
+        },
+        "dense+sp+asf": {
+          "r1": 0.6333,
+          "r5": 0.8933,
+          "mrr": 0.7483,
+          "missing": 11
+        }
+      }
+    },
+    {
+      "alpha": 0.35,
+      "metrics": {
+        "dense": {
+          "r1": 0.7,
+          "r5": 0.88,
+          "mrr": 0.7783,
+          "missing": 11
+        },
+        "dense+sparse": {
+          "r1": 0.8067,
+          "r5": 0.9,
+          "mrr": 0.8496,
+          "missing": 12
+        },
+        "dense+sp+asf": {
+          "r1": 0.6467,
+          "r5": 0.8867,
+          "mrr": 0.7467,
+          "missing": 13
+        }
+      }
+    },
+    {
+      "alpha": 0.5,
+      "metrics": {
+        "dense": {
+          "r1": 0.62,
+          "r5": 0.7933,
+          "mrr": 0.6992,
+          "missing": 19
+        },
+        "dense+sparse": {
+          "r1": 0.76,
+          "r5": 0.88,
+          "mrr": 0.814,
+          "missing": 12
+        },
+        "dense+sp+asf": {
+          "r1": 0.6533,
+          "r5": 0.8733,
+          "mrr": 0.7435,
+          "missing": 13
+        }
+      }
+    },
+    {
+      "alpha": 0.65,
+      "metrics": {
+        "dense": {
+          "r1": 0.3533,
+          "r5": 0.5533,
+          "mrr": 0.4364,
+          "missing": 55
+        },
+        "dense+sparse": {
+          "r1": 0.6067,
+          "r5": 0.8,
+          "mrr": 0.695,
+          "missing": 22
+        },
+        "dense+sp+asf": {
+          "r1": 0.5267,
+          "r5": 0.7933,
+          "mrr": 0.6441,
+          "missing": 24
+        }
+      }
+    },
+    {
+      "alpha": 1.0,
+      "metrics": {
+        "dense": {
+          "r1": 0.0,
+          "r5": 0.0,
+          "mrr": 0.0,
+          "missing": 150
+        },
+        "dense+sparse": {
+          "r1": 0.0333,
+          "r5": 0.08,
+          "mrr": 0.053,
+          "missing": 136
+        },
+        "dense+sp+asf": {
+          "r1": 0.04,
+          "r5": 0.08,
+          "mrr": 0.0567,
+          "missing": 136
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,179 @@
+{
+  "timestamp": "2026-04-29T09:51:06",
+  "domain": "doc_page",
+  "n_samples": 150,
+  "query_chars": 100,
+  "topk": 10,
+  "alphas": [
+    0.2,
+    0.25,
+    0.35,
+    0.5,
+    0.65,
+    0.8,
+    1.0
+  ],
+  "results": [
+    {
+      "alpha": 0.2,
+      "metrics": {
+        "dense": {
+          "r1": 0.0067,
+          "r5": 0.0067,
+          "mrr": 0.0084,
+          "missing": 147
+        },
+        "dense+sparse": {
+          "r1": 0.0,
+          "r5": 0.0067,
+          "mrr": 0.0038,
+          "missing": 147
+        },
+        "dense+sp+asf": {
+          "r1": 0.0,
+          "r5": 0.0,
+          "mrr": 0.0007,
+          "missing": 149
+        }
+      }
+    },
+    {
+      "alpha": 0.25,
+      "metrics": {
+        "dense": {
+          "r1": 0.0067,
+          "r5": 0.0067,
+          "mrr": 0.0084,
+          "missing": 147
+        },
+        "dense+sparse": {
+          "r1": 0.0,
+          "r5": 0.0067,
+          "mrr": 0.0038,
+          "missing": 147
+        },
+        "dense+sp+asf": {
+          "r1": 0.0,
+          "r5": 0.0,
+          "mrr": 0.0007,
+          "missing": 149
+        }
+      }
+    },
+    {
+      "alpha": 0.35,
+      "metrics": {
+        "dense": {
+          "r1": 0.0067,
+          "r5": 0.0067,
+          "mrr": 0.0084,
+          "missing": 147
+        },
+        "dense+sparse": {
+          "r1": 0.0,
+          "r5": 0.0067,
+          "mrr": 0.0038,
+          "missing": 147
+        },
+        "dense+sp+asf": {
+          "r1": 0.0,
+          "r5": 0.0,
+          "mrr": 0.0007,
+          "missing": 149
+        }
+      }
+    },
+    {
+      "alpha": 0.5,
+      "metrics": {
+        "dense": {
+          "r1": 0.0067,
+          "r5": 0.0067,
+          "mrr": 0.0084,
+          "missing": 147
+        },
+        "dense+sparse": {
+          "r1": 0.0,
+          "r5": 0.0067,
+          "mrr": 0.0038,
+          "missing": 147
+        },
+        "dense+sp+asf": {
+          "r1": 0.0,
+          "r5": 0.0,
+          "mrr": 0.0007,
+          "missing": 149
+        }
+      }
+    },
+    {
+      "alpha": 0.65,
+      "metrics": {
+        "dense": {
+          "r1": 0.0067,
+          "r5": 0.0067,
+          "mrr": 0.0084,
+          "missing": 147
+        },
+        "dense+sparse": {
+          "r1": 0.0,
+          "r5": 0.0067,
+          "mrr": 0.0038,
+          "missing": 147
+        },
+        "dense+sp+asf": {
+          "r1": 0.0,
+          "r5": 0.0,
+          "mrr": 0.0007,
+          "missing": 149
+        }
+      }
+    },
+    {
+      "alpha": 0.8,
+      "metrics": {
+        "dense": {
+          "r1": 0.0067,
+          "r5": 0.0067,
+          "mrr": 0.0084,
+          "missing": 147
+        },
+        "dense+sparse": {
+          "r1": 0.0,
+          "r5": 0.0067,
+          "mrr": 0.0038,
+          "missing": 147
+        },
+        "dense+sp+asf": {
+          "r1": 0.0,
+          "r5": 0.0,
+          "mrr": 0.0007,
+          "missing": 149
+        }
+      }
+    },
+    {
+      "alpha": 1.0,
+      "metrics": {
+        "dense": {
+          "r1": 0.0067,
+          "r5": 0.0067,
+          "mrr": 0.0084,
+          "missing": 147
+        },
+        "dense+sparse": {
+          "r1": 0.0,
+          "r5": 0.0067,
+          "mrr": 0.0038,
+          "missing": 147
+        },
+        "dense+sp+asf": {
+          "r1": 0.0,
+          "r5": 0.0,
+          "mrr": 0.0007,
+          "missing": 149
+        }
+      }
+    }
+  ]
+}

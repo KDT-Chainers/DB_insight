@@ -1,0 +1,1995 @@
+[
+  {
+    "query": "준비도에",
+    "expected_basenames": [
+      "(SPRi) AI브리프특집호_AI 데이터센터 동향과 시사점_250730_F.pdf",
+      "SW중심사회 6월호(단면).pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "가구소득과",
+    "expected_basenames": [
+      "(최종)소프트 9월호(단면).pdf",
+      "04. 등록본_국가 모빌리티 진단과 교통SOC 투자정책 연구_250115.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "이렇습니다",
+    "expected_basenames": [
+      "12월 SW 중심사회.pdf",
+      "법제사법위원회_회의록._제299회(5차).pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "가에서는",
+    "expected_basenames": [
+      "2014 OECD교육지표.pdf",
+      "5월 SW 중심사회(전체).pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "형성월",
+    "expected_basenames": [
+      "2018 소프트웨어산업 연간보고서.pdf",
+      "월간SW중심사회 2017년 10월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "공모에서",
+    "expected_basenames": [
+      "2019년 SW산업연간보고서-최종수정v2.pdf",
+      "SPRi AI Brief Special_SaaSpocalypse_Final.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "진행하기에",
+    "expected_basenames": [
+      "2022년 SW산업 연간보고서.pdf",
+      "RRE202400900.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "서예를",
+    "expected_basenames": [
+      "2024 도서관이야기11+12_펼침-0904.pdf",
+      "도서관이야기 3+4월호_펼침.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "flipping",
+    "expected_basenames": [
+      "2026년 SW 중심사회 3월호.pdf",
+      "2301.12597v3__292575f8.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "eccles",
+    "expected_basenames": [
+      "2204.14198v2__c3eefa4c.pdf",
+      "2303.11366v4__20c86b7f.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "maia",
+    "expected_basenames": [
+      "AI브리프_3월_260303.pdf",
+      "SW중심사회 128.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "내포하",
+    "expected_basenames": [
+      "B552126_2008_M_0012.pdf",
+      "빅데이터 시대의 고고학 학술심포지엄 자료집.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "통화량",
+    "expected_basenames": [
+      "J10-04.pdf.pdf",
+      "월간SW중심사회_2015년 09월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "협박하는",
+    "expected_basenames": [
+      "SPRi AI Brief 7월호 산업동향.pdf",
+      "[단행본] 생활안전 중심의 범죄예방 환경조성 정책 과제.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "mixit",
+    "expected_basenames": [
+      "SPRi-AI-Brief-017-20200707.pdf",
+      "월간 SW 중심사회 7월.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "도소매업의",
+    "expected_basenames": [
+      "sw 중심사회 22년 1월호.pdf",
+      "연구보고서 2024-07 국내기업의 인공지능 활용과 정책과제.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "공공부문이나",
+    "expected_basenames": [
+      "SW중심사회 2월호(단면).pdf",
+      "SW중심사회_04월호(0417펼침).pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "이끌었다는",
+    "expected_basenames": [
+      "SW중심사회_3월 최종(단면).pdf",
+      "월간 SW중심사회 12월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "주변으로는",
+    "expected_basenames": [
+      "[단행본] 농촌 토지이용 유형으로 본 우리나라 농촌 공간.pdf",
+      "경주 동궁과 월지 방문자센터 건립예정부지 시굴조사 보고서.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "금액으로서",
+    "expected_basenames": [
+      "국가회계편람_2026년판_최종_260316_v7.pdf",
+      "월간SW중심사회_2016년_12월호_최종.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "유튜버가",
+    "expected_basenames": [
+      "도서관이야기 5월호 최종-저1.pdf",
+      "월간 SW 중심사회 10월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "계산했다",
+    "expected_basenames": [
+      "소프트12월호_단면.pdf",
+      "최종_ 소프트 10월호(단면).pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "무안경",
+    "expected_basenames": [
+      "월간 SW 중심사회 9월호 최종 고화질 단면.pdf",
+      "월간SW중심사회_2020년_4월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "비즈니스라고",
+    "expected_basenames": [
+      "월간SW중심사회 2021년 2월호.pdf",
+      "월간SW중심사회_2015년 03월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "newsread",
+    "expected_basenames": [
+      "월간SW중심사회_2015년 08월호.pdf",
+      "월간SW중심사회_2016년 04월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "역량을 집중",
+    "expected_basenames": [
+      "(SPRi) AI브리프특집호_AI 데이터센터 동향과 시사점_250730_F.pdf",
+      "오세경 26-07 2025년 북중 무역 평가_국가 유통망의 복원과 무역 적자의 심화.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "명시한 것과",
+    "expected_basenames": [
+      "(정책연구 2024-15-01)국가난제를 다룰 정책 접근과 분석(1권)-홍성주.pdf",
+      "소프트 24.01월호(단면).pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "작성하고 기업",
+    "expected_basenames": [
+      "(최종) 2023년 인공지능산업실태조사 결과보고서.pdf",
+      "2024 인공지능산업 실태조사 보고서.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "월 플랫폼",
+    "expected_basenames": [
+      "(최종) 소프트8월호(단면).pdf",
+      "SW중심사회 6월호(단면).pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "사생활의 비밀",
+    "expected_basenames": [
+      "(현안 2019-05)안용성-항만지역 대기질 개선을 위한 데이터의 연계활용방안 연구.pdf",
+      "[단행본] 생활안전 중심의 범죄예방 환경조성 정책 과제.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "정차 차량",
+    "expected_basenames": [
+      "04. 등록본_기본-RR-24-05. 교통 사망사고 정밀 분석을 위한 데이터 조사체계 및 활용방안_241219 (1).pdf",
+      "월간SW중심사회 2017년 5월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "이를 확대하여",
+    "expected_basenames": [
+      "1002 SW중심사회 10월호.pdf",
+      "SW중심사회 128.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "치료법을 개발하며",
+    "expected_basenames": [
+      "12월 SW 중심사회.pdf",
+      "SPRi AI Brief vol.27.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "형태이며 이는",
+    "expected_basenames": [
+      "12월 SW 중심사회.pdf",
+      "월간SW중심사회 2020년 8월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "포르투갈 영국",
+    "expected_basenames": [
+      "2014 OECD교육지표.pdf",
+      "한국조세재정연구원 2026 알기 쉬운 재정통계 내지 최종.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "장을 포함한",
+    "expected_basenames": [
+      "2014 OECD교육지표.pdf",
+      "[단행본] 농촌 토지이용 유형으로 본 우리나라 농촌 공간.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "미래창조과학부장관은 병무청장이",
+    "expected_basenames": [
+      "2015_SW산업 연간보고서.pdf",
+      "2016 SW산업 연간보고서.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "이어가며 년",
+    "expected_basenames": [
+      "2016 SW산업 연간보고서.pdf",
+      "SW중심사회_4월 최종(단면).pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "건강 질병",
+    "expected_basenames": [
+      "2017 소프트웨어산업 연간보고서.pdf",
+      "월간SW중심사회 2020년 8월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "솔루션 보드",
+    "expected_basenames": [
+      "2017 소프트웨어산업 연간보고서.pdf",
+      "2019년 SW산업연간보고서-최종수정v2.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "단체에 의해",
+    "expected_basenames": [
+      "2017년 SW산업 실태조사 보고서.pdf",
+      "연구17-015_2017 소프트웨어 산업 실태조사.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "보호 기업들은",
+    "expected_basenames": [
+      "2018 소프트웨어산업 연간보고서.pdf",
+      "SPRI_AI_Brief_2023년10월호_스페셜_F.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "시험하고 상용화에",
+    "expected_basenames": [
+      "2018 소프트웨어산업 연간보고서.pdf",
+      "2019년 SW산업연간보고서-최종수정v2.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "정책으로 내세운",
+    "expected_basenames": [
+      "2019년 SW산업연간보고서-최종수정v2.pdf",
+      "2020_소프트웨어산업_연간보고서.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "항 과학기술정보통신부장관은",
+    "expected_basenames": [
+      "2019년 SW산업연간보고서-최종수정v2.pdf",
+      "2022년 SW산업 연간보고서.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "시각 제반",
+    "expected_basenames": [
+      "2020 SW융합실태조사 보고서(최종)_v20230421-01.pdf",
+      "2023년 SW융합실태조사_v240828a.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "산업지형 변화에",
+    "expected_basenames": [
+      "2020_소프트웨어산업_연간보고서.pdf",
+      "월간SW중심사회_2015년 02월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "전역에 보급",
+    "expected_basenames": [
+      "2020_소프트웨어산업_연간보고서.pdf",
+      "2022년 SW산업 연간보고서.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "기반 협업을",
+    "expected_basenames": [
+      "2020_소프트웨어산업_연간보고서.pdf",
+      "월간SW중심사회 2021년 3월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "기록했다 표",
+    "expected_basenames": [
+      "2020년 이러닝산업 실태조사 보고서_최종.pdf",
+      "연구보고서 2024-13 글로벌 산업통상정책 변화에 따른 한국 배터리 산업 영향과 대응전략.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "기업들은 클라우드를",
+    "expected_basenames": [
+      "2022년 SW산업 연간보고서.pdf",
+      "SW중심사회_04월호(0417펼침).pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "조직문화 외부",
+    "expected_basenames": [
+      "2022년 SW융합 실태조사_v20231006-01.pdf",
+      "2023년 SW융합실태조사_v240828a.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "중요 이를",
+    "expected_basenames": [
+      "2023년 소프트웨어산업 연간보고서.pdf",
+      "월간SW중심사회_2016년 03월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "협조할 때의",
+    "expected_basenames": [
+      "2023년 소프트웨어산업 연간보고서.pdf",
+      "소프트 24.01월호(단면).pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "함께 해외기업",
+    "expected_basenames": [
+      "2023년 소프트웨어산업 연간보고서.pdf",
+      "SPRI_AI_Brief_2023년8월호_스페셜.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "글로벌 챗봇",
+    "expected_basenames": [
+      "2023년 소프트웨어산업 연간보고서.pdf",
+      "SW중심사회_3월 최종(단면).pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "전 형적인",
+    "expected_basenames": [
+      "2024 도서관이야기11+12_펼침-0904.pdf",
+      "월간SW중심사회_2015년 09월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "다채로운 콘텐츠를",
+    "expected_basenames": [
+      "2025 도서관이야기1+2-펼침-0904.pdf",
+      "[도서관이야기] 2023년 7+8월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "아니라 왜",
+    "expected_basenames": [
+      "2026 SW 중심사회 1월호.pdf",
+      "법제사법위원회_회의록._제299회(5차).pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "등 일반적으로",
+    "expected_basenames": [
+      "2026년 SW 중심사회 3월호.pdf",
+      "SW중심사회 11월 최종(단면).pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "교육 외의",
+    "expected_basenames": [
+      "22. RR2021-22 교육 뉴노멀 시대의 학습복지 실현 방안(이희현)_수정본(M3).pdf",
+      "RRE202400900.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "전 문가를",
+    "expected_basenames": [
+      "221012 (조간) 재난환경 변화 속 새로운 재난안전관리 도약 발판 마련(국립재난안전연구원 재난정보연구실 안전연구실).hwpx",
+      "[어라운드] 도서관이야기 2023 1,2월호_표지와 내지 합본.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "촉진하겠다고 밝혔다",
+    "expected_basenames": [
+      "5월 SW 중심사회(전체).pdf",
+      "SW중심사회_04월호(0417펼침).pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "소통 채널을",
+    "expected_basenames": [
+      "AI 브리프 2022년 11월호.pdf",
+      "SW중심사회 6월호(단면).pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "스탠포드대 리처드",
+    "expected_basenames": [
+      "AIB-029 (2).pdf",
+      "월간SW중심사회 2021년 1월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "있습니다 년에는",
+    "expected_basenames": [
+      "B090003_2012_M_0088.pdf",
+      "Samsung_Electronics_Sustainability_Report_2025_KOR.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "을 반드시",
+    "expected_basenames": [
+      "B090003_2012_M_0090.pdf",
+      "Samsung_Electronics_Sustainability_Report_2025_KOR.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "시장에 서의",
+    "expected_basenames": [
+      "B552126_2008_M_0012.pdf",
+      "월간 SW 중심사회 4월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "이연호 연세대",
+    "expected_basenames": [
+      "B552126_2008_M_0012.pdf",
+      "B552126_2008_M_0017.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "비교적 늦게",
+    "expected_basenames": [
+      "J10-04.pdf.pdf",
+      "월간 SW 중심사회 7월.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "교사와의 협력을",
+    "expected_basenames": [
+      "KICE 연구·정책브리프 통 vol.41.pdf",
+      "SW중심사회_7월.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "이루어진 후",
+    "expected_basenames": [
+      "RRE202400900.pdf",
+      "나이테, 시간의 기록-월성과 동아시아 고기후 연구.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "머릿속에 형성된",
+    "expected_basenames": [
+      "SPRi AI Brief 2월호_최종_260210-1.pdf",
+      "월간SW중심사회 2016년 11월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "단계에 있다는",
+    "expected_basenames": [
+      "SPRi AI Brief Special_SaaSpocalypse_Final.pdf",
+      "월간 SW 중심사회 7월호_최종.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "음료 제조업체",
+    "expected_basenames": [
+      "SPRi AI Brief vol.25.pdf",
+      "월간SW중심사회 2020년 11월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "사람이 몇",
+    "expected_basenames": [
+      "SPRi AI Brief_11월호_산업동향_F.pdf",
+      "법제사법위원회_회의록._제299회(5차).pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "목적의 활용은",
+    "expected_basenames": [
+      "SPRi AI Brief_2024년1월호_F.pdf",
+      "월간SW중심사회_2016년 06월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "활용에 대하여",
+    "expected_basenames": [
+      "SPRi AI Brief_4월호_산업동향_250407_F.pdf",
+      "월간SW중심사회 2020년 11월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "사회에 긍정적",
+    "expected_basenames": [
+      "SPRi AI Brief_9월호_산업동향_0909_F.pdf",
+      "월간SW중심사회 2021년 1월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "개선하여 방대한",
+    "expected_basenames": [
+      "SPRi AI Brief_Special_딥시크(DeepSeek)의 등장과 영향_0217_F(최종).pdf",
+      "SW중심사회 128.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "경각심 확산",
+    "expected_basenames": [
+      "SPRI-AI-Brief-016-20200623.pdf",
+      "월간 SW 중심사회 7월.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "실제 사진을",
+    "expected_basenames": [
+      "SPRI_AI_Brief_2023년8월호_F.pdf",
+      "월간 SW 중심사회 4월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "온 소프트웨어",
+    "expected_basenames": [
+      "SW 중심사회 133(2025.07).pdf",
+      "SW중심사회_2022년 10월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "판단하는 시스템으로",
+    "expected_basenames": [
+      "SW 중심사회 135(2025.09).pdf",
+      "월간SW중심사회_2018년_11월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "프라이버시 정책",
+    "expected_basenames": [
+      "SW 중심사회 2025년 4월호.pdf",
+      "월간SW중심사회_2014년 10월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "싱가포르 기업인",
+    "expected_basenames": [
+      "SW 중심사회 2월호(0226 수정).pdf",
+      "세경포 26-20 싱가포르의 파리협정 제6조 활용 동향.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "최근 정부의",
+    "expected_basenames": [
+      "SW산업 연간보고서_2014_상반기.pdf",
+      "월간SW중심사회 2020년 11월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "요구사항 필요",
+    "expected_basenames": [
+      "SW중심사회 127호_전문.pdf",
+      "월간SW중심사회_2016년_9월호(전체).pdf.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "과정에서 편견",
+    "expected_basenames": [
+      "SW중심사회 23년 1월호.pdf",
+      "SW중심사회_5월 최종본.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "않고 비용",
+    "expected_basenames": [
+      "SW중심사회 3월호(단면)_240326.pdf",
+      "월간SW중심사회 2020년 9월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "된다 인간이",
+    "expected_basenames": [
+      "SW중심사회 9월호.pdf",
+      "SW중심사회_04월호(0417펼침).pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "파트너십을 기반으로",
+    "expected_basenames": [
+      "SW중심사회_07월호_230719.pdf",
+      "WP 26-01 언론기사에서 나타나는 국유지 관리 갈등 및 쟁점 분석_정민기.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "어떤 데이터가",
+    "expected_basenames": [
+      "SW중심사회_3월.pdf",
+      "월간 SW 중심사회 5월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "중심 가치의",
+    "expected_basenames": [
+      "SW중심사회_5월 최종본.pdf",
+      "월간AI브리프_2205월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "서비스 플랫폼에서",
+    "expected_basenames": [
+      "SW중심사회_8월 월간호.pdf",
+      "월간SW중심사회_2015년 04월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "산업 프로젝트",
+    "expected_basenames": [
+      "[단행본] 건축물 생산 및 재고 현황 2025.pdf",
+      "월간SW중심사회 2021년 2월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "호로 제정",
+    "expected_basenames": [
+      "[단행본] 해석례로 읽는 개발행위허가 2025.pdf",
+      "월간 SW 중심사회 6월호_최종.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "유적 경주",
+    "expected_basenames": [
+      "경주 동궁과 월지 방문자센터 건립예정부지 시굴조사 보고서.pdf",
+      "나이테, 시간의 기록-월성과 동아시아 고기후 연구.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "책을 덮고",
+    "expected_basenames": [
+      "도서관이야기 1+2월호_펼침.pdf",
+      "도서관이야기 2023 3+4월호(최종).pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "전문적인 지식이",
+    "expected_basenames": [
+      "빅데이터 시대의 고고학 학술심포지엄 자료집.pdf",
+      "월간SW중심사회_2016년 04월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "부진 등으로",
+    "expected_basenames": [
+      "세경포 26-29 방글라데시 최빈개도국(LDC) 졸업 유예 추진 배경과 시사점.pdf",
+      "월간SW중심사회_2014년 12월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "인력의 증가",
+    "expected_basenames": [
+      "연구보고서 2024-07 국내기업의 인공지능 활용과 정책과제.pdf",
+      "월간SW중심사회_2017년_1월호_최종.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "샤오미 생태계",
+    "expected_basenames": [
+      "월간 SW 중심사회 10월호.pdf",
+      "월간SW중심사회 2021년 3월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "분야에서 사용되고",
+    "expected_basenames": [
+      "월간 SW 중심사회 5월호.pdf",
+      "월간SW중심사회_2016년 03월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "다소 완화된",
+    "expected_basenames": [
+      "월간 SW중심사회 12월호.pdf",
+      "월간SW중심사회_2017년 2월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "보임 월간",
+    "expected_basenames": [
+      "월간SW중심사회 2017년 10월호.pdf",
+      "월간SW중심사회 2017년 5월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "나타났다 연구의",
+    "expected_basenames": [
+      "월간SW중심사회 2020년 8월호.pdf",
+      "월간SW중심사회 2021년 1월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "스케일 아웃",
+    "expected_basenames": [
+      "월간SW중심사회_2014년 09월호.pdf",
+      "월간SW중심사회_2014년 11월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "제기됨 인",
+    "expected_basenames": [
+      "월간SW중심사회_2014년 10월호.pdf",
+      "월간SW중심사회_2014년 11월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "개발에 든",
+    "expected_basenames": [
+      "월간SW중심사회_2014년 10월호.pdf",
+      "월간SW중심사회_2014년 11월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "올씬 얼라이언스",
+    "expected_basenames": [
+      "월간SW중심사회_2015년 01월호.pdf",
+      "월간SW중심사회_2015년 02월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "직업에 매핑한",
+    "expected_basenames": [
+      "월간SW중심사회_2015년 08월호.pdf",
+      "월간SW중심사회_2016년 06월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "발전한 컴퓨터과학은",
+    "expected_basenames": [
+      "월간SW중심사회_2016년 04월호.pdf",
+      "월간SW중심사회_2016년 07월호 (1).pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "상태 원격",
+    "expected_basenames": [
+      "월간SW중심사회_2016년_9월호(전체).pdf.pdf",
+      "월간SW중심사회_2017년_3월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "되돌아보고",
+    "expected_basenames": [
+      "(최종) 소프트8월호(단면).pdf",
+      "221012 (조간) 재난환경 변화 속 새로운 재난안전관리 도약 발판 마련(국립재난안전연구원 재난정보연구실 안전연구실).hwpx",
+      "월간 SW중심사회 12월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "repetition",
+    "expected_basenames": [
+      "2005.14165v4__9dcafddc.pdf",
+      "2103.14030v2__141d8f69.pdf",
+      "2204.14198v2__c3eefa4c.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "참여률",
+    "expected_basenames": [
+      "2018 소프트웨어산업 연간보고서.pdf",
+      "B090027_2012_M_0121.pdf",
+      "월간SW중심사회_2018년_10월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "지정기준",
+    "expected_basenames": [
+      "2022년 SW산업 연간보고서.pdf",
+      "22. RR2021-22 교육 뉴노멀 시대의 학습복지 실현 방안(이희현)_수정본(M3).pdf",
+      "OR2301.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "선택했다는",
+    "expected_basenames": [
+      "2025 도서관이야기9+10-펼침-0904.pdf",
+      "SW 중심사회 135(2025.09).pdf",
+      "월간SW중심사회_2016년 04월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "할수있는가",
+    "expected_basenames": [
+      "86200600201.pdf",
+      "B552126_2004_M_0018.pdf",
+      "B552126_2004_M_0028.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "화되어",
+    "expected_basenames": [
+      "B552126_2010_M_0017.pdf",
+      "[단행본] CPTI로 읽는 범죄예방 환경.pdf",
+      "월간SW중심사회_2016년 03월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "베조스는",
+    "expected_basenames": [
+      "SPRi-AI-Brief-015-20200609.pdf",
+      "월간SW중심사회_2015년 09월호.pdf",
+      "월간SW중심사회_2020년_6월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "불가하며",
+    "expected_basenames": [
+      "SW중심사회_07월호_230719.pdf",
+      "WP 26-01 언론기사에서 나타나는 국유지 관리 갈등 및 쟁점 분석_정민기.pdf",
+      "월간 SW 중심사회 7월.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "배송해",
+    "expected_basenames": [
+      "도서관이야기 2023 3+4월호(최종).pdf",
+      "월간 SW 중심사회 11월호.pdf",
+      "월간 SW 중심사회 5월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "생태계의 경쟁력",
+    "expected_basenames": [
+      "(SPRi) AI브리프특집호_AI 데이터센터 동향과 시사점_250730_F.pdf",
+      "2019년 SW산업연간보고서-최종수정v2.pdf",
+      "2020_소프트웨어산업_연간보고서.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "해법 마련",
+    "expected_basenames": [
+      "(정책연구 2024-15-01)국가난제를 다룰 정책 접근과 분석(1권)-홍성주.pdf",
+      "240409 (조간) 행안부-환경부 부처 간 칸막이 허물고 폐현수막 재활용 해법 찾는다(주소생활공간과).hwpx",
+      "AI Brief_2020_9th.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "영향을 주는지",
+    "expected_basenames": [
+      "(최종)소프트 9월호(단면).pdf",
+      "월간 SW 중심사회 9월호 최종 고화질 단면.pdf",
+      "월간 SW중심사회 12월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "역할을 자처하며",
+    "expected_basenames": [
+      "1002 SW중심사회 10월호.pdf",
+      "SW중심사회_7월.pdf",
+      "월간SW중심사회 2016년 11월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "은 자신의",
+    "expected_basenames": [
+      "2014 OECD교육지표.pdf",
+      "SPRi AI Brief_12월호_산업동향_1208_F.pdf",
+      "월간SW중심사회_2015년 09월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "통합 프레임워크",
+    "expected_basenames": [
+      "2015_SW산업 연간보고서.pdf",
+      "B090003_2012_M_0089.pdf",
+      "SPRi AI Brief_11월호_산업동향_1105_F.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "를 추진하여",
+    "expected_basenames": [
+      "2017 소프트웨어산업 연간보고서.pdf",
+      "[단행본] 생활안전 중심의 범죄예방 환경조성 정책 과제.pdf",
+      "빅데이터 시대의 고고학 학술심포지엄 자료집.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "소프트웨어사업 추진",
+    "expected_basenames": [
+      "2018 소프트웨어산업 연간보고서.pdf",
+      "2019년 SW산업연간보고서-최종수정v2.pdf",
+      "2020_소프트웨어산업_연간보고서.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "실시간 통역",
+    "expected_basenames": [
+      "2019년 SW산업연간보고서-최종수정v2.pdf",
+      "SW 중심사회 2월호(0226 수정).pdf",
+      "월간AI브리프_2204월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "개인 영위사업",
+    "expected_basenames": [
+      "2020 VRAR산업 실태조사 결과보고서 최종_수정_221021.pdf",
+      "2021 가상증강현실(VRAR)산업 실태조사_수정_221026.pdf",
+      "2022년 가상증강현실(VRAR)산업 실태조사_230925.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "요소를 반영하여",
+    "expected_basenames": [
+      "2020_소프트웨어산업_연간보고서.pdf",
+      "2022년 SW산업 연간보고서.pdf",
+      "SPRi AI Brief_10월호_산업동향_1002_F.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "적용하는 인재",
+    "expected_basenames": [
+      "2022년 SW산업 연간보고서.pdf",
+      "2026 SW 중심사회 1월호.pdf",
+      "월간AI브리프_2210.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "전반의 구조적",
+    "expected_basenames": [
+      "2023년 소프트웨어산업 연간보고서.pdf",
+      "월간 SW중심사회 8월호 최종 본문.pdf",
+      "월간SW중심사회_2020년_6월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "데이터 규격",
+    "expected_basenames": [
+      "2024 인공지능산업 실태조사 보고서.pdf",
+      "SPRi AI Brief 2월호_최종_260210-1.pdf",
+      "빅데이터 시대의 고고학 학술심포지엄 자료집.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "예측 모델인",
+    "expected_basenames": [
+      "2026년 SW 중심사회 3월호.pdf",
+      "AI Brief.pdf",
+      "SPRI_AI_Brief_2023년8월호_F.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "않다 반면",
+    "expected_basenames": [
+      "5월 SW 중심사회(전체).pdf",
+      "도서관이야기 1+2월호_펼침.pdf",
+      "월간SW중심사회_2016년 01월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "년대 년대",
+    "expected_basenames": [
+      "B090003_2012_M_0088.pdf",
+      "월간 SW 중심사회 4월호.pdf",
+      "월간SW중심사회_2016년 05월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "소통 능력",
+    "expected_basenames": [
+      "IP2505.pdf",
+      "SPRi AI Brief_10월호_산업동향_1002_F.pdf",
+      "월간SW중심사회_2015년 06월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "전자 의료",
+    "expected_basenames": [
+      "SPRi AI Brief 2월호_최종_260210-1.pdf",
+      "SW중심사회 9월호.pdf",
+      "월간SW중심사회_2016년_12월호_최종.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "향후 신규",
+    "expected_basenames": [
+      "SPRi AI Brief_12월호_산업동향_F.pdf",
+      "[단행본] 생활안전 중심의 범죄예방 환경조성 정책 과제.pdf",
+      "세경포 26-26 EU 산업가속화법(IAA)의 주요 내용과 시사점.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "이들이 제안한",
+    "expected_basenames": [
+      "SPRi-AI-Brief-017-20200707.pdf",
+      "월간 SW 중심사회 7월.pdf",
+      "월간SW중심사회_2016년 07월호 (1).pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "세 부분으로",
+    "expected_basenames": [
+      "SW 중심사회 138(2025.12).pdf",
+      "SW산업 연간보고서_2014_상반기.pdf",
+      "도서관이야기 1+2월호_펼침.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "컴퓨터 기술을",
+    "expected_basenames": [
+      "SW중심사회 23년 1월호.pdf",
+      "SW중심사회_07월호_230719.pdf",
+      "월간SW중심사회 2016년 11월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "수는 개국",
+    "expected_basenames": [
+      "SW중심사회_3월.pdf",
+      "SW중심사회_5월 최종본.pdf",
+      "월간AI브리프_2205월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "태국 파키스탄",
+    "expected_basenames": [
+      "_공표용보고서_2023년 가상증강현실(VRAR)산업 실태조사_F.pdf",
+      "세경포 26-28 인도의 남-남 개발 협력과 시사점.pdf",
+      "오세경 26-08 IEEPA 관세에 관한 미 연방대법원 판결의 주요 쟁점과 후속 관세조치.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "기업은 모바일",
+    "expected_basenames": [
+      "월간 SW 중심사회 7월.pdf",
+      "월간SW중심사회_2015년 04월호.pdf",
+      "월간SW중심사회_2016년_2월호_전체.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "하고 개발",
+    "expected_basenames": [
+      "월간SW중심사회_2016년_9월호(전체).pdf.pdf",
+      "월간SW중심사회_2018년_10월호.pdf",
+      "월간SW중심사회_2018년_8월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "sort",
+    "expected_basenames": [
+      "12월 SW 중심사회.pdf",
+      "1409.3215v3__67f2f121.pdf",
+      "NIPS-2012-imagenet-classification-with-deep-convolutional-neural-networks-Paper__c0f9c0b3.pdf",
+      "[단행본] 건축물 생산 및 재고 현황 2025.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "키보드보안",
+    "expected_basenames": [
+      "2018 소프트웨어산업 연간보고서.pdf",
+      "2019년 SW산업연간보고서-최종수정v2.pdf",
+      "월간SW중심사회_2014년 12월호.pdf",
+      "월간SW중심사회_2015년 04월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "소니가",
+    "expected_basenames": [
+      "2023년 소프트웨어산업 연간보고서.pdf",
+      "월간 SW 중심사회 5월호.pdf",
+      "월간SW중심사회 2016년 11월호.pdf",
+      "월간SW중심사회 2017년 5월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "자발성",
+    "expected_basenames": [
+      "86200600201.pdf",
+      "AI 브리프 2023년 2월호.pdf",
+      "B552126_2004_M_0028.pdf",
+      "B552126_2010_M_0017.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "연구실에서",
+    "expected_basenames": [
+      "SPRi AI Brief_4월호_산업동향_250407_F.pdf",
+      "SW중심사회_3월 최종(단면).pdf",
+      "나이테, 시간의 기록-월성과 동아시아 고기후 연구.pdf",
+      "월간AI브리프_2303_special_v2.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "재확인하고",
+    "expected_basenames": [
+      "빅데이터 시대의 고고학 학술심포지엄 자료집.pdf",
+      "세경포 26-21 최근 주요국의 중앙아시아 다자 정상회의 개최 배경과 시사점.pdf",
+      "소프트 24.01월호(단면).pdf",
+      "오세경 26-08 IEEPA 관세에 관한 미 연방대법원 판결의 주요 쟁점과 후속 관세조치.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "엔지니어 컴퓨터비전",
+    "expected_basenames": [
+      "(최종) 2023년 인공지능산업실태조사 결과보고서.pdf",
+      "2020 인공지능산업실태조사 보고서.pdf",
+      "2021 인공지능산업실태조사 보고서-최종.pdf",
+      "2024 인공지능산업 실태조사 보고서.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "않는 다는",
+    "expected_basenames": [
+      "04. 등록본_기본-RR-24-05. 교통 사망사고 정밀 분석을 위한 데이터 조사체계 및 활용방안_241219 (1).pdf",
+      "SW중심사회_6월 최종(단면).pdf",
+      "월간 SW 중심사회 7월호_최종.pdf",
+      "월간SW중심사회_2017년 2월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "존재한다 그림",
+    "expected_basenames": [
+      "2014 OECD교육지표.pdf",
+      "B090003_2012_M_0088.pdf",
+      "SW중심사회_5월 최종본.pdf",
+      "월간 SW 중심사회 4월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "기술 고도화와",
+    "expected_basenames": [
+      "2017 소프트웨어산업 연간보고서.pdf",
+      "SW 중심사회 135(2025.09).pdf",
+      "SW중심사회_3월 최종(단면).pdf",
+      "sw 중심사회 22년 1월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "교육 대학",
+    "expected_basenames": [
+      "2019년 SW산업연간보고서-최종수정v2.pdf",
+      "2020_소프트웨어산업_연간보고서.pdf",
+      "2022년 SW산업 연간보고서.pdf",
+      "월간SW중심사회 2020년 11월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "지원 반도체",
+    "expected_basenames": [
+      "2020_소프트웨어산업_연간보고서.pdf",
+      "2022년 SW산업 연간보고서.pdf",
+      "2026 SW 중심사회 1월호.pdf",
+      "소프트11월호_단면.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "솔루션제공 시스템구축",
+    "expected_basenames": [
+      "2020년 이러닝산업 실태조사 보고서_최종.pdf",
+      "2022년 이러닝산업 실태조사_20230717.pdf",
+      "2023년 이러닝산업 실태조사-최종(0610).pdf",
+      "[보고서] 2021년 이러닝산업 실태조사 보고서_20230828.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "응답률은 임",
+    "expected_basenames": [
+      "2022년 이러닝산업 실태조사_20230717.pdf",
+      "2023년 이러닝산업 실태조사-최종(0610).pdf",
+      "2024년 이러닝산업 실태조사 보고서-최종_250627.pdf",
+      "[보고서] 2021년 이러닝산업 실태조사 보고서_20230828.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "나누는 것이",
+    "expected_basenames": [
+      "2024 도서관이야기11+12_펼침-0904.pdf",
+      "SPRi AI Brief_2024년1월호_F.pdf",
+      "SW 중심사회 135(2025.09).pdf",
+      "월간SW중심사회_2016년 05월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "올 월부터",
+    "expected_basenames": [
+      "5월 SW 중심사회(전체).pdf",
+      "[어라운드] 도서관이야기 2023 1,2월호_표지와 내지 합본.pdf",
+      "월간SW중심사회 2016년 11월호.pdf",
+      "월간SW중심사회_2016년 05월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "간담회 개최",
+    "expected_basenames": [
+      "NARS+Brief+제59호.pdf",
+      "SW중심사회_8월 월간호.pdf",
+      "정책자료집_2016_01_이상엽.pdf",
+      "환경정의_포럼_자료집.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "이번 판결이",
+    "expected_basenames": [
+      "SPRi AI Brief_9월호_산업동향_0909_F.pdf",
+      "법제사법위원회_회의록._제299회(5차).pdf",
+      "오세경 26-08 IEEPA 관세에 관한 미 연방대법원 판결의 주요 쟁점과 후속 관세조치.pdf",
+      "월간SW중심사회_2016년 07월호 (1).pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "기술로 볼",
+    "expected_basenames": [
+      "SW중심사회 3월호(단면)_240326.pdf",
+      "SW중심사회_7월.pdf",
+      "월간SW중심사회 2020년 8월호.pdf",
+      "월간SW중심사회_2018년_8월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "특허를 침해한",
+    "expected_basenames": [
+      "월간SW중심사회_2014년 10월호.pdf",
+      "월간SW중심사회_2014년 11월호.pdf",
+      "월간SW중심사회_2015년 04월호.pdf",
+      "월간SW중심사회_2016년 07월호 (1).pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "debut",
+    "expected_basenames": [
+      "2005.14165v4__9dcafddc.pdf",
+      "2023년 소프트웨어산업 연간보고서.pdf",
+      "2105.09680v4__4eb04423.pdf",
+      "2303.05499v5__24b26908.pdf",
+      "SW중심사회_04월호(0417펼침).pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "외국에서는",
+    "expected_basenames": [
+      "2020_소프트웨어산업_연간보고서.pdf",
+      "월간 SW 중심사회 6월호_최종.pdf",
+      "월간SW중심사회_2015년 02월호.pdf",
+      "월간SW중심사회_2015년 05월호.pdf",
+      "월간SW중심사회_2015년 08월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "anticipated",
+    "expected_basenames": [
+      "250218 SW 중심사회 2월호(전문).pdf",
+      "86200600201.pdf",
+      "99563p.pdf",
+      "SW 중심사회 2025년 4월호.pdf",
+      "SW중심사회 128.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "비료와",
+    "expected_basenames": [
+      "SW중심사회_07월호_230719.pdf",
+      "세경포 26-14 주요국의 산업부문 탄소 배출량 데이터 관리 제도 동향과 시사점.pdf",
+      "세경포 26-16 EU CBAM 확정기간 이행 동향과 시사점_이행규정 평가 및 CBAM 노출도 분석.pdf",
+      "세경포 26-25 미-이란 전쟁이 신흥국에 미치는 영향.pdf",
+      "월간SW중심사회_2016년_12월호_최종.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "통계 작성기관",
+    "expected_basenames": [
+      "(최종) 2023년 인공지능산업실태조사 결과보고서.pdf",
+      "2020 인공지능산업실태조사 보고서.pdf",
+      "2021 인공지능산업실태조사 보고서-최종.pdf",
+      "2022 인공지능산업실태조사 보고서.pdf",
+      "2024 인공지능산업 실태조사 보고서.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "레드햇 엔터프라이즈",
+    "expected_basenames": [
+      "12월 SW 중심사회.pdf",
+      "2023년 소프트웨어산업 연간보고서.pdf",
+      "SW중심사회 127호_전문.pdf",
+      "월간SW중심사회_2014년 07월호.pdf",
+      "월간SW중심사회_2015년 01월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "최초로 의",
+    "expected_basenames": [
+      "2017 소프트웨어산업 연간보고서.pdf",
+      "2018 소프트웨어산업 연간보고서.pdf",
+      "J10-04.pdf.pdf",
+      "SW 중심사회 138(2025.12).pdf",
+      "SW중심사회_04월호(0417펼침).pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "완만한 증가",
+    "expected_basenames": [
+      "2019년 SW산업연간보고서-최종수정v2.pdf",
+      "2020_소프트웨어산업_연간보고서.pdf",
+      "2022년 SW산업 연간보고서.pdf",
+      "SPRi AI Brief_7월호_산업동향.pdf",
+      "[단행본] 건축물 생산 및 재고 현황 2025.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "전기차 에",
+    "expected_basenames": [
+      "2020_소프트웨어산업_연간보고서.pdf",
+      "세경포 26-23 중국 전기차 및 배터리 산업 구조조정 현황 및 전망.pdf",
+      "연구보고서 2024-13 글로벌 산업통상정책 변화에 따른 한국 배터리 산업 영향과 대응전략.pdf",
+      "월간SW중심사회_2014년 07월호.pdf",
+      "월간SW중심사회_2017년 2월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "유상개념 미비",
+    "expected_basenames": [
+      "2020년_소프트웨어산업_실태조사.pdf",
+      "2021년 소프트웨어산업 실태조사.pdf",
+      "2022년 소프트웨어산업 실태조사.pdf",
+      "2023년 SW산업 실태조사_20241210.pdf",
+      "2024 SW산업실태조사_최종본.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "인식 차이",
+    "expected_basenames": [
+      "22. RR2021-22 교육 뉴노멀 시대의 학습복지 실현 방안(이희현)_수정본(M3).pdf",
+      "[단행본] CPTI로 읽는 범죄예방 환경.pdf",
+      "report_210x297_201912_3rd.pdf",
+      "연구보고서 2024-07 국내기업의 인공지능 활용과 정책과제.pdf",
+      "월간SW중심사회_2014년 09월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "장의 사진을",
+    "expected_basenames": [
+      "SPRI_AI브리프_20200121_vol6.pdf",
+      "SPRi AI Brief_10월호_산업동향_1002_F.pdf",
+      "월간 SW 중심사회 4월호.pdf",
+      "월간SW중심사회_2016년 05월호.pdf",
+      "월간SW중심사회_2016년 07월호 (1).pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "사무지원",
+    "expected_basenames": [
+      "(공표용 보고서) 2025년 가상증강현실(VR·AR)산업 실태조사.pdf",
+      "2020 VRAR산업 실태조사 결과보고서 최종_수정_221021.pdf",
+      "2021 가상증강현실(VRAR)산업 실태조사_수정_221026.pdf",
+      "2022년 가상증강현실(VRAR)산업 실태조사_230925.pdf",
+      "2024년 가상증강현실(VRAR)산업 실태조사 보고서-2.pdf",
+      "_공표용보고서_2023년 가상증강현실(VRAR)산업 실태조사_F.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "라인과",
+    "expected_basenames": [
+      "2016 SW산업 연간보고서.pdf",
+      "SPRI_AI_Brief_2023년7월호_스페셜_F.pdf",
+      "SW산업 연간보고서_2014_상반기.pdf",
+      "세경포 26-18 GCC 산유국으로의 중동 전선 확대에 따른 영향 및 시사점.pdf",
+      "월간SW중심사회_2015년 07월호.pdf",
+      "월간SW중심사회_2016년_9월호(전체).pdf.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "michigan",
+    "expected_basenames": [
+      "2105.09680v4__4eb04423.pdf",
+      "B552126_2010_M_0017.pdf",
+      "SW 중심사회 2월호(0226 수정).pdf",
+      "월간AI브리프_2303.pdf",
+      "월간SW중심사회 2020년 8월호.pdf",
+      "월간SW중심사회_2016년 05월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "상승에 따른",
+    "expected_basenames": [
+      "(국제농식품협력관-국제협력총괄과) 식량농업기구(FAO) 세계식량가격지수 전월 대비 2.4% 상승  보도자료(4.4 배포시).pdf",
+      "KDI FOCUS_사회 이동성 복원을 위한 교육정책의 방향.pdf",
+      "[단행본] 건축물 생산 및 재고 현황 2025.pdf",
+      "세경포 26-25 미-이란 전쟁이 신흥국에 미치는 영향.pdf",
+      "세경포 26-27 2026년 미-일 정상회담 결과와 시사점.pdf",
+      "오세경 26-09_미-이란 전쟁에 따른 유가 충격의 주요국 파급효과.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "따르면 모든",
+    "expected_basenames": [
+      "2014 OECD교육지표.pdf",
+      "2022년 SW산업 연간보고서.pdf",
+      "22. RR2021-22 교육 뉴노멀 시대의 학습복지 실현 방안(이희현)_수정본(M3).pdf",
+      "SPRI_AI_Brief_2023년11월호_F.pdf",
+      "SPRi AI Brief 4월호_260401.pdf",
+      "월간 SW중심사회 12월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "진행되도록 하되",
+    "expected_basenames": [
+      "2018년 소프트웨어 산업 실태조사.pdf",
+      "2019 소프트웨어 산업 실태조사.pdf",
+      "2020년_소프트웨어산업_실태조사.pdf",
+      "2021년 소프트웨어산업 실태조사.pdf",
+      "2022년 소프트웨어산업 실태조사.pdf",
+      "연구17-015_2017 소프트웨어 산업 실태조사.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "곤란 채용에",
+    "expected_basenames": [
+      "2020년_소프트웨어산업_실태조사.pdf",
+      "2021년 소프트웨어산업 실태조사.pdf",
+      "2022년 소프트웨어산업 실태조사.pdf",
+      "2023년 SW산업 실태조사_20241210.pdf",
+      "2023년 소프트웨어산업 연간보고서.pdf",
+      "2024 SW산업실태조사_최종본.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "미래를 만드는",
+    "expected_basenames": [
+      "SW 중심사회 136(2025.10).pdf",
+      "SW중심사회_04월호(0417펼침).pdf",
+      "Samsung_Electronics_Sustainability_Report_2025_KOR.pdf",
+      "[도서관이야기] 2023년 5+6월호.pdf",
+      "월간SW중심사회_2015년 07월호.pdf",
+      "정책자료집_2016_01_이상엽.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "마무리하고",
+    "expected_basenames": [
+      "1002 SW중심사회 10월호.pdf",
+      "2020_소프트웨어산업_연간보고서.pdf",
+      "2025 특별판(하) 도서관이야기.pdf",
+      "[도서관이야기] 2023년 5+6월호.pdf",
+      "sw 중심사회 22년 1월호.pdf",
+      "월간AI브리프_2208_F.pdf",
+      "이슈페이퍼 2025-06 RISE사업 추진에 따른 대학의 지역혁신허브 기능 강화 방안 연구(1).pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "국립중앙도서관",
+    "expected_basenames": [
+      "2024 도서관이야기11+12_펼침-0904.pdf",
+      "2025 도서관이야기9+10-펼침-0904.pdf",
+      "2025 특별판(상) 도서관이야기.pdf",
+      "[도서관이야기] 2023년 7+8월호.pdf",
+      "[어라운드] 도서관이야기 2023 1,2월호_표지와 내지 합본.pdf",
+      "도서관이야기 1+2월호_펼침.pdf",
+      "도서관이야기 3+4월호_펼침.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "시장 선도",
+    "expected_basenames": [
+      "(정책연구 2024-15-01)국가난제를 다룰 정책 접근과 분석(1권)-홍성주.pdf",
+      "(현안 2019-05)안용성-항만지역 대기질 개선을 위한 데이터의 연계활용방안 연구.pdf",
+      "12월 SW 중심사회.pdf",
+      "2018 소프트웨어산업 연간보고서.pdf",
+      "B090039_2011_M_0044.pdf",
+      "월간SW중심사회 2016년 11월호.pdf",
+      "월간SW중심사회_2015년 01월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "비즈니스 가치",
+    "expected_basenames": [
+      "2016 SW산업 연간보고서.pdf",
+      "2023년 소프트웨어산업 연간보고서.pdf",
+      "SW중심사회 6월호(단면).pdf",
+      "SW중심사회_9월 최종(단면).pdf",
+      "sw 중심사회 22년 1월호.pdf",
+      "월간SW중심사회 2018년 04월호.pdf",
+      "월간SW중심사회_2016년 04월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "기반 새로운",
+    "expected_basenames": [
+      "2020_소프트웨어산업_연간보고서.pdf",
+      "SPRi AI Brief 2월호_최종_260210-1.pdf",
+      "SPRi AI Brief_10월호_산업동향_1002_F.pdf",
+      "SPRi AI Brief_11월호_산업동향_1105_F.pdf",
+      "소프트5월호 0512(펼침).pdf",
+      "월간SW중심사회_2016년 03월호.pdf",
+      "월간SW중심사회_2018년_11월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "유출로 인한",
+    "expected_basenames": [
+      "SW중심사회_07월호_230719.pdf",
+      "SW중심사회_2월호.pdf",
+      "월간 SW 중심사회 6월호_최종.pdf",
+      "월간SW중심사회_2014년 07월호.pdf",
+      "월간SW중심사회_2014년 10월호.pdf",
+      "월간SW중심사회_2014년 11월호.pdf",
+      "정책2010-01.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "스토리지의",
+    "expected_basenames": [
+      "2018년 소프트웨어 산업 실태조사.pdf",
+      "2019 소프트웨어 산업 실태조사.pdf",
+      "2020년_소프트웨어산업_실태조사.pdf",
+      "2021년 소프트웨어산업 실태조사.pdf",
+      "2022년 소프트웨어산업 실태조사.pdf",
+      "2023년 SW산업 실태조사_20241210.pdf",
+      "2024 SW산업실태조사_최종본.pdf",
+      "월간SW중심사회_2014년 11월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_token"
+  },
+  {
+    "query": "민원 처리",
+    "expected_basenames": [
+      "(최종) 2023년 인공지능산업실태조사 결과보고서.pdf",
+      "12월 SW 중심사회.pdf",
+      "2020 인공지능산업실태조사 보고서.pdf",
+      "2021 인공지능산업실태조사 보고서-최종.pdf",
+      "2022 인공지능산업실태조사 보고서.pdf",
+      "SW 중심사회 5월호 전문.pdf",
+      "[단행본] 건축물 생산 및 재고 현황 2025.pdf",
+      "월간SW중심사회_2014년 07월호.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  },
+  {
+    "query": "임베디드 운영체제",
+    "expected_basenames": [
+      "2017년 SW산업 실태조사 보고서.pdf",
+      "2018년 소프트웨어 산업 실태조사.pdf",
+      "2019 소프트웨어 산업 실태조사.pdf",
+      "2020년_소프트웨어산업_실태조사.pdf",
+      "2021년 소프트웨어산업 실태조사.pdf",
+      "2022년 소프트웨어산업 실태조사.pdf",
+      "2023년 SW산업 실태조사_20241210.pdf",
+      "2024 SW산업실태조사_최종본.pdf"
+    ],
+    "domain": "doc",
+    "source": "body_phrase"
+  }
+]

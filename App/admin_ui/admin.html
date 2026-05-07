@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<title>TRI-CHEF 관리자 전수 검사</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --muted:#64748b; --text:#e2e8f0;
+    --accent:#059669; --accent2:#2563eb; --warn:#dc2626; --ok:#10b981;
+    --border:#334155;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg);color:var(--text);line-height:1.5}
+  header{padding:20px 32px;border-bottom:1px solid var(--border);background:var(--panel)}
+  header h1{font-size:22px;font-weight:700;letter-spacing:-0.5px}
+  header p{color:var(--muted);font-size:13px;margin-top:4px}
+  main{max-width:1400px;margin:0 auto;padding:24px 32px}
+  .search-box{display:flex;gap:12px;margin-bottom:16px}
+  .search-box input[type=text]{flex:1;padding:14px 18px;border-radius:8px;border:1px solid var(--border);background:var(--panel);color:var(--text);font-size:15px}
+  .search-box input[type=text]:focus{outline:none;border-color:var(--accent)}
+  .search-box button{padding:0 28px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer}
+  .search-box button:hover{background:#047857}
+  .search-box button:disabled{opacity:0.5;cursor:wait}
+  .options{display:flex;gap:20px;flex-wrap:wrap;margin-bottom:20px;font-size:13px;color:var(--muted);align-items:center}
+  .options label{display:flex;align-items:center;gap:6px;cursor:pointer}
+  .options input[type=checkbox]{accent-color:var(--accent)}
+  .options input[type=number]{width:70px;padding:4px 8px;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:4px}
+  .stats{background:var(--panel);border-radius:8px;padding:16px;margin-bottom:20px;font-size:13px;border:1px solid var(--border)}
+  .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:12px}
+  .stat-card{background:#0b1220;border-radius:6px;padding:10px 14px;border:1px solid var(--border)}
+  .stat-card .lbl{color:var(--muted);font-size:11px;text-transform:uppercase}
+  .stat-card .val{font-size:15px;font-weight:600;margin-top:2px}
+  .results{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:10px;overflow:hidden;display:flex;flex-direction:column;position:relative;transition:transform 0.15s}
+  .card:hover{transform:translateY(-2px);border-color:var(--accent)}
+  .card .rank{position:absolute;top:8px;left:8px;background:var(--accent);color:#fff;min-width:32px;height:28px;padding:0 8px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;z-index:2}
+  .thumb{position:relative;height:200px;background:#0b1220;display:flex;align-items:center;justify-content:center;overflow:hidden}
+  .thumb img{max-width:100%;max-height:100%;object-fit:contain;cursor:zoom-in}
+  .thumb .no-img{color:var(--muted);font-size:12px}
+  .body{padding:12px 14px;display:flex;flex-direction:column;gap:8px;flex:1}
+  .title{font-weight:600;font-size:13px;word-break:break-all;color:#f1f5f9}
+  .path{font-size:11px;color:var(--muted);word-break:break-all;font-family:Consolas,monospace}
+  .metrics{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;font-size:11px}
+  .metric{background:#0b1220;border-radius:4px;padding:4px 8px;border:1px solid var(--border)}
+  .metric .k{color:var(--muted)}
+  .metric .v{font-weight:600;color:#f1f5f9}
+  .metric .v.hi{color:var(--ok)}
+  .metric .v.lo{color:var(--warn)}
+  .badges{display:flex;gap:4px;flex-wrap:wrap}
+  .badge{font-size:10px;padding:2px 8px;border-radius:10px;border:1px solid var(--border);background:#0b1220;color:var(--muted)}
+  .badge.domain-image{background:#065f46;color:#d1fae5;border-color:#10b981}
+  .badge.domain-doc_page{background:#5b21b6;color:#ede9fe;border-color:#8b5cf6}
+  .badge.domain-movie{background:#7c2d12;color:#ffedd5;border-color:#ea580c}
+  .badge.domain-music{background:#1e40af;color:#dbeafe;border-color:#3b82f6}
+  .av-player{padding:8px 12px;background:#0b1220;border-bottom:1px solid var(--border)}
+  .av-player audio, .av-player video{width:100%;display:block;outline:none}
+  .av-player video{max-height:220px;background:#000}
+  .segments{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+  .seg-btn{font-size:10px;padding:3px 8px;background:#0b1220;color:#cbd5e1;border:1px solid var(--border);border-radius:4px;cursor:pointer;font-family:Consolas,monospace}
+  .seg-btn:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .seg-text{font-size:11px;color:#94a3b8;margin-top:4px;padding:6px 8px;background:#0b1220;border-radius:4px;border:1px solid var(--border);max-height:80px;overflow:auto;white-space:pre-wrap;word-break:break-word}
+  .excerpt{font-size:12px;color:#cbd5e1;background:#0b1220;padding:8px;border-radius:4px;max-height:120px;overflow:auto;white-space:pre-wrap;border:1px solid var(--border)}
+  .excerpt mark{background:#fbbf24;color:#1f2937;padding:0 2px;border-radius:2px}
+  .loading{text-align:center;padding:40px;color:var(--muted)}
+  .error{background:#7f1d1d;border:1px solid var(--warn);color:#fecaca;padding:12px;border-radius:8px;margin-bottom:16px}
+  .empty{text-align:center;padding:60px 20px;color:var(--muted)}
+  .empty h2{font-size:18px;margin-bottom:8px;color:var(--text)}
+
+  /* 모달 (이미지 확대) */
+  .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:999;align-items:center;justify-content:center;padding:40px;cursor:zoom-out}
+  .modal.show{display:flex}
+  .modal img{max-width:100%;max-height:100%;object-fit:contain}
+
+  /* 백엔드 설정 + 연결 진단 */
+  .conn-bar{display:flex;gap:10px;align-items:center;padding:10px 16px;background:#0b1220;border:1px solid var(--border);border-radius:8px;margin-bottom:16px;font-size:12px;flex-wrap:wrap}
+  .conn-bar input{flex:1;min-width:240px;padding:6px 10px;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:4px;font-family:Consolas,monospace;font-size:12px}
+  .conn-bar button{padding:6px 14px;background:var(--accent2);color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600}
+  .conn-bar button:hover{background:#1d4ed8}
+  .conn-bar .status{padding:3px 10px;border-radius:10px;font-weight:600;font-size:11px}
+  .conn-bar .status.ok{background:#065f46;color:#d1fae5}
+  .conn-bar .status.fail{background:#7f1d1d;color:#fecaca}
+  .conn-help{background:#451a03;border:1px solid #c2410c;border-radius:8px;padding:14px;margin-bottom:16px;font-size:12px;color:#fed7aa}
+  .conn-help code{background:#0b1220;padding:2px 8px;border-radius:3px;color:#fbbf24;font-family:Consolas,monospace}
+  .conn-help h3{font-size:13px;margin-bottom:8px;color:#fff}
+
+  /* 파이프라인 다이어그램 */
+  .pipelines{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:14px 16px;margin-bottom:16px}
+  .pipelines h3{font-size:13px;font-weight:600;margin-bottom:10px;color:#cbd5e1;cursor:pointer;user-select:none;display:flex;align-items:center;gap:8px}
+  .pipelines h3:hover{color:#f1f5f9}
+  .pipe-toggle{font-size:11px;color:var(--muted);transition:transform 0.2s}
+  .pipe-toggle.open{transform:rotate(90deg)}
+  .pipe-row{display:flex;align-items:center;gap:6px;margin-bottom:8px;font-size:11px;flex-wrap:wrap}
+  .pipe-row:last-child{margin-bottom:0}
+  .pipe-label{min-width:90px;font-weight:700;font-size:12px;padding:3px 10px;border-radius:12px}
+  .pipe-label.doc_page{background:#5b21b6;color:#ede9fe}
+  .pipe-label.image{background:#065f46;color:#d1fae5}
+  .pipe-label.movie{background:#7c2d12;color:#ffedd5}
+  .pipe-label.music{background:#1e40af;color:#dbeafe}
+  .pipe-step{padding:3px 10px;background:#0b1220;border:1px solid var(--border);border-radius:4px;color:#cbd5e1;font-family:Consolas,monospace;font-size:10.5px}
+  .pipe-step.calib{border-color:var(--accent);color:#a7f3d0}
+  .pipe-arrow{color:var(--muted);font-weight:700}
+
+  /* 점수 기여도 미니 바 */
+  .score-bars{display:flex;flex-direction:column;gap:3px;font-size:10px}
+  .score-bar{display:flex;align-items:center;gap:6px}
+  .score-bar .lbl{min-width:48px;color:var(--muted);font-family:Consolas,monospace}
+  .score-bar .track{flex:1;height:6px;background:#0b1220;border-radius:3px;border:1px solid var(--border);overflow:hidden}
+  .score-bar .fill{height:100%;background:linear-gradient(90deg,#10b981,#34d399);border-radius:2px}
+  .score-bar .fill.lex{background:linear-gradient(90deg,#3b82f6,#60a5fa)}
+  .score-bar .fill.asf{background:linear-gradient(90deg,#8b5cf6,#a78bfa)}
+  .score-bar .fill.rerank{background:linear-gradient(90deg,#ea580c,#fb923c)}
+  .score-bar .vv{min-width:36px;text-align:right;color:#cbd5e1;font-family:Consolas,monospace}
+
+  /* 문서 위치 표시 (페이지·줄) */
+  .doc-location{font-size:11px;color:#7dd3fc;background:#0c1829;border:1px solid #1e3a5f;border-radius:4px;padding:4px 10px;font-family:Consolas,monospace;letter-spacing:0.02em}
+  .doc-location.loading{color:var(--muted);font-style:italic}
+
+  /* 핵심 3지표 (신뢰도 / 정확도 / 정밀도) */
+  .key-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:2px}
+  .key-metric{background:#0b1220;border-radius:6px;padding:7px 6px;text-align:center;border:1px solid var(--border)}
+  .key-metric .km-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em}
+  .key-metric .km-value{font-size:15px;font-weight:700;margin-top:2px}
+  .km-conf{color:var(--ok)}
+  .km-acc{color:#60a5fa}
+  .km-prec{color:#a78bfa}
+
+  /* 상위N 프리셋 버튼 */
+  .topn-presets{display:flex;gap:4px;align-items:center}
+  .topn-preset{padding:3px 9px;font-size:11px;background:var(--panel);border:1px solid var(--border);border-radius:4px;cursor:pointer;color:var(--muted);line-height:1.4}
+  .topn-preset:hover,.topn-preset.active{background:var(--accent2);color:#fff;border-color:var(--accent2)}
+
+  /* AV 구간 목록 (mm:ss ~ mm:ss) */
+  .seg-range-list{display:flex;flex-direction:column;gap:3px;margin-top:4px}
+  .seg-range-item{display:flex;align-items:center;gap:8px;padding:5px 8px;background:#0b1220;border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:11px;overflow:hidden}
+  .seg-range-item:hover{border-color:var(--accent);background:#0f2040}
+  .seg-time{color:#7dd3fc;font-family:Consolas,monospace;font-weight:600;white-space:nowrap;min-width:118px}
+  .seg-score{color:var(--ok);font-family:Consolas,monospace;white-space:nowrap}
+  .seg-text-preview{color:#94a3b8;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+  /* 미리 재생 버튼 */
+  .preplay-btn{font-size:11px;padding:5px 14px;background:var(--accent);color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:600;margin-top:4px}
+  .preplay-btn:hover{background:#047857}
+</style>
+</head>
+<body>
+<header>
+  <h1>TRI-CHEF 관리자 전수 검사</h1>
+  <p id="dom-info">도메인 현황 로딩…</p>
+</header>
+<main>
+  <div class="conn-bar">
+    <span>백엔드</span>
+    <input id="backend-url" type="text" placeholder="http://127.0.0.1:5001" />
+    <button id="conn-retry">연결 확인</button>
+    <span id="conn-status" class="status fail">미확인</span>
+  </div>
+  <div id="conn-help" class="conn-help" style="display:none">
+    <h3>백엔드 연결 실패</h3>
+    <ol style="padding-left:20px;line-height:1.8">
+      <li>백엔드 구동: <code>cd App\backend</code> 후 <code>python app.py</code></li>
+      <li>구동 확인: <code>http://127.0.0.1:5001/api/admin/domains</code> 가 JSON 반환해야 함</li>
+      <li>주소가 다르면 위 입력란에서 수정 → <b>연결 확인</b> 클릭</li>
+      <li>Tip: <code>?backend=http://other:5001</code> URL 파라미터로 영구 지정 가능</li>
+    </ol>
+  </div>
+  <div id="pipelines" class="pipelines" style="display:none">
+    <h3 id="pipe-toggle-btn">
+      <span class="pipe-toggle" id="pipe-toggle-icon">&#9654;</span>
+      도메인별 파이프라인 (DI-TriCHEF / MR-TriCHEF)
+    </h3>
+    <div id="pipe-rows" style="display:none"></div>
+  </div>
+  <div class="search-box">
+    <input id="q" type="text" placeholder="검색어를 입력하세요 (예: 고양이, 복지정책, 반도체)" autofocus autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" name="trichef-q-nohist" />
+    <button id="go">검색 실행</button>
+  </div>
+  <div class="options">
+    <label><input type="checkbox" id="d-doc_page"> doc_page (문서 페이지)</label>
+    <label><input type="checkbox" id="d-image"> image (이미지)</label>
+    <label><input type="checkbox" id="d-movie"> movie (영상)</label>
+    <label><input type="checkbox" id="d-music"> music (음원)</label>
+    <label>상위 N <input type="number" id="topn" value="30" min="5" max="2000" step="5"></label>
+    <div class="topn-presets">
+      <button class="topn-preset" data-n="10">10</button>
+      <button class="topn-preset active" data-n="30">30</button>
+      <button class="topn-preset" data-n="50">50</button>
+      <button class="topn-preset" data-n="100">100</button>
+      <button class="topn-preset" data-n="200">200</button>
+    </div>
+    <label>세그먼트 <input type="number" id="topseg" value="5" min="1" max="20" step="1"></label>
+    <label title="권장: doc_page / movie / music. image 는 짧은 캡션으로 -14pp 손해 (config.LEXICAL_DOMAINS)"><input type="checkbox" id="use-lex"> Lexical 채널</label>
+    <label title="USE_ASF_DEFAULT=False — LOO R@1 -20pp, E2E hit_rate -10pp. 키워드 매칭 강한 쿼리에만 ON 권장"><input type="checkbox" id="use-asf"> ASF 채널</label>
+    <label title="BGE-reranker-v2-m3 cross-encoder. doc_page 에서만 신뢰도-적합성 정합 개선. image/movie/music 효과 낮음"><input type="checkbox" id="use-rerank"> Reranker</label>
+    <label>rerank K <input type="number" id="rerank-k" value="50" min="5" max="200" step="5"></label>
+    <label title="LangGraph 12-node routing (HI/HN margin τ 기반 동적 분기). 전 도메인 적용"><input type="checkbox" id="use-lg"> LangGraph</label>
+  </div>
+  <div id="stats"></div>
+  <div id="output"></div>
+</main>
+
+<div class="modal" id="modal"><img id="modal-img" alt="preview"></div>
+
+<script>
+// ── Backend URL 설정 (URL param > localStorage > 기본값) ──
+function resolveBackend(){
+  const params = new URLSearchParams(location.search);
+  const fromParam = params.get('backend');
+  if (fromParam){
+    localStorage.setItem('trichef_backend', fromParam);
+    return fromParam;
+  }
+  return localStorage.getItem('trichef_backend') || 'http://127.0.0.1:5001';
+}
+let API_BASE = resolveBackend();
+
+const btn = document.getElementById('go');
+const inp = document.getElementById('q');
+const output = document.getElementById('output');
+const statsDiv = document.getElementById('stats');
+const modal = document.getElementById('modal');
+const modalImg = document.getElementById('modal-img');
+const backendInput = document.getElementById('backend-url');
+const connRetry = document.getElementById('conn-retry');
+const connStatus = document.getElementById('conn-status');
+const connHelp = document.getElementById('conn-help');
+const pipelinesEl = document.getElementById('pipelines');
+const pipeRows = document.getElementById('pipe-rows');
+
+backendInput.value = API_BASE;
+inp.addEventListener('keydown', e => { if (e.key === 'Enter') btn.click(); });
+btn.addEventListener('click', runSearch);
+modal.addEventListener('click', () => modal.classList.remove('show'));
+connRetry.addEventListener('click', () => {
+  const v = backendInput.value.trim().replace(/\/+$/, '');
+  if (v){
+    API_BASE = v;
+    localStorage.setItem('trichef_backend', v);
+  }
+  loadDomains();
+});
+
+loadDomains();
+
+// ── 도메인별 파이프라인 기본 옵션 (확정된 활성화 매트릭스 기반) ──
+//   • lex: LEXICAL_DOMAINS = {doc_page, movie, music}  (image 제외)
+//   • asf: USE_ASF_DEFAULT=False → 전 도메인 기본 OFF (opt-in)
+//   • rerank: BGE Reranker — Movie/Rec 만 통합 (DI 측 미통합)
+//   • lg(LangGraph rewrite): MR 측 (Movie/Rec) 만 통합 (DI 측 미통합)
+const DOMAIN_PIPELINE_DEFAULTS = {
+  doc_page: { lex: true,  asf: false, rerank: false, lg: false },
+  image:    { lex: false, asf: false, rerank: false, lg: false },
+  movie:    { lex: true,  asf: false, rerank: true,  lg: true  },
+  music:    { lex: true,  asf: false, rerank: true,  lg: true  },
+};
+
+function syncPipelineOptions(){
+  const checked = ['doc_page','image','movie','music'].filter(d => {
+    const el = document.getElementById(`d-${d}`);
+    return el && !el.disabled && el.checked;
+  });
+  const setCb = (id, val) => { const el = document.getElementById(id); if (el) el.checked = val; };
+  setCb('use-lex',    checked.some(d => DOMAIN_PIPELINE_DEFAULTS[d]?.lex));
+  setCb('use-asf',    checked.some(d => DOMAIN_PIPELINE_DEFAULTS[d]?.asf));
+  setCb('use-rerank', checked.some(d => DOMAIN_PIPELINE_DEFAULTS[d]?.rerank));
+  setCb('use-lg',     checked.some(d => DOMAIN_PIPELINE_DEFAULTS[d]?.lg));
+}
+
+for (const dom of ['doc_page','image','movie','music']){
+  document.getElementById(`d-${dom}`)?.addEventListener('change', syncPipelineOptions);
+}
+
+// 파이프라인 섹션 접기/펼치기
+document.getElementById('pipe-toggle-btn').addEventListener('click', () => {
+  const rows = document.getElementById('pipe-rows');
+  const icon = document.getElementById('pipe-toggle-icon');
+  const isOpen = rows.style.display !== 'none';
+  rows.style.display = isOpen ? 'none' : '';
+  icon.classList.toggle('open', !isOpen);
+});
+
+let AVAILABLE_DOMAINS = new Set();
+
+// ── 도메인별 파이프라인 단계 정의 (실제 구현 기반) ──
+//   교차검증 근거: config.py LEXICAL_DOMAINS/ASF_DOMAINS (image 제외),
+//   unified_engine L1/L2/L3 fusion (image-only), trichef_admin default_rerank
+//   (doc_page=ON, image=OFF), MR_TriCHEF Z=DINOv2 keyframe / zeros if STT-only.
+const PIPELINES = {
+  doc_page: {
+    label: 'doc_page',
+    name: 'DI-TriCHEF · Document',
+    steps: ['PDF/HWP/Office', 'Page Render (dpi=110)',
+            'Caption: Qwen2-VL (KO) | Legacy BLIP L1+L2+L3',
+            '3-axis Embed (Re=SigLIP2 / Im=BGE-M3 / Z=DINOv2)',
+            'Hermitian Score', 'RRF (Dense+Lex+ASF)',
+            'Calibration τ', 'BGE Reranker (default ON)'],
+  },
+  image: {
+    label: 'image',
+    name: 'DI-TriCHEF · Image',
+    steps: ['Raw Image',
+            'Caption: Qwen2-VL (KO) | Legacy BLIP L1/L2/L3 fusion (0.15/0.25/0.60)',
+            '3-axis Embed (Re=SigLIP2 / Im=BGE-M3 / Z=DINOv2)',
+            'Hermitian Score',
+            'Dense-only (Lex/ASF excluded for image)',
+            'Calibration τ (μ+3σ)',
+            'BGE Reranker (optional, default OFF)'],
+  },
+  movie: {
+    label: 'movie',
+    name: 'MR-TriCHEF · Movie',
+    steps: ['Video',
+            'Adaptive Frame Sampling (baseline 2s, scene>0.2 → 0.5–5s)',
+            'Whisper-large-v3 STT', 'Segment Align (keyframe ∪ STT)',
+            '3-axis Embed (Re=SigLIP2 / Im=BGE-M3 / Z=DINOv2 keyframe, zeros if STT-only)',
+            'File-level Aggregation', 'Calibration τ'],
+  },
+  music: {
+    label: 'music',
+    name: 'MR-TriCHEF · Music',
+    steps: ['Audio', '30s Sliding Window (15s hop, 50% overlap)',
+            'Whisper-large-v3 STT',
+            '2-axis Embed (Re=SigLIP2-text / Im=BGE-M3, Z=0)',
+            'File-level Aggregation', 'Calibration τ'],
+  },
+};
+
+function renderPipelines(domInfo){
+  if (!domInfo || typeof domInfo !== 'object'){
+    pipelinesEl.style.display = 'none';
+    return;
+  }
+  const rows = [];
+  for (const dom of ['doc_page','image','movie','music']){
+    const def = PIPELINES[dom];
+    if (!def) continue;
+    const loaded = domInfo[dom];
+    const opacity = loaded ? '1' : '0.35';
+    const stepHtml = def.steps.map((s,i) => {
+      const isLast = i === def.steps.length - 1;
+      const cls = (i >= def.steps.length - 2) ? 'pipe-step calib' : 'pipe-step';
+      return `<span class="${cls}">${escapeHtml(s)}</span>${isLast ? '' : '<span class="pipe-arrow">›</span>'}`;
+    }).join('');
+    const stat = loaded
+      ? `<span style="color:var(--ok);font-size:10px">N=${loaded.count}</span>`
+      : `<span style="color:var(--warn);font-size:10px">미인덱싱</span>`;
+    rows.push(
+      `<div class="pipe-row" style="opacity:${opacity}">
+         <span class="pipe-label ${dom}">${def.label}</span>
+         ${stepHtml}
+         ${stat}
+       </div>`
+    );
+  }
+  pipeRows.innerHTML = rows.join('');
+  pipelinesEl.style.display = '';
+}
+
+async function loadDomains(){
+  connStatus.className = 'status fail';
+  connStatus.textContent = '확인 중…';
+  try{
+    const r = await fetch(`${API_BASE}/api/admin/domains`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const d = await r.json();
+    AVAILABLE_DOMAINS = new Set(Object.keys(d));
+    connStatus.className = 'status ok';
+    connStatus.textContent = `OK · ${API_BASE}`;
+    connHelp.style.display = 'none';
+    const parts = Object.entries(d).map(([k,v]) =>
+      `${k}: N=${v.count}, vocab=${v.vocab_size}, sparse=${v.has_sparse?'O':'X'}, asf=${v.has_asf?'O':'X'}`
+    );
+    document.getElementById('dom-info').textContent = '도메인 현황 | ' + parts.join(' | ');
+    renderPipelines(d);
+    // 미인덱싱 도메인은 체크박스 비활성화 + 라벨에 표기
+    for (const dom of ['doc_page','image','movie','music']){
+      const cb = document.getElementById(`d-${dom}`);
+      if (!cb) continue;
+      const label = cb.parentElement;
+      if (!AVAILABLE_DOMAINS.has(dom)){
+        cb.checked = false;
+        cb.disabled = true;
+        label.style.opacity = '0.4';
+        if (!label.dataset.markedMissing){
+          label.append(' (미인덱싱)');
+          label.dataset.markedMissing = '1';
+        }
+      } else {
+        cb.disabled = false;
+        label.style.opacity = '1';
+      }
+    }
+  }catch(e){
+    connStatus.className = 'status fail';
+    connStatus.textContent = `실패: ${e.message}`;
+    connHelp.style.display = '';
+    pipelinesEl.style.display = 'none';
+    document.getElementById('dom-info').textContent =
+      `${API_BASE} 연결 실패 — 아래 안내를 확인하고 [연결 확인] 클릭`;
+  }
+}
+
+async function runSearch(){
+  const q = inp.value.trim();
+  if (!q){ inp.focus(); return; }
+  const domains = [];
+  if (document.getElementById('d-doc_page').checked) domains.push('doc_page');
+  if (document.getElementById('d-image').checked) domains.push('image');
+  if (document.getElementById('d-movie').checked) domains.push('movie');
+  if (document.getElementById('d-music').checked) domains.push('music');
+  if (!domains.length){ output.innerHTML = '<div class="error">도메인을 1개 이상 선택하세요.</div>'; return; }
+
+  const topN = parseInt(document.getElementById('topn').value) || 30;
+  const topSeg = parseInt(document.getElementById('topseg').value) || 5;
+  const useLex = document.getElementById('use-lex').checked;
+  const useAsf = document.getElementById('use-asf').checked;
+  const useRerank = document.getElementById('use-rerank').checked;
+  const rerankK   = parseInt(document.getElementById('rerank-k').value) || 50;
+  const AV_DOMAINS = new Set(['movie','music']);
+
+  btn.disabled = true;
+  output.innerHTML = '<div class="loading">검색 중…</div>';
+  statsDiv.innerHTML = '';
+  const t0 = performance.now();
+
+  try{
+    const results = [];
+    const perDom = {};
+    const warnings = [];
+    for (const dom of domains){
+      if (AV_DOMAINS.has(dom)){
+        const r = await fetch(`${API_BASE}/api/admin/inspect_av`, {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({query:q, domain:dom, top_n:topN, top_segments:topSeg}),
+        });
+        if (!r.ok){
+          const body = await r.text();
+          warnings.push(`${dom}: ${body}`);
+          perDom[dom] = {count:0, returned:0, cal:{mu_null:0,sigma_null:0,abs_threshold:0}};
+          continue;
+        }
+        const data = await r.json();
+        perDom[dom] = {count:data.total, returned:data.returned, cal:data.calibration};
+        for (const f of data.files){
+          results.push({
+            kind:'av', domain:dom,
+            id: f.file_path, filename: f.file_name,
+            source_path: f.file_path,
+            dense: f.score, confidence: f.confidence,
+            z_score: f.z_score, rrf: 0,
+            segments: f.segments || [],
+          });
+        }
+      } else {
+        const r = await fetch(`${API_BASE}/api/admin/inspect`, {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({query:q, domain:dom, top_n:topN,
+                                use_lexical:useLex, use_asf:useAsf,
+                                use_rerank:useRerank, rerank_k:rerankK}),
+        });
+        if (!r.ok){
+          const body = await r.text();
+          warnings.push(`${dom}: ${body}`);
+          perDom[dom] = {count:0, returned:0, cal:{mu_null:0,sigma_null:0,abs_threshold:0}};
+          continue;
+        }
+        const data = await r.json();
+        perDom[dom] = {count:data.total, returned:data.returned, cal:data.calibration};
+        for (const row of data.rows){
+          row.domain = data.domain;
+          row.kind = 'text';
+          results.push(row);
+        }
+      }
+    }
+    // 통합 정렬: confidence 우선, 동률이면 dense
+    results.sort((a,b) =>
+      (b.confidence||0) - (a.confidence||0) || (b.dense||0) - (a.dense||0));
+    results.forEach((r,i) => r.global_rank = i+1);
+
+    const elapsed = ((performance.now()-t0)/1000).toFixed(2);
+    renderStats(q, perDom, results.length, elapsed, warnings);
+    await renderResults(q, results);
+  }catch(e){
+    output.innerHTML = `<div class="error">검색 실패: ${e.message}</div>`;
+  }finally{
+    btn.disabled = false;
+  }
+}
+
+function renderStats(query, perDom, totalShown, elapsed, warnings){
+  const cards = Object.entries(perDom).map(([k,v]) =>
+    `<div class="stat-card">
+      <div class="lbl">${k}</div>
+      <div class="val">총 ${v.count}건 중 top-${v.returned}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">
+        μ=${v.cal.mu_null.toFixed(3)} · σ=${v.cal.sigma_null.toFixed(3)} · abs_thr=${v.cal.abs_threshold.toFixed(3)}
+      </div>
+    </div>`
+  ).join('');
+  const warnBlock = (warnings && warnings.length)
+    ? `<div style="margin-top:10px;padding:8px 12px;background:#7f1d1d;border:1px solid var(--warn);border-radius:4px;font-size:12px;color:#fecaca">
+         일부 도메인 스킵됨: ${warnings.map(escapeHtml).join(' · ')}
+       </div>`
+    : '';
+  statsDiv.innerHTML = `
+    <div class="stats">
+      <div><b>${escapeHtml(query)}</b> — ${totalShown}건 표시 (${elapsed}s)</div>
+      <div class="stats-grid">${cards}</div>
+      ${warnBlock}
+    </div>`;
+}
+
+async function renderResults(query, items){
+  if (!items.length){
+    output.innerHTML = `<div class="empty"><h2>결과 없음</h2></div>`;
+    return;
+  }
+  output.className = 'results';
+  output.innerHTML = items.map(it => card(it)).join('');
+
+  // doc_text(원문) lazy fetch — 카드당 1회
+  for (const el of document.querySelectorAll('[data-load-text]')){
+    const doc_id = el.dataset.id;
+    const dom = el.dataset.domain;
+    try{
+      const url = `${API_BASE}/api/admin/doc-text?id=${encodeURIComponent(doc_id)}&domain=${dom}&query=${encodeURIComponent(query)}`;
+      const r = await fetch(url);
+      if (!r.ok){ el.remove(); continue; }
+      const d = await r.json();
+      const text = d.text || '';
+      if (!text){ el.remove(); continue; }
+      const matches = d.matches || [];
+      el.innerHTML = highlight(text.slice(0, 600), matches);
+      el.removeAttribute('data-load-text');
+      // doc_page: 페이지 및 첫 매칭 줄 번호 계산 → doc-location 패널에 표시
+      if (dom === 'doc_page'){
+        const cardEl = el.closest('.card');
+        const locEl = cardEl?.querySelector('[data-doc-loc]');
+        let lineNo = -1;
+        if (matches.length){
+          const sorted = [...matches].filter(Boolean).sort((a,b) => b.length - a.length);
+          const lines = text.split(/\r?\n/);
+          outer: for (const m of sorted){
+            for (let i = 0; i < lines.length; i++){
+              if (lines[i].includes(m)){ lineNo = i + 1; break outer; }
+            }
+          }
+        }
+        if (locEl){
+          const pageNum = d.page ?? '?';
+          locEl.textContent = lineNo > 0
+            ? `페이지 ${pageNum} · 줄 ${lineNo}번째`
+            : `페이지 ${pageNum}`;
+          locEl.classList.remove('loading');
+        }
+      }
+    }catch(_){ el.remove(); }
+  }
+
+  // 이미지 클릭 → 모달 확대
+  for (const img of document.querySelectorAll('.thumb img')){
+    img.addEventListener('click', ev => {
+      ev.stopPropagation();
+      modalImg.src = img.src;
+      modal.classList.add('show');
+    });
+  }
+}
+
+function scoreBarsHtml(it){
+  // 0~1 정규화: dense/lex/asf 는 보통 0~1, rerank logit 은 sigmoid 적용
+  const sigm = x => 1 / (1 + Math.exp(-x));
+  const rows = [
+    {lbl:'dense',  v: clamp01(it.dense), cls:''},
+    {lbl:'lex',    v: clamp01(it.lexical), cls:'lex'},
+    {lbl:'asf',    v: clamp01(it.asf), cls:'asf'},
+    {lbl:'rerank', v: it.rerank!=null ? sigm(it.rerank) : null, cls:'rerank'},
+  ];
+  const html = rows.map(r => {
+    if (r.v==null) return `<div class="score-bar"><span class="lbl">${r.lbl}</span><span class="track"></span><span class="vv">—</span></div>`;
+    const pct = (r.v*100).toFixed(0);
+    return `<div class="score-bar"><span class="lbl">${r.lbl}</span><span class="track"><span class="fill ${r.cls}" style="width:${pct}%"></span></span><span class="vv">${(r.v).toFixed(2)}</span></div>`;
+  }).join('');
+  return `<div class="score-bars">${html}</div>`;
+}
+function clamp01(x){ if (x==null||isNaN(x)) return null; return Math.max(0, Math.min(1, x)); }
+
+function card(it){
+  if (it.kind === 'av') return avCard(it);
+  const isImage = it.domain === 'image';
+  const hasPreview = it.domain === 'image' || it.domain === 'doc_page';
+  const fileUrl = `${API_BASE}/api/admin/file?domain=${it.domain}&id=${encodeURIComponent(it.id)}`;
+  const thumb = hasPreview
+    ? `<div class="thumb"><img src="${fileUrl}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<div class=no-img>미리보기 없음</div>'"></div>`
+    : `<div class="thumb"><div class="no-img">${it.domain}</div></div>`;
+  const pageStr = it.page ? ` · p${it.page}` : '';
+  const conf = it.confidence ?? 0;
+  const confPct = (conf * 100).toFixed(1);
+  // 유사도 = dense (의미 벡터 유사도), 정확도 = rerank(sigmoid) 또는 z-score 정규화
+  const _sigm = x => 1 / (1 + Math.exp(-x));
+  const sim = (clamp01(it.dense) ?? 0).toFixed(3);
+  const acc = it.rerank != null
+    ? _sigm(it.rerank)
+    : Math.max(0, Math.min(1, ((it.z_score ?? 0) + 3) / 6));
+  const fname = it.filename || it.id;
+  const srcPath = it.source_path || '';
+  const pathLink = srcPath ? `<div class="path">${escapeHtml(srcPath)}${pageStr}</div>` : '';
+
+  return `<div class="card">
+    <div class="rank">#${it.global_rank}</div>
+    ${thumb}
+    <div class="body">
+      <div class="badges">
+        <span class="badge domain-${it.domain}">${it.domain}</span>
+        ${it.page ? `<span class="badge">page ${it.page}</span>` : ''}
+      </div>
+      ${it.domain === 'doc_page' ? `<div class="doc-location loading" data-doc-loc>위치 확인 중…</div>` : ''}
+      <div class="title">${escapeHtml(fname)}</div>
+      ${pathLink}
+      <div class="key-metrics">
+        <div class="key-metric"><div class="km-label">신뢰도</div><div class="km-value km-conf">${confPct}%</div></div>
+        <div class="key-metric"><div class="km-label">정확도</div><div class="km-value km-acc">${acc.toFixed(3)}</div></div>
+        <div class="key-metric"><div class="km-label">유사도</div><div class="km-value km-prec">${sim}</div></div>
+      </div>
+      <div class="excerpt" data-load-text data-id="${escapeHtml(it.id)}" data-domain="${it.domain}">로딩 중…</div>
+    </div>
+  </div>`;
+}
+
+function avCard(it){
+  const isVideo = it.domain === 'movie';
+  const url = `${API_BASE}/api/admin/file?domain=${it.domain}&id=${encodeURIComponent(it.id)}`;
+  const pid = `player-${it.global_rank}`;
+  const mediaEl = isVideo
+    ? `<video id="${pid}" src="${url}" controls preload="metadata" style="max-height:200px;width:100%;display:block;background:#000;outline:none"></video>`
+    : `<audio id="${pid}" src="${url}" controls preload="metadata" style="width:100%;display:block;outline:none"></audio>`;
+
+  const conf = it.confidence ?? 0;
+  const confPct = (conf * 100).toFixed(1);
+  const _sigm = x => 1 / (1 + Math.exp(-x));
+  const sim = (clamp01(it.dense) ?? 0).toFixed(3);
+  const acc = it.rerank != null
+    ? _sigm(it.rerank)
+    : Math.max(0, Math.min(1, ((it.z_score ?? 0) + 3) / 6));
+
+  const segs = it.segments || [];
+  const topSeg = segs[0];
+  const topStart = topSeg ? (topSeg.start_sec ?? topSeg.start ?? 0) : null;
+
+  const preplayBtn = topStart != null
+    ? `<button class="preplay-btn" data-pid="${pid}" data-t="${topStart}">상위 구간 재생 ▶</button>`
+    : '';
+
+  const segRows = segs.slice(0, 10).map(s => {
+    const t0 = s.start_sec ?? s.start ?? 0;
+    const t1 = s.end_sec ?? s.end ?? 0;
+    const sc = s.score ?? 0;
+    const preview = (s.text || s.stt_text || s.caption || '').slice(0, 80);
+    return `<div class="seg-range-item" data-pid="${pid}" data-t="${t0}">
+      <span class="seg-time">${fmtTime(t0)} ~ ${fmtTime(t1)}</span>
+      <span class="seg-score">s=${sc.toFixed(3)}</span>
+      <span class="seg-text-preview">${escapeHtml(preview)}</span>
+    </div>`;
+  }).join('');
+
+  return `<div class="card av-card">
+    <div class="rank">#${it.global_rank}</div>
+    <div class="av-player">${mediaEl}</div>
+    <div class="body">
+      <div class="badges">
+        <span class="badge domain-${it.domain}">${it.domain}</span>
+        <span class="badge">세그 ${segs.length}</span>
+      </div>
+      <div class="title">${escapeHtml(it.filename || it.id)}</div>
+      <div class="path">${escapeHtml(it.source_path || it.id)}</div>
+      <div class="key-metrics">
+        <div class="key-metric"><div class="km-label">신뢰도</div><div class="km-value km-conf">${confPct}%</div></div>
+        <div class="key-metric"><div class="km-label">정확도</div><div class="km-value km-acc">${acc.toFixed(3)}</div></div>
+        <div class="key-metric"><div class="km-label">유사도</div><div class="km-value km-prec">${sim}</div></div>
+      </div>
+      ${preplayBtn}
+      <div class="seg-range-list">${segRows}</div>
+    </div>
+  </div>`;
+}
+
+function fmtTime(sec){
+  const s = Math.max(0, parseFloat(sec) || 0);
+  const m = Math.floor(s/60), r = Math.floor(s%60);
+  return `${String(m).padStart(2,'0')}:${String(r).padStart(2,'0')}`;
+}
+
+// 통합 클릭 핸들러: 상위N 프리셋 / 미리 재생 / 구간 행 / 기존 seg-btn
+document.addEventListener('click', ev => {
+  // 상위N 프리셋
+  const preset = ev.target.closest('.topn-preset');
+  if (preset){
+    const n = parseInt(preset.dataset.n);
+    document.getElementById('topn').value = n;
+    document.querySelectorAll('.topn-preset').forEach(b => b.classList.toggle('active', b === preset));
+    return;
+  }
+  // 미리 재생 버튼 (상위 구간 재생 ▶)
+  const preBtn = ev.target.closest('.preplay-btn');
+  if (preBtn){
+    const p = document.getElementById(preBtn.dataset.pid);
+    if (p){ try { p.currentTime = parseFloat(preBtn.dataset.t)||0; p.play(); } catch(_){} }
+    return;
+  }
+  // 구간 행 클릭 (mm:ss ~ mm:ss)
+  const segItem = ev.target.closest('.seg-range-item');
+  if (segItem){
+    const p = document.getElementById(segItem.dataset.pid);
+    if (p){ try { p.currentTime = parseFloat(segItem.dataset.t)||0; p.play(); } catch(_){} }
+    return;
+  }
+  // 기존 seg-btn (하위 호환)
+  const segBtn = ev.target.closest('.seg-btn');
+  if (segBtn){
+    const cardEl = segBtn.closest('.card');
+    if (!cardEl) return;
+    const p = cardEl.querySelector('audio, video');
+    if (!p) return;
+    try { p.currentTime = parseFloat(segBtn.dataset.t)||0; p.play(); } catch(_){}
+  }
+});
+
+function highlight(text, matches){
+  if (!matches || !matches.length) return escapeHtml(text);
+  const sorted = [...matches].filter(Boolean).sort((a,b) => b.length - a.length);
+  const escaped = escapeHtml(text);
+  let out = escaped;
+  for (const m of sorted){
+    const em = escapeHtml(m);
+    const re = new RegExp(em.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'), 'g');
+    out = out.replace(re, `<mark>${em}</mark>`);
+  }
+  return out;
+}
+
+function escapeHtml(s){
+  return String(s ?? '').replace(/[&<>"']/g, c => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[c]));
+}
+</script>
+</body>
+</html>

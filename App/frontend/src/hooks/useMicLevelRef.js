@@ -2,10 +2,15 @@ import { useEffect } from 'react'
 
 /**
  * 마이크 입력 RMS를 스무딩해 `outRef.current`에 0~1 근사값으로 기록 (렌더 없음, Orb 등 rAF 소비용).
+ * Web Speech와 동시에 마이크를 잡으면 STT가 묵음이 되는 경우가 있어, `startDelayMs`로 분석기 시작을 늦출 수 있음.
+ *
  * @param {boolean} active
  * @param {{ current: number }} outRef
+ * @param {{ startDelayMs?: number }} [opts]
  */
-export function useMicLevelRef(active, outRef) {
+export function useMicLevelRef(active, outRef, opts = {}) {
+  const startDelayMs = typeof opts.startDelayMs === 'number' ? opts.startDelayMs : 0
+
   useEffect(() => {
     if (!outRef) return
     if (!active) {
@@ -20,6 +25,7 @@ export function useMicLevelRef(active, outRef) {
     let analyser = null
     let source = null
     const buf = new Float32Array(512)
+    let delayTimer = 0
 
     const loop = () => {
       if (cancelled || !analyser) return
@@ -33,7 +39,7 @@ export function useMicLevelRef(active, outRef) {
       raf = requestAnimationFrame(loop)
     }
 
-    ;(async () => {
+    const openMic = async () => {
       try {
         stream = await navigator.mediaDevices.getUserMedia({ audio: true })
         if (cancelled) {
@@ -53,10 +59,20 @@ export function useMicLevelRef(active, outRef) {
       } catch {
         outRef.current = 0
       }
-    })()
+    }
+
+    if (startDelayMs > 0) {
+      delayTimer = window.setTimeout(() => {
+        delayTimer = 0
+        if (!cancelled) void openMic()
+      }, startDelayMs)
+    } else {
+      void openMic()
+    }
 
     return () => {
       cancelled = true
+      if (delayTimer) window.clearTimeout(delayTimer)
       cancelAnimationFrame(raf)
       try {
         source?.disconnect()
@@ -72,5 +88,5 @@ export function useMicLevelRef(active, outRef) {
       stream?.getTracks().forEach((t) => t.stop())
       outRef.current = 0
     }
-  }, [active, outRef])
+  }, [active, outRef, startDelayMs])
 }

@@ -9,10 +9,10 @@ try {
 } catch (_) {}
 
 contextBridge.exposeInMainWorld('electronAPI', {
-  selectFolder:   () => ipcRenderer.invoke('select-folder'),
-  windowMinimize: () => ipcRenderer.send('window-minimize'),
-  windowMaximize: () => ipcRenderer.send('window-maximize'),
-  windowClose:    () => ipcRenderer.send('window-close'),
-  // webFrame은 renderer 프로세스 모듈이라 IPC 없이 직접 호출 가능
-  setZoom: (factor) => webFrame.setZoomFactor(factor),
+  selectFolder:        () => ipcRenderer.invoke('select-folder'),
+  windowMinimize:      () => ipcRenderer.send('window-minimize'),
+  windowMaximize:      () => ipcRenderer.send('window-maximize'),
+  windowClose:         () => ipcRenderer.send('window-close'),
+  setZoom:             (factor) => webFrame.setZoomFactor(factor),
+  installLibreOffice:  () => ipcRenderer.invoke('install-libreoffice'),
 })

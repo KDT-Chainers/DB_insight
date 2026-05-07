@@ -15,6 +15,20 @@
   background-color: var(--app-bg-top);
 }
 
+/* 데이터·설정·스튜디오 — 순블랙 크롬 + 중성 테두리 */
+.titlebar-chrome-studio {
+  background-color: #000000;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* AI 모드 — 타이틀바는 기능만 유지, 시각적으로는 숨김 */
+.titlebar-chrome-ai {
+  background-color: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-bottom: 0;
+}
+
 /*
  * 색은 “파일명”이 아니라 스포이드로 찍은 값으로 맞춤 (예: RGB 5,16,79 = #05104F).
  * 중요 — 브라우저는 위에서 아래로 “겹쳐 그림”. 첫 번째 그라데이션이 맨 앞 레이어.
@@ -58,6 +72,128 @@ body.app-depth-bg {
     );
 }
 
+/*
+ * 공용 스튜디오 — 메시 글로우: 좌상 블루(한 톤 다운) · 우하 바이올렛(한 톤 다운) · #050507 베이스
+ */
+.studio-bridge-bg {
+  background-color: #050507;
+  background-image:
+    radial-gradient(
+      ellipse 148% 120% at -12% -16%,
+      rgba(22, 62, 198, 0.4) 0%,
+      rgba(22, 62, 198, 0.155) 46%,
+      transparent 84%
+    ),
+    radial-gradient(
+      ellipse 134% 114% at 114% 118%,
+      rgba(56, 40, 124, 0.33) 0%,
+      rgba(56, 40, 124, 0.115) 48%,
+      transparent 86%
+    ),
+    radial-gradient(
+      ellipse 130% 95% at 50% 118%,
+      rgba(0, 0, 0, 0.88) 0%,
+      transparent 56%
+    ),
+    linear-gradient(
+      165deg,
+      #0a0a0c 0%,
+      #050507 42%,
+      #030304 100%
+    );
+}
+
+/* 스튜디오 셸 — 유리에 가깝게: 채움 최소 + 블러·얇은 테 두께감 */
+.apple-studio-unified-canvas {
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  background: linear-gradient(
+    165deg,
+    rgba(255, 255, 255, 0.032) 0%,
+    rgba(255, 255, 255, 0.012) 42%,
+    rgba(255, 255, 255, 0.003) 100%
+  );
+  backdrop-filter: blur(104px) saturate(1.1);
+  -webkit-backdrop-filter: blur(104px) saturate(1.1);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.06),
+    0 22px 72px rgba(0, 0, 0, 0.28);
+}
+
+/* 사이드바 열: 캔버스 위 살짝만 구획 */
+.apple-studio-sidebar-col {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.016) 0%,
+    rgba(255, 255, 255, 0.005) 50%,
+    transparent 100%
+  );
+}
+
+.apple-hero-card {
+  background: linear-gradient(
+    152deg,
+    rgba(255, 255, 255, 0.024) 0%,
+    rgba(255, 255, 255, 0.009) 40%,
+    rgba(255, 255, 255, 0.003) 100%
+  );
+  backdrop-filter: blur(62px) saturate(1.1);
+  -webkit-backdrop-filter: blur(62px) saturate(1.1);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  box-shadow:
+    0 10px 38px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.apple-widget-card {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: linear-gradient(
+    160deg,
+    rgba(255, 255, 255, 0.02) 0%,
+    rgba(255, 255, 255, 0.008) 45%,
+    rgba(255, 255, 255, 0.002) 100%
+  );
+  backdrop-filter: blur(54px) saturate(1.08);
+  -webkit-backdrop-filter: blur(54px) saturate(1.08);
+  box-shadow:
+    0 8px 28px rgba(0, 0, 0, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.apple-studio-widgets {
+  min-width: 0;
+}
+
+/* 설정(관리자) — 동일 유리 톤 */
+.di-glass-shell.settings-glass-strong {
+  backdrop-filter: blur(64px) saturate(1.08);
+  -webkit-backdrop-filter: blur(64px) saturate(1.08);
+  background: linear-gradient(
+    155deg,
+    rgba(255, 255, 255, 0.016) 0%,
+    rgba(255, 255, 255, 0.0055) 48%,
+    rgba(255, 255, 255, 0.002) 100%
+  );
+}
+
+.di-glass-card.settings-glass-strong {
+  backdrop-filter: blur(60px) saturate(1.06);
+  -webkit-backdrop-filter: blur(60px) saturate(1.06);
+  background: linear-gradient(
+    168deg,
+    rgba(255, 255, 255, 0.018) 0%,
+    rgba(255, 255, 255, 0.006) 40%,
+    rgba(255, 255, 255, 0.0015) 100%
+  );
+  border-color: rgba(255, 255, 255, 0.065);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.055),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.1),
+    0 6px 32px rgba(0, 0, 0, 0.22);
+}
+
 html {
   min-height: 100%;
 }
@@ -92,61 +228,83 @@ body {
   background-color: rgba(28, 37, 62, 0.6);
 }
 
-/* 데이터 인덱싱 — 메인 팔레트(surface/primary) + 결정질 글래스 */
+/* 검색 요약 카드: 스크롤 시 유리 반짝 스윕 */
+.summary-glint-sweep {
+  animation: summary-glint-sweep 620ms ease-out both;
+}
+
+@keyframes summary-glint-sweep {
+  from {
+    transform: translateX(0);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.65;
+  }
+  to {
+    transform: translateX(460%);
+    opacity: 0;
+  }
+}
+
+/* 데이터 인덱싱·설정 — 순블랙 베이스 위 모노 글래스 */
 .di-glass-shell {
   background: linear-gradient(
     155deg,
-    rgba(28, 37, 62, 0.58) 0%,
-    rgba(7, 13, 31, 0.4) 48%,
-    rgba(12, 19, 38, 0.52) 100%
+    rgba(255, 255, 255, 0.03) 0%,
+    rgba(255, 255, 255, 0.012) 50%,
+    rgba(255, 255, 255, 0.004) 100%
   );
-  backdrop-filter: blur(44px) saturate(1.45);
-  -webkit-backdrop-filter: blur(44px) saturate(1.45);
-  border-right: 1px solid rgba(133, 173, 255, 0.14);
+  backdrop-filter: blur(54px) saturate(1.1);
+  -webkit-backdrop-filter: blur(54px) saturate(1.1);
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.14),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
-    16px 0 56px rgba(0, 0, 0, 0.32);
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.04),
+    16px 0 42px rgba(0, 0, 0, 0.32);
 }
 
+/* 본문 카드 — 채움 거의 없음 + 강 블러로 유리면 */
 .di-glass-card {
   background: linear-gradient(
     168deg,
-    rgba(28, 37, 62, 0.5) 0%,
-    rgba(17, 25, 46, 0.38) 42%,
-    rgba(7, 13, 31, 0.36) 100%
+    rgba(255, 255, 255, 0.018) 0%,
+    rgba(255, 255, 255, 0.007) 42%,
+    rgba(255, 255, 255, 0.002) 100%
   );
-  backdrop-filter: blur(36px) saturate(1.38);
-  -webkit-backdrop-filter: blur(36px) saturate(1.38);
-  border: 1px solid rgba(133, 173, 255, 0.14);
+  backdrop-filter: blur(64px) saturate(1.08);
+  -webkit-backdrop-filter: blur(64px) saturate(1.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.18),
-    0 10px 42px rgba(0, 0, 0, 0.28);
+    inset 0 1px 0 rgba(255, 255, 255, 0.17),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.04),
+    0 4px 22px rgba(0, 0, 0, 0.12);
 }
 
 .di-glass-card--accent {
-  border-color: rgba(133, 173, 255, 0.26);
+  border-color: rgba(255, 255, 255, 0.13);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.14),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.14),
-    0 10px 42px rgba(0, 0, 0, 0.28),
-    0 0 36px rgba(133, 173, 255, 0.12);
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.05),
+    0 4px 26px rgba(0, 0, 0, 0.14),
+    0 0 20px rgba(255, 255, 255, 0.016);
 }
 
 .di-nav-active {
-  background: rgba(28, 37, 62, 0.88);
-  border: 1px solid rgba(133, 173, 255, 0.32);
-  color: #dfe4fe;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  color: #f4f4f5;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.1),
-    0 0 28px rgba(133, 173, 255, 0.14);
+    0 0 24px rgba(255, 255, 255, 0.04);
 }
 
 .di-section-title {
+  display: inline-block;
   font-weight: 900;
   letter-spacing: -0.03em;
-  background: linear-gradient(105deg, #85adff 0%, #b4c8ff 38%, #dfe4fe 100%);
+  background: linear-gradient(105deg, #e4e4e7 0%, #fafafa 48%, #ffffff 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -276,48 +434,174 @@ body {
   animation: portal-text-fade 0.85s ease-out forwards;
 }
 
-/* AI 홈 — 곡선 띠 첫 진입: 위에서 아래로 내려옴 */
-@keyframes ai-home-glow-slide-in {
+/* ── 페이지 전환 입장 애니메이션 ─────────────────────────── */
+@keyframes radialOpen {
   from {
-    transform: translate3d(0, -26vh, 0);
-    opacity: 0.25;
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.4);
   }
   to {
-    transform: translate3d(0, 0, 0);
     opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
   }
-}
-.ai-home-glow-slide-in {
-  transform-origin: 50% 45%;
-  animation: ai-home-glow-slide-in 2.65s cubic-bezier(0.22, 0.99, 0.26, 1) forwards;
 }
 
-/* AI 홈 — 곡선 그라데이션 띠 부드러운 드리프트 */
-@keyframes ai-home-glow-drift {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0) scale(1.02);
+@keyframes pageEnter {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.993);
   }
-  33% {
-    transform: translate3d(1.25%, -0.9%, 0) scale(1.04);
-  }
-  66% {
-    transform: translate3d(-1.1%, 0.75%, 0) scale(1.03);
-  }
-}
-.ai-home-glow-drift {
-  transform-origin: 50% 50%;
-  animation: ai-home-glow-drift 24s ease-in-out infinite;
-}
-@media (prefers-reduced-motion: reduce) {
-  .ai-home-glow-slide-in {
-    animation: none;
-    transform: none;
+  to {
     opacity: 1;
+    transform: translateY(0) scale(1);
   }
-  .ai-home-glow-drift {
+}
+.page-enter {
+  animation: pageEnter 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* ── 로그인 성공 플래시 ───────────────────────────────────── */
+@keyframes loginFlash {
+  0%   { opacity: 0; transform: scale(0.6); }
+  35%  { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(2.4); }
+}
+.login-flash {
+  pointer-events: none;
+  background: radial-gradient(ellipse at center,
+    rgba(210, 225, 255, 0.95) 0%,
+    rgba(133, 173, 255, 0.7)  25%,
+    rgba(172, 138, 255, 0.4)  55%,
+    transparent 75%
+  );
+  animation: loginFlash 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* ── 데이터 페이지 전환 (오른쪽에서 슬라이드) ──────────────── */
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(28px) scale(0.995);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+.page-enter-right {
+  animation: slideInRight 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* ── 공용 스튜디오 진입: Orb 포커스 줌 + 글래스 패널 스태거 ───────── */
+@keyframes studio-orb-focus-zoom {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+    filter: blur(14px) saturate(0.9);
+  }
+  45% {
+    opacity: 0.68;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(2.65);
+    filter: blur(2px) saturate(1);
+  }
+}
+
+.studio-orb-focus-off {
+  opacity: 0;
+}
+
+.studio-orb-focus-on {
+  background:
+    radial-gradient(circle at 50% 48%, rgba(133, 173, 255, 0.26) 0%, rgba(133, 173, 255, 0.14) 18%, rgba(133, 173, 255, 0.06) 34%, transparent 52%);
+  transform-origin: center;
+  animation: studio-orb-focus-zoom 0.62s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes studio-panel-stagger-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.988);
+    filter: blur(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+.studio-stagger-off {
+  opacity: 0;
+  transform: translateY(12px) scale(0.988);
+  filter: blur(14px);
+}
+
+.studio-stagger-in {
+  animation: studio-panel-stagger-in 0.52s cubic-bezier(0.2, 0.92, 0.25, 1) both;
+}
+
+.studio-stagger-d0 { animation-delay: 0.04s; }
+.studio-stagger-d1 { animation-delay: 0.09s; }
+.studio-stagger-d2 { animation-delay: 0.14s; }
+.studio-stagger-d3 { animation-delay: 0.2s; }
+.studio-stagger-d4 { animation-delay: 0.26s; }
+.studio-stagger-d5 { animation-delay: 0.32s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-orb-focus-on,
+  .studio-stagger-in,
+  .studio-stagger-off {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
+  }
+}
+
+/*
+ * AI 모드 홈 전용 — Orb 뒤 헤일로 PNG (MainAI 홈 뷰에서만 마운트, 검색/기타 라우트 미사용)
+ * 크기: 화면 짧은 축 기준으로 실제 Orb 가시 구보다 약간 크게 → 감싸는 링 느낌
+ * 등장: MainAI `assembleDuration`(8s)와 동기 — 처음엔 배경에 묻혀 있다가 점 구체화와 함께 선명해짐
+ */
+@keyframes ai-orbit-halo-emerge {
+  /* 전환 직후 ~1/4 구간: 배경에 완전히 묻힘 — PNG/글로우가 보이지 않게 */
+  0%,
+  26% {
+    opacity: 0;
+    filter: blur(80px) saturate(0);
+  }
+  40% {
+    opacity: 0.35;
+    filter: blur(22px) saturate(0.65);
+  }
+  100% {
+    opacity: 1;
+    filter: blur(0) saturate(1);
+  }
+}
+
+.ai-home-orbit-bg {
+  background-color: #000000;
+  background-image: url('/ai-home-orbit-bg.png');
+  background-repeat: no-repeat;
+  background-position: 50% 44%;
+  /* Orb 가시 구보다 한 겹 크게 — Orb 컴포넌트 size/카메라는 그대로 */
+  background-size: clamp(280px, calc(min(100vw, 100vh) * 0.82), 900px);
+  opacity: 0;
+  /* both: 첫 프레임 이전에도 0% 적용 → 전환 직후 한동안 헤일로 미노출 */
+  animation: ai-orbit-halo-emerge var(--ai-orbit-assemble, 8s) cubic-bezier(0.12, 0.55, 0.08, 1) both;
+  will-change: opacity, filter;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-home-orbit-bg {
     animation: none;
-    transform: none;
+    opacity: 1;
+    filter: none;
+    will-change: auto;
   }
 }
 
@@ -405,6 +689,278 @@ body {
   }
 }
 
+/* AI 홈 — 검색 모드 전환: 유리 빛 반사(글린트) */
+@keyframes ai-home-search-mode-glint {
+  0% {
+    transform: translateX(-135%) skewX(-16deg);
+    opacity: 0;
+  }
+  18% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(135%) skewX(-16deg);
+    opacity: 0;
+  }
+}
+
+@keyframes ai-home-search-mode-glint-idle {
+  0%,
+  82% {
+    transform: translateX(-135%) skewX(-16deg);
+    opacity: 0;
+  }
+  86% {
+    opacity: 0.85;
+  }
+  100% {
+    transform: translateX(135%) skewX(-16deg);
+    opacity: 0;
+  }
+}
+
+.ai-home-search-mode-btn {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.ai-home-search-mode-btn > * {
+  position: relative;
+  z-index: 1;
+}
+
+.ai-home-search-mode-btn::before {
+  content: '';
+  position: absolute;
+  inset: -30% -75%;
+  z-index: 0;
+  background: linear-gradient(
+    118deg,
+    transparent 37%,
+    rgba(255, 255, 255, 0.04) 44%,
+    rgba(226, 232, 240, 0.65) 49.8%,
+    rgba(255, 255, 255, 0.22) 50.6%,
+    rgba(196, 181, 253, 0.25) 52%,
+    transparent 60%
+  );
+  transform: translateX(-135%) skewX(-16deg);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ai-home-search-mode-btn:hover:not(:disabled)::before,
+.ai-home-search-mode-btn:focus-visible:not(:disabled)::before {
+  animation: ai-home-search-mode-glint 1.45s cubic-bezier(0.28, 0.72, 0.36, 1) forwards;
+}
+
+.main-search-entrance-on .ai-home-search-mode-btn::before {
+  animation: ai-home-search-mode-glint-idle 8.2s ease-in-out 2.1s 1 both;
+}
+
+.main-search-entrance-on .ai-home-search-mode-btn:hover:not(:disabled)::before,
+.main-search-entrance-on .ai-home-search-mode-btn:focus-visible:not(:disabled)::before {
+  animation: ai-home-search-mode-glint 1.45s cubic-bezier(0.28, 0.72, 0.36, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-home-search-mode-btn::before {
+    animation: none !important;
+    opacity: 0 !important;
+    transform: none !important;
+  }
+}
+
+@keyframes ai-home-query-preview-dim-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes ai-home-query-preview-pop-in {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.97);
+    filter: blur(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+    filter: blur(0);
+  }
+}
+
+.ai-home-query-preview-dim {
+  animation: ai-home-query-preview-dim-in 0.2s ease-out both;
+}
+
+.ai-home-query-preview-panel {
+  animation: ai-home-query-preview-pop-in 0.26s cubic-bezier(0.22, 1, 0.36, 1) both;
+  will-change: transform, opacity, filter;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-home-query-preview-dim,
+  .ai-home-query-preview-panel {
+    animation: none !important;
+  }
+}
+
+@keyframes auth-loading-sweep {
+  0% {
+    transform: translateX(-65%) translateY(-18%) rotate(-14deg);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.26;
+  }
+  55% {
+    opacity: 0.12;
+  }
+  100% {
+    transform: translateX(65%) translateY(18%) rotate(-14deg);
+    opacity: 0;
+  }
+}
+
+@keyframes auth-loading-breathe {
+  0%, 100% {
+    transform: translate(-50%, -50%) scale(0.96);
+    opacity: 0.35;
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.08);
+    opacity: 0.6;
+  }
+}
+
+@keyframes auth-loading-logo-float {
+  0%, 100% {
+    transform: translateY(0);
+    filter: drop-shadow(0 0 0 rgba(133, 173, 255, 0));
+  }
+  50% {
+    transform: translateY(-4px);
+    filter: drop-shadow(0 0 12px rgba(133, 173, 255, 0.25));
+  }
+}
+
+.auth-loading-sweep::before {
+  content: "";
+  position: absolute;
+  left: -30%;
+  top: 0;
+  width: 56%;
+  height: 140%;
+  background: linear-gradient(
+    90deg,
+    rgba(133, 173, 255, 0) 0%,
+    rgba(133, 173, 255, 0.11) 38%,
+    rgba(172, 138, 255, 0.16) 52%,
+    rgba(133, 173, 255, 0) 100%
+  );
+  filter: blur(24px);
+  animation: auth-loading-sweep 3.8s ease-in-out infinite;
+}
+
+.auth-loading-halo {
+  background: radial-gradient(
+    circle at center,
+    rgba(133, 173, 255, 0.26) 0%,
+    rgba(172, 138, 255, 0.16) 34%,
+    rgba(133, 173, 255, 0.06) 58%,
+    transparent 76%
+  );
+  animation: auth-loading-breathe 3.4s ease-in-out infinite;
+}
+
+.auth-loading-logo {
+  animation: auth-loading-logo-float 2.8s ease-in-out infinite;
+}
+
+@keyframes auth-aurora-drift-a {
+  0% {
+    transform: translate3d(-10%, 8%, 0) rotate(-8deg) scale(1.02);
+    opacity: 0.16;
+  }
+  50% {
+    transform: translate3d(8%, -4%, 0) rotate(-4deg) scale(1.08);
+    opacity: 0.28;
+  }
+  100% {
+    transform: translate3d(16%, -10%, 0) rotate(-2deg) scale(1.04);
+    opacity: 0.18;
+  }
+}
+
+@keyframes auth-aurora-drift-b {
+  0% {
+    transform: translate3d(18%, 12%, 0) rotate(12deg) scale(1);
+    opacity: 0.12;
+  }
+  50% {
+    transform: translate3d(-4%, 0%, 0) rotate(6deg) scale(1.07);
+    opacity: 0.22;
+  }
+  100% {
+    transform: translate3d(-14%, -8%, 0) rotate(4deg) scale(1.03);
+    opacity: 0.14;
+  }
+}
+
+@keyframes auth-aurora-drift-c {
+  0% {
+    transform: translate3d(-4%, 20%, 0) rotate(-16deg) scale(1.06);
+    opacity: 0.08;
+  }
+  50% {
+    transform: translate3d(10%, 4%, 0) rotate(-10deg) scale(1.12);
+    opacity: 0.16;
+  }
+  100% {
+    transform: translate3d(0%, -6%, 0) rotate(-8deg) scale(1.08);
+    opacity: 0.1;
+  }
+}
+
+.auth-loading-aurora {
+  overflow: hidden;
+  filter: blur(26px) saturate(1.04);
+}
+
+.auth-loading-aurora .aurora-band {
+  position: absolute;
+  display: block;
+  width: 72vmax;
+  height: 28vmax;
+  border-radius: 999px;
+  mix-blend-mode: screen;
+}
+
+.auth-loading-aurora .aurora-band-a {
+  left: -16vmax;
+  top: -8vmax;
+  background: linear-gradient(100deg, rgba(77, 212, 232, 0.12) 0%, rgba(133, 173, 255, 0.24) 46%, rgba(133, 173, 255, 0.04) 100%);
+  animation: auth-aurora-drift-a 16s ease-in-out infinite alternate;
+}
+
+.auth-loading-aurora .aurora-band-b {
+  right: -18vmax;
+  top: 18vmax;
+  background: linear-gradient(94deg, rgba(172, 138, 255, 0.08) 0%, rgba(133, 173, 255, 0.2) 52%, rgba(77, 212, 232, 0.05) 100%);
+  animation: auth-aurora-drift-b 18s ease-in-out infinite alternate;
+}
+
+.auth-loading-aurora .aurora-band-c {
+  left: 6vmax;
+  bottom: -10vmax;
+  background: linear-gradient(100deg, rgba(77, 212, 232, 0.06) 0%, rgba(172, 138, 255, 0.12) 50%, rgba(133, 173, 255, 0.03) 100%);
+  animation: auth-aurora-drift-c 20s ease-in-out infinite alternate;
+}
+
 /* SearchSidebar — 카테고리 패널 전체가 배경 깊이에 묻였다가 선명해지며 떠오름 */
 @keyframes sidebar-shell-bg-emerge {
   from {
@@ -437,5 +993,116 @@ body {
     filter: none !important;
     transform: none !important;
     pointer-events: auto !important;
+  }
+}
+
+@keyframes file-stack-card-shuffle {
+  0% {
+    transform: translate(-50%, -50%) scale(0.98);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  26% {
+    transform: translate(-50%, -58%) translateX(-2px) scale(1.03);
+  }
+  42% {
+    transform: translate(-50%, -54%) translateX(3px) scale(1.02);
+  }
+  64% {
+    transform: translate(-50%, -44%) translateX(48px) scale(0.96);
+    opacity: 0.64;
+  }
+  100% {
+    transform: translate(-50%, -50%) translateX(74px) scale(0.94);
+    opacity: 0.28;
+  }
+}
+
+@keyframes file-stack-scan-sweep {
+  0% {
+    left: -16%;
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.82;
+  }
+  85% {
+    opacity: 0.72;
+  }
+  100% {
+    left: 108%;
+    opacity: 0;
+  }
+}
+
+.file-stack-search .file-stack-card {
+  animation: file-stack-card-shuffle 3.2s cubic-bezier(0.22, 0.92, 0.28, 1) infinite;
+}
+
+.file-stack-search .file-stack-scan-line {
+  left: -16%;
+  animation: file-stack-scan-sweep 2.4s ease-in-out infinite;
+}
+
+@keyframes file-stack-hand-search {
+  0% {
+    transform: translate(-74px, 18px) rotate(-10deg) scale(0.95);
+    opacity: 0;
+  }
+  14% {
+    opacity: 0.96;
+  }
+  30% {
+    transform: translate(-20px, -4px) rotate(-6deg) scale(1);
+  }
+  46% {
+    transform: translate(20px, -10px) rotate(2deg) scale(1.03);
+  }
+  64% {
+    transform: translate(58px, 4px) rotate(8deg) scale(0.98);
+    opacity: 0.92;
+  }
+  100% {
+    transform: translate(86px, 14px) rotate(12deg) scale(0.95);
+    opacity: 0;
+  }
+}
+
+.file-stack-search .file-stack-hand {
+  animation: file-stack-hand-search 3.2s ease-in-out infinite;
+}
+
+/* 검색 결과 카드 — 배경 톤에 묻혀 있다가(저채도·어둡게) 전면으로 떠오름 */
+@keyframes result-card-enter {
+  from {
+    opacity: 0.2;
+    transform: translateY(28px) scale(0.92);
+    filter: brightness(0.38) saturate(0.5) blur(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: brightness(1) saturate(1) blur(0);
+  }
+}
+
+.result-card-enter {
+  animation: result-card-enter 1.15s cubic-bezier(0.2, 0.95, 0.22, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .file-stack-search .file-stack-card,
+  .file-stack-search .file-stack-scan-line,
+  .file-stack-search .file-stack-hand {
+    animation: none !important;
+  }
+
+  .result-card-enter {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
   }
 }

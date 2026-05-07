@@ -1,6 +1,17 @@
 {
   "name": "db-insight-frontend",
   "version": "0.1.0",
+  "description": "DB_insight — 5-domain local multimodal search (Doc/Img/Movie/Rec/BGM) with TriCHEF + CLAP. Chromaprint, BGE-M3, SigLIP2 powered.",
+  "author": {
+    "name": "KDT-FT-team3-Chainers",
+    "url": "https://github.com/KDT-Chainers/DB_insight"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/KDT-Chainers/DB_insight",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/KDT-Chainers/DB_insight.git"
+  },
   "private": true,
   "type": "module",
   "main": "electron/main.cjs",
@@ -10,6 +21,9 @@
     "preview": "vite preview",
     "electron": "electron .",
     "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:3000 && electron .\"",
+    "prepack": "npm run build",
+    "pack": "electron-builder --dir",
+    "predist": "node -e \"const fs=require('fs');const {execSync}=require('child_process');try{execSync('rmdir /s /q out\\\\win-unpacked',{shell:true,stdio:'pipe'})}catch(_){}\"",
     "dist": "npm run build && electron-builder"
   },
   "build": {
@@ -26,16 +40,12 @@
       "electron/main.cjs",
       "electron/preload.cjs"
     ],
-    "extraResources": [
-      {
-        "from": "../backend/dist/backend.exe",
-        "to": "backend/backend.exe"
-      }
-    ],
+    "extraResources": [],
     "win": {
       "target": "portable",
       "signingHashAlgorithms": null,
-      "sign": null
+      "sign": null,
+      "signAndEditExecutable": false
     }
   },
   "dependencies": {
