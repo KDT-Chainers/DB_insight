@@ -14,10 +14,10 @@ const AI = {
   accent: "#8b5cf6",
   accentLight: "#a78bfa",
   accentDark: "#6d28d9",
-  bg: "#060410",
-  leftBg: "rgba(12,8,24,0.86)",
-  rightBg: "rgba(8,5,18,0.82)",
-  card: "rgba(24,17,42,0.62)",
+  bg: "rgb(1,1,4)",
+  leftBg: "rgb(1,1,4)",
+  rightBg: "rgb(1,1,4)",
+  card: "rgb(1,1,4)",
   border: "rgba(167,139,250,0.24)",
 };
 
@@ -2066,8 +2066,9 @@ export default function MainAI() {
       style={{
         height: "100vh",
         background: AI.bg,
-        backgroundImage:
-          "radial-gradient(120% 90% at 0% 100%, rgba(109,40,217,0.1) 0%, transparent 60%), radial-gradient(100% 80% at 100% 0%, rgba(59,130,246,0.08) 0%, transparent 58%)",
+        backgroundImage: view === 'home'
+          ? "radial-gradient(120% 90% at 0% 100%, rgba(109,40,217,0.1) 0%, transparent 60%), radial-gradient(100% 80% at 100% 0%, rgba(59,130,246,0.08) 0%, transparent 58%)"
+          : "none",
         overflow: "hidden",
       }}
     >
@@ -2266,10 +2267,10 @@ export default function MainAI() {
                 padding: "0 18px",
                 height: 52,
                 flexShrink: 0,
-                background: "rgba(9,6,22,0.74)",
-                backdropFilter: "blur(10px) saturate(1.06)",
-                borderBottom: "1px solid rgba(167,139,250,0.16)",
-                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08)",
+                background: "rgb(1,1,4)",
+                backdropFilter: "none",
+                borderBottom: "1px solid rgba(255,255,255,0.08)",
+                boxShadow: "none",
                 position: "relative",
                 zIndex: 10,
               }}
@@ -2319,9 +2320,9 @@ export default function MainAI() {
                     fontWeight: 700,
                     letterSpacing: "0.08em",
                     textTransform: "uppercase",
-                    color: "#10b981",
-                    background: "rgba(16,185,129,0.1)",
-                    border: "1px solid rgba(16,185,129,0.22)",
+                    color: "#e5e7eb",
+                    background: "rgb(1,1,4)",
+                    border: "1px solid rgb(1,1,4)",
                     padding: "3px 10px",
                     borderRadius: 999,
                     flexShrink: 0,
@@ -2340,9 +2341,9 @@ export default function MainAI() {
                     fontWeight: 700,
                     letterSpacing: "0.08em",
                     textTransform: "uppercase",
-                    color: "#06b6d4",
-                    background: "rgba(6,182,212,0.1)",
-                    border: "1px solid rgba(6,182,212,0.22)",
+                    color: "#e5e7eb",
+                    background: "rgb(1,1,4)",
+                    border: "1px solid rgb(1,1,4)",
                     padding: "3px 10px",
                     borderRadius: 999,
                     flexShrink: 0,
@@ -2361,9 +2362,9 @@ export default function MainAI() {
                     fontWeight: 700,
                     letterSpacing: "0.08em",
                     textTransform: "uppercase",
-                    color: "#eab308",
-                    background: "rgba(234,179,8,0.1)",
-                    border: "1px solid rgba(234,179,8,0.25)",
+                    color: "#e5e7eb",
+                    background: "rgb(1,1,4)",
+                    border: "1px solid rgb(1,1,4)",
                     padding: "3px 10px",
                     borderRadius: 999,
                     flexShrink: 0,
@@ -2381,9 +2382,9 @@ export default function MainAI() {
                     gap: 5,
                     fontSize: 10,
                     fontWeight: 700,
-                    color: AI.accentLight,
-                    background: "rgba(139,92,246,0.1)",
-                    border: `1px solid ${AI.border}`,
+                    color: "#e5e7eb",
+                    background: "rgb(1,1,4)",
+                    border: "1px solid rgb(1,1,4)",
                     padding: "3px 10px",
                     borderRadius: 999,
                     flexShrink: 0,
@@ -2391,7 +2392,11 @@ export default function MainAI() {
                 >
                   <span
                     className="inline-flex rounded-md border border-violet-400/25 bg-violet-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest mt-3"
-                    style={{ color: AI.accentLight }}
+                    style={{
+                      color: "#e5e7eb",
+                      border: "1px solid rgb(1,1,4)",
+                      background: "rgb(1,1,4)",
+                    }}
                   >
                     AI 쿼리
                   </span>
@@ -2406,9 +2411,9 @@ export default function MainAI() {
                     gap: 5,
                     fontSize: 10,
                     fontWeight: 700,
-                    color: "#10b981",
-                    background: "rgba(16,185,129,0.1)",
-                    border: "1px solid rgba(16,185,129,0.2)",
+                    color: "#e5e7eb",
+                    background: "rgb(1,1,4)",
+                    border: "1px solid rgb(1,1,4)",
                     padding: "3px 10px",
                     borderRadius: 999,
                     flexShrink: 0,

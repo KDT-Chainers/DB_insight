@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useSidebar } from '../context/SidebarContext'
 import WindowControls from './WindowControls'
@@ -33,7 +33,8 @@ const SIDEBAR = {
   },
 }
 const AI_RAIL_WIDTH_PX = 96
-const NORMAL_SIDEBAR_WIDTH_PX = 256
+const SIDEBAR_MIN_WIDTH_PX = 256
+const SIDEBAR_MAX_WIDTH_PX = 420
 
 /**
  * @param {{ entranceOn?: boolean }} props
@@ -44,6 +45,16 @@ export default function SearchSidebar({ entranceOn } = {}) {
   const location = useLocation()
   const { open, toggle } = useSidebar()
   const aiPath = location.pathname === '/ai' || location.pathname.startsWith('/ai/')
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    try {
+      const raw = Number(localStorage.getItem('search-sidebar-width'))
+      if (Number.isFinite(raw)) {
+        return Math.max(SIDEBAR_MIN_WIDTH_PX, Math.min(SIDEBAR_MAX_WIDTH_PX, raw))
+      }
+    } catch {}
+    return SIDEBAR_MIN_WIDTH_PX
+  })
+  const resizingRef = useRef(false)
   const workspaceReturn = aiPath ? '/ai' : '/search'
   const goDataPage = useCallback(
     () => navigate('/data', { state: { workspaceReturn } }),
@@ -59,6 +70,34 @@ export default function SearchSidebar({ entranceOn } = {}) {
 
   const [historyList, setHistoryList] = useState([])
   const [aiHistoryOpen, setAiHistoryOpen] = useState(false)
+
+  useEffect(() => {
+    try { localStorage.setItem('search-sidebar-width', String(sidebarWidth)) } catch {}
+  }, [sidebarWidth])
+
+  useEffect(() => {
+    const onMove = (e) => {
+      if (!resizingRef.current) return
+      const next = Math.max(
+        SIDEBAR_MIN_WIDTH_PX,
+        Math.min(SIDEBAR_MAX_WIDTH_PX, e.clientX),
+      )
+      setSidebarWidth(next)
+    }
+    const stopResize = () => {
+      if (!resizingRef.current) return
+      resizingRef.current = false
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', stopResize)
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', stopResize)
+      stopResize()
+    }
+  }, [])
 
   // 사이드바 열릴 때마다 기록 갱신
   const loadHistory = useCallback(async () => {
@@ -128,11 +167,26 @@ export default function SearchSidebar({ entranceOn } = {}) {
     <>
       {/* 사이드바 — translate는 래퍼에, 등장 효과는 패널(aside) 전체에 */}
       <div
-        className={`search-sidebar-aside fixed left-0 top-0 z-50 h-full w-64 transition-transform duration-300 ${open ? 'translate-x-0' : '-translate-x-full'}`}
+        className={`search-sidebar-aside fixed left-0 top-0 z-50 h-full transition-transform duration-300 ${open ? 'translate-x-0' : '-translate-x-full'}`}
+        style={{ width: `${sidebarWidth}px` }}
       >
         <aside
           className={`relative flex h-full w-full flex-col rounded-r-3xl p-4 pt-10 ${S.shell} ${shellEntranceClass}`}
         >
+          {open && (
+            <button
+              type="button"
+              aria-label="사이드바 너비 조절"
+              onMouseDown={(e) => {
+                e.preventDefault()
+                resizingRef.current = true
+                document.body.style.cursor = 'ew-resize'
+                document.body.style.userSelect = 'none'
+              }}
+              className="absolute right-0 top-0 z-[60] h-full w-2 cursor-ew-resize bg-transparent"
+              style={{ transform: 'translateX(50%)' }}
+            />
+          )}
           {false ? (
             <>
               <div className="mt-24 flex min-h-0 flex-1">
@@ -386,7 +440,7 @@ export default function SearchSidebar({ entranceOn } = {}) {
         className={`fixed top-0 right-0 h-8 z-[9999] flex items-center justify-end px-2 ${ai ? 'titlebar-chrome-ai' : 'titlebar-chrome'}`}
         style={{
           WebkitAppRegion: 'drag',
-          left: open ? `${NORMAL_SIDEBAR_WIDTH_PX}px` : '0',
+          left: open ? `${sidebarWidth}px` : '0',
           transition: 'left 0.3s',
         }}
       >
