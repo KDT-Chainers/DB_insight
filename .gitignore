@@ -278,3 +278,13 @@ App/backend/scripts/caption_mismatch_suspects.json
 App/backend/scripts/latency_baseline.json
 App/backend/scripts/bgm_evaluation.json
 App/backend/scripts/calibration_distributions.png
+
+# v2 후속 개선 산출물
+App/backend/scripts/real_caption_lies_v2.json
+App/backend/scripts/n_sigma_analysis_v2.json
+App/backend/scripts/calibration_v2.json
+App/backend/scripts/bgm_qualitative_v2.json
+App/backend/scripts/v2_summary.md
+App/backend/scripts/real_caption_lies.json
+App/backend/scripts/n_sigma_recommendations.json
+App/backend/scripts/next_improvement_summary.md
