@@ -876,9 +876,9 @@ function ResultCard({
         {/* 2. 핵심 3지표 (요청에 따라 도메인 배지 바로 아래로 이동) */}
         <div className="grid grid-cols-3 gap-1.5">
           {[
-            { label: "신뢰도", value: `${confPct}%`, cls: "text-[#10b981]" },
-            { label: "정확도", value: acc, cls: "text-[#60a5fa]" },
             { label: "유사도", value: sim, cls: "text-[#a78bfa]" },
+            { label: "정확도", value: acc, cls: "text-[#60a5fa]" },
+            { label: "신뢰도", value: `${confPct}%`, cls: "text-[#10b981]" },
           ].map(({ label, value, cls }) => (
             <div
               key={label}
@@ -2914,17 +2914,17 @@ export default function MainSearch() {
                                 0) * 100,
                             );
                       const bars = [
-                        {
-                          label: "신뢰도",
-                          pct: confPct,
-                          text: "text-emerald-400",
-                        },
+                        { label: "유사도", pct: simPct, text: "text-sky-300" },
                         {
                           label: "정확도",
                           pct: accuracyPct,
                           text: "text-[#85adff]",
                         },
-                        { label: "유사도", pct: simPct, text: "text-sky-300" },
+                        {
+                          label: "신뢰도",
+                          pct: confPct,
+                          text: "text-emerald-400",
+                        },
                       ];
                       return (
                         <div className="flex min-w-0 divide-x divide-white/[0.08] rounded-[22px] border border-white/[0.07] bg-white/[0.02] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-[36px]">

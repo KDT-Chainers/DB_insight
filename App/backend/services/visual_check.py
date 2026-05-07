@@ -29,14 +29,125 @@ logger = logging.getLogger(__name__)
 
 
 # 도메인별 시각 일치성 floor (SigLIP2 raw cosine).
-# 한국어 쿼리 실측 (RTX 4070, SigLIP2-Re, "박스 속에 들어있는 고양이"):
-#   진짜 박스 안 고양이 (IMG_1356/IMG_1425/IMG_1367): cosine 0.14~0.16
-#   인형 (cat_doll_34) — 진짜 고양이+인형 혼잡: 0.010
-#   사자상 (real_cat_31/33): -0.05 ~ -0.06
-#   강아지 (real_cat_32): -0.007
-# 명확한 분리선 ~0.05. SigLIP2 한국어 cosine 절대값이 영어보다 낮음.
-# floor 0.05 = 사자상/강아지 차단, 진짜 고양이 통과.
-_VISUAL_FLOOR_DEFAULT = 0.05
+# Phase 1 캘리브레이션 (scripts/fit_calibration_distributions.py) 결과:
+#   image domain 258,120 샘플 → μ=0.0139, σ=0.0328 (Beta a=12.81, b=10.85)
+#   n×σ 임계값: n=1.0 → 0.047, n=1.5 → 0.063, n=2.0 → 0.080
+#   p95 분위수 = 0.066 (≈ n=1.5σ 와 일치)
+# 실측 케이스:
+#   진짜 박스고양이/햄버거: visual 0.11~0.16 (모든 n 통과)
+#   사자상/강아지/인형: -0.05~+0.02 (모든 n 차단)
+#   cat_doll_34 (실제 고양이+인형): 0.066 (n=1.5 보더라인)
+# n×σ sweep 검증 (실측):
+#   n=1.0/1.5: cat_doll_34 (인형+고양이 혼합, vm=0.066) 통과 → 모호한 결과 잔존
+#   n=2.0   : cat_doll_34 차단 → F99AB2B3 (명확한 고양이) top 부상 ✓
+#   n=2.5/3.0: 동일 결과 (이미 깔끔), 더 엄격해도 회귀 없음
+# default n=2.0 (p98.5 분위수, noise 98.5% 차단). 환경변수 OMC_VISUAL_N_SIGMA 로 조정 가능.
+# calibration.json 미존재 시 fallback: 0.05 (이전 휴리스틱 값).
+_VISUAL_FLOOR_FALLBACK = 0.05
+_DEFAULT_N_SIGMA = 2.0  # 데이터셋 최적값 (n sweep 검증 결과)
+
+
+def _get_calibrated_floor(domain: str = "image", n_sigma: float = _DEFAULT_N_SIGMA) -> float:
+    """calibration.json 에서 mu + n*sigma 임계값 계산. 실패 시 fallback.
+
+    v2 calibration.json (relevant + irrelevant 분리 후) 호환:
+      - cal[domain]["irrelevant"]["gaussian"] 우선 사용
+      - 없으면 cal[domain]["gaussian"] (v1 호환)
+    """
+    try:
+        cal_path = Path(__file__).parent / "calibration.json"
+        if not cal_path.exists():
+            return _VISUAL_FLOOR_FALLBACK
+        cal = json.loads(cal_path.read_text(encoding="utf-8"))
+        d = cal.get(domain) or {}
+        # v2: irrelevant 명시 / v1: 도메인 root 에 직접
+        irr = d.get("irrelevant") or d
+        g = irr.get("gaussian") or {}
+        mu = float(g.get("mu", 0.0))
+        sigma = float(g.get("sigma", 0.0))
+        if sigma <= 0:
+            return _VISUAL_FLOOR_FALLBACK
+        return mu + n_sigma * sigma
+    except Exception:
+        return _VISUAL_FLOOR_FALLBACK
+
+
+_VISUAL_FLOOR_DEFAULT = _get_calibrated_floor("image", _DEFAULT_N_SIGMA)
+
+
+# ── [Phase B] Bayesian dual-Beta confidence ──────────────────────────────────
+class _BayesCache:
+    """relevant + irrelevant Beta 분포 + prior — lazy 로드."""
+    rel: Optional[dict] = None      # {"a", "b", "loc", "scale", "gaussian":{...}}
+    irr: Optional[dict] = None
+    prior_rel: float = 0.05
+    loaded: bool = False
+    enabled: bool = False
+
+
+def _ensure_bayes_loaded() -> bool:
+    if _BayesCache.loaded:
+        return _BayesCache.enabled
+    _BayesCache.loaded = True
+    try:
+        cal_path = Path(__file__).parent / "calibration.json"
+        if not cal_path.exists():
+            return False
+        cal = json.loads(cal_path.read_text(encoding="utf-8"))
+        img = cal.get("image") or {}
+        rel = (img.get("relevant") or {}).get("beta")
+        irr = (img.get("irrelevant") or {}).get("beta") or img.get("beta")
+        if not rel or not irr:
+            logger.info("[bayes] relevant 또는 irrelevant Beta 분포 미존재 — Bayesian 비활성")
+            return False
+        _BayesCache.rel = rel
+        _BayesCache.irr = irr
+        _BayesCache.enabled = True
+        logger.info(f"[bayes] 활성: rel a={rel['a']} b={rel['b']}, "
+                    f"irr a={irr['a']} b={irr['b']}, prior_rel={_BayesCache.prior_rel}")
+        return True
+    except Exception as e:
+        logger.warning(f"[bayes] 로드 실패: {e}")
+        return False
+
+
+def _beta_pdf(x: float, params: dict) -> float:
+    """Beta(a, b, loc, scale) pdf 값 반환. scipy 사용. 범위 외는 0."""
+    try:
+        from scipy.stats import beta as _beta
+        a = params["a"]; b = params["b"]
+        loc = params.get("loc", 0.0); scale = params.get("scale", 1.0)
+        if scale <= 0 or x < loc or x > loc + scale:
+            return 0.0
+        return float(_beta.pdf(x, a, b, loc=loc, scale=scale))
+    except Exception:
+        return 0.0
+
+
+def bayesian_confidence(visual_match: float, prior_rel: Optional[float] = None) -> Optional[float]:
+    """SigLIP2 visual_match 값 → P(relevant | visual_match) 베이즈 확률.
+
+    Args:
+        visual_match: SigLIP2 image-text raw cosine.
+        prior_rel: P(relevant). 미지정 시 default 0.05.
+
+    Returns:
+        float in [0, 1]: P(rel | visual_match). dual-Beta likelihood ratio.
+        None: Bayesian 비활성 또는 계산 불가.
+    """
+    if not _ensure_bayes_loaded():
+        return None
+    p = prior_rel if prior_rel is not None else _BayesCache.prior_rel
+    pdf_rel = _beta_pdf(visual_match, _BayesCache.rel)
+    pdf_irr = _beta_pdf(visual_match, _BayesCache.irr)
+    num = pdf_rel * p
+    den = pdf_rel * p + pdf_irr * (1.0 - p)
+    if den <= 1e-12:
+        # 두 분포 모두 0 — visual_match 가 두 분포 범위 밖. relevant 범위(0.08~0.17) 위면 1, 아래면 0.
+        if _BayesCache.rel and visual_match >= _BayesCache.rel.get("loc", 0):
+            return 1.0
+        return 0.0
+    return num / den
 
 # 페널티 계수 — floor 미만 시 confidence/dense/similarity 에 곱함.
 # 0.3 = ~70% 감점. 완전 cut(0.0) 대신 페널티로 후순위 이동 유도.
@@ -133,10 +244,24 @@ def visual_match_image(image_id: str, query: str) -> Optional[float]:
     return float(np.dot(img_vec, txt_vec))
 
 
+def _get_runtime_floor() -> float:
+    """런타임 환경변수 OMC_VISUAL_N_SIGMA 로 n 값 조정 — n sweep 실험용.
+    예: OMC_VISUAL_N_SIGMA=2.0 → n=2σ 적용. 미설정 시 default 1.5."""
+    import os as _os
+    raw = _os.environ.get("OMC_VISUAL_N_SIGMA", "").strip()
+    if not raw:
+        return _VISUAL_FLOOR_DEFAULT
+    try:
+        n = float(raw)
+        return _get_calibrated_floor("image", n)
+    except Exception:
+        return _VISUAL_FLOOR_DEFAULT
+
+
 def filter_by_visual_match(
     results: list[dict],
     query: str,
-    floor: float = _VISUAL_FLOOR_DEFAULT,
+    floor: Optional[float] = None,
     penalty: float = _PENALTY_FACTOR,
 ) -> list[dict]:
     """검색 결과의 image 도메인 항목에 시각 일치성 검증 적용.
@@ -157,6 +282,14 @@ def filter_by_visual_match(
     if not _ensure_loaded():
         logger.debug("[visual_check] 비활성 — 결과 그대로 반환")
         return results
+
+    # floor 미지정 시 runtime 환경변수 또는 캘리브레이션 default 사용
+    if floor is None:
+        floor = _get_runtime_floor()
+
+    # [Phase B] Bayesian dual-Beta 활성 시 P(rel|vm) 기반 페널티 (더 정직).
+    #   비활성 시 floor + penalty 휴리스틱 (기존 v15.1 동작).
+    use_bayes = _ensure_bayes_loaded()
 
     txt_vec = _embed_query_text(query)
     if txt_vec is None:
@@ -180,14 +313,33 @@ def filter_by_visual_match(
         img_vec = _Cache.img_emb[row]
         cos = float(np.dot(img_vec, txt_vec))
         r["visual_match"] = round(cos, 4)
+
+        if use_bayes:
+            # Bayesian P(rel | visual_match) 계산 → 점수 변환
+            p_rel = bayesian_confidence(cos)
+            if p_rel is not None:
+                r["bayes_p_rel"] = round(p_rel, 4)
+                # P(rel) < 0.5 → 무관 가능성 큼 → 페널티 (P(rel) 비율로 부드럽게)
+                if p_rel < 0.5:
+                    n_penalized += 1
+                    # 부드러운 페널티: 0.3 ~ 1.0 사이로 P(rel) 에 비례
+                    # P(rel)=0.0 → 0.3 (강한 페널티), P(rel)=0.5 → 0.65, P(rel)=0.999 → 1.0
+                    soft_penalty = penalty + (1.0 - penalty) * (p_rel / 0.5)
+                    for k in ("confidence", "dense", "similarity"):
+                        if k in r and r[k] is not None:
+                            r[k] = round(float(r[k]) * soft_penalty, 4)
+                continue
+
+        # Bayesian 비활성 또는 계산 실패 → 기존 floor 휴리스틱
         if cos < floor:
             n_penalized += 1
             for k in ("confidence", "dense", "similarity"):
                 if k in r and r[k] is not None:
                     r[k] = round(float(r[k]) * penalty, 4)
 
+    mode = "bayes" if use_bayes else f"floor={floor:.4f}"
     logger.info(
         f"[visual_check] image={n_image}, penalized={n_penalized}, "
-        f"missing_in_cache={n_missing}, floor={floor}"
+        f"missing_in_cache={n_missing}, mode={mode}"
     )
     return results

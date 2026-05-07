@@ -314,7 +314,12 @@ class TriChefEngine:
             use_asf = False
         q_Re, q_Im = self._embed_query_for_domain(query, domain)
         d = self._cache[domain]
-        q_Z = q_Im
+        # [Phase D] 텍스트 쿼리에서 Z 채널 폴백 제거.
+        #   기존: q_Z = q_Im → BGE-M3 텍스트 벡터 vs DINOv2 이미지 벡터 → 의미공간
+        #         불일치로 노이즈 (β²=0.04 기여, 작지만 score 변동성 추가).
+        #   현재: q_Z = zeros → C = 0 → Z 채널 무효화. Re(α=1) + Im(α=0.4) 만 활용.
+        #   DINOv2 cache 는 search_by_image (이미지 업로드 검색) 시에만 의미 가짐.
+        q_Z = np.zeros_like(q_Im)
         dense_scores = tri_gs.hermitian_score(
             q_Re[None, :], q_Im[None, :], q_Z[None, :],
             d["Re"], d["Im"], d["Z"],
