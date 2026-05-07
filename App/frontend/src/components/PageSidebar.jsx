@@ -25,7 +25,7 @@ export default function PageSidebar({ subtitle, children, footerExtra, footerSub
         >
           <TeamLogoMark />
           <div>
-            <h1 className="text-xl font-black text-[#dfe4fe] leading-none">DB_insight</h1>
+            <h1 className="text-xl font-black text-[#dfe4fe] leading-none">DB insight</h1>
             <p className="text-base uppercase tracking-widest text-[#a5aac2] mt-1">{subtitle}</p>
           </div>
         </button>

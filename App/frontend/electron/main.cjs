@@ -336,7 +336,7 @@ body{
 @keyframes floatY{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
 </style></head><body>
 <div class="orb-wrap"><div class="orb"></div><div class="orb-particles"></div></div>
-<div class="logo">${logoImg}<span class="name">DB_insight</span></div>
+<div class="logo">${logoImg}<span class="name">DB insight</span></div>
 <p id="splash-status" class="status">Loading <span class="dots"><span>.</span><span>.</span><span>.</span></span></p>
 <div class="bar-wrap">
   <div class="bar" id="boot-bar"></div>

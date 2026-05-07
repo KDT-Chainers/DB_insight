@@ -243,9 +243,9 @@ export default function InitialSetup() {
               {/* 좌측: 메인 UI와 동일 Orb + 카피 */}
               <section className="relative flex flex-col items-center justify-center gap-8 overflow-visible border-b border-white/10 px-8 py-12 lg:border-b-0 lg:border-r lg:px-10">
                 <div className="flex flex-col items-center text-center">
-                  <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-white/50">DB_insight</p>
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-white/50">DB insight</p>
                   <h1 className="max-w-sm text-2xl font-bold leading-tight tracking-tight text-white md:text-3xl">
-                    DB_insight에 오신 것을 환영합니다.
+                    DB insight에 오신 것을 환영합니다.
                   </h1>
                   <p className="mt-3 max-w-sm text-sm leading-relaxed text-white/65">
                     신경망 수준의 마스터 비밀번호로 개인 인덱스를 보호하세요. 모든 처리는 기기에서 이루어집니다.

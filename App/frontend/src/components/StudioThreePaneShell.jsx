@@ -81,7 +81,7 @@ export default function StudioThreePaneShell({
             >
               <TeamLogoMark className="!h-10 !w-10 rounded-[12px]" />
               <div className="min-w-0">
-                <p className="truncate text-[15px] font-bold tracking-tight text-white">DB_insight</p>
+                <p className="truncate text-[15px] font-bold tracking-tight text-white">DB insight</p>
                 <p className="truncate text-[11px] font-medium uppercase tracking-[0.14em] text-white/52">
                   {discoverTitle}
                 </p>
