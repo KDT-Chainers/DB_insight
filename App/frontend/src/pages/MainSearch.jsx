@@ -15,11 +15,51 @@ import ScoreBreakdown from "../components/search/ScoreBreakdown";
 // "" (도메인 미선택) 일 때 + 버튼은 기본 add 아이콘. 도메인 선택 시 그 도메인
 // 아이콘·색·링 으로 변경되어 사용자가 "현재 어떤 도메인 모드인지" 한눈에 인지.
 const PLUS_DOMAIN_META = {
-  ""    : { icon: "add",         label: "전체",   bg18: "rgba(133,173,255,0.18)", bg50: "rgba(133,173,255,0.55)", glow: "rgba(133,173,255,0.35)", solid: "rgb(133,173,255)", placeholder: "Ask anything..." },
-  doc   : { icon: "description", label: "문서",   bg18: "rgba(96,165,250,0.18)",  bg50: "rgba(96,165,250,0.55)",  glow: "rgba(96,165,250,0.40)",  solid: "rgb(96,165,250)",  placeholder: "문서에서 검색..." },
-  image : { icon: "image",       label: "이미지", bg18: "rgba(34,211,238,0.18)",  bg50: "rgba(34,211,238,0.55)",  glow: "rgba(34,211,238,0.40)",  solid: "rgb(34,211,238)",  placeholder: "이미지에서 검색..." },
-  video : { icon: "movie",       label: "동영상", bg18: "rgba(167,139,250,0.18)", bg50: "rgba(167,139,250,0.55)", glow: "rgba(167,139,250,0.40)", solid: "rgb(167,139,250)", placeholder: "동영상에서 검색..." },
-  audio : { icon: "volume_up",   label: "음성",   bg18: "rgba(251,191,36,0.18)",  bg50: "rgba(251,191,36,0.55)",  glow: "rgba(251,191,36,0.40)",  solid: "rgb(251,191,36)",  placeholder: "음성에서 검색..." },
+  "": {
+    icon: "add",
+    label: "전체",
+    bg18: "rgba(133,173,255,0.18)",
+    bg50: "rgba(133,173,255,0.55)",
+    glow: "rgba(133,173,255,0.35)",
+    solid: "rgb(133,173,255)",
+    placeholder: "Ask anything...",
+  },
+  doc: {
+    icon: "description",
+    label: "문서",
+    bg18: "rgba(96,165,250,0.18)",
+    bg50: "rgba(96,165,250,0.55)",
+    glow: "rgba(96,165,250,0.40)",
+    solid: "rgb(96,165,250)",
+    placeholder: "문서에서 검색...",
+  },
+  image: {
+    icon: "image",
+    label: "이미지",
+    bg18: "rgba(34,211,238,0.18)",
+    bg50: "rgba(34,211,238,0.55)",
+    glow: "rgba(34,211,238,0.40)",
+    solid: "rgb(34,211,238)",
+    placeholder: "이미지에서 검색...",
+  },
+  video: {
+    icon: "movie",
+    label: "동영상",
+    bg18: "rgba(167,139,250,0.18)",
+    bg50: "rgba(167,139,250,0.55)",
+    glow: "rgba(167,139,250,0.40)",
+    solid: "rgb(167,139,250)",
+    placeholder: "동영상에서 검색...",
+  },
+  audio: {
+    icon: "volume_up",
+    label: "음성",
+    bg18: "rgba(251,191,36,0.18)",
+    bg50: "rgba(251,191,36,0.55)",
+    glow: "rgba(251,191,36,0.40)",
+    solid: "rgb(251,191,36)",
+    placeholder: "음성에서 검색...",
+  },
 };
 
 // ── 파일 타입 메타 ───────────────────────────────────────
@@ -772,7 +812,9 @@ function ResultCard({
             /* 플레이스홀더 — 클릭하면 실제 플레이어로 교체 */
             <div
               className="w-full flex items-center justify-center bg-black/60 rounded cursor-pointer hover:bg-black/80 transition-colors gap-2 text-white/40 hover:text-white/80"
-              style={{ height: result.file_type === "video" ? "120px" : "44px" }}
+              style={{
+                height: result.file_type === "video" ? "120px" : "44px",
+              }}
               onClick={() => setPlayerMounted(true)}
             >
               <span
@@ -1472,8 +1514,8 @@ export default function MainSearch() {
     setSearching(true);
     setSearchError("");
     try {
-      const topK = type ? 100 : 500;  // 도메인 탭=100, 전체=500 — backend 도메인 cap과 일치
-                                       // (lazy loading으로 UI freeze 해결됨)
+      const topK = type ? 100 : 500; // 도메인 탭=100, 전체=500 — backend 도메인 cap과 일치
+      // (lazy loading으로 UI freeze 해결됨)
       const data = await searchFiles(q, topK, type);
       setResults(data);
       // 검색 기록 저장 → 완료 후 사이드바 갱신 이벤트
@@ -1882,10 +1924,10 @@ export default function MainSearch() {
                 className={`mse-hero-down mb-6 text-center transition-all duration-300 ${homeExiting ? "opacity-0 -translate-y-6" : ""}`}
               >
                 <h1 className="mb-3 text-3xl font-light tracking-tight text-on-surface text-balance md:text-5xl lg:text-6xl">
-                  Local Intelligence
+                  나만의 데이터 인사이트
                 </h1>
-                <p className="text-lg text-on-surface-variant md:text-xl">
-                  Your Data Stays Yours
+                <p className="mt-5 text-lg text-on-surface-variant md:text-xl">
+                  파일 이름 몰라도 괜찮아요. 내용만 떠올려보세요.
                 </p>
               </div>
 
@@ -2020,12 +2062,18 @@ export default function MainSearch() {
                                 >
                                   <span
                                     className={`material-symbols-outlined text-[22px] ${it.ic}`}
-                                    style={it.isActive ? { fontVariationSettings: '"FILL" 1' } : undefined}
+                                    style={
+                                      it.isActive
+                                        ? { fontVariationSettings: '"FILL" 1' }
+                                        : undefined
+                                    }
                                   >
                                     {it.icon}
                                   </span>
                                 </div>
-                                <span className={`text-[10px] font-semibold whitespace-pre-wrap text-center leading-tight drop-shadow ${it.isActive ? "text-white" : "text-white/80"}`}>
+                                <span
+                                  className={`text-[10px] font-semibold whitespace-pre-wrap text-center leading-tight drop-shadow ${it.isActive ? "text-white" : "text-white/80"}`}
+                                >
                                   {it.isActive ? `${it.label} ✓` : it.label}
                                 </span>
                               </button>
@@ -2058,7 +2106,8 @@ export default function MainSearch() {
                   {/* + 버튼 — domainFilter 활성 시 그 도메인 아이콘·색으로 변경.
                       우클릭 = 도메인 즉시 해제. */}
                   {(() => {
-                    const _meta = PLUS_DOMAIN_META[domainFilter] || PLUS_DOMAIN_META[""];
+                    const _meta =
+                      PLUS_DOMAIN_META[domainFilter] || PLUS_DOMAIN_META[""];
                     const _hasDomain = !!domainFilter;
                     return (
                       <button
@@ -2067,7 +2116,8 @@ export default function MainSearch() {
                         onMouseDown={(e) => {
                           e.stopPropagation();
                           if (!plusMenuOpen && plusBtnRef.current) {
-                            const r = plusBtnRef.current.getBoundingClientRect();
+                            const r =
+                              plusBtnRef.current.getBoundingClientRect();
                             setPlusBtnCenter({
                               x: r.left + r.width / 2,
                               y: r.top + r.height / 2,
@@ -2079,9 +2129,11 @@ export default function MainSearch() {
                           e.preventDefault();
                           if (domainFilter) setDomainFilter("");
                         }}
-                        title={_hasDomain
-                          ? `${_meta.label} 도메인 검색 활성 — 우클릭으로 해제`
-                          : "필터 메뉴 열기"}
+                        title={
+                          _hasDomain
+                            ? `${_meta.label} 도메인 검색 활성 — 우클릭으로 해제`
+                            : "필터 메뉴 열기"
+                        }
                         className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-all duration-300 relative z-50 ${
                           !_hasDomain
                             ? plusMenuOpen
@@ -2089,11 +2141,17 @@ export default function MainSearch() {
                               : "bg-primary/15 text-primary hover:bg-primary/25"
                             : ""
                         }`}
-                        style={_hasDomain ? {
-                          backgroundColor: plusMenuOpen ? _meta.bg50 : _meta.bg18,
-                          color: plusMenuOpen ? "#fff" : _meta.solid,
-                          boxShadow: `0 0 ${plusMenuOpen ? 20 : 14}px ${_meta.glow}`,
-                        } : undefined}
+                        style={
+                          _hasDomain
+                            ? {
+                                backgroundColor: plusMenuOpen
+                                  ? _meta.bg50
+                                  : _meta.bg18,
+                                color: plusMenuOpen ? "#fff" : _meta.solid,
+                                boxShadow: `0 0 ${plusMenuOpen ? 20 : 14}px ${_meta.glow}`,
+                              }
+                            : undefined
+                        }
                       >
                         <span
                           className={`material-symbols-outlined text-[20px] font-bold transition-transform duration-300 ${plusMenuOpen ? "rotate-45" : ""}`}
@@ -2114,7 +2172,14 @@ export default function MainSearch() {
                       }
                       onFocus={() => setSearchFocused(true)}
                       onBlur={() => setSearchFocused(false)}
-                      placeholder={listening ? "" : (PLUS_DOMAIN_META[domainFilter] || PLUS_DOMAIN_META[""]).placeholder}
+                      placeholder={
+                        listening
+                          ? ""
+                          : (
+                              PLUS_DOMAIN_META[domainFilter] ||
+                              PLUS_DOMAIN_META[""]
+                            ).placeholder
+                      }
                       className="h-full w-full bg-transparent py-3 text-base text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none md:py-4 md:text-base"
                       readOnly={listening}
                     />
@@ -2237,7 +2302,16 @@ export default function MainSearch() {
                   <input
                     ref={resultsInputRef}
                     className="bg-transparent border-none focus:ring-0 w-full text-on-surface placeholder-on-surface-variant text-lg outline-none"
-                    placeholder={listening ? "" : (domainFilter ? (PLUS_DOMAIN_META[domainFilter] || PLUS_DOMAIN_META[""]).placeholder : "인텔리전스에 질문하세요...")}
+                    placeholder={
+                      listening
+                        ? ""
+                        : domainFilter
+                          ? (
+                              PLUS_DOMAIN_META[domainFilter] ||
+                              PLUS_DOMAIN_META[""]
+                            ).placeholder
+                          : "인텔리전스에 질문하세요..."
+                    }
                     value={listening ? "" : inputValue}
                     onChange={(e) =>
                       !listening && setInputValue(e.target.value)
@@ -2421,7 +2495,7 @@ export default function MainSearch() {
                 기본 숨김 처리하여 노이즈 제거. 사용자는 토글로 전체 보기 가능.
                 [v10] 5% → 20% 상향: backend floor와 동일 기준으로 통일. */}
               {(() => {
-                const LOW = 0.20;
+                const LOW = 0.2;
                 const lowCount = results.filter(
                   (r) => (r.confidence ?? 0) < LOW,
                 ).length;
@@ -2481,7 +2555,7 @@ export default function MainSearch() {
               {!searching &&
                 results.length > 0 &&
                 (() => {
-                  const LOW = 0.20;
+                  const LOW = 0.2;
                   const visible = hideLowConf
                     ? results.filter((r) => (r.confidence ?? 0) >= LOW)
                     : results;
@@ -2608,52 +2682,12 @@ export default function MainSearch() {
                   "opacity 0.35s ease, transform 0.35s ease, margin 0.3s",
               }}
             >
-              {/* 액션 바 — 헤더와 겹치지 않게 간격 두고, 본문과 동일 max-w 로 가로 정렬 */}
-              <div
-                className={`fixed top-32 ${leftEdge} right-0 z-30 bg-[#0b1220]/78 py-4 transition-[left] duration-300`}
-              >
-                <div className="mx-auto w-full max-w-[1400px] px-8">
-                  <div className="grid grid-cols-12 gap-6">
-                    <div className="col-span-8" />
-                    <div className="col-span-4 flex w-full items-center justify-start gap-3">
-                      <button
-                        type="button"
-                        onClick={() => handleSummarize(selectedFile)}
-                        disabled={summarizing}
-                        title="이 파일의 핵심 내용을 AI가 요약합니다"
-                        className="inline-flex h-10 min-w-0 items-center justify-center gap-1.5 rounded-full border border-white/[0.1] bg-white/[0.06] px-4 text-xs font-bold uppercase tracking-[0.08em] text-slate-200 shadow-sm transition hover:border-primary/35 hover:bg-white/[0.1] hover:text-white active:scale-95 disabled:opacity-55"
-                      >
-                        <span
-                          className={`material-symbols-outlined text-[15px] text-[#85adff] ${summarizing ? "animate-spin" : ""}`}
-                        >
-                          {summarizing ? "progress_activity" : "auto_awesome"}
-                        </span>
-                        <span className="whitespace-nowrap">
-                          {summarizing ? "요약 중..." : "AI 요약"}
-                        </span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => openFolder(selectedFile.file_path)}
-                        className="inline-flex h-10 min-w-0 items-center justify-center rounded-full border border-white/[0.1] bg-[#0f131a]/90 px-4 text-xs font-bold uppercase tracking-[0.08em] text-primary transition hover:border-primary/30 hover:bg-white/[0.06] active:scale-95"
-                      >
-                        <span className="whitespace-nowrap">경로 열기</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => openFile(selectedFile.file_path)}
-                        className="inline-flex h-10 min-w-0 items-center justify-center rounded-full border border-primary/40 bg-primary px-4 text-xs font-bold uppercase tracking-[0.08em] text-on-primary shadow-[0_0_20px_rgba(133,173,255,0.22)] transition hover:brightness-110 active:scale-95"
-                      >
-                        <span className="whitespace-nowrap">파일 열기</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <section className="mx-auto max-w-[1400px] space-y-6 px-8 pb-12 pt-52">
+              <section className="mx-auto max-w-[1400px] space-y-6 px-8 pb-12 pt-36">
                 {/* AI 요약 패널 — 보라 제거 · 배경 따름 + 글래스 */}
-                {(summarizing || summaryText || summaryError || summaryBlocked) && (
+                {(summarizing ||
+                  summaryText ||
+                  summaryError ||
+                  summaryBlocked) && (
                   <div className="relative overflow-hidden rounded-[22px] border border-white/[0.07] bg-white/[0.03] shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_20px_50px_rgba(0,0,0,0.28)] backdrop-blur-[44px]">
                     <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#85adff]/[0.06] via-transparent to-transparent" />
                     <div className="relative flex items-center gap-3 px-6 py-4">
@@ -2752,8 +2786,8 @@ export default function MainSearch() {
                           </p>
                           {summaryBlocked.pii_types?.length > 0 && (
                             <p className="mt-2 text-xs opacity-70">
-                              탐지: {summaryBlocked.pii_types.join(", ")} · 단계:{" "}
-                              {summaryBlocked.stage}
+                              탐지: {summaryBlocked.pii_types.join(", ")} ·
+                              단계: {summaryBlocked.stage}
                             </p>
                           )}
                         </div>
@@ -2802,6 +2836,38 @@ export default function MainSearch() {
                 <div className="grid grid-cols-12 gap-6 border-t border-white/[0.08] pt-6">
                   {/* 메인 컨텐츠 */}
                   <div className="col-span-8 space-y-6">
+                    <div className="flex w-full items-center justify-start gap-3">
+                      <button
+                        type="button"
+                        onClick={() => handleSummarize(selectedFile)}
+                        disabled={summarizing}
+                        title="이 파일의 핵심 내용을 AI가 요약합니다"
+                        className="inline-flex h-10 min-w-0 items-center justify-center gap-1.5 rounded-full border border-white/[0.1] bg-white/[0.06] px-4 text-xs font-bold uppercase tracking-[0.08em] text-slate-200 shadow-sm transition hover:border-primary/35 hover:bg-white/[0.1] hover:text-white active:scale-95 disabled:opacity-55"
+                      >
+                        <span
+                          className={`material-symbols-outlined text-[15px] text-[#85adff] ${summarizing ? "animate-spin" : ""}`}
+                        >
+                          {summarizing ? "progress_activity" : "auto_awesome"}
+                        </span>
+                        <span className="whitespace-nowrap">
+                          {summarizing ? "요약 중..." : "AI 요약"}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openFolder(selectedFile.file_path)}
+                        className="inline-flex h-10 min-w-0 items-center justify-center rounded-full border border-white/[0.1] bg-[#0f131a]/90 px-4 text-xs font-bold uppercase tracking-[0.08em] text-primary transition hover:border-primary/30 hover:bg-white/[0.06] active:scale-95"
+                      >
+                        <span className="whitespace-nowrap">경로 열기</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openFile(selectedFile.file_path)}
+                        className="inline-flex h-10 min-w-0 items-center justify-center rounded-full border border-primary/40 bg-primary px-4 text-xs font-bold uppercase tracking-[0.08em] text-on-primary shadow-[0_0_20px_rgba(133,173,255,0.22)] transition hover:brightness-110 active:scale-95"
+                      >
+                        <span className="whitespace-nowrap">파일 열기</span>
+                      </button>
+                    </div>
                     <div className="flex min-h-[400px] flex-col overflow-hidden rounded-[22px] border border-white/[0.07] bg-white/[0.02] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-[40px]">
                       <div className="flex items-center justify-between border-b border-white/[0.08] px-8 pb-5 pt-7">
                         <span className="text-sm font-bold tracking-[0.2em] text-primary uppercase">
@@ -2880,7 +2946,7 @@ export default function MainSearch() {
                   </div>
 
                   {/* 메타데이터 패널 */}
-                  <div className="col-span-4 min-w-0 space-y-5">
+                  <div className="col-span-4 min-w-0 space-y-5 pt-16">
                     {/* 신뢰도/정확도/유사도 3지표 */}
                     {(() => {
                       // [BUGFIX] search card 와 동일한 sigmCalibrated 사용.

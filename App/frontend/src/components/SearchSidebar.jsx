@@ -318,15 +318,12 @@ export default function SearchSidebar({ entranceOn } = {}) {
               <div className="mb-10 flex items-center justify-between px-2">
                 <button
                   onClick={() => navigate('/search', { state: { goHomeAt: Date.now() } })}
-                  className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+                  className="flex items-center gap-3.5 rounded-full border border-white/80 px-4 py-2 hover:opacity-85 transition-opacity"
                 >
                   <TeamLogoMark />
-                  <div className="text-left">
-                    <h1 className="text-xl font-black text-[#dfe4fe] leading-none">DB insight</h1>
-                    <p className="mt-1 text-[0.65rem] uppercase tracking-widest text-on-surface-variant">
-                      로컬 인텔리전스
-                    </p>
-                  </div>
+                  <h1 className="text-[1.25rem] font-medium tracking-tight text-[#f1f5f9] leading-none">
+                    Insight
+                  </h1>
                 </button>
                 <button
                   onClick={toggle}
