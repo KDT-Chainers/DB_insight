@@ -353,8 +353,12 @@ def search():
     #   video — 정상(NGC 코스모스) 95~98%, 무관 65~80%
     #   audio — 모두 z-score CDF 부풀려 98%+, sim 으로 분리 거의 불가
     #   bgm   — 모두 CLAP CDF 부풀려 92%+, sim 으로 분리 거의 불가
+    # [v15] image floor 완화: 0.72 → 0.60.
+    #   배경: '햄버거' 쿼리 시 raw cosine 모두 0.18~0.27 → generous_curve 후 70~80%
+    #   → 0.72 floor 가 너무 빡빡해 1건만 통과. 시각 일치성 검증(visual_check) 이
+    #   캡션 거짓말 케이스를 후처리로 차단하므로 sim floor 는 완화 가능.
     _DOMAIN_MIN_SIM = {
-        "image": 0.72,   # 정상 79%+ 통과, 무관 64% 이하 차단
+        "image": 0.60,   # 0.72 → 0.60 (visual_check 가 거짓 매칭 차단 담당)
         "doc":   0.68,   # 0.58 → 0.68 (보이저호/팝송 무관 67% 이하 차단)
         "video": 0.75,
         "audio": 0.85,   # AV CDF 부풀림으로 실효 floor 약함

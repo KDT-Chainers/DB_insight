@@ -14,7 +14,7 @@ MPLC_WEIGHTS = {
       "sparse": 0.0,
       "asf": 0.0,
       "rerank": 0.0,
-      "keyword_count": 3.095537143819654,
+      "keyword_count": 0.0,
       "filename_substr": 0.27649356642688183,
       "z_dense": 8.496565670601615
     },
@@ -27,7 +27,7 @@ MPLC_WEIGHTS = {
       "sparse": 0.0,
       "asf": 0.0,
       "rerank": 0.0,
-      "keyword_count": 3.274375706725717,
+      "keyword_count": 0.0,
       "filename_substr": 0.0,
       "z_dense": 0.31546925160688705
     },
@@ -40,7 +40,7 @@ MPLC_WEIGHTS = {
       "sparse": 2.675342954425297,
       "asf": 0.8365524894689303,
       "rerank": 0.0,
-      "keyword_count": 0.12370937956095596,
+      "keyword_count": 0.0,
       "filename_substr": 0.0,
       "z_dense": 1.5142504107381536
     },
@@ -53,7 +53,7 @@ MPLC_WEIGHTS = {
       "sparse": 0.23367071498864747,
       "asf": 2.1823747511509715,
       "rerank": 0.0,
-      "keyword_count": 3.5609199157478812,
+      "keyword_count": 0.0,
       "filename_substr": 0.0,
       "z_dense": 3.681575230023254
     },
@@ -66,7 +66,7 @@ MPLC_WEIGHTS = {
       "sparse": 0.0,
       "asf": 0.0,
       "rerank": 0.0,
-      "keyword_count": 1.0401661210211695,
+      "keyword_count": 0.0,
       "filename_substr": 0.0,
       "z_dense": 0.0
     },
