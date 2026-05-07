@@ -83,6 +83,8 @@ def collect_relevant_cosines(
     domain: str = "image",
     rerank_threshold: float = 0.0,
     visual_floor: float = 0.08,
+    file_type: str = "image",
+    match_field: str = "visual_match",
 ) -> tuple[list[float], list[float]]:
     """rerank_score ≥ threshold 인 페어를 relevant 로 수집.
 

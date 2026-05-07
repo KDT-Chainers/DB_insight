@@ -394,17 +394,20 @@ def search():
 
     results = [r for r in results if _passes_floor(r)]
 
-    # [v15] 시각 일치성 검증 — 캡션 거짓말 케이스 차단.
-    #   배경: 사자상/강아지가 거짓 "고양이" 캡션 보유 시 dense 부풀림 → top 노출.
-    #   해결: SigLIP2 image embedding ↔ 쿼리 text embedding raw cosine 직접 측정.
-    #   visual_match < 0.20 (사자상 + "고양이" cosine ~0.18) 인 image 결과는
-    #   confidence/dense/similarity 에 페널티 0.3 적용 → 정렬 후순위로 밀림.
-    #   image 도메인만 적용 (doc/audio/video/bgm 은 영향 없음).
+    # [v15] 시각 일치성 검증 — 캡션 거짓말 케이스 차단 (image 도메인).
     try:
         from services.visual_check import filter_by_visual_match
         results = filter_by_visual_match(results, query)
-    except Exception as _e:
-        # 시각 검증 실패 시 결과 그대로 — 회귀 안전.
+    except Exception:
+        pass
+
+    # [Phase E-2] audio 도메인 BGE-M3 일치성 검증 — z-score CDF 부풀림 차단.
+    #   "보이저호" 검색 시 무관 다스뵈이다 등 100건이 dense 98%+ 부풀려지는 케이스.
+    #   audio_check.py 에서 BGE-M3 raw cosine 직접 측정 → noise 분포 대비 페널티.
+    try:
+        from services.audio_check import filter_by_audio_match
+        results = filter_by_audio_match(results, query)
+    except Exception:
         pass
 
     # [v14.1] 최종 ranking — 사용자 지시: 유사도(dense) > 정확도(rerank) > 신뢰도(conf) 순.

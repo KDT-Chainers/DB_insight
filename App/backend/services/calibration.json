@@ -1,5 +1,5 @@
 {
-  "version": "v3",
+  "version": "v5",
   "method": "siglip2_random_pairs",
   "image": {
     "n_samples": 258120,
@@ -206,6 +206,38 @@
       },
       "raw_min": 0.0701,
       "raw_max": 0.4485
+    },
+    "relevant": {
+      "n_samples": 28,
+      "gaussian": {
+        "mu": 0.3401,
+        "sigma": 0.0323
+      },
+      "beta": {
+        "a": 0.5174,
+        "b": 1.037,
+        "loc": 0.303,
+        "scale": 0.1486
+      },
+      "raw_min": 0.303,
+      "raw_max": 0.4516
+    }
+  },
+  "bgm": {
+    "irrelevant": {
+      "n_samples": 2550,
+      "gaussian": {
+        "mu": 0.1088,
+        "sigma": 0.1467
+      },
+      "beta": {
+        "a": 3.6135,
+        "b": 3.852,
+        "loc": -0.319,
+        "scale": 0.8867
+      },
+      "raw_min": -0.319,
+      "raw_max": 0.5678
     }
   }
 }
