@@ -316,22 +316,53 @@ def search():
             if r.get("page_num") is None and loc.get("page"):
                 r["page_num"] = loc["page"]
 
-    # [v10] 최소 신뢰도 floor — 모든 검색 모드에 적용 (유한 top_k 포함).
-    #   BGE-M3 벡터 검색은 항상 "가장 가까운 N개" 를 반환하므로
-    #   쿼리와 무관한 파일도 top-k에 포함됨 (예: "보이저호" → 관련 없는 이미지 100개).
-    #   도메인별 floor: image=0.25 (SigLIP2/DINOv2 z-score 기준 무관련 ~0.2 이하),
-    #   나머지=0.20.
+    # [v11] 다중 신호 floor — confidence + similarity + raw dense cosine.
+    #   문제: 신뢰도(MPLC)는 keyword_count weight로 부풀려져 무관한 결과도 95%+
+    #         가 되지만 유사도(raw cosine) 는 keyword 매칭에 영향받지 않음.
+    #   해결: confidence + similarity + (AV/BGM 한정) raw dense cosine 모두 검사.
+    #
+    #   예: "코스모스 보이저호" → 무관한 doc 신뢰도 97% / 유사도 69% / raw 0.55
+    #        → similarity floor 0.72 로 cut.
     _DOMAIN_MIN_CONF = {
-        "image": 0.25,
-        "doc":   0.20,
-        "video": 0.20,
-        "audio": 0.20,
-        "bgm":   0.20,
+        "image": 0.40,
+        "doc":   0.40,
+        "video": 0.50,
+        "audio": 0.50,
+        "bgm":   0.50,
     }
-    _def_min = 0.20
-    results = [r for r in results
-               if (r.get("confidence") or 0) >=
-               _DOMAIN_MIN_CONF.get(r.get("file_type", ""), _def_min)]
+    _DOMAIN_MIN_SIM = {
+        "image": 0.72,   # SigLIP2 raw cosine 기준 무관련 ~0.65 이하
+        "doc":   0.72,   # BGE-M3 doc raw cosine 기준
+        "video": 0.90,   # AV CDF normalize 후 — 진짜 매칭은 0.95+
+        "audio": 0.90,
+        "bgm":   0.90,
+    }
+    # AV/BGM 의 raw cosine_top1 (z-score 정규화 우회).
+    # 실제 매칭이면 cosine ≥ 0.45, 무관이면 ~0.30 이하.
+    _DOMAIN_MIN_DENSE = {
+        "video": 0.50,
+        "audio": 0.50,
+        "bgm":   0.30,   # CLAP cosine 은 BGE-M3 보다 낮음
+    }
+
+    def _passes_floor(r: dict) -> bool:
+        ftype = r.get("file_type", "")
+        conf  = float(r.get("confidence") or 0)
+        sim   = float(r.get("similarity") or 0)
+        if conf < _DOMAIN_MIN_CONF.get(ftype, 0.40):
+            return False
+        if sim < _DOMAIN_MIN_SIM.get(ftype, 0.60):
+            return False
+        # AV/BGM 은 z-score CDF 가 부풀린 0.98+ 점수를 만들 수 있으므로
+        # 원본 cosine 으로 한 번 더 검사.
+        if ftype in _DOMAIN_MIN_DENSE:
+            # cosine_top1 (AV) 또는 dense (BGM/일반) — 둘 다 지원
+            raw = float(r.get("cosine_top1") or r.get("dense") or 0)
+            if raw > 0 and raw < _DOMAIN_MIN_DENSE[ftype]:
+                return False
+        return True
+
+    results = [r for r in results if _passes_floor(r)]
 
     # [v7] 최종 top_k 컷 — combined[:top_k*2] dedup 여유분으로 받았으나
     # 사용자 요청 top_k 정확히 맞춰 반환. (이전 v6 까지는 자르지 않아 30 요청에

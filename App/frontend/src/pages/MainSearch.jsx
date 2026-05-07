@@ -1472,7 +1472,8 @@ export default function MainSearch() {
     setSearching(true);
     setSearchError("");
     try {
-      const topK = type ? 50 : 250;   // 도메인 탭=50, 전체=250 (5도메인×50) — UI 반응성 최적화
+      const topK = type ? 100 : 500;  // 도메인 탭=100, 전체=500 — backend 도메인 cap과 일치
+                                       // (lazy loading으로 UI freeze 해결됨)
       const data = await searchFiles(q, topK, type);
       setResults(data);
       // 검색 기록 저장 → 완료 후 사이드바 갱신 이벤트
