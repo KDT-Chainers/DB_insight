@@ -1465,6 +1465,8 @@ export default function MainAI() {
   const [homeExiting,  setHomeExiting]  = useState(false)
   const [resultsReady, setResultsReady] = useState(false)
   const [detailVisible,setDetailVisible]= useState(false)
+  const [aiHomeInputFocused, setAiHomeInputFocused] = useState(false)
+  const [homeInputOverflow, setHomeInputOverflow] = useState(false)
 
   const [aiHomeEntranceOn, setAiHomeEntranceOn] = useState(
     () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -1476,10 +1478,12 @@ export default function MainAI() {
   const [aiDockExpanded, setAiDockExpanded] = useState(false)
   const btnRef      = useRef(null)
   const formRef     = useRef(null)
-  const inputRef    = useRef(null)
+  const homeInputRef = useRef(null)
+  const chatInputRef = useRef(null)
   const orbSinkRef  = useRef(null)
   const orbVoiceRef = useRef(0)
   const conversationEndRef = useRef(null)
+  const submitGuardRef = useRef({ q: "", ts: 0 })
 
   const [turns, setTurns] = useState([])
   const [rightMode, setRightMode] = useState('cards')
@@ -1498,10 +1502,29 @@ export default function MainAI() {
   // 뷰 변경 시 검색창 자동 포커스 (detail 제외 모든 뷰)
   useEffect(() => {
     if (view !== 'detail') {
-      const t = setTimeout(() => inputRef.current?.focus(), 150)
+      const t = setTimeout(() => {
+        if (view === 'home') homeInputRef.current?.focus()
+        else chatInputRef.current?.focus()
+      }, 150)
       return () => clearTimeout(t)
     }
   }, [view])
+
+  useEffect(() => {
+    if (view !== 'home') {
+      setHomeInputOverflow(false)
+      return
+    }
+    const el = homeInputRef.current
+    if (!el) return
+    const checkOverflow = () => {
+      // input 내부 실제 문자열 렌더 폭이 visible 폭보다 큰지 확인
+      setHomeInputOverflow(el.scrollWidth - el.clientWidth > 2)
+    }
+    checkOverflow()
+    window.addEventListener('resize', checkOverflow)
+    return () => window.removeEventListener('resize', checkOverflow)
+  }, [view, inputValue, aiHomeInputFocused])
 
   const ml       = open ? 'ml-64' : 'ml-0'
   const leftEdge = open ? 'left-64' : 'left-0'
@@ -1907,9 +1930,10 @@ export default function MainAI() {
   }
 
   const doSearch = (q) => {
-    if (!q.trim() || searchTransitioning) return
-    setQuery(q)
-    setInputValue(q)
+    const searchQ = String(q ?? "").trim()
+    if (!searchQ || searchTransitioning || homeExiting) return
+    setQuery(searchQ)
+    setInputValue(searchQ)
 
     if (view === 'home') {
       setHomeExiting(true)
@@ -1917,16 +1941,17 @@ export default function MainAI() {
         setHomeExiting(false)
         setResultsReady(false)
         setView('results')
-        window.history.pushState({ view: 'results' }, '')
+        // 검색 실행은 UI 보조 로직보다 우선 보장
+        runAISearch(searchQ)
+        try { window.history.pushState({ view: 'results' }, '') } catch {}
         dispatchAiSidebarView('results')
         requestAnimationFrame(() => setResultsReady(true))
-        runAISearch(q)
       }, 420)
     } else {
       setView('results')
-      window.history.pushState({ view: 'results' }, '')
+      runAISearch(searchQ)
+      try { window.history.pushState({ view: 'results' }, '') } catch {}
       dispatchAiSidebarView('results')
-      runAISearch(q)
     }
   }
 
@@ -1934,7 +1959,26 @@ export default function MainAI() {
 
   useEffect(() => { doSearchRef.current = doSearch })
 
-  const handleSearch  = (e) => { e?.preventDefault(); doSearch(inputValue) }
+  const submitQuery = (raw) => {
+    const q = String(raw ?? "").trim()
+    if (!q) return
+    const now = Date.now()
+    const prev = submitGuardRef.current
+    // Enter keydown + form submit 중복 호출 방지
+    if (prev.q === q && now - prev.ts < 450) return
+    submitGuardRef.current = { q, ts: now }
+    doSearch(q)
+  }
+
+  const handleSearch  = (e) => {
+    e?.preventDefault()
+    // 폼 submit 단일 경로: 해당 form의 query input 값을 1순위로 사용
+    const formInput = e?.currentTarget?.elements?.query?.value
+    const liveValue = formInput ?? (view === 'home'
+      ? homeInputRef.current?.value
+      : chatInputRef.current?.value) ?? inputValue
+    submitQuery(liveValue)
+  }
 
   const handleSelectFile = (file) => {
     setSelectedFile(file)
@@ -2091,6 +2135,29 @@ export default function MainAI() {
                       className="mse-search-up group pointer-events-auto relative z-10 w-full max-w-[min(90vw,22rem)] shrink-0 md:max-w-[24rem]"
                       style={homeExiting ? { visibility: 'hidden' } : {}}
                     >
+                      {aiHomeInputFocused && homeInputOverflow && inputValue.trim() && (
+                        <>
+                          <div className="ai-home-query-preview-dim pointer-events-none fixed inset-0 z-20 bg-[rgba(3,2,10,0.45)] backdrop-blur-[2px]" />
+                          <div className="ai-home-query-preview-panel fixed left-1/2 top-1/2 z-30 flex w-[min(94vw,48rem)] items-end gap-3 rounded-2xl border border-white/22 bg-[rgba(8,7,18,0.92)] px-6 py-5 shadow-[0_22px_60px_rgba(0,0,0,0.58)] backdrop-blur-xl">
+                            <p className="max-h-[42vh] flex-1 overflow-y-auto whitespace-pre-wrap break-words pr-1 text-left text-[15px] leading-relaxed text-violet-50/95">
+                              {inputValue}
+                              <span
+                                className="ml-0.5 inline-block h-[1.05em] w-[2px] animate-pulse align-[-0.14em] bg-violet-200/95"
+                                aria-hidden
+                              />
+                            </p>
+                            <button
+                              type="button"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => submitQuery(inputValue)}
+                              className="pointer-events-auto inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-violet-300/35 bg-violet-500/20 text-violet-100 transition hover:bg-violet-500/30 hover:text-white"
+                              aria-label="검색 실행"
+                            >
+                              <span className="material-symbols-outlined text-[20px]">search</span>
+                            </button>
+                          </div>
+                        </>
+                      )}
                       <div className="pointer-events-none absolute -inset-[2px] rounded-full bg-gradient-to-r from-fuchsia-500/0 via-violet-400/25 to-fuchsia-500/0 opacity-0 blur-md transition-opacity duration-500 group-focus-within:opacity-100" />
                       <div className="relative flex items-center gap-2 rounded-full border border-violet-200/[0.14] bg-gradient-to-b from-violet-100/[0.09] to-violet-950/[0.28] px-1.5 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.16),inset_0_-1px_0_rgba(0,0,0,0.22),0_10px_44px_rgba(32,12,58,0.5)] backdrop-blur-2xl transition-all duration-300 group-focus-within:border-violet-200/25 group-focus-within:from-violet-100/[0.12] group-focus-within:to-violet-950/[0.34]">
                         <button
@@ -2100,9 +2167,13 @@ export default function MainAI() {
                           <span className="material-symbols-outlined text-[20px] font-bold">add</span>
                         </button>
                         <input
+                          ref={homeInputRef}
+                          name="query"
                           type="text"
                           value={inputValue}
                           onChange={(e) => setInputValue(e.target.value)}
+                          onFocus={() => setAiHomeInputFocused(true)}
+                          onBlur={() => setAiHomeInputFocused(false)}
                           placeholder={
                             listening ? "듣는 중…" : "Anything you need"
                           }
@@ -2126,6 +2197,7 @@ export default function MainAI() {
                           </span>
                         </button>
                       </div>
+                      <button type="submit" aria-hidden className="hidden" tabIndex={-1} />
                     </form>
                   </div>
                 </div>
@@ -2202,6 +2274,18 @@ export default function MainAI() {
                 zIndex: 10,
               }}
             >
+              <button
+                type="button"
+                onClick={() => {
+                  setView("home");
+                  setTurns([]);
+                  setInputValue("");
+                }}
+                title="AI 모드 홈으로 이동"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/[0.08] text-white/80 ring-1 ring-white/[0.12] transition hover:bg-white/[0.14] hover:text-white"
+              >
+                <span className="material-symbols-outlined text-[18px]">arrow_back</span>
+              </button>
               <button
                 onClick={() => {
                   setView("home");
@@ -2470,7 +2554,9 @@ export default function MainAI() {
                       }}
                     >
                       <input
-                        ref={inputRef}
+                        ref={chatInputRef}
+                        name="query"
+                        type="text"
                         value={listening ? "" : inputValue}
                         onChange={(e) =>
                           !listening && setInputValue(e.target.value)
