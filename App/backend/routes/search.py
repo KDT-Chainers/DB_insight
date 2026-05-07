@@ -235,6 +235,28 @@ def search():
             combined.sort(key=lambda r: r.get("_rank_score", r.get("confidence", 0)), reverse=True)
             results = combined[:TOTAL_CAP]
 
+        # [v12] 도메인 단독 탭 MPLC + query_intent_boost — ALL 탭과 동일한 scoring 보장.
+        # ALL 탭은 이미 위 else 블록 내에서 MPLC 적용 완료 → 이 블록은 도메인 탭 전용.
+        if file_type in ("image", "doc", "video", "audio", "bgm"):
+            try:
+                from services.mplc_scoring import (
+                    apply_mplc_to_results, MPLC_WEIGHTS, query_intent_boost,
+                )
+                if MPLC_WEIGHTS:
+                    apply_mplc_to_results({file_type: results}, expanded_query)
+                boost = query_intent_boost(query, file_type)
+                if boost > 1.0:
+                    for r in results:
+                        c = float(r.get("confidence", 0) or 0)
+                        r["_rank_score"] = c * boost
+                        r["confidence"] = round(min(1.0, c * boost), 4)
+                results.sort(
+                    key=lambda r: r.get("_rank_score", r.get("confidence", 0)),
+                    reverse=True,
+                )
+            except Exception:
+                pass
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -352,7 +374,9 @@ def search():
     def _passes_floor(r: dict) -> bool:
         ftype = r.get("file_type", "")
         conf  = float(r.get("confidence") or 0)
-        sim   = float(r.get("similarity") or 0)
+        # dense = generous_curve(raw cosine) — 실제 의미 유사도 (UI "유사도" 표시값과 동일)
+        # similarity = confidence 의 alias (하위 호환용) — floor 기준으로 부적합
+        sim   = float(r.get("dense") or r.get("similarity") or 0)
         if conf < _DOMAIN_MIN_CONF.get(ftype, 0.40):
             return False
         if sim < _DOMAIN_MIN_SIM.get(ftype, 0.60):
