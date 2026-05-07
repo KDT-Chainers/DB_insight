@@ -240,7 +240,15 @@ def search():
 
     # Optional cross-encoder rerank (env-gated, GPU bf16). 비활성/실패 시 원본 유지.
     from services.rerank_adapter import maybe_rerank, _is_enabled as _rr_enabled
-    results = maybe_rerank(query, results)
+    # [v13] 도메인 단독 탭은 rerank pool 을 top_k 로 확대.
+    #   문제: 도메인 단독(예: 이미지) 탭에서 default pool=50 이라 부풀려진 신뢰도로
+    #   head 50 개가 채워지면 진짜 매칭(IMG_1357 박스 안 고양이 등)이 tail(51~100)
+    #   에 갇혀 cross-encoder 영향을 못 받음 → 사자상/강아지/인형이 ranking 상위.
+    #
+    #   전체 탭은 5도메인 mix + quota 분배로 head 다양성 확보되므로 default(50) 유지.
+    #   비용 영향: 도메인 탭 cross-encoder GPU 추론 ~2배 (+0.5~1초/쿼리).
+    _rerank_pool = top_k if file_type in ("image", "doc", "video", "audio", "bgm") else None
+    results = maybe_rerank(query, results, top_k_pool=_rerank_pool)
 
     # [v6] 재순위 후 관련성 하한 필터 — reranker 활성 시만 작동.
     # 도메인 보장 쿼터(guaranteed slot)에 의해 포함된 비관련 결과가 상위 노출되는
@@ -381,6 +389,28 @@ def search():
         return True
 
     results = [r for r in results if _passes_floor(r)]
+
+    # [v14] 최종 ranking — 정확도(rerank) > 유사도(dense) > 신뢰도(conf) 순.
+    #   배경: 신뢰도(MPLC + 가우시안 CDF + boost)는 캡션 키워드 부풀림에 취약 →
+    #   사자상/강아지 캡션이 "고양이" 키워드를 거짓 포함 시 99%+ 로 부풀려짐.
+    #   유사도(dense=fusion cosine) 도 캡션 영향 일부 있음.
+    #   정확도(BGE-reranker-v2-m3 cross-encoder) 가 가장 정직한 의미 매칭 신호.
+    #
+    #   다중 키 정렬:
+    #     1순위: rerank_score (높을수록 의미 매칭 강함, None/0 fallback -999)
+    #     2순위: dense (시각+텍스트 fusion)
+    #     3순위: confidence (가장 부풀려진 값, 동률 처리용)
+    #
+    #   효과: '박스 속 고양이' 검색 시 IMG_1710/IMG_1357 같은 진짜 고양이가 top,
+    #         사자상/강아지(rerank -5~-8)는 후순위로 밀림.
+    def _sort_key(r):
+        rs = r.get("rerank_score")
+        return (
+            float(rs) if rs is not None else -999.0,
+            float(r.get("dense") or 0),
+            float(r.get("confidence") or 0),
+        )
+    results.sort(key=_sort_key, reverse=True)
 
     # [v7] 최종 top_k 컷 — combined[:top_k*2] dedup 여유분으로 받았으나
     # 사용자 요청 top_k 정확히 맞춰 반환. (이전 v6 까지는 자르지 않아 30 요청에
