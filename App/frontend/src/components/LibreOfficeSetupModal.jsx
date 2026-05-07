@@ -1,88 +1,100 @@
 /**
  * LibreOfficeSetupModal
  *
- * ???úÏûë ??/api/setup/check Î•??∏Ï∂ú??LibreOffice ÎØ∏ÏÑ§Ïπ??ÅÌÉú?¥Î©¥
- * ?ÑÏ≤¥ ?îÎ©¥????äî Î™®Îã¨???úÏãú?©Îãà?? ?§Ïπò ?ÑÎ£å ???êÎèô?ºÎ°ú ?´Ìûô?àÎã§.
+ * ?? ? /api/setup/check ? ??? LibreOffice ??? ???
+ * ?? ?? ?? ??? ????. ?? ?? ? ???? ????.
  *
- * ?§Ïπò??Electron IPC(install-libreoffice)Î•??µÌï¥ Î©îÏù∏ ?ÑÎ°ú?∏Ïä§?êÏÑú ÏßÅÏ†ë
- * msiexec /passive Î°??§Ìñâ?©Îãà?? Î©îÏù∏ ?ÑÎ°ú?∏Ïä§(GUI)?êÏÑú ?∏Ï∂ú?¥Ïïº UAC ?ùÏóÖ?? * ?ïÏÉÅ?ÅÏúºÎ°??úÏãú?©Îãà??
+ * ??? Electron IPC(install-libreoffice)? ?? ?????? ?????.
+ * ?? ?????? ???? UAC ?? ?? ?? ?? ?????.
  */
 import { useEffect, useState } from 'react'
 import { API_BASE } from '../api'
 
 export default function LibreOfficeSetupModal() {
-  // null = ?ïÏù∏ Ï§? true = ?§Ïπò??Î™®Îã¨ Î∂àÌïÑ??, false = ÎØ∏ÏÑ§Ïπ?Î™®Îã¨ ?úÏãú)
+  // null: ?? ?, true: ???(?? ??), false: ???(?? ??)
   const [loInstalled, setLoInstalled] = useState(null)
-  const [hasMsi, setHasMsi]           = useState(false)
-  const [installing, setInstalling]   = useState(false)
-  const [message, setMessage]         = useState('')
-  const [error, setError]             = useState('')
-  const [done, setDone]               = useState(false)
+  const [hasMsi, setHasMsi] = useState(false)
+  const [installing, setInstalling] = useState(false)
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
+  const [done, setDone] = useState(false)
 
-  // ?Ä?Ä ÏµúÏ¥à ?§Ïπò ?¨Î? ?ïÏù∏ ?Ä?Ä?Ä?Ä?Ä?Ä?Ä?Ä?Ä?Ä?Ä?Ä?Ä?Ä?Ä?Ä?Ä?Ä?Ä?Ä?Ä?Ä?Ä?Ä?Ä?Ä?Ä?Ä?Ä?Ä?Ä?Ä?Ä?Ä?Ä?Ä?Ä?Ä?Ä?Ä?Ä
   useEffect(() => {
     fetch(`${API_BASE}/api/setup/check`)
-      .then(r => r.json())
-      .then(d => {
-        setLoInstalled(!!(d.libreoffice?.installed))
-        setHasMsi(!!(d.local_msi?.exists))
+      .then((r) => r.json())
+      .then((d) => {
+        setLoInstalled(!!d.libreoffice?.installed)
+        setHasMsi(!!d.local_msi?.exists)
       })
-      .catch(() => setLoInstalled(true)) // Î∞±Ïóî???§Î•ò ??Î™®Îã¨ ?®Í?(Î∞©Ìï¥ ????
+      .catch(() => setLoInstalled(true)) // ??? ?? ? ??? ??? ??
   }, [])
 
-  // ?Ä?Ä ?§Ïπò ?úÏûë (Electron IPC ??Î©îÏù∏ ?ÑÎ°ú?∏Ïä§?êÏÑú msiexec ?§Ìñâ) ?Ä?Ä
+  useEffect(() => {
+    if (!done) return
+    const t = setTimeout(() => setLoInstalled(true), 800)
+    return () => clearTimeout(t)
+  }, [done])
+
   const startInstall = async () => {
     setError('')
     setInstalling(true)
-    setMessage('UAC Í∂åÌïú ?îÏ≤≠ Ï§???Í¥ÄÎ¶¨Ïûê Í∂åÌïú???àÏö©??Ï£ºÏÑ∏??..')
+    setMessage('UAC ?? ?? ?... ??? ??? ??? ???.')
+
     try {
-      // Electron ?òÍ≤Ω: IPCÎ°?Î©îÏù∏ ?ÑÎ°ú?∏Ïä§?êÏÑú msiexec /passive ?§Ìñâ
+      // Electron ??: ?? ?????? msiexec /passive ??
       if (window.electronAPI?.installLibreOffice) {
         const result = await window.electronAPI.installLibreOffice()
-        if (result.success) {
-          setDone(true)
-        } else {
-          setError(result.error || `?§Ïπò ?§Ìå® (ÏΩîÎìú: ${result.code})`)
-        }
+        if (result.success) setDone(true)
+        else setError(result.error || `?? ?? (??: ${result.code})`)
       } else {
-        // Î∏åÎùº?∞Ï? ?òÍ≤Ω fallback: Flask API ?¨Ïö©
+        // ???? fallback: Flask API ??
         await fetch(`${API_BASE}/api/setup/install-lo`, { method: 'POST' })
-        setMessage('?§Ïπò Ï§?..')
-        // ?ÅÌÉú ?¥ÎßÅ
+        setMessage('?? ?...')
+
         await new Promise((resolve) => {
           const t = setInterval(async () => {
             try {
               const r = await fetch(`${API_BASE}/api/setup/install-status`)
               const d = await r.json()
               setMessage(d.message || '')
-              if (d.state === 'done')  { clearInterval(t); setDone(true); resolve() }
-              if (d.state === 'error') { clearInterval(t); setError(d.error || '?§Ïπò ?§Ìå®'); resolve() }
+              if (d.state === 'done') {
+                clearInterval(t)
+                setDone(true)
+                resolve()
+              }
+              if (d.state === 'error') {
+                clearInterval(t)
+                setError(d.error || '?? ??')
+                resolve()
+              }
             } catch (_) {}
           }, 1000)
         })
       }
     } catch (e) {
-      setError('?§Ïπò ?§Î•ò: ' + (e?.message || String(e)))
+      setError(`?? ??: ${e?.message || String(e)}`)
     }
+
     setInstalling(false)
   }
 
-  // ?ïÏù∏ Ï§ëÏù¥Í±∞ÎÇò ?¥Î? ?§Ïπò??Í≤ΩÏö∞ ??Î™®Îã¨ ÎØ∏Ìëú??  if (loInstalled === null || loInstalled === true) return null
+  if (loInstalled === null || loInstalled === true) return null
 
-  // ?§Ïπò ?ÑÎ£å ??0.8Ï¥???Î™®Îã¨ ?´Í∏∞
   if (done) {
-    setTimeout(() => setLoInstalled(true), 800)
     return (
       <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm">
-        <div className="bg-[#0d1526] border border-white/10 rounded-3xl p-8 w-full max-w-sm mx-4 flex flex-col items-center gap-5 shadow-2xl">
-          <div className="w-16 h-16 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center">
-            <span className="material-symbols-outlined text-emerald-400 text-3xl" style={{ fontVariationSettings: '"FILL" 1' }}>
+        <div className="mx-4 flex w-full max-w-sm flex-col items-center gap-5 rounded-3xl border border-white/10 bg-[#0d1526] p-8 shadow-2xl">
+          <div className="flex h-16 w-16 items-center justify-center rounded-full border border-emerald-500/30 bg-emerald-500/20">
+            <span
+              className="material-symbols-outlined text-3xl text-emerald-400"
+              style={{ fontVariationSettings: '"FILL" 1' }}
+            >
               check_circle
             </span>
           </div>
           <div className="text-center">
-            <p className="text-lg font-bold text-white mb-1">?§Ïπò ?ÑÎ£å</p>
-            <p className="text-sm text-white/50">?±ÏùÑ Í≥ÑÏÜç ?¨Ïö©?òÏã§ ???àÏäµ?àÎã§.</p>
+            <p className="mb-1 text-lg font-bold text-white">?? ??</p>
+            <p className="text-sm text-white/50">?? ?? ??? ? ????.</p>
           </div>
         </div>
       </div>
@@ -91,91 +103,88 @@ export default function LibreOfficeSetupModal() {
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm">
-      <div className="bg-[#0d1526] border border-white/10 rounded-3xl p-8 w-full max-w-md mx-4 flex flex-col gap-6 shadow-2xl">
-
-        {/* ?§Îçî */}
+      <div className="mx-4 flex w-full max-w-md flex-col gap-6 rounded-3xl border border-white/10 bg-[#0d1526] p-8 shadow-2xl">
         <div className="flex items-start gap-4">
-          <div className="w-12 h-12 rounded-xl bg-[#1e3a8a]/40 border border-[#85adff]/20 flex items-center justify-center shrink-0">
-            <span className="material-symbols-outlined text-[#85adff] text-2xl">description</span>
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-[#85adff]/20 bg-[#1e3a8a]/40">
+            <span className="material-symbols-outlined text-2xl text-[#85adff]">description</span>
           </div>
           <div>
-            <h2 className="text-xl font-bold text-white">LibreOffice ?ÑÏöî</h2>
-            <p className="text-sm text-white/50 mt-0.5">
-              Î¨∏ÏÑú(.docx ¬∑ .hwp ¬∑ .pptx ¬∑ .xlsx) Í≤Ä?âÏùÑ ?ÑÌïú ?ÑÏàò Íµ¨ÏÑ±?îÏÜå?ÖÎãà??
+            <h2 className="text-xl font-bold text-white">LibreOffice ?? ??</h2>
+            <p className="mt-0.5 text-sm text-white/50">
+              ??(.docx, .hwp, .pptx, .xlsx) ??? ?? ?? ???????.
             </p>
           </div>
         </div>
 
-        {/* MSI Í≤ΩÎ°ú ?àÎÇ¥ */}
-        <div className="bg-white/[0.04] border border-white/[0.07] rounded-2xl p-4 space-y-2">
+        <div className="space-y-2 rounded-2xl border border-white/[0.07] bg-white/[0.04] p-4">
           <div className="flex items-center gap-2">
-            <span className={`w-2 h-2 rounded-full shrink-0 ${hasMsi ? 'bg-emerald-400' : 'bg-amber-400'}`} />
-            <span className="text-xs text-white/60 font-mono">
+            <span className={`h-2 w-2 shrink-0 rounded-full ${hasMsi ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+            <span className="font-mono text-xs text-white/60">
               {hasMsi
                 ? 'C:\\Honey\\DB_insight\\LibreOffice_26.2.2_Win_x86-64.msi'
-                : 'Î≤àÎì§ MSI ?ÜÏùå ??winget / ?∏ÌÑ∞???§Ïö¥Î°úÎìú ?¨Ïö©'}
+                : '?? MSI ?? (winget/??? ???? ??)'}
             </span>
           </div>
-          <p className="text-sm text-white/35 pl-4">
+          <p className="pl-4 text-sm text-white/35">
             {hasMsi
-              ? 'Î°úÏª¨ ?§Ïπò ?åÏùº???ïÏù∏?òÏóà?µÎãà?? ?§Ìä∏?åÌÅ¨ ?ÜÏù¥ ?§Ïπò?©Îãà??'
-              : '?∏ÌÑ∞???∞Í≤∞???ÑÏöî?©Îãà??'}
+              ? '?? ?? ??? ???? ???? ?? ?????.'
+              : '??? ??? ?????.'}
           </p>
         </div>
 
-        {/* ?§Ïπò ?ÅÌÉú */}
         {installing && (
-          <div className="flex items-center gap-3 bg-white/[0.04] rounded-xl px-4 py-3">
-            <span className="material-symbols-outlined text-[#85adff] text-lg animate-spin shrink-0">progress_activity</span>
-            <p className="text-xs text-white/50 truncate">{message || '?§Ïπò Ï§?..'}</p>
-          </div>
-        )}
-        {error && (
-          <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
-            <p className="text-xs text-red-400 truncate">{error}</p>
+          <div className="flex items-center gap-3 rounded-xl bg-white/[0.04] px-4 py-3">
+            <span className="material-symbols-outlined shrink-0 animate-spin text-lg text-[#85adff]">
+              progress_activity
+            </span>
+            <p className="truncate text-xs text-white/50">{message || '?? ?...'}</p>
           </div>
         )}
 
-        {/* ?àÎÇ¥ */}
+        {error && (
+          <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3">
+            <p className="truncate text-xs text-red-400">{error}</p>
+          </div>
+        )}
+
         {!installing && !error && (
-          <ul className="space-y-1.5 text-lg text-white/40">
+          <ul className="space-y-1.5 text-sm text-white/40">
             {[
-              'Í¥ÄÎ¶¨Ïûê Í∂åÌïú???ÑÏöî?????àÏäµ?àÎã§.',
-              '.pdf ¬∑ ?¥Î?ÏßÄ ¬∑ ?ôÏòÅ??¬∑ ?åÏÑ± ?åÏùº?Ä LibreOffice ?ÜÏù¥ ?ôÏûë?©Îãà??',
-              '?§Ïπò ?ÑÏπò: C:\\Honey\\DB_insight\\Data\\LibreOffice',
+              '??? ??? ??? ? ????.',
+              'pdf/???/??/?? ??? LibreOffice ??? ?????.',
+              '?? ??: C:\\Honey\\DB_insight\\Data\\LibreOffice',
             ].map((t, i) => (
               <li key={i} className="flex items-start gap-1.5">
-                <span className="material-symbols-outlined text-lg text-[#85adff]/50 mt-px shrink-0">info</span>
+                <span className="material-symbols-outlined mt-px shrink-0 text-base text-[#85adff]/50">
+                  info
+                </span>
                 {t}
               </li>
             ))}
           </ul>
         )}
 
-        {/* Î≤ÑÌäº */}
         <button
           onClick={installing ? undefined : startInstall}
           disabled={installing}
-          className="w-full py-3.5 rounded-2xl font-bold text-lg flex items-center justify-center gap-2 transition-all active:scale-95
-            bg-gradient-to-r from-[#85adff] to-[#ac8aff] text-[#070d1f]
-            hover:brightness-110 disabled:opacity-60 disabled:cursor-not-allowed"
+          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#85adff] to-[#ac8aff] py-3.5 text-lg font-bold text-[#070d1f] transition-all hover:brightness-110 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {installing ? (
             <>
-              <span className="material-symbols-outlined text-lg animate-spin">progress_activity</span>
-              ?§Ïπò Ï§?..
+              <span className="material-symbols-outlined animate-spin text-lg">progress_activity</span>
+              ?? ?...
             </>
           ) : (
             <>
               <span className="material-symbols-outlined text-lg">download</span>
-              ?§Ïö¥Î°úÎìú Î∞??§Ïπò
+              ???? ? ??
             </>
           )}
         </button>
 
         {error && (
-          <p className="text-xs text-center text-red-400/70 -mt-2">
-            ?êÎèô ?§Ïπò ?§Ìå® ??MSIÎ•?ÏßÅÏ†ë ?§Ìñâ?òÍ±∞??' '}
+          <p className="-mt-2 text-center text-xs text-red-400/70">
+            ?? ?? ?? ? MSI? ?? ?????{' '}
             <a
               href="https://www.libreoffice.org/download/"
               target="_blank"
@@ -184,7 +193,7 @@ export default function LibreOfficeSetupModal() {
             >
               libreoffice.org
             </a>
-            ?êÏÑú ?òÎèô ?§Ïπò?òÏÑ∏??
+            ?? ?? ??? ???.
           </p>
         )}
       </div>
