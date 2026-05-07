@@ -333,6 +333,15 @@ def phase5_visualization():
         import matplotlib.pyplot as plt
         from scipy.stats import beta as beta_dist
 
+        # [한글 폰트 패치] Windows 의 Malgun Gothic 사용 (없으면 영문 fallback)
+        for font_name in ["Malgun Gothic", "NanumGothic", "AppleGothic", "Arial Unicode MS"]:
+            try:
+                plt.rcParams["font.family"] = font_name
+                plt.rcParams["axes.unicode_minus"] = False
+                break
+            except Exception:
+                continue
+
         cal_path = _BACKEND_DIR / "services" / "calibration.json"
         cal = json.loads(cal_path.read_text(encoding="utf-8"))
 
