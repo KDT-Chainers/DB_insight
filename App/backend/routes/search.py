@@ -358,7 +358,11 @@ def search():
     }
     _DOMAIN_MIN_SIM = {
         "image": 0.72,   # SigLIP2 raw cosine — 정상 79%+, 무관 ~69%
-        "doc":   0.58,   # 0.72 → 0.58 (정상 NIPS 65% 보존)
+        # [v12.1] doc 0.58 → 0.66: '팝송' 단일토큰 쿼리에서 BGE-M3 dense 가
+        #   무관 IT 문서까지 58~64% 로 부풀려 17건 노이즈 통과 발견.
+        #   상한 0.66 으로 단일토큰 쿼리 noise floor 차단. 정상 매칭(키워드 직접
+        #   포함된 doc)은 70%+ 라 영향 없음.
+        "doc":   0.66,
         "video": 0.75,   # 0.90 → 0.75 (정상 NGC 80% 보존, 무관 65% 컷)
         "audio": 0.85,   # 0.90 → 0.85 (audio similarity 는 uniformly 높아 약한 floor)
         "bgm":   0.80,   # 0.90 → 0.80
