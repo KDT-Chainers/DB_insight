@@ -271,3 +271,10 @@ Figures/
 App/backend/scripts/mplc_sweep_*.json
 App/backend/scripts/phase_*_log.txt
 App/backend/scripts/phase_*_report.json
+
+# 오버나이트 파이프라인 산출물 (run_overnight_pipeline.py)
+App/backend/scripts/overnight_report.json
+App/backend/scripts/caption_mismatch_suspects.json
+App/backend/scripts/latency_baseline.json
+App/backend/scripts/bgm_evaluation.json
+App/backend/scripts/calibration_distributions.png
