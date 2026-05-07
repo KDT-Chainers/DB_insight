@@ -219,7 +219,10 @@ def filter_by_audio_match(
 
     if floor is None:
         floor = _get_runtime_floor()
-    # Bayesian 은 환경변수 명시 시에만 활성 (audio relevant n 부족으로 default 비활성)
+    # Bayesian 은 환경변수 명시 시에만 활성.
+    # 실험 (Phase B, 2026-05-07): relevant n=70 학습 했으나 다스뵈이다 같은 noise
+    # outlier 가 학습 데이터에 포함되어 Bayesian 이 보이저호 부풀림 회귀 발생.
+    # → default 비활성 유지. hard floor n=3.5σ 가 더 신뢰 가능.
     use_bayes = (os.environ.get("OMC_AUDIO_USE_BAYES", "").strip() == "1") and _ensure_bayes_loaded()
 
     txt_vec = _embed_query_text(query)
