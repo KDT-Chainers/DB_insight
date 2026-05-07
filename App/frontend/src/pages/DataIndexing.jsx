@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import WindowControls from "../components/WindowControls";
 import StudioThreePaneShell from "../components/StudioThreePaneShell";
@@ -525,7 +525,8 @@ function IndexingModal({
     allResults[0] ??
     null;
   const primaryFileName = primaryResult
-    ? primaryResult.path.split("\\").pop() || primaryResult.path.split("/").pop()
+    ? primaryResult.path.split("\\").pop() ||
+      primaryResult.path.split("/").pop()
     : "처리 중인 파일";
   const errorResults = allResults.filter((r) => r.status === "error");
 
@@ -756,10 +757,14 @@ function IndexingModal({
             <div className="w-full rounded-2xl border border-white/[0.12] bg-white/[0.003] shadow-[inset_0_1px_0_rgba(255,255,255,0.2),inset_0_-1px_0_rgba(255,255,255,0.05)] p-2.5 backdrop-blur-xl">
               <div className="flex items-center gap-3">
                 <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-white/[0.14] bg-[#85adff]/12 text-[#b9ccff]">
-                  <span className="material-symbols-outlined text-[1.55rem]">description</span>
+                  <span className="material-symbols-outlined text-[1.55rem]">
+                    description
+                  </span>
                 </div>
                 <div className="min-w-0">
-                  <p className="truncate text-[13px] font-bold text-white/92">{primaryFileName}</p>
+                  <p className="truncate text-[13px] font-bold text-white/92">
+                    {primaryFileName}
+                  </p>
                   <p className="mt-0.5 text-xs text-white/55">
                     {processed} / {total} 파일
                   </p>
@@ -791,9 +796,15 @@ function IndexingModal({
             <div className="w-full rounded-2xl border border-white/[0.12] bg-white/[0.002] shadow-[inset_0_1px_0_rgba(255,255,255,0.2),inset_0_-1px_0_rgba(255,255,255,0.05)] p-2.5 backdrop-blur-xl">
               <div className="mb-2 flex items-center justify-between">
                 <p className="text-sm font-semibold text-white/78">
-                  {isStopping ? "중단 중..." : isEffectivelyDone ? "완료" : "Uploading ..."}
+                  {isStopping
+                    ? "중단 중..."
+                    : isEffectivelyDone
+                      ? "완료"
+                      : "Uploading ..."}
                 </p>
-                <p className={`text-[1.45rem] font-black tabular-nums ${statusColor}`}>
+                <p
+                  className={`text-[1.45rem] font-black tabular-nums ${statusColor}`}
+                >
                   {progress}%
                 </p>
               </div>
@@ -824,9 +835,7 @@ function IndexingModal({
                 </p>
               )}
               {isEffectivelyDone && (
-                <p className="text-xs text-emerald-400/80 tabular-nums">
-                  완료
-                </p>
+                <p className="text-xs text-emerald-400/80 tabular-nums">완료</p>
               )}
             </div>
 
@@ -861,13 +870,12 @@ function IndexingModal({
                   >
                     {s.val}
                   </span>
-                    <span className="text-sm text-on-surface-variant/60 mt-0.5">
+                  <span className="text-sm text-on-surface-variant/60 mt-0.5">
                     {s.label}
                   </span>
                 </div>
               ))}
             </div>
-
           </div>
 
           {/* 오른쪽: 동영상 스텝 + 파일 목록 */}
@@ -1345,33 +1353,6 @@ function VectorStoreTab() {
 
   return (
     <div className="space-y-6">
-      {/* 총합 */}
-      <div className="di-glass-card di-glass-card--accent relative overflow-hidden rounded-2xl border border-outline-variant/20 p-6">
-        <div
-          className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-gradient-to-br from-primary/25 to-secondary/15 blur-3xl"
-          aria-hidden
-        />
-        <p className="relative mb-2 text-[10px] font-bold uppercase tracking-widest text-primary">
-          총 벡터 데이터
-        </p>
-        <div className="relative flex items-end gap-6">
-          <div>
-            <p className="text-4xl font-black text-on-surface">
-              {stats?.total_chunks?.toLocaleString()}
-            </p>
-            <p className="text-sm text-on-surface-variant mt-1">
-              총 청크 (벡터)
-            </p>
-          </div>
-          <div>
-            <p className="text-2xl font-black text-on-surface">
-              {stats?.total_files}
-            </p>
-            <p className="text-sm text-on-surface-variant mt-1">총 파일</p>
-          </div>
-        </div>
-      </div>
-
       {/* 타입별 컬렉션 */}
       <div className="grid grid-cols-2 gap-4">
         {[
@@ -1483,26 +1464,6 @@ function VectorStoreTab() {
           );
         })}
       </div>
-
-      {/* 벡터 엔진 정보 */}
-      <div className="di-glass-card rounded-2xl border border-outline-variant/20 p-5">
-        <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-secondary">
-          벡터 엔진 정보
-        </p>
-        <div className="grid grid-cols-3 gap-4 text-xs">
-          {[
-            ["문서 / 이미지 엔진", "TRI-CHEF (ChromaDB)"],
-            ["동영상 / 음성 엔진", "TRI-CHEF (NPY 캐시)"],
-            ["문서/이미지 유사도", "Hermitian Score √(Re²+0.16Im²+0.04Z²)"],
-            ["동영상/음성 유사도", "Cosine (Re·Im·Z 3축 가중 합산)"],
-          ].map(([k, v]) => (
-            <div key={k} className="space-y-1">
-              <p className="text-on-surface-variant">{k}</p>
-              <p className="font-bold text-on-surface">{v}</p>
-            </div>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }
@@ -1510,8 +1471,32 @@ function VectorStoreTab() {
 // ── 메인 ────────────────────────────────────────────────
 export default function DataIndexing() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const workspaceReturn = useMemo(
+    () => (location.state?.workspaceReturn === "/ai" ? "/ai" : "/search"),
+    [location.state],
+  );
 
-  const [tab, setTab] = useState("indexing"); // 'sources' | 'indexing' | 'store'
+  const resolveInitialTab = useCallback(() => {
+    const stateTab = location.state?.tab;
+    if (
+      stateTab === "sources" ||
+      stateTab === "indexing" ||
+      stateTab === "store"
+    ) {
+      return stateTab;
+    }
+    return "sources";
+  }, [location.state]);
+  const [tab, setTab] = useState(resolveInitialTab); // 'sources' | 'indexing' | 'store'
+  const tabHistoryRef = useRef([]);
+  const setTabWithHistory = useCallback((nextTab) => {
+    setTab((prev) => {
+      if (prev === nextTab) return prev;
+      tabHistoryRef.current.push(prev);
+      return nextTab;
+    });
+  }, []);
 
   const [rootPath, setRootPath] = useState("");
   const [rootItems, setRootItems] = useState([]);
@@ -1853,10 +1838,10 @@ export default function DataIndexing() {
       {
         key: "ws",
         icon: "database",
-        label: "워크스페이스",
+        label: "메인화면",
         subtitle: "검색 · 기록",
         active: false,
-        onClick: () => navigate("/search"),
+        onClick: () => navigate(workspaceReturn),
       },
       {
         key: "sources",
@@ -1864,7 +1849,7 @@ export default function DataIndexing() {
         label: "데이터 소스",
         subtitle: "원본 경로 및 등록",
         active: tab === "sources",
-        onClick: () => setTab("sources"),
+        onClick: () => setTabWithHistory("sources"),
       },
       {
         key: "indexing",
@@ -1872,18 +1857,18 @@ export default function DataIndexing() {
         label: "인덱싱",
         subtitle: "파일 선택 및 임베딩",
         active: tab === "indexing",
-        onClick: () => setTab("indexing"),
+        onClick: () => setTabWithHistory("indexing"),
       },
       {
         key: "store",
         icon: "memory",
-        label: "벡터 저장소",
+        label: "검색 저장소",
         subtitle: "저장 상태 및 통계",
         active: tab === "store",
-        onClick: () => setTab("store"),
+        onClick: () => setTabWithHistory("store"),
       },
     ],
-    [navigate, tab],
+    [navigate, tab, setTabWithHistory, workspaceReturn],
   );
 
   const studioBreadcrumb = useMemo(
@@ -1891,7 +1876,7 @@ export default function DataIndexing() {
       <>
         <button
           type="button"
-          onClick={() => navigate("/search")}
+          onClick={() => navigate(workspaceReturn)}
           className="shrink-0 rounded-lg px-1.5 py-0.5 text-white/48 transition hover:bg-white/[0.08] hover:text-white/88"
         >
           홈
@@ -1914,11 +1899,11 @@ export default function DataIndexing() {
             ? "데이터 소스"
             : tab === "indexing"
               ? "인덱싱"
-              : "벡터 저장소"}
+              : "검색 저장소"}
         </span>
       </>
     ),
-    [navigate, tab],
+    [navigate, tab, workspaceReturn],
   );
 
   const studioRightWidgets = useMemo(() => {
@@ -1936,7 +1921,9 @@ export default function DataIndexing() {
             </div>
             {selectedCount > 0 ? (
               <>
-                <p className="text-3xl font-bold tabular-nums text-white">{selectedCount}</p>
+                <p className="text-3xl font-bold tabular-nums text-white">
+                  {selectedCount}
+                </p>
                 <p className="mt-0.5 text-[12px] text-white/42">개 파일</p>
                 <div className="mt-3 border-t border-white/[0.08] pt-3">
                   <IndexingETA data={estimateData} loading={estimateLoading} />
@@ -1953,11 +1940,13 @@ export default function DataIndexing() {
               <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/55">
                 진행 안내
               </span>
-              <span className="material-symbols-outlined text-lg text-white/28">info</span>
+              <span className="material-symbols-outlined text-lg text-white/28">
+                info
+              </span>
             </div>
             <p className="text-[12px] leading-relaxed text-white/38">
-              인덱싱 중에는 진행 모달에서 단계를 확인할 수 있습니다. 완료 후 검색·AI에서 바로
-              활용됩니다.
+              인덱싱 중에는 진행 모달에서 단계를 확인할 수 있습니다. 완료 후
+              검색·AI에서 바로 활용됩니다.
             </p>
           </div>
         </>
@@ -1971,19 +1960,14 @@ export default function DataIndexing() {
               <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-violet-200/85">
                 연결
               </span>
-              <span className="material-symbols-outlined text-lg text-white/28">link</span>
+              <span className="material-symbols-outlined text-lg text-white/28">
+                link
+              </span>
             </div>
             <p className="text-[12px] leading-relaxed text-white/38">
-              소스 경로를 바꾼 뒤에는 인덱싱 탭에서 필요한 범위만 다시 임베딩하세요.
+              폴더 경로를 바꾼 뒤에는 인덱싱 탭에서 필요한 범위만 다시
+              재인덱싱하세요.
             </p>
-          </div>
-          <div className="apple-widget-card flex aspect-[4/3] max-h-[140px] items-center justify-center rounded-[18px]">
-            <span
-              className="material-symbols-outlined text-5xl text-white/12"
-              style={{ fontVariationSettings: '"FILL" 1' }}
-            >
-              hub
-            </span>
           </div>
         </>
       );
@@ -1995,36 +1979,57 @@ export default function DataIndexing() {
             <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-emerald-200/85">
               저장소
             </span>
-            <span className="material-symbols-outlined text-lg text-white/28">analytics</span>
+            <span className="material-symbols-outlined text-lg text-white/28">
+              analytics
+            </span>
           </div>
           <p className="text-[12px] leading-relaxed text-white/38">
-            아래 요약 카드에서 타입별 청크 수와 전체 용량을 확인할 수 있습니다.
+            아래 요약 카드에서 폴더 타입별 파일 수와 전체 용량을 확인할 수
+            있습니다.
           </p>
-        </div>
-        <div className="apple-widget-card flex aspect-[4/3] max-h-[140px] items-center justify-center rounded-[18px]">
-          <span className="material-symbols-outlined text-5xl text-white/12">memory</span>
         </div>
       </>
     );
   }, [tab, selectedCount, estimateData, estimateLoading]);
 
+  const handleGoBack = useCallback(() => {
+    // 탭 이동 히스토리가 있으면 마지막 누른 탭으로 복귀.
+    const prev = tabHistoryRef.current.pop();
+    if (prev) {
+      setTab(prev);
+      return;
+    }
+    // 기본 순차 복귀: 벡터 저장소 → 인덱싱 → 데이터 소스 → 메인(검색)
+    if (tab === "store") {
+      setTab("indexing");
+      return;
+    }
+    if (tab === "indexing") {
+      setTab("sources");
+      return;
+    }
+    navigate(workspaceReturn);
+  }, [navigate, tab, workspaceReturn]);
+
   const studioHero = useMemo(() => {
     if (tab === "indexing") {
       return (
         <div className="min-w-0">
-          <span className="inline-flex items-center rounded-full bg-sky-500/18 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-sky-100/90 ring-1 ring-sky-300/25">
-            로컬 워크스페이스
-          </span>
+          <div className="inline-flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleGoBack}
+              title="이전 페이지로 이동"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/[0.08] text-white/80 ring-1 ring-white/[0.12] transition hover:bg-white/[0.14] hover:text-white"
+            >
+              <span className="material-symbols-outlined text-[18px]">
+                arrow_back
+              </span>
+            </button>
+          </div>
           <h2 className="mt-2 text-[1.65rem] font-bold tracking-tight text-white sm:text-[1.85rem]">
             인덱싱
           </h2>
-          <p className="mt-2 max-w-3xl text-[14px] leading-relaxed text-white/42">
-            {rootPath ? (
-              <span className="break-all font-mono text-[13px] text-white/50">{rootPath}</span>
-            ) : (
-              "액션 바에서 폴더를 선택한 뒤, 리소스 트리에서 파일을 선택합니다."
-            )}
-          </p>
           <p className="mt-2 text-[13px] text-white/32">
             {selectedCount > 0
               ? `${selectedCount}개 파일 선택됨`
@@ -2036,9 +2041,18 @@ export default function DataIndexing() {
     if (tab === "sources") {
       return (
         <div className="min-w-0">
-          <span className="inline-flex items-center rounded-full bg-violet-500/18 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-violet-100/90 ring-1 ring-violet-400/25">
-            소스
-          </span>
+          <div className="inline-flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleGoBack}
+              title="이전 페이지로 이동"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/[0.08] text-white/80 ring-1 ring-white/[0.12] transition hover:bg-white/[0.14] hover:text-white"
+            >
+              <span className="material-symbols-outlined text-[18px]">
+                arrow_back
+              </span>
+            </button>
+          </div>
           <h2 className="mt-2 text-[1.65rem] font-bold tracking-tight text-white sm:text-[1.85rem]">
             데이터 소스
           </h2>
@@ -2050,18 +2064,27 @@ export default function DataIndexing() {
     }
     return (
       <div className="min-w-0">
-        <span className="inline-flex items-center rounded-full bg-emerald-500/18 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-100/90 ring-1 ring-emerald-400/22">
-          저장소
-        </span>
+        <div className="inline-flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleGoBack}
+            title="이전 페이지로 이동"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/[0.08] text-white/80 ring-1 ring-white/[0.12] transition hover:bg-white/[0.14] hover:text-white"
+          >
+            <span className="material-symbols-outlined text-[18px]">
+              arrow_back
+            </span>
+          </button>
+        </div>
         <h2 className="mt-2 text-[1.65rem] font-bold tracking-tight text-white sm:text-[1.85rem]">
-          벡터 저장소
+          검색 저장소
         </h2>
         <p className="mt-2 max-w-3xl text-[14px] leading-relaxed text-white/42">
-          임베딩 인덱스와 저장 통계를 확인합니다.
+          검색에 쓰이는 인덱스와 저장 상태를 확인합니다.
         </p>
       </div>
     );
-  }, [tab, rootPath, selectedCount]);
+  }, [tab, rootPath, selectedCount, handleGoBack]);
 
   const studioActionBar = useMemo(() => {
     if (tab !== "indexing") return null;
@@ -2103,7 +2126,9 @@ export default function DataIndexing() {
           </button>
         ) : null}
         {jobError ? (
-          <span className="text-[13px] font-medium text-red-300">{jobError}</span>
+          <span className="text-[13px] font-medium text-red-300">
+            {jobError}
+          </span>
         ) : null}
         <div className="min-w-[8px] flex-1" />
         <button
@@ -2213,87 +2238,87 @@ export default function DataIndexing() {
                 )}
               </div>
 
-                {/* 파일 트리 */}
-                <div className="di-glass-card flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-outline-variant/20">
-                  <div className="flex shrink-0 items-center justify-between border-b border-outline-variant/20 px-4 py-2.5">
-                    <h2 className="text-base font-bold tracking-tight text-on-surface">
-                      리소스 탐색기
-                    </h2>
-                    <div className="flex items-center gap-2">
-                      <SelectNewOnlyButton
-                        indexedMap={indexedMap}
-                        onApply={(paths) => setCheckedPaths(new Set(paths))}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex-1 overflow-y-auto py-1.5 min-h-0">
-                    {loading && (
-                      <div className="flex items-center justify-center gap-2 py-12">
-                        <span className="material-symbols-outlined text-primary animate-spin">
-                          progress_activity
-                        </span>
-                        <span className="text-base text-on-surface-variant">
-                          스캔 중...
-                        </span>
-                      </div>
-                    )}
-                    {!loading && loadError && (
-                      <div className="flex flex-col items-center gap-2 py-12">
-                        <span className="material-symbols-outlined text-red-400 text-3xl">
-                          wifi_off
-                        </span>
-                        <p className="text-sm text-red-400">{loadError}</p>
-                        <p className="text-sm text-on-surface-variant/40">
-                          Flask 백엔드가 실행 중인지 확인하세요
-                        </p>
-                      </div>
-                    )}
-                    {!loading && !loadError && rootItems.length === 0 && (
-                      <div className="flex flex-col items-center gap-3 py-16">
-                        <span className="material-symbols-outlined text-on-surface-variant/20 text-5xl">
-                          folder_open
-                        </span>
-                        <p className="text-base text-on-surface-variant/30">
-                          {rootPath
-                            ? "이 폴더는 비어 있습니다."
-                            : "폴더를 선택하면 파일 목록이 표시됩니다."}
-                        </p>
-                      </div>
-                    )}
-
-                    {/* 트리 */}
-                    {!loading &&
-                      !loadError &&
-                      rootItems.map((item) =>
-                        item.kind === "folder" ? (
-                          <FolderRow
-                            key={item.path}
-                            item={item}
-                            depth={0}
-                            checkedPaths={checkedPaths}
-                            onToggle={toggleFile}
-                            onSetMany={setManyFiles}
-                            jobResultMap={jobResultMap}
-                            indexedMap={indexedMap}
-                            registerPaths={registerPaths}
-                            orphanMap={orphanMap}
-                            registerOrphans={registerOrphans}
-                          />
-                        ) : (
-                          <FileRow
-                            key={item.path}
-                            item={item}
-                            depth={0}
-                            checked={checkedPaths.has(item.path)}
-                            indexedInfo={indexedMap?.[item.path]}
-                            onToggle={toggleFile}
-                            jobResult={jobResultMap?.[item.path]}
-                          />
-                        ),
-                      )}
+              {/* 파일 트리 */}
+              <div className="di-glass-card flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-outline-variant/20">
+                <div className="flex shrink-0 items-center justify-between border-b border-outline-variant/20 px-4 py-2.5">
+                  <h2 className="text-base font-bold tracking-tight text-on-surface">
+                    파일 탐색기
+                  </h2>
+                  <div className="flex items-center gap-2">
+                    <SelectNewOnlyButton
+                      indexedMap={indexedMap}
+                      onApply={(paths) => setCheckedPaths(new Set(paths))}
+                    />
                   </div>
                 </div>
+
+                <div className="flex-1 overflow-y-auto py-1.5 min-h-0">
+                  {loading && (
+                    <div className="flex items-center justify-center gap-2 py-12">
+                      <span className="material-symbols-outlined text-primary animate-spin">
+                        progress_activity
+                      </span>
+                      <span className="text-base text-on-surface-variant">
+                        스캔 중...
+                      </span>
+                    </div>
+                  )}
+                  {!loading && loadError && (
+                    <div className="flex flex-col items-center gap-2 py-12">
+                      <span className="material-symbols-outlined text-red-400 text-3xl">
+                        wifi_off
+                      </span>
+                      <p className="text-sm text-red-400">{loadError}</p>
+                      <p className="text-sm text-on-surface-variant/40">
+                        Flask 백엔드가 실행 중인지 확인하세요
+                      </p>
+                    </div>
+                  )}
+                  {!loading && !loadError && rootItems.length === 0 && (
+                    <div className="flex flex-col items-center gap-3 py-16">
+                      <span className="material-symbols-outlined text-on-surface-variant/20 text-5xl">
+                        folder_open
+                      </span>
+                      <p className="text-base text-on-surface-variant/30">
+                        {rootPath
+                          ? "이 폴더는 비어 있습니다."
+                          : "폴더를 선택하면 파일 목록이 표시됩니다."}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* 트리 */}
+                  {!loading &&
+                    !loadError &&
+                    rootItems.map((item) =>
+                      item.kind === "folder" ? (
+                        <FolderRow
+                          key={item.path}
+                          item={item}
+                          depth={0}
+                          checkedPaths={checkedPaths}
+                          onToggle={toggleFile}
+                          onSetMany={setManyFiles}
+                          jobResultMap={jobResultMap}
+                          indexedMap={indexedMap}
+                          registerPaths={registerPaths}
+                          orphanMap={orphanMap}
+                          registerOrphans={registerOrphans}
+                        />
+                      ) : (
+                        <FileRow
+                          key={item.path}
+                          item={item}
+                          depth={0}
+                          checked={checkedPaths.has(item.path)}
+                          indexedInfo={indexedMap?.[item.path]}
+                          onToggle={toggleFile}
+                          jobResult={jobResultMap?.[item.path]}
+                        />
+                      ),
+                    )}
+                </div>
+              </div>
             </div>
           )}
         </StudioThreePaneShell>

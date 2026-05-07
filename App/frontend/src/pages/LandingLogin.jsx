@@ -66,10 +66,10 @@ export default function LandingLogin() {
             className="pointer-events-none absolute -inset-1.5 rounded-[1.25rem] border border-white/[0.13] bg-white/[0.025] shadow-[0_8px_30px_rgba(3,10,30,0.24),inset_0_1px_0_0_rgba(255,255,255,0.22)] backdrop-blur-[26px] backdrop-saturate-135"
             aria-hidden
           />
-          <div className="relative min-h-[34rem] overflow-hidden rounded-[1.2rem] border border-white/[0.09] shadow-[0_14px_44px_rgba(0,0,0,0.38)]">
+          <div className="relative min-h-[33rem] overflow-hidden rounded-[1.2rem] border border-white/[0.09] shadow-[0_14px_44px_rgba(0,0,0,0.38)]">
           <div className="pointer-events-none absolute inset-0 app-depth-bg" aria-hidden />
 
-          <div className="relative z-10 flex min-h-[34rem] flex-col justify-center bg-gradient-to-b from-white/[0.05] via-white/[0.015] to-transparent px-7 py-12 backdrop-blur-[34px] backdrop-saturate-130">
+          <div className="relative z-10 flex min-h-[33rem] flex-col justify-center bg-gradient-to-b from-white/[0.05] via-white/[0.015] to-transparent px-7 py-10 backdrop-blur-[34px] backdrop-saturate-130">
             <div className="flex w-full flex-col items-center gap-6">
               <div className="relative">
                 <div className="h-24 w-24 overflow-hidden rounded-full bg-gradient-to-tr from-[#060d1f] via-[#0f2847] to-[#2563eb] p-1 shadow-[0_0_28px_rgba(37,99,235,0.28)]">
@@ -88,7 +88,6 @@ export default function LandingLogin() {
 
               <div className="text-center">
                 <h2 className="text-xl font-bold tracking-tight text-white">보안 인증이 필요합니다</h2>
-                <p className="mt-1 text-sm text-white/65">신경망 탐색기 접근 인증</p>
               </div>
 
               <form onSubmit={handleLogin} className="w-full space-y-8">
@@ -145,13 +144,7 @@ export default function LandingLogin() {
 
         {/* Status footer */}
         <div className="mt-12 flex flex-wrap items-center justify-center gap-3">
-          <div className="flex items-center gap-2 rounded-full bg-white/[0.06] px-4 py-2 backdrop-blur-md">
-            <div className="h-2 w-2 animate-pulse rounded-full bg-sky-300 shadow-[0_0_10px_rgba(125,211,252,0.75)]" />
-            <span className="text-[10px] font-bold uppercase tracking-widest text-white/50">
-              노드 상태: <span className="text-sky-200">정상</span>
-            </span>
-          </div>
-          <div className="flex items-center gap-2 rounded-full bg-white/[0.06] px-4 py-2 backdrop-blur-md">
+          <div className="flex items-center gap-2 rounded-full bg-white/[0.06] px-4 py-1.5 backdrop-blur-md">
             <span className="material-symbols-outlined text-xs text-sky-200/90" style={{ fontVariationSettings: '"FILL" 1' }}>
               verified_user
             </span>

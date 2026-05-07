@@ -81,7 +81,7 @@ export default function StudioThreePaneShell({
             >
               <TeamLogoMark className="!h-10 !w-10 rounded-[12px]" />
               <div className="min-w-0">
-                <p className="truncate text-[15px] font-bold tracking-tight text-white">DB_insight</p>
+                <p className="truncate text-[15px] font-bold tracking-tight text-white">DB insight</p>
                 <p className="truncate text-[11px] font-medium uppercase tracking-[0.14em] text-white/52">
                   {discoverTitle}
                 </p>
@@ -147,23 +147,28 @@ export default function StudioThreePaneShell({
                   setTimeout(() => navigate(next ? '/settings' : '/data'), 160)
                 }}
                 aria-pressed={adminToggleOn}
-                className="apple-widget-card relative mt-1 flex h-11 w-[132px] items-center overflow-hidden rounded-full p-1 text-left"
+                className="apple-widget-card relative mt-1 flex h-12 w-[132px] items-center overflow-hidden rounded-full p-1 text-left"
               >
                 <span
-                  className={`absolute left-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full text-white transition-[transform,background-color,box-shadow] duration-300 ease-out ${
+                  className={`absolute top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full transition-[left,background-color,box-shadow,color] duration-300 ease-out ${
                     adminToggleOn
-                      ? 'translate-x-[78px] bg-sky-500/35 shadow-[0_0_20px_rgba(56,189,248,0.35)]'
-                      : 'translate-x-0 bg-white/[0.13]'
+                      ? 'left-[calc(100%-2.75rem)] bg-sky-500/25 text-sky-200 shadow-[0_0_22px_rgba(56,189,248,0.28)] ring-1 ring-sky-400/35'
+                      : 'left-1 bg-white/[0.06] text-white/58 shadow-none ring-0'
                   }`}
                 >
-                  <span className="material-symbols-outlined text-[1.1rem]">person</span>
+                  <span
+                    className="material-symbols-outlined text-[1.35rem]"
+                    style={{ fontVariationSettings: adminToggleOn ? '"FILL" 1' : '"FILL" 0' }}
+                  >
+                    settings
+                  </span>
                 </span>
                 <span
-                  className={`pointer-events-none pl-11 text-[12px] font-semibold transition-all duration-300 ${
-                    adminToggleOn ? 'translate-x-1 text-white/94' : 'translate-x-0 text-white/78'
+                  className={`pointer-events-none pl-[3rem] text-[13px] font-semibold transition-all duration-300 ${
+                    adminToggleOn ? 'translate-x-1 text-white' : 'translate-x-0 text-white/68'
                   }`}
                 >
-                  관리자
+                  설정
                 </span>
               </button>
             </div>

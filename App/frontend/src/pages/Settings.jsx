@@ -172,7 +172,9 @@ export default function Settings() {
         <span className="material-symbols-outlined shrink-0 text-[15px] text-white/22">
           chevron_right
         </span>
-        <span className="min-w-0 truncate font-medium text-white/88">시스템 설정</span>
+        <span className="min-w-0 truncate font-medium text-white/88">
+          시스템 설정
+        </span>
       </>
     ),
     [navigate],
@@ -186,11 +188,13 @@ export default function Settings() {
             <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-sky-200/85">
               보안
             </span>
-            <span className="material-symbols-outlined text-lg text-white/28">shield</span>
+            <span className="material-symbols-outlined text-lg text-white/28">
+              shield
+            </span>
           </div>
           <p className="text-[12px] leading-relaxed text-white/38">
-            마스터 비밀번호는 로컬 DB 복호화에 사용됩니다. 상단 또는 본문에서 변경할 수
-            있습니다.
+            마스터 비밀번호는 DB 데이터 접근시 사용됩니다. 시스템 설정에서
+            변경할 수 있습니다.
           </p>
         </div>
         <div className="apple-widget-card rounded-[18px] p-4">
@@ -198,22 +202,12 @@ export default function Settings() {
             <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/55">
               BGM API
             </span>
-            <span className="material-symbols-outlined text-lg text-white/28">music_note</span>
-          </div>
-          <p className="text-[12px] leading-relaxed text-white/38">
-            외부 음원 인식은 끄면 호출이 발생하지 않습니다. 키 저장 후 카탈로그 동기화를
-            실행하세요.
-          </p>
-        </div>
-        <div className="apple-widget-card rounded-[18px] p-4">
-          <div className="mb-2 flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/55">
-              적용
+            <span className="material-symbols-outlined text-lg text-white/28">
+              music_note
             </span>
-            <span className="material-symbols-outlined text-lg text-white/28">bolt</span>
           </div>
           <p className="text-[12px] leading-relaxed text-white/38">
-            UI 배율은 즉시 반영됩니다. 위험 구역 작업은 되돌릴 수 없으니 신중히 진행하세요.
+            외부 음원 인식을 끌 경우 기능이 동작하지 않습니다.
           </p>
         </div>
       </>
@@ -224,30 +218,33 @@ export default function Settings() {
   const settingsHero = useMemo(
     () => (
       <div className="min-w-0">
-        <span className="inline-flex items-center rounded-full bg-white/[0.1] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-white/80 ring-1 ring-white/[0.12]">
-          시스템
-        </span>
+        <div className="inline-flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => navigate("/search")}
+            title="이전 페이지로 이동"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/[0.08] text-white/80 ring-1 ring-white/[0.12] transition hover:bg-white/[0.14] hover:text-white"
+          >
+            <span className="material-symbols-outlined text-[18px]">
+              arrow_back
+            </span>
+          </button>
+          <span className="inline-flex items-center rounded-full bg-white/[0.1] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-white/80 ring-1 ring-white/[0.12]">
+            시스템
+          </span>
+        </div>
         <h2 className="mt-2 text-[1.65rem] font-bold tracking-tight text-white sm:text-[1.85rem]">
           시스템 설정
         </h2>
         <p className="mt-2 max-w-3xl text-[14px] leading-relaxed text-white/56">
-          DB_insight 노드 파라미터 및 보안 프로토콜을 관리합니다.
+          DB insight의 설정과 보안을 관리합니다.
         </p>
       </div>
     ),
-    [],
+    [navigate],
   );
 
-  const settingsToolbarRight = (
-    <button
-      type="button"
-      onClick={openModal}
-      className="inline-flex h-9 items-center gap-1.5 rounded-full bg-white/[0.1] px-3.5 text-[12px] font-semibold text-white/90 ring-1 ring-white/[0.12] transition hover:bg-white/[0.14]"
-    >
-      <span className="material-symbols-outlined text-base text-white/70">key</span>
-      비밀번호
-    </button>
-  );
+  const settingsToolbarRight = null;
 
   return (
     <div className="studio-bridge-bg relative flex h-screen overflow-hidden text-on-surface">
@@ -264,7 +261,9 @@ export default function Settings() {
           navSectionLabel="메뉴"
           navItems={navItems}
           footerSub={
-            <span className="text-[11px] text-white/40">심층 분석 접근 권한</span>
+            <span className="text-[11px] text-white/40">
+              심층 분석 접근 권한
+            </span>
           }
           breadcrumb={settingsBreadcrumb}
           rightWidgets={settingsRightWidgets}
@@ -298,7 +297,8 @@ export default function Settings() {
                       마스터 인증
                     </h3>
                     <p className="text-sm text-on-surface-variant">
-                      마스터 비밀번호는 로컬 데이터베이스를 복호화합니다.
+                      마스터 비밀번호가 있어야 로컬 데이터베이스 내용을 볼 수
+                      있습니다.
                     </p>
                   </div>
                   <button
@@ -372,46 +372,6 @@ export default function Settings() {
                       앱 전체 UI 크기를 조절합니다. 즉시 적용됩니다.
                     </p>
                   </div>
-
-                  {/* 토글들 */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {[
-                      {
-                        label: "클라우드 동기화",
-                        desc: "로컬 로그를 암호화된 클라우드에 동기화",
-                        value: cloudSync,
-                        onChange: () => setCloudSync((v) => !v),
-                      },
-                      {
-                        label: "신경망 피드백",
-                        desc: "햅틱 처리 신호 활성화",
-                        value: neuralFeedback,
-                        onChange: () => setNeuralFeedback((v) => !v),
-                      },
-                    ].map((item) => (
-                      <div
-                        key={item.label}
-                        className="flex items-center justify-between gap-3 rounded-md border border-white/[0.08] bg-white/[0.04] p-4 backdrop-blur-md"
-                      >
-                        <div>
-                          <p className="text-sm font-semibold text-on-surface">
-                            {item.label}
-                          </p>
-                          <p className="text-xs text-on-surface-variant/80 mt-0.5">
-                            {item.desc}
-                          </p>
-                        </div>
-                        <button
-                          onClick={item.onChange}
-                          className={`shrink-0 w-10 h-5 rounded-full relative cursor-pointer p-1 transition-colors duration-300 ${item.value ? "bg-primary/30" : "bg-surface-container-highest"}`}
-                        >
-                          <div
-                            className={`w-3 h-3 rounded-full absolute top-1 transition-all ${item.value ? "bg-primary right-1" : "bg-outline left-1"}`}
-                          />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
                 </div>
               </section>
 
@@ -446,6 +406,7 @@ export default function Settings() {
                       </p>
                     </div>
                     <button
+                      type="button"
                       onClick={() =>
                         updateBgmApi({ api_enabled: !bgmStatus?.api_enabled })
                       }
@@ -570,17 +531,17 @@ export default function Settings() {
                 <div className="absolute -right-16 -bottom-16 w-48 h-48 bg-red-500/10 blur-[60px] rounded-full" />
                 <div className="flex items-center gap-2 mb-5">
                   <span className="text-sm font-manrope uppercase tracking-[0.2em] text-red-400 font-bold">
-                    위험 구역
+                    주의 영역
                   </span>
                   <div className="h-px flex-grow bg-red-500/20" />
                 </div>
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 relative z-10">
                   <div>
                     <h3 className="text-base font-semibold text-red-400 mb-1">
-                      공장 초기화 및 데이터 삭제
+                      설정 초기화 및 데이터 삭제
                     </h3>
                     <p className="text-sm text-on-surface-variant">
-                      모든 인덱스, 로컬 파일, 설정을 영구적으로 삭제합니다.
+                      모든 데이터 및 설정을 영구적으로 삭제합니다.
                     </p>
                   </div>
                   <button className="shrink-0 border border-red-500/40 text-red-400 font-bold py-2.5 px-6 rounded-full text-lg hover:bg-red-500 hover:text-white transition-all duration-200 active:scale-95 whitespace-nowrap">

@@ -21,6 +21,14 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
+/* AI 모드 — 타이틀바는 기능만 유지, 시각적으로는 숨김 */
+.titlebar-chrome-ai {
+  background-color: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-bottom: 0;
+}
+
 /*
  * 색은 “파일명”이 아니라 스포이드로 찍은 값으로 맞춤 (예: RGB 5,16,79 = #05104F).
  * 중요 — 브라우저는 위에서 아래로 “겹쳐 그림”. 첫 번째 그라데이션이 맨 앞 레이어.
@@ -678,6 +686,126 @@ body {
     opacity: 1;
     transform: none;
     filter: none;
+  }
+}
+
+/* AI 홈 — 검색 모드 전환: 유리 빛 반사(글린트) */
+@keyframes ai-home-search-mode-glint {
+  0% {
+    transform: translateX(-135%) skewX(-16deg);
+    opacity: 0;
+  }
+  18% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(135%) skewX(-16deg);
+    opacity: 0;
+  }
+}
+
+@keyframes ai-home-search-mode-glint-idle {
+  0%,
+  82% {
+    transform: translateX(-135%) skewX(-16deg);
+    opacity: 0;
+  }
+  86% {
+    opacity: 0.85;
+  }
+  100% {
+    transform: translateX(135%) skewX(-16deg);
+    opacity: 0;
+  }
+}
+
+.ai-home-search-mode-btn {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.ai-home-search-mode-btn > * {
+  position: relative;
+  z-index: 1;
+}
+
+.ai-home-search-mode-btn::before {
+  content: '';
+  position: absolute;
+  inset: -30% -75%;
+  z-index: 0;
+  background: linear-gradient(
+    118deg,
+    transparent 37%,
+    rgba(255, 255, 255, 0.04) 44%,
+    rgba(226, 232, 240, 0.65) 49.8%,
+    rgba(255, 255, 255, 0.22) 50.6%,
+    rgba(196, 181, 253, 0.25) 52%,
+    transparent 60%
+  );
+  transform: translateX(-135%) skewX(-16deg);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ai-home-search-mode-btn:hover:not(:disabled)::before,
+.ai-home-search-mode-btn:focus-visible:not(:disabled)::before {
+  animation: ai-home-search-mode-glint 1.45s cubic-bezier(0.28, 0.72, 0.36, 1) forwards;
+}
+
+.main-search-entrance-on .ai-home-search-mode-btn::before {
+  animation: ai-home-search-mode-glint-idle 8.2s ease-in-out 2.1s 1 both;
+}
+
+.main-search-entrance-on .ai-home-search-mode-btn:hover:not(:disabled)::before,
+.main-search-entrance-on .ai-home-search-mode-btn:focus-visible:not(:disabled)::before {
+  animation: ai-home-search-mode-glint 1.45s cubic-bezier(0.28, 0.72, 0.36, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-home-search-mode-btn::before {
+    animation: none !important;
+    opacity: 0 !important;
+    transform: none !important;
+  }
+}
+
+@keyframes ai-home-query-preview-dim-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes ai-home-query-preview-pop-in {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.97);
+    filter: blur(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+    filter: blur(0);
+  }
+}
+
+.ai-home-query-preview-dim {
+  animation: ai-home-query-preview-dim-in 0.2s ease-out both;
+}
+
+.ai-home-query-preview-panel {
+  animation: ai-home-query-preview-pop-in 0.26s cubic-bezier(0.22, 1, 0.36, 1) both;
+  will-change: transform, opacity, filter;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-home-query-preview-dim,
+  .ai-home-query-preview-panel {
+    animation: none !important;
   }
 }
 
