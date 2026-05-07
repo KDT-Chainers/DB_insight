@@ -263,7 +263,7 @@ export default function SearchSidebar({ entranceOn } = {}) {
                 >
                   <TeamLogoMark />
                   <div className="text-left">
-                    <h1 className="text-xl font-black text-[#dfe4fe] leading-none">DB_insight</h1>
+                    <h1 className="text-xl font-black text-[#dfe4fe] leading-none">DB insight</h1>
                     <p className="mt-1 text-[0.65rem] uppercase tracking-widest text-on-surface-variant">
                       로컬 인텔리전스
                     </p>

@@ -241,7 +241,7 @@ export default function Settings() {
           시스템 설정
         </h2>
         <p className="mt-2 max-w-3xl text-[14px] leading-relaxed text-white/56">
-          DB_insight 노드 파라미터 및 보안 프로토콜을 관리합니다.
+          DB insight 노드 파라미터 및 보안 프로토콜을 관리합니다.
         </p>
       </div>
     ),
