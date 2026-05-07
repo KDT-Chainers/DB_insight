@@ -288,3 +288,6 @@ App/backend/scripts/v2_summary.md
 App/backend/scripts/real_caption_lies.json
 App/backend/scripts/n_sigma_recommendations.json
 App/backend/scripts/next_improvement_summary.md
+
+# 캡션 거짓말 카테고리별 산출물
+App/backend/scripts/lies_by_category/
