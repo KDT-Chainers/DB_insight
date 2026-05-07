@@ -1521,7 +1521,7 @@ def _rag_sse(question: str, topk: int, thread_id: str,
     model = _get_ollama_model()
     if not model:
         yield emit({"type": "error",
-                    "message": "Ollama 미연결. 'ollama pull qwen2.5:7b' 실행 후 재시도."})
+                    "message": "Ollama 미연결. 'ollama pull gemma3:4b', 'ollama pull gemma3:12b' 실행 후 재시도."})
         return
 
     yield emit({"type": "info", "model": model, "thread_id": thread_id,
