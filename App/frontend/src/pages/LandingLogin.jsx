@@ -88,7 +88,6 @@ export default function LandingLogin() {
 
               <div className="text-center">
                 <h2 className="text-xl font-bold tracking-tight text-white">보안 인증이 필요합니다</h2>
-                <p className="mt-1 text-sm text-white/65">신경망 탐색기 접근 인증</p>
               </div>
 
               <form onSubmit={handleLogin} className="w-full space-y-8">
