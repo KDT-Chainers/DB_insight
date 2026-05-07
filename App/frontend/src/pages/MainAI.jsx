@@ -1128,25 +1128,80 @@ function TurnView({ turn, isLatest, onClickSource, onClickFile }) {
   );
 }
 
-// ── AI 탐색 과정 패널 ─────────────────────────────────────────
-function AIIterationPanel({ iterationData, domainSelection, streaming, hasLLM }) {
-  const [collapsed, setCollapsed] = useState(false)
-
-  if (!iterationData.length && !streaming) return null
-
-  const focusedCount = iterationData.filter(it => it.iteration > 0).length
-
+// ── FileCard (right panel) ─────────────────────────────────────────
+function FileCard({ source, index, scanState, selected, onClick }) {
+  const [imgError, setImgError] = useState(false);
+  const fname = source.file_name || "?",
+    ftype = source.file_type || "";
+  const conf = source.confidence ?? 0,
+    meta = getTypeMeta(ftype);
+  const hasThumb = (ftype === "image" || ftype === "doc") && source.preview_url;
+  const isFound = scanState === "found",
+    isNF = scanState === "not_found",
+    isScan = scanState === "scanning";
+  const borderColor = selected
+    ? AI.accent
+    : isFound
+      ? "#10b981"
+      : isScan
+        ? AI.accent
+        : isNF
+          ? "rgba(71,85,105,0.3)"
+          : AI.border;
   return (
-    <div className="mb-6 rounded-xl overflow-hidden" style={{ border: `1px solid ${AI.border}`, background: AI.card }}>
-      {/* 패널 헤더 */}
-      <button
-        onClick={() => setCollapsed(c => !c)}
-        className="w-full flex items-center justify-between px-5 py-3 hover:brightness-110 transition-all"
-        style={{ background: 'rgba(109,40,217,0.15)' }}
+    <button
+      onClick={() => onClick?.(source)}
+      style={{
+        textAlign: "left",
+        width: "100%",
+        padding: 0,
+        background: selected ? "rgba(139,92,246,0.1)" : AI.card,
+        border: `1px solid ${borderColor}`,
+        borderRadius: 12,
+        overflow: "hidden",
+        cursor: "pointer",
+        opacity: isNF ? 0.4 : 1,
+        filter: isNF ? "grayscale(60%)" : "none",
+        boxShadow: isFound
+          ? "0 0 16px rgba(16,185,129,0.2)"
+          : selected
+            ? "0 0 16px rgba(139,92,246,0.25)"
+            : "none",
+        transition: "all 0.3s",
+      }}
+    >
+      <div
+        style={{
+          height: 88,
+          background: "#06030f",
+          position: "relative",
+          overflow: "hidden",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
       >
-        <div className="flex items-center gap-2.5">
-          <span className="material-symbols-outlined text-lg" style={{ color: AI.accentLight, fontVariationSettings: '"FILL" 1' }}>
-            {streaming ? 'psychology' : 'auto_awesome'}
+        {hasThumb && !imgError ? (
+          <img
+            src={`${API_BASE}${source.preview_url}`}
+            alt={fname}
+            style={{
+              maxWidth: "100%",
+              maxHeight: "100%",
+              objectFit: "contain",
+            }}
+            onError={() => setImgError(true)}
+          />
+        ) : (
+          <span
+            className="material-symbols-outlined"
+            style={{
+              fontSize: 30,
+              color: meta.color,
+              fontVariationSettings: '"FILL" 0, "wght" 200',
+            }}
+          >
+            {meta.icon}
           </span>
         )}
         {isScan && (
@@ -1407,9 +1462,9 @@ function AVDetailContent({ result }) {
 
 // ══════════════════════════════════════════════════════════════════
 export default function MainAI() {
-  const navigate  = useNavigate()
-  const location  = useLocation()
-  const { open }  = useSidebar()
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { open } = useSidebar();
 
   const [view, setView] = useState("home");
   const [inputValue, setInputValue] = useState("");
@@ -1489,29 +1544,29 @@ export default function MainAI() {
     stop: stopMic,
   } = useSpeechRecognition({
     onFinal: useCallback((text) => {
-      setInputValue(text)
-      setTimeout(() => doSearchRef.current?.(text), 80)
+      setInputValue(text);
+      setTimeout(() => doSearchRef.current?.(text), 80);
     }, []),
-  })
-
-  useMicLevelRef(view === 'home' && listening, orbVoiceRef, { startDelayMs: 420 })
-
+  });
+  useMicLevelRef(view === "home" && listening, orbVoiceRef, {
+    startDelayMs: 420,
+  });
   useEffect(() => {
     if (view !== "home") stopMic();
   }, [view, stopMic]);
 
-  // 뒤로가기
   useEffect(() => {
     const handle = () => {
-      setDetailVisible(false)
-      if (view === 'detail')        setTimeout(() => setView('results'), 320)
-      else if (view === 'results')  { setResultsReady(false); setView('home') }
-    }
-    window.addEventListener('popstate', handle)
-    return () => window.removeEventListener('popstate', handle)
-  }, [view])
+      if (view === "chat") {
+        setView("home");
+        setTurns([]);
+        setInputValue("");
+      }
+    };
+    window.addEventListener("popstate", handle);
+    return () => window.removeEventListener("popstate", handle);
+  }, [view]);
 
-  // 사이드바 검색 기록 클릭
   useEffect(() => {
     const q = location.state?.query;
     if (q) {
@@ -1524,37 +1579,52 @@ export default function MainAI() {
   const getOrCreateThreadId = () => {
     let tid = null;
     try {
-      const raw = localStorage.getItem('aimode_thread_id')
+      const raw = localStorage.getItem("aimode_thread_id");
       if (raw) {
-        const obj = JSON.parse(raw)
-        if (obj?.id && obj?.expires > Date.now()) tid = obj.id
+        const obj = JSON.parse(raw);
+        if (obj?.id && obj?.expires > Date.now()) tid = obj.id;
       }
     } catch {}
     if (!tid) {
-      tid = `t_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+      tid = `t_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       try {
-        localStorage.setItem('aimode_thread_id', JSON.stringify({
-          id: tid, expires: Date.now() + 24 * 3600 * 1000,
-        }))
+        localStorage.setItem(
+          "aimode_thread_id",
+          JSON.stringify({ id: tid, expires: Date.now() + 86400000 }),
+        );
       } catch {}
     }
-    window.__aimodeThreadId = tid
-    const body = useAimode
-      ? { query: q, topk: topK, thread_id: tid }
-      : { query: q, topk: topK, max_iterations: maxIter }
+    window.__aimodeThreadId = tid;
+    return tid;
+  };
 
-    try {
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  // ── runRAG ──────────────────────────────────────────────────────
+  const runRAG = useCallback(
+    async (q) => {
+      if (abortRef.current) abortRef.current.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
 
-      const reader  = res.body.getReader()
-      const decoder = new TextDecoder()
-      let   buffer  = ''
+      const turnId = `turn_${Date.now()}`;
+      activeTurnId.current = turnId;
+      setTurns((prev) => [...prev, makeTurn(turnId, q)]);
+      setRightMode("cards");
+      setSelectedFile(null);
+
+      const tid = getOrCreateThreadId();
+
+      try {
+        const resp = await fetch(`${API_BASE}/api/aimode/chat`, {
+          method: "POST",
+          signal: controller.signal,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: q, topk: topK, thread_id: tid, secure: securityMode }),
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = "";
 
         while (true) {
           const { value, done } = await reader.read();
@@ -1722,8 +1792,9 @@ export default function MainAI() {
   );
 
   doSearchRef.current = doSearch;
-
-  useEffect(() => { doSearchRef.current = doSearch })
+  useEffect(() => {
+    doSearchRef.current = doSearch;
+  });
 
   const handleSearch = (e) => {
     e?.preventDefault();
@@ -1752,10 +1823,14 @@ export default function MainAI() {
   };
 
   const handleNewConversation = useCallback(async () => {
-    if (abortRef.current) abortRef.current.abort()
-    const tid = window.__aimodeThreadId
+    if (abortRef.current) abortRef.current.abort();
+    const tid = window.__aimodeThreadId;
     if (tid) {
-      try { await fetch(`${API_BASE}/api/aimode/chat/${encodeURIComponent(tid)}`, { method: 'DELETE' }) } catch {}
+      try {
+        await fetch(`${API_BASE}/api/aimode/chat/${encodeURIComponent(tid)}`, {
+          method: "DELETE",
+        });
+      } catch {}
     }
     try {
       localStorage.removeItem("aimode_thread_id");
@@ -1786,7 +1861,7 @@ export default function MainAI() {
 
   // ── Render ──────────────────────────────────────────────────────
   return (
-    <div className={view === 'home' ? 'overflow-hidden h-screen relative' : 'min-h-screen relative text-on-surface'}
+    <div
       style={{
         display: "flex",
         height: "100vh",
@@ -1796,11 +1871,19 @@ export default function MainAI() {
     >
       {searchTransitioning && (
         <div className="fixed inset-0 z-[9999] pointer-events-none overflow-hidden">
-          <div className="portal-overlay absolute rounded-full"
-            style={{ width: '80px', height: '80px', left: ripplePos.x, top: ripplePos.y,
-              transform: 'translate(-50%, -50%)',
-              background: 'radial-gradient(circle, #1c253e 0%, #0c1326 60%, #070d1f 100%)',
-              boxShadow: '0 0 30px 10px rgba(133,173,255,0.15)' }} />
+          <div
+            className="portal-overlay absolute rounded-full"
+            style={{
+              width: 80,
+              height: 80,
+              left: ripplePos.x,
+              top: ripplePos.y,
+              transform: "translate(-50%,-50%)",
+              background:
+                "radial-gradient(circle,#1c253e 0%,#0c1326 60%,#070d1f 100%)",
+              boxShadow: "0 0 30px 10px rgba(133,173,255,0.15)",
+            }}
+          />
           {[0, 200].map((delay, i) => (
             <div
               key={i}
@@ -1816,14 +1899,22 @@ export default function MainAI() {
             />
           ))}
           <div className="portal-text absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-2">
-            <span className="material-symbols-outlined text-[#a5aac2] text-4xl" style={{ fontVariationSettings: '"FILL" 1' }}>database</span>
-            <span className="font-manrope uppercase tracking-[0.25em] text-base text-[#a5aac2]">검색 모드</span>
+            <span
+              className="material-symbols-outlined text-[#a5aac2] text-4xl"
+              style={{ fontVariationSettings: '"FILL" 1' }}
+            >
+              database
+            </span>
+            <span className="font-manrope uppercase tracking-[0.25em] text-base text-[#a5aac2]">
+              검색 모드
+            </span>
           </div>
         </div>
       )}
 
-      {/* 사이드바 */}
-      <SearchSidebar entranceOn={view === 'home' ? aiHomeEntranceOn : undefined} />
+      <SearchSidebar
+        entranceOn={view === "home" ? aiHomeEntranceOn : undefined}
+      />
 
       <div
         className={`${ml} flex-1 flex flex-col overflow-hidden transition-[margin] duration-300`}
@@ -1927,7 +2018,7 @@ export default function MainAI() {
                 >
                   <span
                     className="h-2 w-2 animate-pulse rounded-full bg-violet-500"
-                    style={{ boxShadow: "0 0 6px rgba(139, 92, 246, 0.9)" }}
+                    style={{ boxShadow: "0 0 6px rgba(139,92,246,0.9)" }}
                   />
                   검색 모드로 전환
                   <span className="material-symbols-outlined text-lg transition-transform group-hover:translate-x-1">
