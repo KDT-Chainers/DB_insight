@@ -111,12 +111,25 @@ def step1_caption_lies_v2(threshold: float = 0.20) -> dict:
         captions_path = idir / "caption_3stage.json"
         captions = json.loads(captions_path.read_text(encoding="utf-8"))
 
-        # 캡션 있는 이미지만 처리
+        # caption_3stage.json 구조: {"ids": [...], "L1": [...], "L2": [...], "L3": [...]}
+        # 평행 리스트 형식 — index 기반 매핑
+        cap_ids = captions.get("ids", [])
+        L1_list = captions.get("L1", [])
+        L2_list = captions.get("L2", [])
+        L3_list = captions.get("L3", [])
+        cap_dict = {}
+        for j, cid in enumerate(cap_ids):
+            l1 = L1_list[j] if j < len(L1_list) else ""
+            l2 = L2_list[j] if j < len(L2_list) else ""
+            l3 = L3_list[j] if j < len(L3_list) else ""
+            cap = (str(l1) + " " + str(l2) + " " + str(l3)).strip()
+            if cap:
+                cap_dict[cid] = cap
+
+        # 이미지 ids 와 매칭
         items_with_cap = []
         for i, _id in enumerate(ids):
-            cap_obj = captions.get(_id, {})
-            cap = (cap_obj.get("L1", "") + " " + cap_obj.get("L2", "")
-                   + " " + cap_obj.get("L3", "")).strip()
+            cap = cap_dict.get(_id, "")
             if cap and len(cap) >= 10:
                 items_with_cap.append((i, _id, cap))
 

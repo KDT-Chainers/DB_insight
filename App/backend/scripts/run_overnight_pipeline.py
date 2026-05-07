@@ -209,16 +209,25 @@ def phase2_caption_mismatch():
             return None
         captions = json.loads(captions_path.read_text(encoding="utf-8"))
 
+        # caption_3stage.json 구조: {"ids": [...], "L1": [...], "L2": [...], "L3": [...]}
+        # 평행 리스트 형식 — index 기반 매핑
+        cap_ids = captions.get("ids", [])
+        L1_list = captions.get("L1", [])
+        L2_list = captions.get("L2", [])
+        L3_list = captions.get("L3", [])
+        cap_dict = {}
+        for j, cid in enumerate(cap_ids):
+            l1 = L1_list[j] if j < len(L1_list) else ""
+            l2 = L2_list[j] if j < len(L2_list) else ""
+            l3 = L3_list[j] if j < len(L3_list) else ""
+            cap = (str(l1) + " " + str(l2) + " " + str(l3)).strip()
+            cap_dict[cid] = cap if cap else "(no caption)"
+
         suspects = []
         batch = 64
         for batch_start in range(0, N, batch):
             batch_ids = ids[batch_start: batch_start + batch]
-            batch_caps = []
-            for _id in batch_ids:
-                cap_obj = captions.get(_id, {})
-                cap = (cap_obj.get("L1", "") + " " + cap_obj.get("L2", "")
-                       + " " + cap_obj.get("L3", "")).strip()
-                batch_caps.append(cap or "(no caption)")
+            batch_caps = [cap_dict.get(_id, "(no caption)") for _id in batch_ids]
 
             try:
                 txt_emb = siglip2_re.embed_texts(batch_caps)
