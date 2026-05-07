@@ -175,6 +175,15 @@ desktop.ini
 *.swp
 *.swo
 
+
+.\claude
+admin_ui
+LibreOffice_26.2.2_Win_x86-64.msi
+out2
+out*
+installer
+Docs
+merge
 실행방법.txt
 실행메모.txt
 publication/
