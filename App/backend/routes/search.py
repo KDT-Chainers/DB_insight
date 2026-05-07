@@ -323,45 +323,59 @@ def search():
     #
     #   예: "코스모스 보이저호" → 무관한 doc 신뢰도 97% / 유사도 69% / raw 0.55
     #        → similarity floor 0.72 로 cut.
-    # [v11.1] 실측 데이터 (고양이/보이저호) 기반 보수적 조정.
-    # Doc 은 similarity 분리 곤란 (정상/무관 모두 60~65%) → 신뢰도+rerank 의존.
-    # Video 정상 매칭이 sim 80% 인 경우 있음 → floor 0.90 → 0.75 완화.
-    # AV/BGM 의 raw cosine_top1 floor 가 진짜 differentiator.
+    # [v11.2] 모든 도메인에 raw dense cosine floor 적용 — 가장 강력한 differentiator.
+    # MPLC 신뢰도와 similarity (z-score CDF) 는 keyword_count + saturation 으로 부풀려짐.
+    # raw dense cosine 만이 정직한 신호 — BGE-M3/SigLIP2/CLAP 의 원본 cosine.
+    #
+    # 실측 (RTX 4070, BGE-M3 / SigLIP2 / CLAP):
+    #   - 적합 매칭: dense cosine ≥ 0.55 (image/doc/video/audio), CLAP ≥ 0.45 (bgm)
+    #   - 무관 매칭: dense cosine ~0.30~0.45 (random noise floor)
     _DOMAIN_MIN_CONF = {
         "image": 0.40,
-        "doc":   0.30,   # 0.40 → 0.30 (NIPS 같이 sim 65% 에 conf 96% 인 정상 케이스 보존)
-        "video": 0.40,   # 0.50 → 0.40
+        "doc":   0.30,
+        "video": 0.40,
         "audio": 0.40,
         "bgm":   0.40,
     }
+    # [v12] sim 검사를 dense 필드(=UI '유사도' 표시값)로 통합 — 이전엔 sim=similarity
+    #   가 confidence alias 였어서 floor 가 사실상 conf 만 두 번 검사하던 버그.
+    # 실측:
+    #   image — 정상(real_cat) 79%, 무관(보이저호 미니인조) 64%, 무관(팝송 음식) 60%
+    #   doc   — 보이저호 무관 67% 이하, 팝송 무관 64% 이하, 정상은 70%+
+    #   video — 정상(NGC 코스모스) 95~98%, 무관 65~80%
+    #   audio — 모두 z-score CDF 부풀려 98%+, sim 으로 분리 거의 불가
+    #   bgm   — 모두 CLAP CDF 부풀려 92%+, sim 으로 분리 거의 불가
     _DOMAIN_MIN_SIM = {
-        "image": 0.72,   # SigLIP2 raw cosine — 정상 79%+, 무관 ~69%
-        "doc":   0.58,   # 0.72 → 0.58 (정상 NIPS 65% 보존)
-        "video": 0.75,   # 0.90 → 0.75 (정상 NGC 80% 보존, 무관 65% 컷)
-        "audio": 0.85,   # 0.90 → 0.85 (audio similarity 는 uniformly 높아 약한 floor)
-        "bgm":   0.80,   # 0.90 → 0.80
+        "image": 0.72,   # 정상 79%+ 통과, 무관 64% 이하 차단
+        "doc":   0.68,   # 0.58 → 0.68 (보이저호/팝송 무관 67% 이하 차단)
+        "video": 0.75,
+        "audio": 0.85,   # AV CDF 부풀림으로 실효 floor 약함
+        "bgm":   0.80,
     }
-    # AV/BGM 의 raw cosine_top1 (z-score CDF normalize 우회).
-    # 실제 매칭이면 cosine ≥ 0.45, 무관이면 ~0.30 이하 — 진짜 differentiator.
+    # raw dense cosine — 가장 정직한 신호. 모든 도메인 적용.
+    # AV: cosine_top1 (segment 최고), 그 외: dense.
     _DOMAIN_MIN_DENSE = {
-        "video": 0.45,
-        "audio": 0.45,
-        "bgm":   0.30,   # CLAP cosine 은 BGE-M3 보다 절대값 낮음
+        "image": 0.50,   # SigLIP2 cosine 무관 ~0.35, 정상 0.55+
+        "doc":   0.50,   # BGE-M3 cosine 무관 ~0.40, 정상 0.55+
+        "video": 0.55,   # AV cosine_top1 — 0.45 → 0.55 (팝송 노이즈 컷용)
+        "audio": 0.55,   # 0.45 → 0.55
+        "bgm":   0.45,   # CLAP cosine — 0.30 → 0.45 (팝송 BGM 노이즈 컷용)
     }
 
     def _passes_floor(r: dict) -> bool:
         ftype = r.get("file_type", "")
         conf  = float(r.get("confidence") or 0)
-        sim   = float(r.get("similarity") or 0)
+        # [v12] dense (= UI '유사도' 표시값) 우선 — similarity 는 confidence alias 라
+        #   floor 기준으로 부적합 (legacy 결과 호환을 위해 fallback 만 유지).
+        sim   = float(r.get("dense") or r.get("similarity") or 0)
         if conf < _DOMAIN_MIN_CONF.get(ftype, 0.40):
             return False
         if sim < _DOMAIN_MIN_SIM.get(ftype, 0.60):
             return False
-        # AV/BGM 은 z-score CDF 가 부풀린 0.98+ 점수를 만들 수 있으므로
-        # 원본 cosine 으로 한 번 더 검사.
+        # raw dense cosine — z-score CDF / MPLC 우회한 정직 신호.
         if ftype in _DOMAIN_MIN_DENSE:
-            # cosine_top1 (AV) 또는 dense (BGM/일반) — 둘 다 지원
             raw = float(r.get("cosine_top1") or r.get("dense") or 0)
+            # raw == 0 이면 데이터 미제공 (legacy 결과) — floor 통과시킴.
             if raw > 0 and raw < _DOMAIN_MIN_DENSE[ftype]:
                 return False
         return True
