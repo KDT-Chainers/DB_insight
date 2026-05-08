@@ -52,6 +52,17 @@ _clients: dict[str, chromadb.PersistentClient] = {}
 _collections: dict[str, object] = {}
 
 
+def close_clients() -> None:
+    """열려 있는 Chroma PersistentClient 를 모두 닫고 캐시를 비운다."""
+    for client in _clients.values():
+        try:
+            client.close()
+        except Exception:
+            pass
+    _collections.clear()
+    _clients.clear()
+
+
 def _get_client(file_type: str) -> chromadb.PersistentClient:
     """file_type 별 독립 ChromaDB 클라이언트."""
     if file_type not in _clients:

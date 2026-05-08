@@ -8,13 +8,17 @@ from __future__ import annotations
 import json
 import logging
 import math
+import os
+import shutil
+import stat
 from pathlib import Path
 
 import fitz
 import numpy as np
 from flask import Blueprint, jsonify, request, send_file, send_from_directory
 
-from config import PATHS, TRICHEF_CFG
+from config import EMBEDDED_DB, EXTRACTED_DB, PATHS, RAW_DB, TRICHEF_CFG
+from db.init_db import DB_PATH, init_db
 from embedders.trichef import bgem3_sparse, siglip2_re
 from embedders.trichef import bgem3_caption_im as e5_caption_im
 from embedders.trichef.caption_io import load_caption, page_idx_from_stem
@@ -29,6 +33,145 @@ bp_admin = Blueprint("trichef_admin", __name__, url_prefix="/api/admin")
 def _engine():
     from routes.trichef import _get_engine
     return _get_engine()
+
+
+_RESET_ROOTS = (EMBEDDED_DB, EXTRACTED_DB, RAW_DB)
+_RESET_REQUIRED_DIRS = (
+    EMBEDDED_DB / "Movie",
+    EMBEDDED_DB / "Doc",
+    EMBEDDED_DB / "Img",
+    EMBEDDED_DB / "Rec",
+    EMBEDDED_DB / "Bgm",
+    EMBEDDED_DB / "trichef",
+    EMBEDDED_DB / "trichef_chroma",
+    EXTRACTED_DB / "Movie",
+    EXTRACTED_DB / "Music",
+    EXTRACTED_DB / "Rec",
+    EXTRACTED_DB / "Img",
+    EXTRACTED_DB / "Img" / "captions",
+    EXTRACTED_DB / "Img" / "tags",
+    EXTRACTED_DB / "Doc",
+    EXTRACTED_DB / "Doc" / "captions",
+    EXTRACTED_DB / "Doc" / "chunks",
+    EXTRACTED_DB / "Doc" / "converted_pdf",
+    EXTRACTED_DB / "Doc" / "page_images",
+    EXTRACTED_DB / "Doc" / "page_text",
+    EXTRACTED_DB / "Bgm",
+    EXTRACTED_DB / "Bgm" / "audio",
+    RAW_DB / "Doc",
+    RAW_DB / "Doc" / "staged",
+    RAW_DB / "Img",
+    RAW_DB / "Img" / "staged",
+    RAW_DB / "Movie",
+    RAW_DB / "Rec",
+    RAW_DB / "Idcard",
+    RAW_DB / ".omc",
+    RAW_DB / ".omc" / "state",
+)
+
+
+def _remove_readonly_and_retry(func, path, _exc_info):
+    os.chmod(path, stat.S_IWRITE)
+    func(path)
+
+
+def _stop_active_index_jobs() -> None:
+    try:
+        from routes import index as index_routes
+        with index_routes._jobs_lock:
+            for job_id, job in index_routes._jobs.items():
+                if job.get("status") == "running":
+                    index_routes._stop_flags[job_id] = True
+                    job["stopping"] = True
+        from services.job_control import kill_indexing_subprocesses
+        kill_indexing_subprocesses()
+    except Exception as e:
+        logger.warning(f"[admin.reset] indexing stop skipped: {e}")
+
+
+def _close_runtime_clients() -> None:
+    try:
+        from db.vector_store import close_clients
+        close_clients()
+    except Exception as e:
+        logger.warning(f"[admin.reset] vector store close skipped: {e}")
+
+
+def _clear_dir_contents(root: Path, stats: dict[str, int]) -> None:
+    root.mkdir(parents=True, exist_ok=True)
+    for entry in root.iterdir():
+        if entry.is_symlink() or entry.is_file():
+            try:
+                entry.chmod(stat.S_IWRITE)
+            except Exception:
+                pass
+            entry.unlink(missing_ok=True)
+            stats["files"] += 1
+            continue
+        shutil.rmtree(entry, onerror=_remove_readonly_and_retry)
+        stats["dirs"] += 1
+
+
+def _reset_data_roots() -> dict[str, int]:
+    stats = {"files": 0, "dirs": 0}
+    for root in _RESET_ROOTS:
+        _clear_dir_contents(root, stats)
+    for required_dir in _RESET_REQUIRED_DIRS:
+        required_dir.mkdir(parents=True, exist_ok=True)
+    return stats
+
+
+def _reset_app_db() -> bool:
+    deleted = DB_PATH.exists()
+    if deleted:
+        try:
+            DB_PATH.chmod(stat.S_IWRITE)
+        except Exception:
+            pass
+        DB_PATH.unlink()
+    init_db()
+    return deleted
+
+
+def _reload_runtime_state() -> None:
+    try:
+        from routes import trichef as trichef_routes
+        trichef_routes._doc_reg_cache = None
+        trichef_routes._raw_count_cache.update(ts=0.0, img=0, doc=0)
+        trichef_routes.reload_engine()
+    except Exception as e:
+        logger.warning(f"[admin.reset] trichef reload skipped: {e}")
+    try:
+        from services.bgm.search_engine import reload_engine as reload_bgm_engine
+        reload_bgm_engine()
+    except Exception as e:
+        logger.warning(f"[admin.reset] bgm reload skipped: {e}")
+
+
+@bp_admin.delete("/reset")
+def reset_all_data():
+    try:
+        _stop_active_index_jobs()
+        _close_runtime_clients()
+        disk_stats = _reset_data_roots()
+        db_file_deleted = _reset_app_db()
+    except Exception as e:
+        logger.exception("[admin.reset] factory reset failed")
+        _reload_runtime_state()
+        return jsonify({
+            "success": False,
+            "message": "데이터 삭제 중 오류가 발생했습니다.",
+            "error": str(e),
+        }), 500
+
+    _reload_runtime_state()
+    return jsonify({
+        "success": True,
+        "message": "모든 데이터가 삭제되었습니다.",
+        "deleted_files": disk_stats["files"],
+        "deleted_dirs": disk_stats["dirs"],
+        "db_file_deleted": db_file_deleted,
+    })
 
 
 # ── 경로 해석 ────────────────────────────────────────────────────────────
