@@ -185,10 +185,10 @@ function FileStackSearchMotion() {
 
         <div className="mt-2 text-center">
           <p className="text-sm tracking-[0.08em] text-white/78">
-            파일 후보를 순차 탐색 중...
+            파일을 순차적으로 검색하고 있어요...
           </p>
           <p className="mt-1 text-xs text-white/50">
-            질문과 가장 유사한 문서를 찾고 있어요
+            원하는 파일과 가장 유사한 데이터를 찾고 있어요.
           </p>
         </div>
 
@@ -1515,14 +1515,14 @@ export default function MainSearch() {
       introLines: [
         "안녕하세요! 저는 디비예요.",
         "당신의 DB를 관리해주는 매니저입니다.",
-        "지금부터 데이터 관리법을 짧게 안내해드릴게요.",
+        "지금부터 저희 프로그램 사용법을 안내해드릴게요.",
       ],
     },
     {
       selector: '[data-tutorial-id="sidebar-data-tab"]',
       title: "데이터 탭으로 이동합니다.",
       description:
-        "왼쪽 사이드바의 데이터 버튼을 누르면 인덱싱 화면으로 이동할 수 있어요.",
+        "왼쪽 카테고리의 데이터 버튼을 누르면 분석 화면으로 이동할 수 있어요.",
     },
   ];
 
@@ -1977,9 +1977,9 @@ export default function MainSearch() {
             <div className="z-10 flex w-full max-w-xl flex-col items-center">
               {/* Hero (v0) */}
               <div
-                className={`mse-hero-down mb-6 text-center transition-all duration-300 ${homeExiting ? "opacity-0 -translate-y-6" : ""}`}
+                className={`mse-hero-down mb-6 w-full px-2 text-center transition-all duration-300 ${homeExiting ? "opacity-0 -translate-y-6" : ""}`}
               >
-                <h1 className="mb-3 text-3xl font-light tracking-tight text-on-surface text-balance md:text-5xl lg:text-6xl">
+                <h1 className="mx-auto mb-3 w-full whitespace-nowrap text-center text-[clamp(1.8rem,5.2vw,4.2rem)] font-light leading-[1.08] tracking-tight text-on-surface">
                   나만의 데이터 인사이트
                 </h1>
                 <p className="mt-5 text-lg text-on-surface-variant md:text-xl">
@@ -2272,10 +2272,10 @@ export default function MainSearch() {
                   {searching ? (
                     <button
                       type="button"
-                    onClick={() => {}}
-                    aria-label="검색 중단(연동 예정)"
-                    title="검색 중단(백엔드 연동 예정)"
-                    className="flex h-12 w-12 shrink-0 cursor-not-allowed items-center justify-center rounded-full text-red-300/70"
+                      onClick={() => {}}
+                      aria-label="검색 중단(연동 예정)"
+                      title="검색 중단(백엔드 연동 예정)"
+                      className="flex h-12 w-12 shrink-0 cursor-not-allowed items-center justify-center rounded-full text-red-300/70"
                     >
                       <span className="material-symbols-outlined block text-[22px] leading-none">
                         stop_circle
@@ -2325,19 +2325,26 @@ export default function MainSearch() {
               <div
                 className={`mse-search-up mse-search-up-delay-1 mt-10 flex justify-center ${homeExiting ? "pointer-events-none opacity-0" : ""}`}
               >
-                <button
-                  ref={btnRef}
-                  type="button"
-                  onClick={handleGoToAI}
-                  disabled={aiTransitioning}
-                  className="group flex items-center gap-3 rounded-full border border-outline-variant/20 bg-surface-container-high px-8 py-3 text-sm font-bold uppercase tracking-widest text-on-surface-variant transition-all duration-300 hover:bg-surface-container-highest hover:text-on-surface disabled:pointer-events-none glow-primary"
-                >
-                  <span className="h-2 w-2 animate-pulse rounded-full bg-primary" />
-                  AI 모드로 전환
-                  <span className="material-symbols-outlined text-lg transition-transform group-hover:translate-x-1">
-                    arrow_forward
-                  </span>
-                </button>
+                <div className="group relative inline-flex">
+                  <button
+                    ref={btnRef}
+                    type="button"
+                    onClick={handleGoToAI}
+                    disabled={aiTransitioning}
+                    className="flex items-center gap-3 rounded-full border border-outline-variant/20 bg-surface-container-high px-8 py-3 text-sm font-bold uppercase tracking-widest text-on-surface-variant transition-all duration-300 hover:bg-surface-container-highest hover:text-on-surface disabled:pointer-events-none glow-primary"
+                  >
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-primary" />
+                    AI 모드로 전환
+                    <span className="material-symbols-outlined text-lg transition-transform group-hover:translate-x-1">
+                      arrow_forward
+                    </span>
+                  </button>
+                  <div className="pointer-events-none absolute -bottom-3 left-1/2 z-20 w-[280px] -translate-x-1/2 translate-y-full rounded-2xl border border-primary/30 bg-[linear-gradient(135deg,rgba(18,28,52,0.72),rgba(10,16,34,0.56))] px-4 py-2.5 text-center text-xs font-semibold leading-relaxed text-on-surface/95 opacity-0 shadow-[0_10px_30px_rgba(0,0,0,0.35)] backdrop-blur-xl transition-all duration-200 group-hover:translate-y-[calc(100%+6px)] group-hover:opacity-100 group-focus-within:translate-y-[calc(100%+6px)] group-focus-within:opacity-100">
+                    기본모드보다 더욱 성능이 뛰어난 AI 모드예요.
+                    <br />
+                    질문 의도를 이해해 여러 자료를 한 번에 찾아줘요.
+                  </div>
+                </div>
               </div>
 
               {/* fly 클론 — 홈 검색 쉘과 동일한 박스·테두리·내부 레이아웃 (픽셀 드리프트 방지) */}
@@ -2442,7 +2449,7 @@ export default function MainSearch() {
                               PLUS_DOMAIN_META[domainFilter] ||
                               PLUS_DOMAIN_META[""]
                             ).placeholder
-                          : "인텔리전스에 질문하세요..."
+                          : "Insight에 질문하세요..."
                     }
                     value={listening ? "" : inputValue}
                     onChange={(e) =>
@@ -2574,9 +2581,6 @@ export default function MainSearch() {
                       <h1 className="text-2xl font-extrabold tracking-tight text-on-surface truncate">
                         {imageSearchFile?.name || "이미지 검색"}
                       </h1>
-                      <p className="text-xs text-on-surface-variant/60 mt-1">
-                        시각 임베딩 (SigLIP2) 기반 유사도 검색
-                      </p>
                     </div>
                   </div>
                 ) : (
@@ -3019,7 +3023,7 @@ export default function MainSearch() {
                         <span className="text-sm font-bold tracking-[0.2em] text-primary uppercase">
                           {isAV
                             ? "미디어 플레이어 · 세그먼트 타임라인"
-                            : "추출된 콘텐츠 스트림"}
+                            : "요청 분석 결과"}
                         </span>
                         <div className="flex gap-2 items-center">
                           {detailLoading && (

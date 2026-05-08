@@ -1467,6 +1467,7 @@ export default function MainAI() {
   const [detailVisible,setDetailVisible]= useState(false)
   const [aiHomeInputFocused, setAiHomeInputFocused] = useState(false)
   const [homeInputOverflow, setHomeInputOverflow] = useState(false)
+  const [homeInputExpandedLocked, setHomeInputExpandedLocked] = useState(false)
 
   const [aiHomeEntranceOn, setAiHomeEntranceOn] = useState(
     () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -1526,9 +1527,24 @@ export default function MainAI() {
     return () => window.removeEventListener('resize', checkOverflow)
   }, [view, inputValue, aiHomeInputFocused])
 
+  useEffect(() => {
+    if (view !== 'home') {
+      setHomeInputExpandedLocked(false)
+      return
+    }
+    if (!inputValue.trim()) {
+      setHomeInputExpandedLocked(false)
+      return
+    }
+    if (aiHomeInputFocused && homeInputOverflow) {
+      setHomeInputExpandedLocked(true)
+    }
+  }, [view, inputValue, aiHomeInputFocused, homeInputOverflow])
+
   const ml       = open ? 'ml-64' : 'ml-0'
   const leftEdge = open ? 'left-64' : 'left-0'
   const sidebarPx= open ? 256 : 0
+  const homeInputExpanded = view === 'home' && homeInputExpandedLocked
 
   // STT
   const doSearchRef = useRef(null)
@@ -1885,6 +1901,7 @@ export default function MainAI() {
     // Enter keydown + form submit 중복 호출 방지
     if (prev.q === q && now - prev.ts < 450) return
     submitGuardRef.current = { q, ts: now }
+    setHomeInputExpandedLocked(false)
     doSearch(q)
   }
 
@@ -1952,6 +1969,7 @@ export default function MainAI() {
     setAiError('')
     setView('home')
     setInputValue('')
+    setHomeInputExpandedLocked(false)
   }, [])
 
   const handleGoToSearch = () => {
@@ -2051,32 +2069,13 @@ export default function MainAI() {
                     </div>
                     <form
                       onSubmit={handleSearch}
-                      className="mse-search-up group pointer-events-auto relative z-10 w-full max-w-[min(90vw,22rem)] shrink-0 md:max-w-[24rem]"
+                      className={`mse-search-up group pointer-events-auto relative z-10 w-full shrink-0 transition-[max-width] duration-300 ${
+                        homeInputExpanded
+                          ? 'max-w-[min(96vw,46rem)] md:max-w-[min(86vw,56rem)]'
+                          : 'max-w-[min(90vw,22rem)] md:max-w-[24rem]'
+                      }`}
                       style={homeExiting ? { visibility: 'hidden' } : {}}
                     >
-                      {aiHomeInputFocused && homeInputOverflow && inputValue.trim() && (
-                        <>
-                          <div className="ai-home-query-preview-dim pointer-events-none fixed inset-0 z-20 bg-[rgba(3,2,10,0.45)] backdrop-blur-[2px]" />
-                          <div className="ai-home-query-preview-panel fixed left-1/2 top-1/2 z-30 flex w-[min(94vw,48rem)] items-end gap-3 rounded-2xl border border-white/22 bg-[rgba(8,7,18,0.92)] px-6 py-5 shadow-[0_22px_60px_rgba(0,0,0,0.58)] backdrop-blur-xl">
-                            <p className="max-h-[42vh] flex-1 overflow-y-auto whitespace-pre-wrap break-words pr-1 text-left text-[15px] leading-relaxed text-violet-50/95">
-                              {inputValue}
-                              <span
-                                className="ml-0.5 inline-block h-[1.05em] w-[2px] animate-pulse align-[-0.14em] bg-violet-200/95"
-                                aria-hidden
-                              />
-                            </p>
-                            <button
-                              type="button"
-                              onMouseDown={(e) => e.preventDefault()}
-                              onClick={() => submitQuery(inputValue)}
-                              className="pointer-events-auto inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-violet-300/35 bg-violet-500/20 text-violet-100 transition hover:bg-violet-500/30 hover:text-white"
-                              aria-label="검색 실행"
-                            >
-                              <span className="material-symbols-outlined text-[20px]">search</span>
-                            </button>
-                          </div>
-                        </>
-                      )}
                       <div className="pointer-events-none absolute -inset-[2px] rounded-full bg-gradient-to-r from-fuchsia-500/0 via-violet-400/25 to-fuchsia-500/0 opacity-0 blur-md transition-opacity duration-500 group-focus-within:opacity-100" />
                       <div className="relative flex items-center gap-2 rounded-full border border-violet-200/[0.14] bg-gradient-to-b from-violet-100/[0.09] to-violet-950/[0.28] px-1.5 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.16),inset_0_-1px_0_rgba(0,0,0,0.22),0_10px_44px_rgba(32,12,58,0.5)] backdrop-blur-2xl transition-all duration-300 group-focus-within:border-violet-200/25 group-focus-within:from-violet-100/[0.12] group-focus-within:to-violet-950/[0.34]">
                         <button

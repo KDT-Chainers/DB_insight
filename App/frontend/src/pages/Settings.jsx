@@ -651,7 +651,7 @@ export default function Settings() {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="flex-1 py-2.5 rounded-full bg-gradient-to-tr from-primary to-secondary text-on-primary text-lg font-bold hover:brightness-110 active:scale-95 transition-all disabled:opacity-50"
+                    className="flex-1 rounded-full border border-primary/35 bg-primary/15 py-2.5 text-lg font-bold text-primary transition-all hover:bg-primary/22 hover:border-primary/55 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50"
                   >
                     {loading ? "변경 중..." : "변경"}
                   </button>
