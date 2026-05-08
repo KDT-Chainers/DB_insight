@@ -805,10 +805,10 @@ function ResultCard({
         animationDelay: `${Math.min(Math.max(rank - 1, 0), 14) * 58}ms`,
       }}
       className={`result-card-enter bg-[#1e293b] border border-[#334155] rounded-[10px] overflow-hidden flex flex-col relative transition-transform duration-150
-        ${isAV ? "" : "cursor-pointer hover:-translate-y-0.5 hover:border-[#059669]"}`}
+        ${isAV ? "" : "cursor-pointer hover:-translate-y-0.5 hover:border-[#6366f1]"}`}
     >
       {/* 랭크 배지 */}
-      <div className="absolute top-2 left-2 z-20 bg-[#059669] text-white min-w-[32px] h-7 px-2 rounded-full flex items-center justify-center font-bold text-xs">
+      <div className="absolute top-2 left-2 z-20 bg-gradient-to-r from-[#1c253e] via-[#243357] to-[#2b3f6e] border border-[#5c78b8]/45 text-[#dbe7ff] min-w-[32px] h-7 px-2 rounded-full flex items-center justify-center font-bold text-xs shadow-[0_0_10px_rgba(92,120,184,0.22)]">
         #{rank}
       </div>
 
@@ -928,9 +928,9 @@ function ResultCard({
         {/* 2. 핵심 3지표 (요청에 따라 도메인 배지 바로 아래로 이동) */}
         <div className="grid grid-cols-3 gap-1.5">
           {[
-            { label: "유사도", value: sim, cls: "text-[#a78bfa]" },
-            { label: "정확도", value: acc, cls: "text-[#60a5fa]" },
-            { label: "신뢰도", value: `${confPct}%`, cls: "text-[#10b981]" },
+            { label: "유사도", value: sim, cls: "text-[#9e8fd4]" },
+            { label: "정확도", value: acc, cls: "text-[#7ea0d4]" },
+            { label: "신뢰도", value: `${confPct}%`, cls: "text-[#5aa892]" },
           ].map(({ label, value, cls }) => (
             <div
               key={label}
@@ -973,7 +973,7 @@ function ResultCard({
                 {topStart != null && (
                   <button
                     onClick={() => seekTo(topStart)}
-                    className="text-[11px] px-3 py-1 bg-[#059669] text-white rounded font-semibold hover:bg-[#047857] mb-1.5"
+                    className="text-[11px] px-3 py-1 bg-gradient-to-r from-[#4338ca] to-[#3b82f6] text-white rounded font-semibold hover:from-[#3730a3] hover:to-[#2563eb] mb-1.5 shadow-[0_4px_14px_rgba(59,130,246,0.28)]"
                   >
                     상위 구간 재생 ▶
                   </button>
@@ -993,7 +993,7 @@ function ResultCard({
                       <button
                         key={i}
                         onClick={() => seekTo(t0)}
-                        className="flex items-center gap-2 px-2 py-1 bg-[#0b1220] border border-[#334155] rounded text-[11px] overflow-hidden hover:border-[#059669] hover:bg-[#0f2040] text-left w-full"
+                        className="flex items-center gap-2 px-2 py-1 bg-[#0b1220] border border-[#334155] rounded text-[11px] overflow-hidden hover:border-[#6366f1] hover:bg-[#13203a] text-left w-full"
                       >
                         <span className="text-[#7dd3fc] font-mono font-semibold whitespace-nowrap min-w-[112px]">
                           {fmtTime(t0)} ~ {fmtTime(t1)}
@@ -1955,6 +1955,13 @@ export default function MainSearch() {
     setTimeout(() => navigate("/ai"), 900);
   };
 
+  // fixed 헤더/액션바와 본문 시작점을 같은 기준으로 맞춰 스크롤 걸림 방지
+  const RESULTS_HEADER_TOP_PX = 48;
+  const RESULTS_HEADER_HEIGHT_PX = 64;
+  const RESULTS_CONTENT_GAP_PX = 24;
+  const RESULTS_CONTENT_TOP_PX =
+    RESULTS_HEADER_TOP_PX + RESULTS_HEADER_HEIGHT_PX + RESULTS_CONTENT_GAP_PX;
+
   return (
     <div
       className={`relative text-on-surface ${view === "home" ? "min-h-screen h-screen overflow-x-hidden overflow-y-auto" : "min-h-screen overflow-x-hidden"}`}
@@ -2477,8 +2484,8 @@ export default function MainSearch() {
       {/* ════ RESULTS / DETAIL 공통 헤더 ════ */}
       {view !== "home" && (
         <header
-          className={`fixed top-8 ${leftEdge} right-0 z-40 border-b border-outline-variant/10 bg-slate-950/60 py-3 shadow-[0_0_20px_rgba(133,173,255,0.1)] backdrop-blur-xl transition-[left,opacity] duration-300`}
-          style={{ opacity: resultsReady ? 1 : 0 }}
+          className={`fixed ${leftEdge} right-0 z-40 border-b border-outline-variant/10 bg-slate-950/60 py-3 shadow-[0_0_20px_rgba(133,173,255,0.1)] backdrop-blur-xl transition-[left,opacity] duration-300`}
+          style={{ opacity: resultsReady ? 1 : 0, top: `${RESULTS_HEADER_TOP_PX}px` }}
         >
           <div className="mx-auto flex max-w-[1400px] items-center gap-4 px-8">
             <form
@@ -2595,14 +2602,15 @@ export default function MainSearch() {
       {/* ════ RESULTS VIEW ════ */}
       {view === "results" && (
         <main
-          className={`${ml} relative pt-24 min-h-screen transition-[margin] duration-300`}
+          className={`${ml} relative min-h-screen transition-[margin] duration-300`}
           style={{
             opacity: resultsReady ? 1 : 0,
             transform: resultsReady ? "translateY(0)" : "translateY(24px)",
             transition: "opacity 0.38s ease, transform 0.38s ease, margin 0.3s",
+            paddingTop: `${RESULTS_CONTENT_TOP_PX}px`,
           }}
         >
-          <div className="p-8 max-w-[1400px] mx-auto">
+          <div className="px-8 pb-8 pt-2 max-w-[1400px] mx-auto">
             {/* 헤더 */}
             <div className="apple-hero-card mb-6 flex items-end justify-between rounded-[22px] border border-white/[0.11] px-6 py-5">
               <div className="space-y-2 flex-1 min-w-0">
@@ -2886,7 +2894,8 @@ export default function MainSearch() {
             >
               {/* 액션 바 — 헤더와 겹치지 않게 간격 두고, 본문과 동일 max-w 로 가로 정렬 */}
               <div
-                className={`fixed top-32 ${leftEdge} right-0 z-30 bg-[#0b1220]/78 py-4 transition-[left] duration-300`}
+                className={`fixed ${leftEdge} right-0 z-30 bg-[#0b1220]/78 py-4 transition-[left] duration-300`}
+                style={{ top: `${RESULTS_CONTENT_TOP_PX}px` }}
               >
                 <div className="mx-auto w-full max-w-[1400px] px-8">
                   <div className="grid grid-cols-12 gap-6">
