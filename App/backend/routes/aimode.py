@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 aimode_bp = Blueprint("aimode", __name__, url_prefix="/api/aimode")
 
 OLLAMA_URL  = "http://localhost:11434"
-SUPPORTED_GEMMA_MODELS = ("gemma:12b", "gemma:4b")
+SUPPORTED_GEMMA_MODELS = ("gemma3:12b", "gemma3:4b")
 SCAN_DELAY  = 0.25   # 파일 스캔 간 UI 애니메이션 딜레이 (초)
 
 
@@ -183,15 +183,15 @@ def _is_supported_gemma_model(name: str) -> bool:
 
 
 def _get_ollama_model(task: str | None = None) -> str | None:
-    """지원 Gemma 모델은 gemma:12b, gemma:4b만 허용한다."""
+    """지원 Gemma 모델은 gemma3:12b, gemma:4b만 허용한다."""
     try:
         r = _req.get(f"{OLLAMA_URL}/api/tags", timeout=3)
         models = r.json().get("models", [])
         if task == "generate":
-            preferred = ["gemma:12b", "gemma:4b", "qwen2.5:1.5b", "qwen2.5:3b",
+            preferred = ["gemma3:12b", "gemma3:4b", "qwen2.5:1.5b", "qwen2.5:3b",
                          "qwen2.5", "llama3.2", "llama3", "mistral", "phi4"]
         else:
-            preferred = ["gemma:12b", "gemma:4b", "qwen2.5", "llama3.2", "llama3", "mistral", "phi4"]
+            preferred = ["gemma3:12b", "gemma3:4b", "qwen2.5", "llama3.2", "llama3", "mistral", "phi4"]
         for pref in preferred:
             for m in models:
                 name = m.get("name", "").lower()
@@ -1660,7 +1660,7 @@ def _rag_sse(question: str, topk: int, thread_id: str,
     model = _get_ollama_model()
     if not model:
         yield emit({"type": "error",
-                    "message": "Ollama 미연결 또는 지원 Gemma 모델이 없습니다. 'ollama pull gemma:12b', 'ollama pull gemma:4b' 실행 후 재시도."})
+                    "message": "Ollama 미연결 또는 지원 Gemma 모델이 없습니다. 'ollama pull gemma3:12b', 'ollama pull gemma3:4b' 실행 후 재시도."})
         return
 
     yield emit({"type": "info", "model": model, "thread_id": thread_id,
@@ -2482,7 +2482,7 @@ def _summarize_sse(file_type: str, trichef_id: str, file_path: str,
     # 하이브리드: 요약은 답변 생성과 동일하게 작은 모델(4b) 사용
     model = _get_ollama_model("generate")
     if not model:
-        yield emit({"type": "error", "message": "Ollama 미연결 또는 지원 Gemma 모델이 없습니다. gemma:12b 또는 gemma:4b를 설치해 주세요."})
+        yield emit({"type": "error", "message": "Ollama 미연결 또는 지원 Gemma 모델이 없습니다. gemma3:12b 또는 gemma:4b를 설치해 주세요."})
         return
 
     fname = file_name or (file_path or "").rsplit("/", 1)[-1].rsplit("\\", 1)[-1] or "?"

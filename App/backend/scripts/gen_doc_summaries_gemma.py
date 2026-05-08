@@ -1,7 +1,7 @@
-"""gen_doc_summaries_gemma.py — Doc 페이지 한국어 요약 생성 (gemma:12b/gemma:4b Ollama).
+"""gen_doc_summaries_gemma.py — Doc 페이지 한국어 요약 생성 (gemma3:12b/gemma3:4b Ollama).
 
 문제: 기존 Doc 캡션(.txt) = BLIP 영어 degenerated (완전 무용)
-해결: _body_texts.json (PDF 본문) → gemma:12b/gemma:4b → 한국어 3-tier 요약
+해결: _body_texts.json (PDF 본문) → gemma3:12b/gemma3:4b → 한국어 3-tier 요약
      저장: extracted_DB/Doc/captions/{doc_folder}/summary.caption.json
      형식: {"L1": "30자 제목", "L2": "80자 한문장", "L3": "200자 상세"}
 
@@ -28,7 +28,7 @@ BODY_TEXTS   = DOC_CACHE / "_body_texts.json"
 DOC_IDS_PATH = DOC_CACHE / "doc_page_ids.json"
 
 OLLAMA_URL   = "http://localhost:11434/api/generate"
-MODEL_PRIORITY = ("gemma:12b", "gemma:4b")
+MODEL_PRIORITY = ("gemma3:12b", "gemma3:4b")
 MODEL        = MODEL_PRIORITY[0]
 TIMEOUT_S    = 120   # 요청당 타임아웃
 
