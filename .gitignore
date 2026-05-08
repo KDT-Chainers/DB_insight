@@ -327,3 +327,6 @@ App/backend/scripts/recaption_validation.md
 App/backend/scripts/caption_food_v2.json
 App/backend/scripts/caption_food_v2_ckpt.json
 App/backend/scripts/caption_food_v2.md
+
+# Calibration 자동 백업
+App/backend/services/calibration.bak_*.json
