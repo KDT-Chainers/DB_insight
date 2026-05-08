@@ -1742,6 +1742,11 @@ export default function MainSearch() {
     setSummarySecurity(null);
   }, []);
 
+  useEffect(() => {
+    if (!selectedFile) return;
+    closeSummary();
+  }, [selectedFile, closeSummary]);
+
   const handleBgmIdentify = useCallback(async (file) => {
     if (!file) return;
     setBgmIdentifying(true);
@@ -1766,6 +1771,7 @@ export default function MainSearch() {
   // 이미지 검색 실행
   const handleImageSearch = useCallback(async (file) => {
     if (!file) return;
+    closeSummary();
     setImageSearchActive(true);
     setQuery(`[이미지 검색] ${file.name}`);
     setInputValue(file.name);
@@ -1783,10 +1789,11 @@ export default function MainSearch() {
     } finally {
       setSearching(false);
     }
-  }, []);
+  }, [closeSummary]);
 
   const doSearch = (q) => {
     if (!q.trim() || aiTransitioning) return;
+    closeSummary();
     // 텍스트 검색 시작 → 이미지 검색 모드 해제 + preview 정리
     if (imageSearchActive) {
       setImageSearchActive(false);
@@ -1877,6 +1884,7 @@ export default function MainSearch() {
   };
 
   const handleSelectFile = (file) => {
+    closeSummary();
     setSelectedFile(file);
     setFileDetail(null);
     setDetailVisible(false);
