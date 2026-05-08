@@ -926,7 +926,9 @@ def _open_in_file_explorer(target_path: str) -> None:
         if os.path.isdir(target_path):
             os.startfile(target_path)
         else:
-            subprocess.Popen(["explorer", f"/select,{target_path}"])
+            # explorer 는 `/select,"C:\path with spaces\file.ext"` 형태의
+            # 단일 command line 을 더 안정적으로 해석한다.
+            subprocess.Popen(f'explorer.exe /select,"{target_path}"')
         return
 
     if system == "Darwin":
