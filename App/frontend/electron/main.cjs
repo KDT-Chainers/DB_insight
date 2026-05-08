@@ -278,8 +278,10 @@ function killBackend() {
 // 백엔드 준비 대기 (최대 15초, 300ms 간격 폴링)
 // ---------------------------------------------------------------------------
 
-// maxRetries=300, interval=600ms → 최대 3분 대기 (ML 모델 로딩 포함)
-function waitForBackend(maxRetries = 300, interval = 600) {
+// [startup-speedup] interval 600ms → 250ms (Flask listener 가 /api/health 에 ~2초
+// 만에 응답하므로 빠르게 폴링하면 splash 통과 시간 단축).
+// maxRetries=600, interval=250ms → 최대 2.5분 대기 (워밍업 포함 안전 버퍼).
+function waitForBackend(maxRetries = 600, interval = 250) {
   return new Promise((resolve) => {
     if (isDev) return resolve()
 
@@ -305,7 +307,10 @@ function waitForBackend(maxRetries = 300, interval = 600) {
 
       updateSplash('Loading <span class="dots"><span>.</span><span>.</span><span>.</span></span>')
 
-      const req = http.get('http://127.0.0.1:5001/api/auth/status', (res) => {
+      // [startup-speedup] /api/auth/status → /api/health (초경량, 백엔드 listener
+      // 시작 즉시 응답). 22초→2초 단축. 모델 워밍업은 background thread 가 진행하며
+      // SplashOrb 가 /api/warmup-status 를 polling 하여 진행률 표시.
+      const req = http.get('http://127.0.0.1:5001/api/health', (res) => {
         updateSplash('Loading <span class="dots"><span>.</span><span>.</span><span>.</span></span>')
         resolve()
       })

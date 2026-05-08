@@ -100,15 +100,39 @@ def _caption_for_im(cap_dir: Path, img_path: Path, key: str | None = None) -> st
         t = plain_tp.read_text(encoding="utf-8").strip()
         if t:
             return t
-    # 신규: Qwen 한국어 캡션 생성
+    # 신규: Qwen 한국어 5-stage 캡션 생성 (rebuild_img_qwen_full_caption.py 와 동일 형식)
+    # title / tagline / synopsis / tags_kr / tags_en 5종 → captions_triple.jsonl 호환.
+    _STAGE_PROMPTS = {
+        "title":    "이 사진의 핵심을 1줄로 한국어로 표현하세요. 객체와 핵심 행동만 간결하게.",
+        "tagline":  "이 사진의 분위기, 감정, 시각적 인상을 한국어로 1~2문장으로 묘사하세요.",
+        "synopsis": "이 사진을 한국어로 자세히 묘사하세요. 주요 객체, 인물 유무, 행동, 위치, 색감, 분위기를 3~5문장으로.",
+        "tags_kr":  "이 사진을 표현하는 한국어 키워드를 10~20개 쉼표로 구분하여 출력하세요.",
+        "tags_en":  "Output 10~20 English keywords separated by commas describing this image.",
+    }
+    _STAGE_MAX = {"title": 30, "tagline": 60, "synopsis": 150, "tags_kr": 80, "tags_en": 80}
+    parts = {}
+    text = ""
     try:
         from PIL import Image
         im = Image.open(img_path).convert("RGB")
-        text = _get_qwen_captioner().caption(im, max_new_tokens=60, max_image_side=896)
+        cap = _get_qwen_captioner()
+        for stage, prompt in _STAGE_PROMPTS.items():
+            try:
+                parts[stage] = (cap.caption(im, prompt=prompt,
+                                             max_new_tokens=_STAGE_MAX[stage],
+                                             max_image_side=896) or "").strip()
+            except Exception as e:
+                logger.warning(f"[caption] Qwen {stage} 실패 {img_path.name}: {type(e).__name__}: {e}")
+                parts[stage] = ""
+        # 5-stage → L1/L2/L3 합성 (captions_triple.jsonl 형식)
+        l1 = parts.get("title", "")
+        l2 = (parts.get("tagline", "") + " " + parts.get("tags_kr", "")).strip()
+        l3 = (parts.get("synopsis", "") + " " + parts.get("tags_en", "")).strip()
+        text = (l1 + " " + l2 + " " + l3).strip()
     except Exception as e:
-        logger.warning(f"[caption] Qwen 캡션 실패 {img_path.name}: {type(e).__name__}: {e}")
+        logger.warning(f"[caption] 이미지 로드 실패 {img_path.name}: {type(e).__name__}: {e}")
         text = ""
-        # [P1.5] 실패 파일 추적용 append-only ledger — 추후 재처리 스크립트에서 활용.
+        # [P1.5] 실패 파일 추적용 append-only ledger
         try:
             ledger = cap_dir / "_caption_failures.jsonl"
             ledger.parent.mkdir(parents=True, exist_ok=True)
@@ -122,12 +146,36 @@ def _caption_for_im(cap_dir: Path, img_path: Path, key: str | None = None) -> st
                     "err_type": type(e).__name__,
                     "err_msg":  str(e)[:500],
                 }, ensure_ascii=False) + "\n")
-        except Exception:  # ledger 실패는 본류에 영향 주지 않음
+        except Exception:
             pass
-    # plain stem 에 저장 (recaption_all / fix_non_korean 과 동일 규약)
-    if text:
+    # 저장: 5-stage JSON (검색 파이프라인 호환) + plain text (레거시 fallback)
+    if text and parts:
+        try:
+            full_json = {
+                "L1": parts.get("title", ""),
+                "L2": (parts.get("tagline", "") + " " + parts.get("tags_kr", "")).strip(),
+                "L3": (parts.get("synopsis", "") + " " + parts.get("tags_en", "")).strip(),
+                "title":    parts.get("title", ""),
+                "tagline":  parts.get("tagline", ""),
+                "synopsis": parts.get("synopsis", ""),
+                "tags_kr":  parts.get("tags_kr", ""),
+                "tags_en":  parts.get("tags_en", ""),
+            }
+            jp.write_text(json.dumps(full_json, ensure_ascii=False, indent=2), encoding="utf-8")
+        except Exception as e:
+            logger.warning(f"[caption] 5-stage JSON 저장 실패: {e}")
         plain_tp.write_text(text, encoding="utf-8")
         (cap_dir / f"{plain}.qwen").write_text("", encoding="utf-8")
+        # captions_triple.jsonl 갱신 (검색 캐시 입력 소스)
+        try:
+            from config import PATHS as _P
+            jsonl = Path(_P["TRICHEF_IMG_CACHE"]) / "captions_triple.jsonl"
+            entry = {"key": key or img_path.stem, **full_json}
+            jsonl.parent.mkdir(parents=True, exist_ok=True)
+            with jsonl.open("a", encoding="utf-8") as f:
+                f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        except Exception as e:
+            logger.warning(f"[caption] captions_triple.jsonl append 실패: {e}")
     return text
 
 

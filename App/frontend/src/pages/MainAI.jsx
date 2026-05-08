@@ -104,7 +104,15 @@ function AVDetailContent({ result }) {
               const t1 = seg.end ?? seg.end_sec ?? 0
               const sc = seg.score ?? 0
               const text = seg.text || seg.caption || ''
-              const pct = Math.round(sc * 100)
+              // [표시 통일] 일반 검색 카드 스타일 — 유사도/정확도/신뢰도 % 표시.
+              // segment 는 단일 raw cosine 만 가지므로 세 값 모두 동일 score 기반.
+              // raw cosine 이 1.0 초과 가능 (unnormalized embedding) → 0~100 clamp.
+              const _clamp = (v) => Math.max(0, Math.min(100, v * 100))
+              const sim = _clamp(seg.similarity ?? sc)
+              const acc = _clamp(seg.rerank_score != null
+                ? 1 / (1 + Math.exp(-((seg.rerank_score) + 3) / 3))
+                : sc)
+              const conf = _clamp(seg.confidence ?? sc)
               return (
                 <button
                   key={i}
@@ -121,14 +129,10 @@ function AVDetailContent({ result }) {
                       <span className="text-sm text-slate-500">→</span>
                       <span className="font-mono text-lg text-slate-400">{fmtTime(t1)}</span>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <div className="h-1 w-16 overflow-hidden rounded-full bg-white/10">
-                        <div
-                          className="h-full rounded-full bg-gradient-to-r from-amber-500 to-violet-500"
-                          style={{ width: `${Math.min(pct * 2, 100)}%` }}
-                        />
-                      </div>
-                      <span className="font-mono text-sm tabular-nums text-slate-500">{sc.toFixed(3)}</span>
+                    <div className="flex items-center gap-3 font-mono text-xs tabular-nums">
+                      <span className="text-[#a78bfa]">유사도 {sim.toFixed(1)}%</span>
+                      <span className="text-[#60a5fa]">정확도 {acc.toFixed(1)}%</span>
+                      <span className="text-[#10b981]">신뢰도 {conf.toFixed(1)}%</span>
                     </div>
                   </div>
                   {text && (

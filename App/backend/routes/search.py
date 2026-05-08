@@ -418,23 +418,52 @@ def search():
     except Exception:
         pass
 
-    # [v14.1] 최종 ranking — 사용자 지시: 유사도(dense) > 정확도(rerank) > 신뢰도(conf) 순.
-    #   다중 키 정렬:
-    #     1순위: dense (시각+텍스트 fusion 코사인, UI '유사도')
-    #     2순위: rerank_score (cross-encoder 의미 매칭, UI '정확도', None fallback -999)
-    #     3순위: confidence (UI '신뢰도', 동률 처리용)
-    #
-    #   주의: dense 는 캡션 키워드 영향을 일부 받음 (사자상/강아지의 거짓 캡션이
-    #   "고양이" 키워드 포함 시 dense 가 부풀려짐). 1순위 키로 사용 시 사자상/
-    #   강아지가 진짜 박스 안 고양이보다 상위 노출될 수 있음.
-    #   캡션 거짓말 문제는 Beta 하이브리드 + 시각 일치성 검증(별도 작업) 필요.
-    def _sort_key(r):
+    # [v15-sweep] 정렬 키 env var 토글 — OMC_SORT_VARIANT (A/B/C/D/E/F/G/H).
+    #   A (default, v14.1): (dense, rerank, conf)
+    #   B: (rerank, dense, conf)
+    #   C: (rerank, dense)
+    #   D: (dense, rerank)
+    #   E: (conf, rerank, dense)  — 옛날 설정 회귀
+    #   F: 0.5·dense + 0.5·rerank
+    #   G: 0.4·dense + 0.6·rerank
+    #   H: 0.7·rerank + 0.3·dense
+    import os as _os_sort
+    _variant = _os_sort.environ.get("OMC_SORT_VARIANT", "A").strip().upper()
+
+    def _r_norm(r):
+        # rerank_score → sigmoid 로 0~1 정규화. None 은 0.
         rs = r.get("rerank_score")
-        return (
-            float(r.get("dense") or 0),
-            float(rs) if rs is not None else -999.0,
-            float(r.get("confidence") or 0),
-        )
+        if rs is None:
+            return 0.0
+        try:
+            import math
+            return 1.0 / (1.0 + math.exp(-(float(rs) + 3.0) / 3.0))
+        except Exception:
+            return 0.0
+
+    def _sort_key(r):
+        ds = float(r.get("dense") or 0)
+        rs_raw = r.get("rerank_score")
+        rs = float(rs_raw) if rs_raw is not None else -999.0
+        cf = float(r.get("confidence") or 0)
+        rs_n = _r_norm(r)
+        if _variant == "B":
+            return (rs, ds, cf)
+        if _variant == "C":
+            return (rs, ds)
+        if _variant == "D":
+            return (ds, rs)
+        if _variant == "E":
+            return (cf, rs, ds)
+        if _variant == "F":
+            return (0.5 * ds + 0.5 * rs_n,)
+        if _variant == "G":
+            return (0.4 * ds + 0.6 * rs_n,)
+        if _variant == "H":
+            return (0.7 * rs_n + 0.3 * ds,)
+        # A (default)
+        return (ds, rs, cf)
+
     results.sort(key=_sort_key, reverse=True)
 
     # [v7] 최종 top_k 컷 — combined[:top_k*2] dedup 여유분으로 받았으나
