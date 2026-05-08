@@ -152,7 +152,19 @@ def bayesian_confidence(visual_match: float, prior_rel: Optional[float] = None) 
 # 페널티 계수 — floor 미만 시 confidence/dense/similarity 에 곱함.
 # 0.3 = ~70% 감점. 완전 cut(0.0) 대신 페널티로 후순위 이동 유도.
 # 추후 정렬 키(유사도 우선)에서 자연스럽게 밀려남.
-_PENALTY_FACTOR = 0.3
+# OMC_VISUAL_PENALTY 환경변수로 0.0~1.0 사이 값 override 가능 (sweep 실험용).
+def _get_default_penalty() -> float:
+    import os as _os_p
+    raw = _os_p.environ.get("OMC_VISUAL_PENALTY", "").strip()
+    if raw:
+        try:
+            v = float(raw)
+            if 0.0 <= v <= 1.0:
+                return v
+        except Exception:
+            pass
+    return 0.3
+_PENALTY_FACTOR = _get_default_penalty()
 
 
 class _Cache:
@@ -289,7 +301,10 @@ def filter_by_visual_match(
 
     # [Phase B] Bayesian dual-Beta 활성 시 P(rel|vm) 기반 페널티 (더 정직).
     #   비활성 시 floor + penalty 휴리스틱 (기존 v15.1 동작).
-    use_bayes = _ensure_bayes_loaded()
+    # [v3 A/B] OMC_VISUAL_USE_BAYES=0 으로 floor 모드 강제 가능 (default "1" 호환).
+    import os as _os_bayes
+    _bayes_env = _os_bayes.environ.get("OMC_VISUAL_USE_BAYES", "1").strip()
+    use_bayes = (_bayes_env != "0") and _ensure_bayes_loaded()
 
     txt_vec = _embed_query_text(query)
     if txt_vec is None:

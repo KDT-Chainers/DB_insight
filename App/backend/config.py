@@ -146,12 +146,12 @@ TRICHEF_CFG = {
 
 # ── 런타임 체크 ────────────────────────────────────────────────────────
 #   INT8 양자화 플래그가 True 인데 bitsandbytes 가 없으면, 로더마다 FP16 fallback
-#   되는 silent 동작. 시작 시점에서 한 번 명시적으로 경고.
+#   되는 silent 동작. [startup-speedup] import bitsandbytes 가 ~5초 걸려 기동 지연 →
+#   importlib.util.find_spec 으로 존재 여부만 확인 (실제 import 없음, ms 내).
 def _check_int8_support() -> None:
     if TRICHEF_CFG.get("INT8_Z_DINOV2") or TRICHEF_CFG.get("INT8_RE_SIGLIP2"):
-        try:
-            import bitsandbytes  # noqa: F401
-        except ImportError:
+        import importlib.util as _ilu
+        if _ilu.find_spec("bitsandbytes") is None:
             import logging
             logging.getLogger("config").warning(
                 "[config] INT8_Z_DINOV2/INT8_RE_SIGLIP2=True 이지만 bitsandbytes "

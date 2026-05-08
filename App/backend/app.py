@@ -1,3 +1,5 @@
+import time
+
 from flask import Flask
 from flask_cors import CORS
 
@@ -121,33 +123,70 @@ def create_app() -> Flask:
     def _health():
         return {"ok": True}, 200
 
-    # [W5-4] Warmup — 기동 시 TriChefEngine 싱글턴 로드 + dummy 쿼리 1회 실행하여
-    # SigLIP2 / BGE-M3 / DINOv2 / Qwen 을 선로딩. 첫 사용자 쿼리 430ms 지연 제거.
-    try:
-        import logging
-        from routes.trichef import _get_engine
-        _log = logging.getLogger(__name__)
-        eng = _get_engine()
-        # Doc/Img 워밍업 — SigLIP2 / BGE-M3 / DINOv2 / Qwen 선로딩
-        for dom in ("image", "doc_page"):
-            if dom in eng._cache:
+    # [W5-4 → async + focused] image 도메인만 사전 로드 → 워밍업 시간 ~14s → ~6s.
+    # doc_page / AV / Qwen / CLAP 은 첫 사용 시 lazy 로드 (모듈 자체 _load 락으로 안전).
+    # OMC_FULL_WARMUP=1 → 모든 도메인 사전 로드 (server 모드용).
+    # OMC_SYNC_WARMUP=1 → 동기 워밍업 강제 (디버깅).
+    import threading as _th_w
+    _warmup_event = _th_w.Event()
+    _warmup_progress = {"stage": "init", "started": time.time(), "done": False}
+    app._warmup_event = _warmup_event           # type: ignore[attr-defined]
+    app._warmup_progress = _warmup_progress     # type: ignore[attr-defined]
+
+    def _warmup_engine():
+        import logging as _lg
+        import os as _os_we
+        _log = _lg.getLogger(__name__)
+        try:
+            _warmup_progress["stage"] = "engine_load"
+            from routes.trichef import _get_engine
+            eng = _get_engine()
+            _warmup_progress["stage"] = "image_search"
+            if "image" in eng._cache:
                 try:
-                    eng.search("워밍업", dom, topk=1)
-                    _log.info(f"[warmup] {dom} OK")
-                    break
+                    eng.search("워밍업", "image", topk=1)
+                    _log.info("[warmup] image OK (async)")
                 except Exception as e:
-                    _log.warning(f"[warmup] {dom} 실패: {e}")
-        # AV 워밍업 — movie/music 캐시가 있을 때만 search_av 1회 실행
-        for av_dom in ("music", "movie"):
-            if av_dom in eng._cache:
-                try:
-                    eng.search_av("워밍업", av_dom, topk=1)
-                    _log.info(f"[warmup] {av_dom} OK")
-                except Exception as e:
-                    _log.warning(f"[warmup] {av_dom} 실패: {e}")
-    except Exception as e:
-        import logging
-        logging.getLogger(__name__).warning(f"[warmup] skip: {e}")
+                    _log.warning(f"[warmup] image 실패: {e}")
+            # 전체 도메인 사전 로드 (선택)
+            if _os_we.environ.get("OMC_FULL_WARMUP", "").strip() == "1":
+                _warmup_progress["stage"] = "doc_search"
+                if "doc_page" in eng._cache:
+                    try:
+                        eng.search("워밍업", "doc_page", topk=1)
+                    except Exception:
+                        pass
+                _warmup_progress["stage"] = "av_search"
+                for av_dom in ("music", "movie"):
+                    if av_dom in eng._cache:
+                        try:
+                            eng.search_av("워밍업", av_dom, topk=1)
+                        except Exception:
+                            pass
+        except Exception as e:
+            _log.warning(f"[warmup] skip: {e}")
+        finally:
+            _warmup_progress["stage"] = "done"
+            _warmup_progress["done"] = True
+            _warmup_progress["elapsed"] = time.time() - _warmup_progress["started"]
+            _warmup_event.set()
+
+    @app.route("/api/warmup-status")
+    def _warmup_status():
+        return {
+            "ready": _warmup_event.is_set(),
+            "stage": _warmup_progress.get("stage", "init"),
+            "elapsed": round(time.time() - _warmup_progress["started"], 2),
+        }, 200
+
+    import os as _os_w_outer
+    if _os_w_outer.environ.get("OMC_SYNC_WARMUP", "").strip() == "1":
+        _warmup_engine()
+    else:
+        try:
+            _th_w.Thread(target=_warmup_engine, daemon=True, name="engine-warmup").start()
+        except Exception:
+            pass
 
     # [VRAM] PyTorch allocator 튜닝 — 8GB GPU 단편화 방지.
     # expandable_segments: 큰 텐서 alloc 시 reserved 영역을 늘리는 대신 새 segment 추가.
@@ -179,12 +218,12 @@ def create_app() -> Flask:
     except Exception:
         pass
 
-    # [P0 #D] Qwen-VL 캡션 모델 background prewarm.
-    # 인덱싱 시작 시 첫 이미지 파일에서 발생하던 ~15-30s 모델 로드 지연을 제거.
-    # 비동기 thread → 검색·UI 응답에는 무영향. 환경변수 OMC_DISABLE_QWEN_PREWARM=1 로 OFF.
+    # [P0 #D] Qwen-VL 캡션 모델 prewarm — 인덱싱 전용 (검색에는 영향 없음).
+    # [startup-speedup] default 비활성. OMC_QWEN_PREWARM=1 일 때만 시작 시 적재.
+    # 인덱싱 첫 호출 시 lazy 로 로드 (~15-30s 소요) — 검색만 사용하는 사용자는 부담 없음.
     try:
         import os, threading, logging as _lg
-        if os.environ.get("OMC_DISABLE_QWEN_PREWARM", "").strip().lower() not in ("1","true","yes"):
+        if os.environ.get("OMC_QWEN_PREWARM", "").strip() == "1":
             def _prewarm_qwen():
                 try:
                     from embedders.trichef.incremental_runner import _get_qwen_captioner

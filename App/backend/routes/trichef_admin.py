@@ -13,7 +13,6 @@ import shutil
 import stat
 from pathlib import Path
 
-import fitz
 import numpy as np
 from flask import Blueprint, jsonify, request, send_file, send_from_directory
 
@@ -22,8 +21,27 @@ from db.init_db import DB_PATH, init_db
 from embedders.trichef import bgem3_sparse, siglip2_re
 from embedders.trichef import bgem3_caption_im as e5_caption_im
 from embedders.trichef.caption_io import load_caption, page_idx_from_stem
-from services.trichef import asf_filter, calibration, qwen_expand, tri_gs
 from services.trichef.auto_vocab import _tokenize
+
+
+_LAZY_MODS = {
+    "fitz": "fitz",
+    "siglip2_re": "embedders.trichef.siglip2_re",
+    "bgem3_sparse": "embedders.trichef.bgem3_sparse",
+    "e5_caption_im": "embedders.trichef.bgem3_caption_im",
+    "asf_filter": "services.trichef.asf_filter",
+    "calibration": "services.trichef.calibration",
+    "qwen_expand": "services.trichef.qwen_expand",
+    "tri_gs": "services.trichef.tri_gs",
+}
+
+def __getattr__(name: str):
+    if name in _LAZY_MODS:
+        import importlib
+        mod = importlib.import_module(_LAZY_MODS[name])
+        globals()[name] = mod
+        return mod
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 logger = logging.getLogger(__name__)
 bp_admin = Blueprint("trichef_admin", __name__, url_prefix="/api/admin")
