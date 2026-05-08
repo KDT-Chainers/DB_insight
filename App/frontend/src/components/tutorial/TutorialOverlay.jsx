@@ -199,6 +199,18 @@ export default function TutorialOverlay({
     };
   }, [targetRect, displayTitle, displayDescription, isCenteredStep]);
 
+  const skipButtonPos = useMemo(() => {
+    // 기본은 orb 상단, 단 말풍선과 겹치지 않도록 말풍선 위쪽 제한을 함께 적용.
+    const left = Math.max(12, Math.round(guideLayout.orb.x - 46));
+    const orbTop = Math.round(guideLayout.orb.y - 124);
+    const bubbleTop =
+      guideLayout?.box?.top != null
+        ? Math.round(guideLayout.box.top - 58)
+        : orbTop;
+    const top = Math.max(12, Math.min(orbTop, bubbleTop));
+    return { left, top };
+  }, [guideLayout]);
+
   if (!open || !step) return null;
 
   return (
@@ -262,7 +274,11 @@ export default function TutorialOverlay({
         type="button"
         onClick={onSkip}
         data-tutorial-ui="1"
-        className="pointer-events-auto absolute right-4 top-4 rounded-full border border-white/20 bg-black/25 px-3 py-1 text-xs text-white/75 backdrop-blur-sm transition hover:bg-black/35 hover:text-white"
+        className="pointer-events-auto absolute rounded-full border border-sky-200/35 bg-[#091632]/72 px-5 py-2 text-sm font-semibold text-sky-100 shadow-[0_10px_22px_rgba(2,6,23,0.42)] backdrop-blur-md transition hover:bg-[#12254d]/82 hover:border-sky-200/55"
+        style={{
+          left: `${skipButtonPos.left}px`,
+          top: `${skipButtonPos.top}px`,
+        }}
       >
         건너뛰기
       </button>
