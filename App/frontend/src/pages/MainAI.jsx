@@ -2116,7 +2116,11 @@ export default function MainAI() {
         break;
 
       case "error":
+        // 백엔드가 즉시 끊고 error 이벤트 1개만 보내는 경우(Ollama 미연결/모델 미설치 등)
+        // 진행 단계 스피너가 "의도 분석"에서 멈춘 것처럼 보여 오해 유발 → idle 로 복귀.
+        // 주의: aimodeDone 은 정상 완료 의미라 "완료" 뱃지가 켜지므로 여기선 건드리지 않음.
         setAiError(ev.message || "오류");
+        setAimodeStage("idle");
         break;
 
       // ── 기존 ai_search 이벤트 (fallback) ─────────────────────
@@ -2939,6 +2943,51 @@ export default function MainAI() {
                     </div>
                   </div>
                 )}
+
+                {/* ════ AIMODE: 백엔드 에러 박스 ════
+                    백엔드가 즉시 끊고 error 이벤트 1개만 보내는 케이스(Ollama 미연결,
+                    필수 Gemma 모델 미설치 등)에서 사용자에게 명확한 원인/조치를 노출.
+                    메시지에 'ollama' / 'gemma' 가 포함되면 설치 명령을 안내한다. */}
+                {useAimode && aiError && !aimodeBlocked && (() => {
+                  const lower = String(aiError).toLowerCase();
+                  const isModelMissing =
+                    lower.includes("ollama") ||
+                    lower.includes("gemma") ||
+                    lower.includes("모델");
+                  return (
+                    <div className="mb-4 relative overflow-hidden rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3">
+                      <div className="flex items-center gap-2 text-amber-200">
+                        <span
+                          className="material-symbols-outlined text-lg"
+                          style={{ fontVariationSettings: '"FILL" 1' }}
+                        >
+                          {isModelMissing ? "download" : "error"}
+                        </span>
+                        <span className="text-sm font-bold">
+                          {isModelMissing
+                            ? "AI 모델이 설치되어 있지 않습니다"
+                            : "AI 응답을 가져오지 못했습니다"}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-amber-200/85 whitespace-pre-wrap">
+                        {aiError}
+                      </p>
+                      {isModelMissing && (
+                        <div className="mt-2 rounded-md border border-amber-300/30 bg-black/30 px-3 py-2 font-mono text-[11px] text-amber-100/90 leading-relaxed select-text">
+                          <div>ollama pull gemma:12b</div>
+                          <div>ollama pull gemma:4b</div>
+                        </div>
+                      )}
+                      {isModelMissing && (
+                        <p className="mt-2 text-[11px] text-amber-200/60">
+                          위 명령으로 모델 설치 후 검색을 다시 시도해 주세요.
+                          이미 다른 버전(예: gemma3)이 설치되어 있더라도 백엔드는
+                          gemma:12b / gemma:4b 이름의 모델을 요구합니다.
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {/* ════ AIMODE: 보안 차단 박스 ════ */}
                 {useAimode && aimodeBlocked && (
