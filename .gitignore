@@ -258,6 +258,7 @@ publication/paper/fig*_ko.pdf
 publication/paper/fig*_ko.png
 
 .claude/
+CLAUDE.md
 node_modules
 
 # Data/ 동기화 zip (USB/Teams 별도 공유 — git 에는 포함 X)

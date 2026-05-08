@@ -154,25 +154,74 @@ function AVDetailContent({ result }) {
 function FileCard({ source, index, scanState, selected, onClick }) {
   const meta = getTypeMeta(source.file_type)
   const pct = (((source.confidence ?? source.similarity ?? 0) * 100) || 0).toFixed(0)
+  const isScanning = scanState === 'scanning'
+  const isFound    = scanState === 'found'
+  const isNotFound = scanState === 'not_found'
+
+  // 상태별 보더/배경 — 스캔→발견→선택 흐름 시각화
+  const stateClass = selected
+    ? 'border-violet-400/55 bg-violet-500/[0.12] shadow-[0_0_28px_rgba(139,92,246,0.28)]'
+    : isFound
+      ? 'border-emerald-400/45 bg-emerald-500/[0.08] shadow-[0_0_18px_rgba(52,211,153,0.18)]'
+      : isScanning
+        ? 'border-violet-300/40 bg-violet-500/[0.06]'
+        : isNotFound
+          ? 'border-white/[0.06] bg-white/[0.02] opacity-50'
+          : 'border-white/[0.12] bg-white/[0.03] hover:border-violet-300/35 hover:bg-white/[0.05]'
+
   return (
     <button
       type="button"
       onClick={() => onClick(source)}
-      className={`flex flex-col gap-2 rounded-xl border p-3 text-left transition ${
-        selected
-          ? 'border-violet-400/55 bg-violet-500/[0.12] shadow-[0_0_24px_rgba(139,92,246,0.2)]'
-          : 'border-white/[0.12] bg-white/[0.03] hover:border-violet-300/35 hover:bg-white/[0.05]'
-      }`}
+      className={`relative flex flex-col gap-2 overflow-hidden rounded-xl border p-3 text-left transition-all duration-300 ${stateClass}`}
     >
-      <div className="flex items-start justify-between gap-2">
+      {/* 스캔 중: 위→아래 스캔라인 (절대 위치 오버레이) */}
+      {isScanning && (
+        <>
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-transparent via-violet-400/15 to-transparent animate-[scanline_1.4s_ease-in-out_infinite]" />
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-violet-300 to-transparent animate-[scanline_1.4s_ease-in-out_infinite] shadow-[0_0_12px_rgba(167,139,250,0.6)]" />
+        </>
+      )}
+      {/* found 진입 시 글로우 펄스 */}
+      {isFound && !selected && (
+        <div className="pointer-events-none absolute -inset-px rounded-xl ring-1 ring-emerald-400/40 animate-pulse" />
+      )}
+
+      <div className="relative flex items-start justify-between gap-2">
         <span className={`material-symbols-outlined shrink-0 text-xl ${meta.color}`} style={{ fontVariationSettings: '"FILL" 1' }}>
           {meta.icon}
         </span>
-        <span className="rounded-full bg-emerald-600/90 px-2 py-0.5 text-[10px] font-bold text-white">#{index + 1}</span>
+        <div className="flex items-center gap-1">
+          {isFound && (
+            <span className="material-symbols-outlined text-base text-emerald-300" style={{ fontVariationSettings: '"FILL" 1' }}>
+              check_circle
+            </span>
+          )}
+          {isScanning && (
+            <span className="material-symbols-outlined animate-spin text-base text-violet-300">
+              progress_activity
+            </span>
+          )}
+          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold text-white ${
+            isFound ? 'bg-emerald-500/95' : isScanning ? 'bg-violet-500/95' : 'bg-emerald-600/90'
+          }`}>
+            #{index + 1}
+          </span>
+        </div>
       </div>
-      <div className="line-clamp-2 text-[12px] font-semibold text-slate-100">{source.file_name}</div>
-      <div className="flex items-center justify-between text-[10px] text-slate-500">
-        <span className="uppercase tracking-wide">{scanState === 'scanning' ? '스캔…' : scanState}</span>
+      <div className="relative line-clamp-2 text-[12px] font-semibold text-slate-100">{source.file_name}</div>
+      <div className="relative flex items-center justify-between text-[10px]">
+        <span className={`uppercase tracking-wide ${
+          isScanning ? 'text-violet-300 font-bold'
+            : isFound ? 'text-emerald-300 font-bold'
+            : isNotFound ? 'text-slate-600'
+            : 'text-slate-500'
+        }`}>
+          {isScanning ? '스캔 중…'
+            : isFound ? '✓ 매칭'
+            : isNotFound ? '미매칭'
+            : '대기'}
+        </span>
         <span className="font-mono text-violet-200/90">{pct}%</span>
       </div>
     </button>
@@ -1447,6 +1496,11 @@ export default function MainAI() {
   const [aimodeSelected,    setAimodeSelected]    = useState(null)
   const [aimodeAnswer,      setAimodeAnswer]      = useState('')
   const [aimodeDone,        setAimodeDone]        = useState(false)
+  const [aimodeScanStates,  setAimodeScanStates]  = useState({})  // fid → 'scanning'|'found'|'not_found'
+  const [aimodeStage,       setAimodeStage]       = useState('idle')  // 'intent'|'searching'|'scanning'|'generating'|'idle'
+  // 보안 모드: SecurityCritic 차단/마스킹 결과
+  const [aimodeBlocked,     setAimodeBlocked]     = useState(null)  // {stage, reason, pii_types}
+  const [aimodeSecurity,    setAimodeSecurity]    = useState(null)  // {masked, pii_types, reason}
   const [useAimode,         setUseAimode]         = useState(true)
   const [topK,              setTopK]              = useState(20)
   const [maxIter,           setMaxIter]           = useState(5)
@@ -1526,8 +1580,10 @@ export default function MainAI() {
     return () => window.removeEventListener('resize', checkOverflow)
   }, [view, inputValue, aiHomeInputFocused])
 
-  const ml       = open ? 'ml-64' : 'ml-0'
-  const leftEdge = open ? 'left-64' : 'left-0'
+  // 사이드바 폭은 SearchSidebar 가 --sidebar-width CSS 변수로 export.
+  // 사용자가 리사이즈하면 256~420px 사이에서 변동, 닫히면 0px.
+  const ml       = open ? 'ml-[var(--sidebar-width,16rem)]' : 'ml-0'
+  const leftEdge = open ? 'left-[var(--sidebar-width,16rem)]' : 'left-0'
   const sidebarPx= open ? 256 : 0
 
   // STT
@@ -1591,6 +1647,10 @@ export default function MainAI() {
     setAimodeSelected(null)
     setAimodeAnswer('')
     setAimodeDone(false)
+    setAimodeBlocked(null)
+    setAimodeSecurity(null)
+    setAimodeScanStates({})
+    setAimodeStage('intent')
 
     const endpoint = useAimode
       ? `${API_BASE}/api/aimode/chat`
@@ -1614,8 +1674,8 @@ export default function MainAI() {
     }
     window.__aimodeThreadId = tid
     const body = useAimode
-      ? { query: q, topk: topK, thread_id: tid }
-      : { query: q, topk: topK, max_iterations: maxIter }
+      ? { query: q, topk: topK, thread_id: tid, secure: securityMode }
+      : { query: q, topk: topK, max_iterations: maxIter, secure: securityMode }
 
     try {
       const res = await fetch(endpoint, {
@@ -1736,6 +1796,7 @@ export default function MainAI() {
         }
         break
 
+      case 'candidates':
       case 'sources': {
         // AIMODE 검색 결과 — 작은 단계 패널용 + MainSearch 와 동일한 큰 카드 그리드용
         const items = ev.items || []
@@ -1763,14 +1824,63 @@ export default function MainAI() {
         break
       }
 
+      case 'intent':
+        if (ev.message)         setAimodeQuery(ev.message)
+        if (ev.file_keywords)   setAimodeContentKws(ev.file_keywords)
+        if (ev.detail_keywords) setAimodeDetailKws(ev.detail_keywords)
+        setAimodeStage('searching')
+        break
+
+      case 'scanning':
+        setAimodeStage('scanning')
+        if (ev.file_id) {
+          setAimodeScanStates(prev => ({ ...prev, [ev.file_id]: 'scanning' }))
+        }
+        break
+
+      case 'scan_result':
+        if (ev.file_id) {
+          setAimodeScanStates(prev => ({
+            ...prev,
+            [ev.file_id]: ev.found ? 'found' : 'not_found',
+          }))
+        }
+        break
+
+      case 'selected': {
+        // 백엔드 select_node — found:true 인 파일들만 추려서 sources 로 송출
+        const items = ev.sources || []
+        if (items.length > 0) {
+          const mapped = items.map(mapItem)
+          setAimodeSources(mapped)
+          setResults(mapped)
+        }
+        break
+      }
+
+      case 'generating':
+        setAimodeStage('generating')
+        break
+
       case 'token':
         setAimodeAnswer(prev => prev + (ev.text || ''))
         break
 
       case 'done':
         setAimodeDone(true)
+        setAimodeStage('idle')
         if (ev.answer) setAimodeAnswer(ev.answer)
+        if (ev.security) setAimodeSecurity(ev.security)
         if (typeof ev.selected_idx === 'number') setAimodeSelected(ev.selected_idx)
+        break
+
+      case 'blocked':
+        setAimodeDone(true)
+        setAimodeBlocked({
+          stage: ev.stage || 'final',
+          reason: ev.reason || '보안 정책상 응답이 차단되었습니다.',
+          pii_types: ev.pii_types || [],
+        })
         break
 
       case 'error':
@@ -1942,6 +2052,8 @@ export default function MainAI() {
     setAimodeSelected(null)
     setAimodeAnswer('')
     setAimodeDone(false)
+    setAimodeBlocked(null)
+    setAimodeSecurity(null)
     setResults([])
     setIterationData([])
     setTurns([])
@@ -1972,7 +2084,10 @@ export default function MainAI() {
   const rightCandidates = latestTurn?.candidates?.length
     ? latestTurn.candidates
     : results;
-  const rightScanStates = latestTurn?.scanStates ?? {};
+  // legacy turns 의 scanStates 가 있으면 우선, 없으면 AIMODE 의 aimodeScanStates
+  const rightScanStates = (latestTurn?.scanStates && Object.keys(latestTurn.scanStates).length)
+    ? latestTurn.scanStates
+    : aimodeScanStates;
   const shouldShowCenterNoInfoAlert =
     latestTurn?.done &&
     !latestTurn?.streaming &&
@@ -2165,7 +2280,7 @@ export default function MainAI() {
         {/* ══ CHAT ══ (검색/대화 결과 — doSearch·popstate 에서는 'results' 사용) */}
         {(view === "chat" || view === "results" || view === "detail") && (
           <div
-            className={`${ml} min-h-0 w-full transition-[margin] duration-300`}
+            className={`${ml} min-h-0 ${open ? 'w-[calc(100%-var(--sidebar-width,16rem))]' : 'w-full'} transition-[margin,width] duration-300`}
             style={{
               display: "flex",
               flexDirection: "column",
@@ -2292,58 +2407,51 @@ export default function MainAI() {
                 </div>
               )}
 
-              {isAnyStreaming && (
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 5,
-                    fontSize: 10,
-                    fontWeight: 700,
-                    color: "#e5e7eb",
-                    background: "rgb(1,1,4)",
-                    border: "1px solid rgb(1,1,4)",
-                    padding: "3px 10px",
-                    borderRadius: 999,
-                    flexShrink: 0,
-                  }}
-                >
-                  <span
-                    className="inline-flex rounded-md border border-violet-400/25 bg-violet-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest mt-3"
-                    style={{
-                      color: "#e5e7eb",
-                      border: "1px solid rgb(1,1,4)",
-                      background: "rgb(1,1,4)",
-                    }}
+              {/* AIMODE 스테이지 뱃지 — 진행 중 (단계별 아이콘+라벨) */}
+              {isAnyStreaming && (() => {
+                const stageMeta = {
+                  intent:     { icon: 'psychology',         label: '의도 분석' },
+                  searching:  { icon: 'travel_explore',     label: '벡터 검색' },
+                  scanning:   { icon: 'document_scanner',   label: '문서 스캔' },
+                  generating: { icon: 'auto_awesome',       label: '답변 생성' },
+                  idle:       { icon: 'progress_activity',  label: '처리 중'   },
+                };
+                const m = stageMeta[aimodeStage] || stageMeta.idle;
+                return (
+                  <div
+                    className="relative flex items-center gap-1.5 rounded-full border border-violet-400/30 bg-violet-500/[0.08] px-3 py-1 flex-shrink-0 overflow-hidden"
                   >
-                    AI 쿼리
-                  </span>
-                  처리 중
-                </div>
-              )}
-              {!isAnyStreaming && latestTurn?.done && (
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 5,
-                    fontSize: 10,
-                    fontWeight: 700,
-                    color: "#e5e7eb",
-                    background: "rgb(1,1,4)",
-                    border: "1px solid rgb(1,1,4)",
-                    padding: "3px 10px",
-                    borderRadius: 999,
-                    flexShrink: 0,
-                  }}
-                >
+                    {/* 글로우 펄스 백그라운드 */}
+                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-transparent via-violet-400/15 to-transparent animate-pulse" />
+                    <span
+                      className={`material-symbols-outlined text-violet-200 relative ${aimodeStage === 'idle' ? 'animate-spin' : 'animate-pulse'}`}
+                      style={{ fontSize: 14, fontVariationSettings: '"FILL" 1' }}
+                    >
+                      {m.icon}
+                    </span>
+                    <span className="relative text-[10px] font-bold uppercase tracking-[0.14em] text-violet-100">
+                      {m.label}
+                    </span>
+                    <span className="relative inline-flex gap-0.5 ml-0.5">
+                      <span className="h-1 w-1 rounded-full bg-violet-300 animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <span className="h-1 w-1 rounded-full bg-violet-300 animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <span className="h-1 w-1 rounded-full bg-violet-300 animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </span>
+                  </div>
+                );
+              })()}
+              {/* AIMODE 완료 뱃지 — turns 또는 aimodeDone 둘 다 인식 */}
+              {!isAnyStreaming && (latestTurn?.done || aimodeDone) && (
+                <div className="flex items-center gap-1.5 rounded-full border border-emerald-400/35 bg-emerald-500/[0.08] px-3 py-1 flex-shrink-0">
                   <span
-                    className="material-symbols-outlined"
-                    style={{ fontSize: 11 }}
+                    className="material-symbols-outlined text-emerald-300"
+                    style={{ fontSize: 14, fontVariationSettings: '"FILL" 1' }}
                   >
                     check_circle
                   </span>
-                  완료
+                  <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-200">
+                    완료
+                  </span>
                 </div>
               )}
 
@@ -2408,6 +2516,145 @@ export default function MainAI() {
                       onClickFile={handleSelectFile}
                     />
                   ))}
+
+                  {/* ════ AIMODE: 인텐트 헤더 (질문 의도 + 키워드 칩) ════ */}
+                  {useAimode && aimodeQuery && (
+                    <div className="mb-4 rounded-2xl border border-violet-400/20 bg-gradient-to-br from-violet-500/[0.06] via-transparent to-fuchsia-500/[0.06] px-4 py-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="material-symbols-outlined text-base" style={{ color: AI.accentLight, fontVariationSettings: '"FILL" 1' }}>
+                          psychology
+                        </span>
+                        <span className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: AI.accentLight }}>
+                          질문 의도 분석
+                        </span>
+                      </div>
+                      <p className="text-[13px] text-violet-50/95 leading-relaxed mb-2">{aimodeQuery}</p>
+                      {(aimodeContentKws.length > 0 || aimodeDetailKws.length > 0) && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {aimodeContentKws.map((kw, i) => (
+                            <span key={`c-${i}`} className="rounded-full border border-violet-400/30 bg-violet-500/15 px-2.5 py-0.5 text-[10px] font-medium text-violet-200">
+                              {kw}
+                            </span>
+                          ))}
+                          {aimodeDetailKws.map((kw, i) => (
+                            <span key={`d-${i}`} className="rounded-full border border-fuchsia-400/25 bg-fuchsia-500/10 px-2.5 py-0.5 text-[10px] font-medium text-fuchsia-200">
+                              {kw}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* ════ AIMODE: 처리중 인디케이터 (눈에 띄게) ════ */}
+                  {useAimode && streaming && !aimodeAnswer && !aimodeBlocked && (
+                    <div className="relative mb-4 overflow-hidden rounded-2xl border border-violet-400/30 bg-gradient-to-br from-violet-600/15 via-fuchsia-600/10 to-violet-600/15 px-5 py-6">
+                      {/* 백그라운드 펄스 */}
+                      <div className="pointer-events-none absolute inset-0 opacity-60">
+                        <div className="absolute -inset-1 animate-pulse bg-gradient-to-r from-transparent via-violet-500/15 to-transparent blur-xl" />
+                      </div>
+                      <div className="relative flex items-center gap-4">
+                        {/* 회전 오브 */}
+                        <div className="relative h-12 w-12 shrink-0">
+                          <div className="absolute inset-0 rounded-full border-2 border-violet-400/30" />
+                          <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-violet-300 animate-spin" />
+                          <div className="absolute inset-2 rounded-full bg-gradient-to-br from-violet-400/40 to-fuchsia-400/40 animate-pulse" />
+                          <span className="material-symbols-outlined absolute inset-0 m-auto h-fit w-fit text-violet-100" style={{ fontSize: 20, fontVariationSettings: '"FILL" 1' }}>
+                            {aimodeStage === 'generating' ? 'auto_awesome'
+                              : aimodeStage === 'scanning' ? 'document_scanner'
+                              : aimodeStage === 'searching' ? 'travel_explore'
+                              : 'psychology'}
+                          </span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-violet-300 mb-1">
+                            {aimodeStage === 'generating' ? '답변 생성'
+                              : aimodeStage === 'scanning' ? '문서 스캔'
+                              : aimodeStage === 'searching' ? '벡터 검색'
+                              : '의도 분석'}
+                          </div>
+                          <div className="text-[14px] font-semibold text-violet-50">
+                            {aimodeStage === 'generating' ? 'AI 가 답변을 작성하고 있어요'
+                              : aimodeStage === 'scanning' ? '관련 문서에서 핵심 구절을 찾고 있어요'
+                              : aimodeStage === 'searching' ? '의미적으로 관련된 파일을 찾고 있어요'
+                              : '질문을 이해하는 중이에요'}
+                            <span className="inline-flex ml-1 gap-0.5">
+                              <span className="h-1 w-1 rounded-full bg-violet-300 animate-bounce" style={{ animationDelay: '0ms' }} />
+                              <span className="h-1 w-1 rounded-full bg-violet-300 animate-bounce" style={{ animationDelay: '150ms' }} />
+                              <span className="h-1 w-1 rounded-full bg-violet-300 animate-bounce" style={{ animationDelay: '300ms' }} />
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ════ AIMODE: 보안 차단 박스 ════ */}
+                  {useAimode && aimodeBlocked && (
+                    <div className="mb-4 relative overflow-hidden rounded-2xl border border-rose-500/40 bg-rose-500/10 px-4 py-3">
+                      <div className="flex items-center gap-2 text-rose-200">
+                        <span className="material-symbols-outlined text-lg" style={{ fontVariationSettings: '"FILL" 1' }}>shield</span>
+                        <span className="text-sm font-bold">보안 모드: 응답이 차단되었습니다</span>
+                      </div>
+                      <p className="mt-1 text-xs text-rose-200/85">{aimodeBlocked.reason}</p>
+                      {aimodeBlocked.pii_types?.length > 0 && (
+                        <p className="mt-1 text-[11px] text-rose-200/60">
+                          탐지: {aimodeBlocked.pii_types.join(', ')} · 단계: {aimodeBlocked.stage}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* ════ AIMODE: 마스킹 안내 ════ */}
+                  {useAimode && aimodeSecurity?.masked && !aimodeBlocked && (
+                    <div className="mb-4 rounded-lg border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-xs text-amber-200 flex items-center gap-2">
+                      <span className="material-symbols-outlined text-base" style={{ fontVariationSettings: '"FILL" 1' }}>shield</span>
+                      보안 모드: 개인정보({(aimodeSecurity.pii_types || []).join(', ')})가 마스킹되었습니다.
+                    </div>
+                  )}
+
+                  {/* ════ AIMODE: 답변 카드 (좌측으로 이동) ════ */}
+                  {useAimode && aimodeAnswer && !aimodeBlocked && (
+                    <div className="mb-4 relative overflow-hidden rounded-2xl border border-violet-400/25 bg-gradient-to-br from-white/[0.04] via-violet-500/[0.03] to-fuchsia-500/[0.04] shadow-[0_8px_32px_rgba(139,92,246,0.12)]">
+                      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-fuchsia-500/[0.06] via-transparent to-violet-500/[0.08]" />
+                      <div className="relative flex items-center gap-3 border-b border-violet-400/15 px-4 py-3">
+                        <span className="material-symbols-outlined text-xl" style={{ color: AI.accentLight, fontVariationSettings: '"FILL" 1' }}>
+                          auto_awesome
+                        </span>
+                        <span className="text-[11px] font-bold uppercase tracking-[0.18em]" style={{ color: AI.accentLight }}>
+                          AI 답변
+                        </span>
+                        {aimodeDone ? (
+                          <span className="ml-auto flex items-center gap-1 text-[11px] text-[#7af5d9]">
+                            <span className="material-symbols-outlined text-base" style={{ fontVariationSettings: '"FILL" 1' }}>check_circle</span> 완료
+                          </span>
+                        ) : (
+                          <span className="ml-auto flex items-center gap-1 text-[11px]" style={{ color: AI.accentLight }}>
+                            <span className="material-symbols-outlined animate-spin text-base">progress_activity</span>
+                            작성 중
+                          </span>
+                        )}
+                      </div>
+                      <div className="relative px-5 py-4 text-[14px] leading-[1.7] text-violet-50/95 whitespace-pre-wrap">
+                        {stripMarkdown(aimodeAnswer)}
+                        {!aimodeDone && (
+                          <span className="inline-block w-2 h-5 bg-violet-300 ml-1 animate-pulse align-middle rounded-sm" />
+                        )}
+                      </div>
+                      {/* AV 출처 자동 노출 — selectedFile 없으면 aimodeSources 의 비디오/오디오 fallback */}
+                      {(() => {
+                        const avSrc = (selectedFile && ["video","audio","movie","music"].includes(selectedFile.file_type))
+                          ? selectedFile
+                          : aimodeSources.find(s => ["video","audio","movie","music"].includes(s.file_type) && (s.segments?.length));
+                        return avSrc ? (
+                          <div style={{ marginBottom: 13 }}>
+                            <AVDetailContent result={avSrc} />
+                          </div>
+                        ) : null;
+                      })()}
+                    </div>
+                  )}
+
                   <div ref={conversationEndRef} />
                 </div>
                 {shouldShowCenterNoInfoAlert && (
@@ -2613,43 +2860,82 @@ export default function MainAI() {
                           flexDirection: "column",
                           alignItems: "center",
                           justifyContent: "center",
-                          gap: 10,
+                          gap: 14,
                           padding: 40,
                         }}
                       >
-                        <span
-                          className="material-symbols-outlined"
-                          style={{
-                            fontSize: 40,
-                            color: "rgba(167,139,250,0.22)",
-                          }}
-                        >
-                          folder_open
-                        </span>
-                        <p
-                          style={{
-                            fontSize: 11,
-                            color: "#94a3b8",
-                            textAlign: "center",
-                          }}
-                        >
-                          후보 파일이 여기 표시됩니다
-                        </p>
+                        {streaming ? (
+                          // 검색 중 — 회전 오브 + 스캔 메시지
+                          <>
+                            <div className="relative h-16 w-16">
+                              <div className="absolute inset-0 rounded-full border-2 border-violet-400/20" />
+                              <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-violet-400 border-r-fuchsia-400 animate-spin" />
+                              <div className="absolute inset-3 rounded-full bg-gradient-to-br from-violet-500/30 to-fuchsia-500/30 animate-pulse" />
+                              <span className="material-symbols-outlined absolute inset-0 m-auto h-fit w-fit text-violet-200" style={{ fontSize: 22, fontVariationSettings: '"FILL" 1' }}>
+                                travel_explore
+                              </span>
+                            </div>
+                            <div className="text-center">
+                              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-violet-300 mb-1">
+                                벡터 검색 중
+                              </p>
+                              <p className="text-[12px] text-violet-100/75">
+                                관련 파일을 찾고 있어요
+                              </p>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <span className="material-symbols-outlined" style={{ fontSize: 40, color: "rgba(167,139,250,0.22)" }}>
+                              folder_open
+                            </span>
+                            <p style={{ fontSize: 11, color: "#94a3b8", textAlign: "center" }}>
+                              후보 파일이 여기 표시됩니다
+                            </p>
+                          </>
+                        )}
                       </div>
                     ) : (
                       <>
-                        <p
-                          style={{
-                            fontSize: 10,
-                            fontWeight: 700,
-                            color: "#a78bfa",
-                            letterSpacing: "0.12em",
-                            textTransform: "uppercase",
-                            marginBottom: 9,
-                          }}
-                        >
-                          후보 파일 {rightCandidates.length}개
-                        </p>
+                        {/* 헤더 — 스캔 진행상태 함께 표시 */}
+                        {(() => {
+                          const total = rightCandidates.length;
+                          const scanned = rightCandidates.reduce((acc, src, i) => {
+                            const fid = src.trichef_id || src.file_name || String(i);
+                            const st = rightScanStates[fid];
+                            return acc + (st === 'found' || st === 'not_found' ? 1 : 0);
+                          }, 0);
+                          const found = rightCandidates.reduce((acc, src, i) => {
+                            const fid = src.trichef_id || src.file_name || String(i);
+                            return acc + (rightScanStates[fid] === 'found' ? 1 : 0);
+                          }, 0);
+                          const inProgress = scanned < total && streaming;
+                          return (
+                            <div className="mb-3 flex items-center justify-between gap-2 px-1">
+                              <div className="flex items-center gap-2">
+                                <span className={`material-symbols-outlined text-base ${inProgress ? 'text-violet-300 animate-pulse' : 'text-violet-400/70'}`}>
+                                  {inProgress ? 'document_scanner' : 'folder_managed'}
+                                </span>
+                                <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-violet-300">
+                                  {inProgress ? `스캔 ${scanned}/${total}` : `후보 ${total}개`}
+                                </span>
+                                {found > 0 && (
+                                  <span className="rounded-full bg-emerald-500/15 border border-emerald-400/30 px-2 py-0.5 text-[10px] font-bold text-emerald-300">
+                                    매칭 {found}
+                                  </span>
+                                )}
+                              </div>
+                              {inProgress && (
+                                <div className="flex-1 max-w-[80px] h-1 rounded-full bg-violet-950/60 overflow-hidden">
+                                  <div
+                                    className="h-full bg-gradient-to-r from-violet-400 to-fuchsia-400 transition-all duration-500"
+                                    style={{ width: `${total > 0 ? (scanned / total) * 100 : 0}%` }}
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
                         <div
                           style={{
                             display: "grid",
@@ -2678,49 +2964,6 @@ export default function MainAI() {
                       </>
                     )}
 
-                    {streaming && results.length === 0 && (
-                      <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] px-4 py-3 text-center text-xs text-on-surface-variant">
-                        AIMODE 파이프라인이 실행 중입니다. 잠시만 기다려 주세요.
-                      </div>
-                    )}
-
-                    {useAimode && aimodeAnswer && !streaming && (
-                      <div className="relative overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.03]">
-                        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-fuchsia-500/[0.07] via-transparent to-violet-500/[0.08]" />
-                        <div className="relative flex items-center gap-3 border-b border-white/[0.08] px-4 py-2.5">
-                          <span className="material-symbols-outlined text-lg" style={{ color: AI.accentLight }}>
-                            stylus
-                          </span>
-                          <span className="text-[11px] font-bold uppercase tracking-widest" style={{ color: AI.accentLight }}>
-                            초안 답변
-                          </span>
-                          {aimodeDone ? (
-                            <span className="ml-auto flex items-center gap-1 text-[11px] text-[#7af5d9]">
-                              <span className="material-symbols-outlined text-base">check_circle</span> 완료
-                            </span>
-                          ) : (
-                            <span className="ml-auto flex items-center gap-1 text-[11px]" style={{ color: AI.accentLight }}>
-                              <span className="material-symbols-outlined animate-spin text-base">progress_activity</span>
-                              작성 중
-                            </span>
-                          )}
-                        </div>
-                        <div className="relative px-4 py-3 text-xs leading-relaxed text-on-surface/95 whitespace-pre-wrap">
-                          {stripMarkdown(aimodeAnswer)}
-                          {!aimodeDone && (
-                            <span className="inline-block w-2 h-4 bg-violet-400 ml-1 animate-pulse align-middle" />
-                          )}
-                        </div>
-                        {selectedFile &&
-                          ["video", "audio", "movie", "music"].includes(
-                            selectedFile.file_type,
-                          ) && (
-                            <div style={{ marginBottom: 13 }}>
-                              <AVDetailContent result={selectedFile} />
-                            </div>
-                          )}
-                      </div>
-                    )}
                   </div>
                 ) : (
                   <div style={{ flex: 1, overflowY: "auto" }}>

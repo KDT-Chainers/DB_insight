@@ -39,6 +39,7 @@ logger = logging.getLogger(__name__)
 aimode_bp = Blueprint("aimode", __name__, url_prefix="/api/aimode")
 
 OLLAMA_URL  = "http://localhost:11434"
+SUPPORTED_GEMMA_MODELS = ("gemma:12b", "gemma:4b")
 SCAN_DELAY  = 0.25   # 파일 스캔 간 UI 애니메이션 딜레이 (초)
 
 
@@ -176,29 +177,33 @@ _prev_sources_lock = threading.Lock()
 
 
 # ── Ollama 함수 ────────────────────────────────────────────────────
+def _is_supported_gemma_model(name: str) -> bool:
+    lowered = name.lower()
+    return any(model in lowered for model in SUPPORTED_GEMMA_MODELS)
+
+
 def _get_ollama_model(task: str | None = None) -> str | None:
-    """task 별 모델 분기 (하이브리드 모드).
-
-    - task='generate' : 답변/요약 생성용 → 작은 빠른 모델 우선 (gemma3:4b 등)
-    - 그 외(검색/intent/scan/router) : 정확도 우선 큰 모델 (gemma3:12b 등)
-
-    동일 머신에 여러 모델 보유 시 자동 선택. VRAM 부족하면 Ollama가 모델 스왑.
-    """
+    """지원 Gemma 모델은 gemma:12b, gemma:4b만 허용한다."""
     try:
         r = _req.get(f"{OLLAMA_URL}/api/tags", timeout=3)
         models = r.json().get("models", [])
         if task == "generate":
-            # 답변 생성: 작은 모델 우선 (속도 우선). 4b 없으면 fallback 으로 큰 모델
-            preferred = ["gemma3:4b", "gemma3:1b", "qwen2.5:1.5b", "qwen2.5:3b",
-                         "gemma3", "qwen2.5", "llama3.2", "llama3", "mistral", "phi4"]
+            preferred = ["gemma:12b", "gemma:4b", "qwen2.5:1.5b", "qwen2.5:3b",
+                         "qwen2.5", "llama3.2", "llama3", "mistral", "phi4"]
         else:
-            # 검색/intent/scan/router: 정확도 우선 큰 모델
-            preferred = ["gemma3:12b", "gemma3", "qwen2.5", "llama3.2", "llama3", "mistral", "phi4"]
+            preferred = ["gemma:12b", "gemma:4b", "qwen2.5", "llama3.2", "llama3", "mistral", "phi4"]
         for pref in preferred:
             for m in models:
-                if pref in m.get("name", "").lower():
+                name = m.get("name", "").lower()
+                if pref in name:
                     return m["name"]
-        return models[0]["name"] if models else None
+        for m in models:
+            name = m.get("name", "").lower()
+            if name.startswith("gemma") and not _is_supported_gemma_model(name):
+                continue
+            if name:
+                return m["name"]
+        return None
     except Exception:
         return None
 
@@ -220,7 +225,14 @@ def _ollama_oneshot(prompt: str, model: str, num_predict: int = 150) -> str:
 
 def _ollama_stream(messages: list[dict], model: str,
                    num_predict: int = -1,
-                   temperature: float = 0.3) -> Generator[str, None, None]:
+                   temperature: float = 0.3,
+                   chunk_size: int = 80) -> Generator[str, None, None]:
+    """Ollama 스트리밍 응답.
+
+    chunk_size>0 이면 토큰을 buffer 에 모아 N자 이상이거나 줄바꿈을 만나면 한 번에 yield.
+    한 글자씩 떠오르는 답답함을 줄이고 "줄 단위로 차라락" 나오는 UX 제공.
+    chunk_size=0 이면 토큰을 받는 즉시 yield (기존 동작).
+    """
     try:
         with _req.post(
             f"{OLLAMA_URL}/api/chat",
@@ -233,6 +245,7 @@ def _ollama_stream(messages: list[dict], model: str,
             stream=True, timeout=600,
         ) as resp:
             resp.raise_for_status()
+            buf = ""
             for line in resp.iter_lines():
                 if not line:
                     continue
@@ -242,9 +255,17 @@ def _ollama_stream(messages: list[dict], model: str,
                     continue
                 tok = d.get("message", {}).get("content", "")
                 if tok:
-                    yield tok
+                    if chunk_size <= 0:
+                        yield tok
+                    else:
+                        buf += tok
+                        if "\n" in buf or len(buf) >= chunk_size:
+                            yield buf
+                            buf = ""
                 if d.get("done"):
                     break
+            if buf:
+                yield buf
     except Exception as e:
         logger.warning(f"[aimode] Ollama stream 실패: {e}")
 
@@ -476,6 +497,34 @@ def _build_rag_context(matched_sources: list[dict]) -> str:
     return "\n\n".join(parts)
 
 
+def _fmt_seg_ts(seconds) -> str:
+    """초를 MM:SS 또는 HH:MM:SS 로 변환. 비디오/오디오 segment 타임스탬프용."""
+    try:
+        s = int(float(seconds or 0))
+    except (TypeError, ValueError):
+        return "00:00"
+    if s >= 3600:
+        return f"{s//3600}:{(s%3600)//60:02d}:{s%60:02d}"
+    return f"{s//60}:{s%60:02d}"
+
+
+def _build_av_chunk_with_timestamps(src: dict, max_segments: int = 8) -> str:
+    """비디오/오디오 source 의 segments 를 [MM:SS] 텍스트 형태로 직렬화.
+
+    LLM 이 forced-quote 에서 timestamp 와 STT 텍스트를 함께 보고 답변에 인용 가능하도록.
+    답변 예: "보이저호의 골든디스크 펄사 지도는 [32:21] 부분에서 언급됩니다"
+    """
+    segments = src.get("segments") or []
+    seg_lines = []
+    for seg in segments[:max_segments]:
+        text = (seg.get("text") or seg.get("preview") or "").strip()
+        if not text:
+            continue
+        ts = _fmt_seg_ts(seg.get("start"))
+        seg_lines.append(f"[{ts}] {text}")
+    return "\n".join(seg_lines)
+
+
 def _build_rag_messages(
     question: str,
     context: str,
@@ -508,6 +557,17 @@ def _build_rag_messages(
 
 """
 
+    # 비디오/오디오 출처 포함 여부 — timestamp 인용 규칙 활성화 트리거
+    has_av = any(
+        s.get("file_type") in ("video", "movie", "audio", "music", "bgm")
+        for s in matched_sources
+    )
+    av_rule = (
+        "5. 비디오/오디오 출처일 때는 답변에 [MM:SS] 또는 [HH:MM:SS] 타임스탬프를 "
+        "그대로 인용해서 어느 부분에서 나오는지 함께 적으세요.\n"
+        if has_av else ""
+    )
+
     sys_msg = f"""당신은 아래 [문서 발췌]를 보고 [질문]에 답하는 AI입니다. 반드시 한국어로만 답변하세요.
 {forced_block}
 [절대 규칙]
@@ -515,7 +575,7 @@ def _build_rag_messages(
 2. 학습 데이터에서 알고 있는 수치를 쓰면 안 됩니다. 문서 수치만 사용.
 3. 발췌에 없는 내용 추가 금지. 외국어 출력 금지.
 4. 답을 못 찾으면 "제공 문서에 해당 정보가 없습니다"라고만 쓰세요.
-
+{av_rule}
 [답변 형식]
 - 항목별 번호(1. 2.)와 줄바꿈 사용
 - 마크다운(** # `) 사용 금지
@@ -561,6 +621,30 @@ def _python_extract_key_facts(
     """
     import re as _re
 
+    # 줄바꿈 정규화 — fitz 소프트 줄바꿈으로 끊긴 문장 재결합.
+    # "생산량은\n3,035.5백만톤으로\n5.8% 증가..." 처럼 한 문장이 여러 줄로 쪼개진 경우,
+    # 직전 줄이 문장 종결자로 끝나지 않고 현재 줄이 불릿/괄호로 시작 안 하면 결합.
+    # 단, 직전 줄이 "* 생산량 전망치..." 같은 불릿 라인이면 다음 줄 절대 병합 X
+    # (불릿은 한 줄로 닫혀야 다음 narrative 와 분리됨).
+    _SENT_END = ('다', '요', '죠', '함', '임', '.', '!', '?', '。', ':')
+    _BULLET_RE = _re.compile(r'^\s*(?:[\*·•\-\(\[①②③④⑤]|\d+[.)]\s)')
+    _normalized = []
+    _prev_is_bullet = False
+    for _ln in full_text.split('\n'):
+        if not _ln.strip():
+            _prev_is_bullet = False
+            continue
+        _is_bullet = bool(_BULLET_RE.match(_ln))
+        if (_normalized
+                and not _prev_is_bullet                                  # 불릿 다음엔 새 문장 시작
+                and not _normalized[-1].rstrip().endswith(_SENT_END)
+                and not _is_bullet):
+            _normalized[-1] += ' ' + _ln.strip()
+        else:
+            _normalized.append(_ln)
+            _prev_is_bullet = _is_bullet
+    full_text = '\n'.join(_normalized)
+
     # 줄바꿈 / 문장 종결 기준으로 문장 분리
     raw_sents = _re.split(r'\n|(?<=[다요함임])\.\s*|(?<=[.!?])\s+', full_text)
     sentences = [s.strip() for s in raw_sents if len(s.strip()) > 20]
@@ -568,15 +652,31 @@ def _python_extract_key_facts(
     # 질문 키워드 (2자 이상 한글 + 숫자)
     q_tokens = set(_re.findall(r'[가-힣]{2,}|\d+', question))
 
+    # 결론형 패턴 — "X.X%(...) 증가/감소/상승/하락/기록/전망/예상/달성"
+    # 분해 표 행보다 narrative 결론 문장을 forced-quote 에 우선 노출.
+    # NOTE: lazy `.` 사용 — 십진수 마침표("167.8") 가 %와 동사 사이에 끼어도 통과.
+    ANSWER_PATTERN = _re.compile(
+        r'\d+\.?\d*\s*%.{0,40}?'
+        r'(?:증가|감소|상승|하락|기록|전망|예상|달성|확대|축소|개선)'
+    )
+
     scored = []
     for sent in sentences:
         score = 0
-        # 숫자/비율/날짜 포함 시 가산점
+        # 숫자/비율/날짜 포함 시 가산점 — 단 raw 데이터 테이블이 점수 독식 못하게 cap=5.
+        # (식량가격지수 표 한 줄에 25개 숫자 박혀 75점 먹는 케이스 차단)
         nums = _re.findall(r'\d+\.?\d*\s*%|\d{4}년|\d+\.\d+|\d+백만', sent)
-        score += len(nums) * 3
+        score += min(len(nums), 5) * 3
         # 질문 토큰 포함 시 가산점
         kw_hits = sum(1 for tok in q_tokens if tok in sent)
         score += kw_hits
+        # 결론형 narrative 가산점 (분해 표 행 대신 결과 문장 우선)
+        # 분해 표 행은 숫자수×3 으로 22점대 까지 올라가므로 +10 이상 필요.
+        if ANSWER_PATTERN.search(sent):
+            score += 10
+        # 불릿/표 행 감점 ("* 쌀 563.3 / 잡곡 ..." 같은 분해 행 억제)
+        if _re.match(r'^\s*[\*·•\-]', sent):
+            score -= 3
         # min_score 통과 여부 (kw_hits도 함께 검증)
         if score >= min_score and kw_hits >= 1:
             scored.append((score, sent))
@@ -979,11 +1079,14 @@ def qa_generate_node(state: dict) -> dict:
     attempts    = 0
     last_issues: list[str] = ["아직 생성 안 됨"]
 
+    # 하이브리드: 답변 생성은 작은 모델(4b)
+    gen_model = _get_ollama_model("generate") or model
+
     for attempt in range(1, 4):  # 최대 3회
         attempts = attempt
         _emit({"type": "qa_generating", "attempt": attempt, "max": 3})
 
-        raw = _ollama_oneshot(prompt, model, num_predict=500)
+        raw = _ollama_oneshot(prompt, gen_model, num_predict=500)
         logger.info(f"[qa_generate] attempt={attempt} raw={raw[:150]!r}")
 
         q_text, a_text = _parse_qa(raw)
@@ -1031,6 +1134,7 @@ def qa_generate_node(state: dict) -> dict:
         "type":          "done",
         "answer":        answer_text,
         "model":         model,
+        "gen_model":     gen_model,
         "sources_count": len(matched_sources),
     })
 
@@ -1083,6 +1187,7 @@ def direct_generate_node(state: dict) -> dict:
         "type":          "done",
         "answer":        full_answer,
         "model":         model,
+        "gen_model":     gen_model,
         "sources_count": 0,
         "error":         stream_error,
     })
@@ -1305,6 +1410,15 @@ def generate_node(state: dict) -> dict:
 
             logger.info(f"[generate_node] {src.get('file_name','?')}: combined={len(combined)}ch")
             full_sources.append({**src, "matched_chunks": [combined[:15000]]})
+        elif file_type in ("video", "movie", "audio", "music", "bgm"):
+            # 비디오/오디오: segments 를 [MM:SS] 형식으로 직렬화 → matched_chunks 주입
+            # LLM 이 forced-quote 에서 timestamp 와 STT 를 함께 인용할 수 있게.
+            av_chunk = _build_av_chunk_with_timestamps(src, max_segments=8)
+            if av_chunk:
+                logger.info(f"[generate_node] AV {src.get('file_name','?')}: segments={av_chunk.count(chr(10))+1}개")
+                full_sources.append({**src, "matched_chunks": [av_chunk]})
+            else:
+                full_sources.append(src)
         else:
             full_sources.append(src)
 
@@ -1384,6 +1498,7 @@ def generate_node(state: dict) -> dict:
         "type":          "done",
         "answer":        full_answer,
         "model":         model,
+        "gen_model":     gen_model,
         "sources_count": len(matched_sources),
         "error":         stream_error,
     })
@@ -1521,7 +1636,7 @@ def _rag_sse(question: str, topk: int, thread_id: str,
     model = _get_ollama_model()
     if not model:
         yield emit({"type": "error",
-                    "message": "Ollama 미연결. 'ollama pull gemma3:4b', 'ollama pull gemma3:12b' 실행 후 재시도."})
+                    "message": "Ollama 미연결 또는 지원 Gemma 모델이 없습니다. 'ollama pull gemma:12b', 'ollama pull gemma:4b' 실행 후 재시도."})
         return
 
     yield emit({"type": "info", "model": model, "thread_id": thread_id,
@@ -1680,9 +1795,11 @@ def history(thread_id: str):
 
 @aimode_bp.get("/status")
 def status():
-    model = _get_ollama_model()
+    model     = _get_ollama_model()              # 검색/intent/router (12b 우선)
+    gen_model = _get_ollama_model("generate")    # 답변 생성 (4b 우선)
     return jsonify({
         "ollama_model":     model,
+        "ollama_gen_model": gen_model,
         "ollama_available": model is not None,
         "scan_delay_sec":   SCAN_DELAY,
         "langgraph_ok":     _LANGGRAPH_OK,
@@ -1942,23 +2059,30 @@ def _read_source_full_text(source: dict, max_chars: int = 60000) -> str:
                         "죠",  # 죠
                         "함",  # 함
                         "임",  # 임
-                        "!", "?", "。",  # 。
+                        ".",   # 마침표 — narrative 와 다음 불릿 분리 위해 추가
+                        "!", "?", "。",
                     ])
-                    _BULLET = _re.compile(r"^[·•\-\d①②③④⑤]")
+                    # 진짜 불릿/번호 매김만 매치 — "2025/26", "2.4%", "3,035.5" 같은
+                    # 문장 일부 숫자는 불릿으로 오인하면 안 됨. `*` 도 추가.
+                    _BULLET = _re.compile(r"^(?:[\*·•\-①②③④⑤]|\d+[.)]\s)")
                     lines = text.split("\n")
                     result = []
+                    prev_is_bullet = False
                     for line in lines:
+                        is_bullet = bool(_BULLET.match(line.strip()))
+                        starts_paren = line.strip().startswith("[") or line.strip().startswith("(")
                         if (result
                                 and line
                                 and result[-1]
+                                and not prev_is_bullet                # 불릿 다음엔 새 문장 시작
                                 and result[-1][-1] not in _SENT_END
-                                and not _BULLET.match(line.strip())
-                                and not line.strip().startswith("[")
-                                and not line.strip().startswith("(")
+                                and not is_bullet
+                                and not starts_paren
                         ):
                             result[-1] += line  # 이전 줄에 이어붙임
                         else:
                             result.append(line)
+                            prev_is_bullet = is_bullet
                     return "\n".join(result)
 
                 texts = []
@@ -2334,7 +2458,7 @@ def _summarize_sse(file_type: str, trichef_id: str, file_path: str,
     # 하이브리드: 요약은 답변 생성과 동일하게 작은 모델(4b) 사용
     model = _get_ollama_model("generate")
     if not model:
-        yield emit({"type": "error", "message": "Ollama 미연결 또는 모델 없음."})
+        yield emit({"type": "error", "message": "Ollama 미연결 또는 지원 Gemma 모델이 없습니다. gemma:12b 또는 gemma:4b를 설치해 주세요."})
         return
 
     fname = file_name or (file_path or "").rsplit("/", 1)[-1].rsplit("\\", 1)[-1] or "?"
@@ -2354,6 +2478,13 @@ def _summarize_sse(file_type: str, trichef_id: str, file_path: str,
         {"role": "user",   "content": "이 파일을 위 원칙에 따라 요약해줘."},
     ]
 
+    # 본문 길이 기반 동적 num_predict — 짧은 파일은 빨리 끝내고, 긴 파일만 길게 허용
+    clen = len(content)
+    if   clen < 2000:   dynamic_np = 800
+    elif clen < 10000:  dynamic_np = 2000
+    elif clen < 30000:  dynamic_np = 4500
+    else:               dynamic_np = 7500
+
     full = ""
     t0 = time.time()
     stream_error: str | None = None
@@ -2361,7 +2492,7 @@ def _summarize_sse(file_type: str, trichef_id: str, file_path: str,
     last_scan_len = 0
     SCAN_INTERVAL = 200
     try:
-        for tok in _ollama_stream(messages, model, num_predict=7500, temperature=0.25):
+        for tok in _ollama_stream(messages, model, num_predict=dynamic_np, temperature=0.25):
             full += tok
             if secure:
                 if len(full) - last_scan_len >= SCAN_INTERVAL:

@@ -73,7 +73,12 @@ export default function SearchSidebar({ entranceOn } = {}) {
 
   useEffect(() => {
     try { localStorage.setItem('search-sidebar-width', String(sidebarWidth)) } catch {}
-  }, [sidebarWidth])
+    // CSS 변수로 export — 메인 영역이 리사이즈 추적 가능 (MainAI ml/width calc)
+    document.documentElement.style.setProperty(
+      '--sidebar-width',
+      open ? `${sidebarWidth}px` : '0px',
+    )
+  }, [sidebarWidth, open])
 
   useEffect(() => {
     const onMove = (e) => {
