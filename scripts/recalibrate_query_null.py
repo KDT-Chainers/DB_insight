@@ -35,15 +35,18 @@ NULL_QUERIES = [
 def recalibrate(domain: str, eng: TriChefEngine) -> dict:
     d = eng._cache[domain]
     Re, Im, Z = d["Re"], d["Im"], d["Z"]
-    scores_all: list[float] = []
+    # TOP-1 기반 null 분포: 각 null 쿼리에서 corpus 내 최대 점수를 측정.
+    # 기존 all-pair 평균(μ≈0.14)은 abs_threshold 가 너무 낮아 무관 TOP-1(≈0.28)을
+    # 통과시키는 문제. TOP-1 분포로 교체 시 FAR=5%가 "쿼리 단위" False Acceptance Rate 가 됨.
+    top1_scores: list[float] = []
     for q in NULL_QUERIES:
         q_Re, q_Im = eng._embed_query_for_domain(q, domain)
         s = tri_gs.hermitian_score(
             q_Re[None, :], q_Im[None, :], q_Im[None, :], Re, Im, Z,
         )[0]
-        scores_all.append(s)
-    flat = np.concatenate(scores_all)
-    mu, sig = float(flat.mean()), float(flat.std())
+        top1_scores.append(float(s.max()))
+    arr = np.array(top1_scores)
+    mu, sig = float(arr.mean()), float(arr.std())
 
     far_key_map = {
         "image": "FAR_IMG", "doc_page": "FAR_DOC_PAGE",

@@ -67,7 +67,7 @@ TRICHEF_CFG = {
     "DIM_Z":  1024,
 
     # FAR / 임계값 (Data-adaptive 재보정이 덮어씀)
-    "FAR_IMG":      0.20,
+    "FAR_IMG":      0.30,
     "FAR_DOC_TEXT": 0.05,
     "FAR_DOC_PAGE": 0.05,
 
@@ -107,7 +107,7 @@ TRICHEF_CFG = {
     #   α=0.35 → R@5 0.880 (dense), 0.900 (+sparse)  — 이전 기본값
     #   α=1.00 → R@5 0.000  (Im_body 무시 시 본문 검색 완전 실패)
     # proxy keyword bench 와 non-regression 동시 달성.
-    "DOC_IM_ALPHA": 0.35,
+    "DOC_IM_ALPHA": 0.20,
 
     # [ASF default] LOO/E2E/local_bench 모든 벤치에서 ASF on이 -3~20pp 손해 (2026-04-25 분석).
     #   LOO R@1: dense+sparse 83.3% → +ASF 63.3% (-20pp)

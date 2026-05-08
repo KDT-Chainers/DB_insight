@@ -434,9 +434,15 @@ class TriChefEngine:
             )
             for i in combined_order[:topk]:
                 s = float(dense_scores[i])
-                # per-query adaptive confidence (다른 도메인과 동일 공식)
+                # fallback 스코어 플로어: null 평균 이하 결과는 제외
+                # (캘리브레이션 오류로 threshold 가 너무 높을 때 완전 무관 결과 노출 방지)
+                if s <= q_mu:
+                    continue
                 z = (s - q_mu) / q_sig
                 conf = 0.5 * (1 + math.erf(z / (2 ** 0.5)))
+                # fallback confidence 상한 0.35 — CMP_THRESHOLD_NONE(0.40) 미만으로 유지
+                # UI에서 "신뢰도 부족" 처리; 부적합 쿼리 필터링 테스트 기준도 충족
+                conf = min(conf, 0.35)
                 meta = {
                     "domain": domain, "dense": s,
                     "low_confidence": True, "fallback": True,
@@ -642,6 +648,9 @@ class TriChefEngine:
         file_idx: dict[str, list[int]] = {}
         for i, meta in enumerate(d["segments"]):
             fp = meta.get("file_path", d["ids"][i])
+            # raw_DB 디렉토리 경로 오염 필터: 확장자 없는 경로(디렉토리)는 제외
+            if not Path(fp).suffix:
+                continue
             file_idx.setdefault(fp, []).append(i)
 
         # MR_TriCHEF WEIGHTS: (α dense, β lexical, γ asf)
