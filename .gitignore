@@ -295,3 +295,31 @@ App/backend/scripts/lies_by_category/
 # 캡션 품질 파이프라인 산출물
 App/backend/scripts/caption_quality.json
 App/backend/scripts/caption_priority_analysis.md
+
+# Night V2 통합 검증 산출물 (run_night_pipeline.py)
+App/backend/scripts/night_v2/
+
+# Calibration v3 강화 산출물
+App/backend/scripts/calibration_v3.json
+App/backend/scripts/calibration_separation_v3.json
+App/backend/scripts/calibration_v3_summary.md
+
+# A/B Bayes vs Floor 회귀 산출물
+App/backend/scripts/ab_bayes_vs_floor.json
+App/backend/scripts/ab_bayes_vs_floor_summary.md
+
+# Penalty sweep 산출물
+App/backend/scripts/penalty_sweep.json
+App/backend/scripts/penalty_sweep_summary.md
+
+# 0건 쿼리 진단 산출물
+App/backend/scripts/_zero_queries.json
+App/backend/scripts/zero_queries_diagnosis.json
+App/backend/scripts/zero_queries_diagnosis.md
+
+# 재캡션 검증/실행 산출물
+App/backend/scripts/recaption_validation.json
+App/backend/scripts/recaption_validation.md
+App/backend/scripts/caption_food_v2.json
+App/backend/scripts/caption_food_v2_ckpt.json
+App/backend/scripts/caption_food_v2.md

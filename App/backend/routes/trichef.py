@@ -11,13 +11,32 @@ from pathlib import Path
 from flask import Blueprint, jsonify, request, send_file
 
 from config import PATHS, TRICHEF_CFG
-from services.trichef.unified_engine import TriChefEngine
-from embedders.trichef.incremental_runner import (
-    run_image_incremental,
-    run_doc_incremental,
-    run_movie_incremental,
-    run_music_incremental,
-)
+
+# [startup-speedup] unified_engine 과 incremental_runner 는 import 만으로 torch+모델
+# 적재로 ~23초 소요. 실제 endpoint 호출 시 lazy 로드.
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from services.trichef.unified_engine import TriChefEngine
+    from embedders.trichef.incremental_runner import (
+        run_image_incremental, run_doc_incremental,
+        run_movie_incremental, run_music_incremental,
+    )
+
+def _import_TriChefEngine():
+    from services.trichef.unified_engine import TriChefEngine
+    return TriChefEngine
+
+def _import_incremental():
+    from embedders.trichef.incremental_runner import (
+        run_image_incremental, run_doc_incremental,
+        run_movie_incremental, run_music_incremental,
+    )
+    return {
+        "image": run_image_incremental,
+        "doc":   run_doc_incremental,
+        "movie": run_movie_incremental,
+        "music": run_music_incremental,
+    }
 
 logger = logging.getLogger(__name__)
 bp = Blueprint("trichef", __name__, url_prefix="/api/trichef")
@@ -74,7 +93,7 @@ def _parse_doc_page_id(page_id: str) -> dict:
         pass
     return {"file_name": Path(page_id).name, "page_num": 1, "source_path": ""}
 
-_engine: TriChefEngine | None = None
+_engine: "TriChefEngine | None" = None
 _engine_lock = threading.Lock()
 
 _raw_count_cache: dict = {"ts": 0.0, "img": 0, "doc": 0}
@@ -94,27 +113,28 @@ def _raw_counts() -> tuple[int, int]:
     return img_n, doc_n
 
 
-def _get_engine() -> TriChefEngine:
+def _get_engine() -> "TriChefEngine":
     global _engine
     if _engine is None:
         with _engine_lock:
             if _engine is None:
-                _engine = TriChefEngine()
+                _engine = _import_TriChefEngine()()
     return _engine
 
 
 def reload_engine() -> None:
     """임베딩 완료 후 검색 엔진 캐시 재로드 (npy 파일 변경 반영)."""
     global _engine
+    _TCE = _import_TriChefEngine()
     with _engine_lock:
         if _engine is not None:
             try:
                 _engine.reload()
             except Exception as e:
                 logger.warning(f"[reload_engine] reload 실패, 재생성: {e}")
-                _engine = TriChefEngine()
+                _engine = _TCE()
         else:
-            _engine = TriChefEngine()
+            _engine = _TCE()
 
 
 @bp.post("/search")
@@ -386,27 +406,28 @@ def reindex():
     scope = body.get("scope", "all")
     # scope: "image" | "document" | "movie" | "music" | "all"
     results = {}
+    _runners = _import_incremental()
     if scope in ("image", "all"):
         try:
-            results["image"] = run_image_incremental().__dict__
+            results["image"] = _runners["image"]().__dict__
         except Exception as e:
             logger.exception("image reindex 실패")
             results["image"] = {"error": str(e)[:400]}
     if scope in ("document", "all"):
         try:
-            results["document"] = run_doc_incremental().__dict__
+            results["document"] = _runners["doc"]().__dict__
         except Exception as e:
             logger.exception("document reindex 실패")
             results["document"] = {"error": str(e)[:400]}
     if scope in ("movie", "all"):
         try:
-            results["movie"] = run_movie_incremental().__dict__
+            results["movie"] = _runners["movie"]().__dict__
         except Exception as e:
             logger.exception("movie reindex 실패")
             results["movie"] = {"error": str(e)[:400]}
     if scope in ("music", "all"):
         try:
-            results["music"] = run_music_incremental().__dict__
+            results["music"] = _runners["music"]().__dict__
         except Exception as e:
             logger.exception("music reindex 실패")
             results["music"] = {"error": str(e)[:400]}

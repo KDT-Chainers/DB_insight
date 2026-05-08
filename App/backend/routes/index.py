@@ -4,14 +4,20 @@ import uuid
 
 from flask import Blueprint, jsonify, request
 
-from embedders.trichef.incremental_runner import (
-    embed_image_file, embed_doc_file,
-    IMAGE_EMBED_EXTS, DOC_EMBED_EXTS,
-)
-from embedders.trichef.av_embed import (
-    embed_movie_file, embed_music_file,
-    MOVIE_EXTS, MUSIC_EXTS,
-)
+# [startup-speedup] 무거운 임베더 모듈 (incremental_runner / av_embed) 은 import 만 해도
+# torch + SigLIP2/DINOv2/Qwen 모델을 적재하여 ~21초 소요. 인덱싱 endpoint 가 실제로
+# 호출될 때만 lazy 로 로드하여 Flask 기동 시간을 단축한다.
+# 확장자 SSOT 만 가벼운 모듈에서 직접 import.
+import sys as _sys_se
+from pathlib import Path as _Path_se
+_DI_ROOT = _Path_se(__file__).resolve().parents[3] / "DI_TriCHEF"
+_MR_ROOT = _Path_se(__file__).resolve().parents[3] / "MR_TriCHEF"
+if _DI_ROOT.is_dir() and str(_DI_ROOT) not in _sys_se.path:
+    _sys_se.path.insert(0, str(_DI_ROOT))
+if _MR_ROOT.is_dir() and str(_MR_ROOT) not in _sys_se.path:
+    _sys_se.path.insert(0, str(_MR_ROOT))
+from _extensions import IMAGE_EMBED_EXTS, DOC_EXTS as DOC_EMBED_EXTS  # type: ignore
+from pipeline.paths import MOVIE_EXTS, MUSIC_EXTS  # type: ignore
 
 index_bp = Blueprint("index", __name__, url_prefix="/api/index")
 
@@ -20,24 +26,42 @@ index_bp = Blueprint("index", __name__, url_prefix="/api/index")
 # ---------------------------------------------------------------------------
 
 EXT_TYPE_MAP: dict[str, str] = {}
-# video / audio: MR_TriCHEF TRI-CHEF 파이프라인
 for _ext in MOVIE_EXTS:
     EXT_TYPE_MAP[_ext] = "video"
 for _ext in MUSIC_EXTS:
     EXT_TYPE_MAP[_ext] = "audio"
-# image / doc: DI_TriCHEF TRI-CHEF 단일 파일 함수
 for _ext in IMAGE_EMBED_EXTS:
     EXT_TYPE_MAP[_ext] = "image"
 for _ext in DOC_EMBED_EXTS:
     EXT_TYPE_MAP[_ext] = "doc"
 
-# 활성 임베더 — 전 타입 TRI-CHEF 파이프라인 사용
-EMBEDDERS = {
-    "video": embed_movie_file,
-    "audio": embed_music_file,
-    "image": embed_image_file,
-    "doc":   embed_doc_file,
-}
+
+# [startup-speedup] embed_*_file lazy 로더 — 첫 호출 시에만 모듈 import.
+_EMBEDDER_CACHE: dict = {}
+def _get_embedder(file_type: str):
+    if file_type in _EMBEDDER_CACHE:
+        return _EMBEDDER_CACHE[file_type]
+    fn = None
+    if file_type in ("image", "doc"):
+        from embedders.trichef.incremental_runner import (
+            embed_image_file, embed_doc_file,
+        )
+        fn = embed_image_file if file_type == "image" else embed_doc_file
+    elif file_type in ("video", "audio"):
+        from embedders.trichef.av_embed import embed_movie_file, embed_music_file
+        fn = embed_movie_file if file_type == "video" else embed_music_file
+    _EMBEDDER_CACHE[file_type] = fn
+    return fn
+
+
+class _EmbeddersLazy:
+    """기존 EMBEDDERS dict 인터페이스 호환 — `EMBEDDERS.get(type)` 호출 시 lazy 로드."""
+    def get(self, file_type, default=None):
+        if file_type not in ("image", "doc", "video", "audio"):
+            return default
+        return _get_embedder(file_type) or default
+
+EMBEDDERS = _EmbeddersLazy()
 
 # 인덱싱 가능한 타입 (UI 파일 트리에서 활성 표시)
 ACTIVE_TYPES = {"video", "audio", "image", "doc"}
