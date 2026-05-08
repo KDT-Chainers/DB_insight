@@ -155,7 +155,6 @@ function FileStackSearchMotion() {
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-sky-300" />
             탐색 엔진 동작 중
           </div>
-          <span className="text-[11px] text-white/45">Local Retrieval</span>
         </div>
 
         <div className="file-stack-search relative mx-auto h-[220px] w-[360px] max-w-[82vw]">
@@ -195,10 +194,10 @@ function FileStackSearchMotion() {
 
         <div className="mt-5 grid grid-cols-3 gap-2 text-[11px] text-white/58">
           <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-center">
-            벡터 유사도 계산
+            유사도 계산
           </div>
           <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-center">
-            타입별 후보 정렬
+            후보 정렬
           </div>
           <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-center">
             상위 결과 확정
@@ -1418,7 +1417,8 @@ export default function MainSearch() {
   );
 
   const btnRef = useRef(null);
-  const formRef = useRef(null);
+  /** 플라이 애니메이션 시작 위치 — 테두리가 그려진 쉘과 동일한 박스로 측정 */
+  const homeSearchShellRef = useRef(null);
   const homeInputRef = useRef(null);
   const resultsInputRef = useRef(null);
 
@@ -1787,31 +1787,12 @@ export default function MainSearch() {
     setQuery(q);
     setInputValue(q);
 
+    const RESULTS_SWITCH_MS = 220;
+
     if (view === "home") {
-      const rect = formRef.current?.getBoundingClientRect();
-      if (rect) {
-        setFlyStyle({
-          position: "fixed",
-          top: rect.top,
-          left: rect.left,
-          width: rect.width,
-          transition: "none",
-          zIndex: 9998,
-        });
-        setHomeExiting(true);
-        requestAnimationFrame(() =>
-          requestAnimationFrame(() => {
-            setFlyStyle({
-              position: "fixed",
-              top: 10,
-              left: sidebarPx + 180,
-              width: `calc(100vw - ${sidebarPx + 460}px)`,
-              transition: "all 0.45s cubic-bezier(0.4,0,0.2,1)",
-              zIndex: 9998,
-            });
-          }),
-        );
-      }
+      // crossfade: 홈 검색창 페이드아웃 → 결과 헤더 검색창 페이드인
+      setFlyStyle(null);
+      setHomeExiting(true);
       setTimeout(() => {
         setFlyStyle(null);
         setHomeExiting(false);
@@ -1820,7 +1801,7 @@ export default function MainSearch() {
         window.history.pushState({ view: "results" }, "");
         requestAnimationFrame(() => setResultsReady(true));
         fetchResults(q, domainFilter);
-      }, 480);
+      }, RESULTS_SWITCH_MS);
     } else {
       setView("results");
       fetchResults(q, domainFilter);
@@ -2149,12 +2130,16 @@ export default function MainSearch() {
 
               {/* 검색 필 (v0 LLM input 스타일) */}
               <form
-                ref={formRef}
                 onSubmit={handleSearch}
                 className="mse-search-up relative w-full max-w-xl"
-                style={homeExiting ? { visibility: "hidden" } : {}}
               >
                 <div
+                  style={{
+                    opacity: homeExiting ? 0 : 1,
+                    transition: "opacity 180ms ease",
+                    pointerEvents: homeExiting ? "none" : "auto",
+                  }}
+                  ref={homeSearchShellRef}
                   className={`relative flex items-center gap-3 rounded-full border bg-surface-container-high/60 px-1 py-1 pl-2 backdrop-blur-xl transition-all duration-300 md:pl-3
                     ${
                       listening
@@ -2327,16 +2312,73 @@ export default function MainSearch() {
                 </button>
               </div>
 
-              {/* fly 클론 */}
+              {/* fly 클론 — 홈 검색 쉘과 동일한 박스·테두리·내부 레이아웃 (픽셀 드리프트 방지) */}
               {flyStyle && (
-                <div style={{ ...flyStyle }}>
-                  <div className="flex items-center gap-3 rounded-full border border-primary/40 bg-surface-container-high/80 px-4 py-3 shadow-[0_0_30px_rgba(133,173,255,0.15)] backdrop-blur-xl">
-                    <span className="material-symbols-outlined text-primary">
-                      search
-                    </span>
-                    <span className="flex-1 text-on-surface font-manrope text-lg truncate">
-                      {inputValue}
-                    </span>
+                <div
+                  aria-hidden
+                  className="pointer-events-none isolate"
+                  style={flyStyle}
+                >
+                  <div
+                    className={`relative flex h-full w-full min-h-0 items-center gap-3 rounded-full border bg-surface-container-high/60 px-1 py-1 pl-2 backdrop-blur-xl md:pl-3 ${
+                      listening
+                        ? "border-red-400/60 shadow-[0_0_24px_rgba(248,113,113,0.2)]"
+                        : "border-primary/50 shadow-lg shadow-primary/20"
+                    }`}
+                  >
+                    {(() => {
+                      const _meta =
+                        PLUS_DOMAIN_META[domainFilter] || PLUS_DOMAIN_META[""];
+                      const _hasDomain = !!domainFilter;
+                      return (
+                        <div
+                          className={`relative z-50 flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-all duration-300 ${
+                            !_hasDomain ? "bg-primary/15 text-primary" : ""
+                          }`}
+                          style={
+                            _hasDomain
+                              ? {
+                                  backgroundColor: _meta.bg18,
+                                  color: _meta.solid,
+                                  boxShadow: `0 0 14px ${_meta.glow}`,
+                                }
+                              : undefined
+                          }
+                        >
+                          <span className="material-symbols-outlined text-[20px] font-bold">
+                            {_meta.icon}
+                          </span>
+                        </div>
+                      );
+                    })()}
+                    <div className="relative flex min-h-[3.25rem] flex-1 items-center">
+                      <span className="w-full truncate bg-transparent py-3 font-manrope text-base text-on-surface md:py-4 md:text-base">
+                        {inputValue}
+                      </span>
+                    </div>
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-on-surface-variant">
+                      <span className="material-symbols-outlined block text-[22px] leading-none">
+                        search
+                      </span>
+                    </div>
+                    <div
+                      className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full transition-all duration-200 ${
+                        securityMode
+                          ? "bg-red-500/20 text-red-400 ring-2 ring-red-400/40 shadow-[0_0_20px_rgba(248,113,113,0.3)]"
+                          : "text-on-surface-variant"
+                      }`}
+                    >
+                      <span
+                        className="material-symbols-outlined"
+                        style={
+                          securityMode
+                            ? { fontVariationSettings: '"FILL" 1' }
+                            : {}
+                        }
+                      >
+                        shield
+                      </span>
+                    </div>
                   </div>
                 </div>
               )}
@@ -2348,7 +2390,8 @@ export default function MainSearch() {
       {/* ════ RESULTS / DETAIL 공통 헤더 ════ */}
       {view !== "home" && (
         <header
-          className={`fixed top-8 ${leftEdge} right-0 z-40 border-b border-outline-variant/10 bg-slate-950/60 py-3 shadow-[0_0_20px_rgba(133,173,255,0.1)] backdrop-blur-xl transition-[left] duration-300`}
+          className={`fixed top-8 ${leftEdge} right-0 z-40 border-b border-outline-variant/10 bg-slate-950/60 py-3 shadow-[0_0_20px_rgba(133,173,255,0.1)] backdrop-blur-xl transition-[left,opacity] duration-300`}
+          style={{ opacity: resultsReady ? 1 : 0 }}
         >
           <div className="mx-auto flex max-w-[1400px] items-center gap-4 px-8">
             <form
@@ -2530,7 +2573,7 @@ export default function MainSearch() {
 
             <section className="rounded-[22px] border border-white/[0.07] bg-white/[0.02] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-[40px]">
               {/* [#2] 도메인 필터 칩 — 검색창 구조 미변경, 결과 헤더 아래에 독립 마운트 */}
-              <div className="mb-6 -mt-4">
+              <div className="mb-6 -mt-3">
                 <DomainFilter
                   value={domainFilter}
                   onChange={setDomainFilter}
@@ -2591,7 +2634,7 @@ export default function MainSearch() {
                 <div
                   className={`pointer-events-auto fixed ${leftEdge} right-0 top-0 bottom-0 z-[80] flex items-center justify-center bg-[#01030c]/88 transition-[left] duration-300`}
                 >
-                  <div className="-translate-x-16 translate-y-64">
+                  <div className="-translate-x-20 translate-y-72">
                     <FileStackSearchMotion />
                   </div>
                 </div>
@@ -3159,12 +3202,12 @@ export default function MainSearch() {
       {/* ── 이미지 검색 입력 모달 ─────────────────────────── */}
       {imageSearchModalOpen && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-[#020612]/72 backdrop-blur-[8px]"
           onClick={() => closeImageModal(false)}
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="relative w-full max-w-lg mx-4 bg-surface-container border border-outline-variant/30 rounded-3xl p-8 shadow-2xl animate-in fade-in zoom-in duration-200"
+            className="relative w-full max-w-lg mx-4 rounded-3xl border border-white/[0.12] bg-[linear-gradient(180deg,rgba(18,30,64,0.72)_0%,rgba(8,16,40,0.76)_100%)] p-8 shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_24px_72px_rgba(2,6,18,0.6)] backdrop-blur-[24px] animate-in fade-in zoom-in duration-200"
           >
             {/* 헤더 */}
             <div className="flex items-center justify-between mb-6">
@@ -3250,7 +3293,7 @@ export default function MainSearch() {
                 onClick={() =>
                   imageSearchFile && handleImageSearch(imageSearchFile)
                 }
-                className="px-6 py-2 rounded-full bg-gradient-to-r from-primary to-secondary text-on-primary-fixed font-bold disabled:opacity-40 disabled:cursor-not-allowed hover:shadow-lg hover:shadow-primary/30 transition"
+                className="px-6 py-2 rounded-full border border-primary/35 bg-primary/15 text-primary font-bold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-primary/22 hover:border-primary/55 transition"
               >
                 <span className="material-symbols-outlined text-base align-middle mr-1">
                   search
@@ -3265,12 +3308,12 @@ export default function MainSearch() {
       {/* ── BGM 식별 모달 — 동영상/오디오 업로드 → 곡 인식 ────── */}
       {bgmModalOpen && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-[#020612]/72 backdrop-blur-[8px]"
           onClick={() => closeBgmModal(false)}
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="relative w-full max-w-lg mx-4 bg-surface-container border border-outline-variant/30 rounded-3xl p-8 shadow-2xl animate-in fade-in zoom-in duration-200"
+            className="relative w-full max-w-lg mx-4 rounded-3xl border border-white/[0.12] bg-[linear-gradient(180deg,rgba(18,30,64,0.72)_0%,rgba(8,16,40,0.76)_100%)] p-8 shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_24px_72px_rgba(2,6,18,0.6)] backdrop-blur-[24px] animate-in fade-in zoom-in duration-200"
           >
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-xl font-bold text-on-surface flex items-center gap-2">
@@ -3350,8 +3393,6 @@ export default function MainSearch() {
                     MP4 · MP3 · WAV · M4A · WebM (최대 100 MB)
                   </div>
                   <div className="text-[11px] text-pink-400/80 mt-1">
-                    Chromaprint(정확매칭) → CLAP(의미매칭) → ACR API(옵션)
-                    순으로 시도
                   </div>
                 </div>
               )}
@@ -3428,7 +3469,7 @@ export default function MainSearch() {
                 type="button"
                 disabled={!bgmFile || bgmIdentifying}
                 onClick={() => bgmFile && handleBgmIdentify(bgmFile)}
-                className="px-6 py-2 rounded-full bg-gradient-to-r from-pink-500 to-rose-500 text-white font-bold disabled:opacity-40 disabled:cursor-not-allowed hover:shadow-lg hover:shadow-pink-500/30 transition"
+                className="px-6 py-2 rounded-full border border-primary/35 bg-primary/15 text-primary font-bold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-primary/22 hover:border-primary/55 transition"
               >
                 {bgmIdentifying ? (
                   <span className="flex items-center gap-1">
