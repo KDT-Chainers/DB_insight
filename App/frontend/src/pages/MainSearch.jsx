@@ -543,19 +543,29 @@ async function searchFiles(query, topK = 30, type = "") {
 }
 
 async function openFile(filePath) {
-  await fetch(`${API_BASE}/api/files/open`, {
+  const res = await fetch(`${API_BASE}/api/files/open`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ file_path: filePath }),
   });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || "파일을 열 수 없습니다.");
+  }
+  return data;
 }
 
 async function openFolder(filePath) {
-  await fetch(`${API_BASE}/api/files/open-folder`, {
+  const res = await fetch(`${API_BASE}/api/files/open-folder`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ file_path: filePath }),
   });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || "파일 위치를 열 수 없습니다.");
+  }
+  return data;
 }
 
 // ── AV 플레이어 스트림 URL 생성 ──────────────────────────
@@ -1892,6 +1902,30 @@ export default function MainSearch() {
     }
   };
 
+  const handleOpenFolderClick = useCallback(async () => {
+    if (!selectedFile?.file_path) {
+      alert("원본 파일 경로가 없습니다.");
+      return;
+    }
+    try {
+      await openFolder(selectedFile.file_path);
+    } catch (e) {
+      alert(e.message || "파일 위치를 열 수 없습니다.");
+    }
+  }, [selectedFile]);
+
+  const handleOpenFileClick = useCallback(async () => {
+    if (!selectedFile?.file_path) {
+      alert("원본 파일 경로가 없습니다.");
+      return;
+    }
+    try {
+      await openFile(selectedFile.file_path);
+    } catch (e) {
+      alert(e.message || "파일을 열 수 없습니다.");
+    }
+  }, [selectedFile]);
+
   const handleBackToResults = () => {
     setDetailVisible(false);
     setTimeout(() => setView("results"), 320);
@@ -2916,14 +2950,14 @@ export default function MainSearch() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => openFolder(selectedFile.file_path)}
+                        onClick={handleOpenFolderClick}
                         className="inline-flex h-10 min-w-0 items-center justify-center rounded-full border border-white/[0.1] bg-[#0f131a]/90 px-4 text-xs font-bold uppercase tracking-[0.08em] text-primary transition hover:border-primary/30 hover:bg-white/[0.06] active:scale-95"
                       >
                         <span className="whitespace-nowrap">경로 열기</span>
                       </button>
                       <button
                         type="button"
-                        onClick={() => openFile(selectedFile.file_path)}
+                        onClick={handleOpenFileClick}
                         className="inline-flex h-10 min-w-0 items-center justify-center rounded-full border border-primary/40 bg-primary px-4 text-xs font-bold uppercase tracking-[0.08em] text-on-primary shadow-[0_0_20px_rgba(133,173,255,0.22)] transition hover:brightness-110 active:scale-95"
                       >
                         <span className="whitespace-nowrap">파일 열기</span>
