@@ -1769,27 +1769,30 @@ export default function MainSearch() {
   }, []);
 
   // 이미지 검색 실행
-  const handleImageSearch = useCallback(async (file) => {
-    if (!file) return;
-    closeSummary();
-    setImageSearchActive(true);
-    setQuery(`[이미지 검색] ${file.name}`);
-    setInputValue(file.name);
-    setView("results");
-    setResultsReady(true);
-    setSearching(true);
-    setSearchError("");
-    setImageSearchModalOpen(false);
-    try {
-      const data = await searchByImage(file, 30);
-      setResults(data);
-    } catch (e) {
-      setSearchError(e.message);
-      setResults([]);
-    } finally {
-      setSearching(false);
-    }
-  }, [closeSummary]);
+  const handleImageSearch = useCallback(
+    async (file) => {
+      if (!file) return;
+      closeSummary();
+      setImageSearchActive(true);
+      setQuery(`[이미지 검색] ${file.name}`);
+      setInputValue(file.name);
+      setView("results");
+      setResultsReady(true);
+      setSearching(true);
+      setSearchError("");
+      setImageSearchModalOpen(false);
+      try {
+        const data = await searchByImage(file, 30);
+        setResults(data);
+      } catch (e) {
+        setSearchError(e.message);
+        setResults([]);
+      } finally {
+        setSearching(false);
+      }
+    },
+    [closeSummary],
+  );
 
   const doSearch = (q) => {
     if (!q.trim() || aiTransitioning) return;
@@ -2649,7 +2652,7 @@ export default function MainSearch() {
                     일치하는 파일을 찾지 못했습니다.
                   </p>
                   <p className="text-sm text-on-surface-variant/55">
-                    데이터 페이지에서 먼저 파일을 인덱싱하세요.
+                    데이터 페이지에서 파일을 추가해 주세요.
                   </p>
                 </div>
               )}
