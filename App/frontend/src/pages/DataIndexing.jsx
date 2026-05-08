@@ -495,14 +495,14 @@ function IndexingModal({
   //   correctionFactor = actualElapsed / doneEstimate  (최대 3배 클램프)
   //   remainingSec     = estimated_remaining * correctionFactor
   //   폴백: 백엔드 추정치 없으면 Phase 1 선형 외삽 유지.
-  const actualDone      = done + errors;              // skipped 제외 실제 처리 수
+  const actualDone = done + errors; // skipped 제외 실제 처리 수
   const actualRemaining = total - skipped - actualDone; // 실제 남은 신규 파일 수
   let remainingSec = null;
   if (isRunning && actualRemaining > 0 && jobStatus?.started_at) {
     const elapsedSec = Date.now() / 1000 - jobStatus.started_at;
     if (elapsedSec > 5.0) {
-      const estRemaining     = jobStatus?.estimated_remaining;
-      const doneEstimate     = jobStatus?.done_estimate;
+      const estRemaining = jobStatus?.estimated_remaining;
+      const doneEstimate = jobStatus?.done_estimate;
       const curFileRemaining = jobStatus?.current_file_remaining ?? 0;
       if (estRemaining != null && doneEstimate != null && doneEstimate > 0) {
         // [Phase 2+3] 가중 평균 보정 + 현재 파일 스테이지 잔여 합산
@@ -1910,16 +1910,16 @@ export default function DataIndexing() {
       {
         key: "sources",
         icon: "hub",
-        label: "데이터 소스",
-        subtitle: "원본 경로 및 등록",
+        label: "데이터",
+        subtitle: "파일 경로 및 등록",
         active: tab === "sources",
         onClick: () => setTabWithHistory("sources"),
       },
       {
         key: "indexing",
         icon: "account_tree",
-        label: "인덱싱",
-        subtitle: "파일 선택 및 임베딩",
+        label: "분석",
+        subtitle: "데이터 분석하기",
         active: tab === "indexing",
         onClick: () => setTabWithHistory("indexing"),
       },
@@ -2256,7 +2256,6 @@ export default function DataIndexing() {
       <div className="relative z-10 flex min-h-0 min-w-0 flex-1">
         <StudioThreePaneShell
           discoverTitle="데이터"
-          areaSubtitle="데이터 인덱싱"
           navSectionLabel="메뉴"
           navItems={navItems}
           footerSub={footerSubLink}

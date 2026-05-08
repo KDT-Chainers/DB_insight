@@ -1390,6 +1390,7 @@ export default function MainSearch() {
   const [summaryBlocked, setSummaryBlocked] = useState(null); // {stage, reason, pii_types}
   const [summarySecurity, setSummarySecurity] = useState(null); // {masked, pii_types, reason}
   const summaryAbortRef = useRef(null);
+  const pendingSearchTimeoutRef = useRef(null);
 
   // home → results 애니메이션
   const [flyStyle, setFlyStyle] = useState(null);
@@ -1564,6 +1565,10 @@ export default function MainSearch() {
   // ── 검색 실행 ──────────────────────────────────────────
   // [#2] 도메인 필터를 백엔드에 전달 → 서버 측에서 type 별 top_k 할당.
   const fetchResults = useCallback(async (q, type = "") => {
+    if (pendingSearchTimeoutRef.current) {
+      clearTimeout(pendingSearchTimeoutRef.current);
+      pendingSearchTimeoutRef.current = null;
+    }
     setSearching(true);
     setSearchError("");
     try {
@@ -1793,7 +1798,8 @@ export default function MainSearch() {
       // crossfade: 홈 검색창 페이드아웃 → 결과 헤더 검색창 페이드인
       setFlyStyle(null);
       setHomeExiting(true);
-      setTimeout(() => {
+      pendingSearchTimeoutRef.current = setTimeout(() => {
+        pendingSearchTimeoutRef.current = null;
         setFlyStyle(null);
         setHomeExiting(false);
         setResultsReady(false);
@@ -1846,6 +1852,14 @@ export default function MainSearch() {
     e?.preventDefault();
     doSearch(inputValue);
   };
+
+  useEffect(() => {
+    return () => {
+      if (pendingSearchTimeoutRef.current) {
+        clearTimeout(pendingSearchTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleSelectFile = (file) => {
     setSelectedFile(file);
@@ -2255,15 +2269,29 @@ export default function MainSearch() {
                       </div>
                     )}
                   </div>
-                  <button
-                    type="submit"
-                    aria-label="검색"
-                    className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-on-surface-variant transition-colors hover:bg-white/10 hover:text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-                  >
-                    <span className="material-symbols-outlined block text-[22px] leading-none">
-                      search
-                    </span>
-                  </button>
+                  {searching ? (
+                    <button
+                      type="button"
+                    onClick={() => {}}
+                    aria-label="검색 중단(연동 예정)"
+                    title="검색 중단(백엔드 연동 예정)"
+                    className="flex h-12 w-12 shrink-0 cursor-not-allowed items-center justify-center rounded-full text-red-300/70"
+                    >
+                      <span className="material-symbols-outlined block text-[22px] leading-none">
+                        stop_circle
+                      </span>
+                    </button>
+                  ) : (
+                    <button
+                      type="submit"
+                      aria-label="검색"
+                      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-on-surface-variant transition-colors hover:bg-white/10 hover:text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                    >
+                      <span className="material-symbols-outlined block text-[22px] leading-none">
+                        search
+                      </span>
+                    </button>
+                  )}
                   {/* 보안 모드 토글 — 마이크 옆에 위치 */}
                   <button
                     type="button"
@@ -2443,15 +2471,29 @@ export default function MainSearch() {
                     </div>
                   )}
                 </div>
-                <button
-                  type="submit"
-                  aria-label="검색"
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-primary transition-colors hover:bg-primary/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-                >
-                  <span className="material-symbols-outlined block text-lg leading-none">
-                    search
-                  </span>
-                </button>
+                {searching ? (
+                  <button
+                    type="button"
+                    onClick={() => {}}
+                    aria-label="검색 중단(연동 예정)"
+                    title="검색 중단(백엔드 연동 예정)"
+                    className="flex h-10 w-10 shrink-0 cursor-not-allowed items-center justify-center rounded-full text-red-300/70"
+                  >
+                    <span className="material-symbols-outlined block text-lg leading-none">
+                      stop_circle
+                    </span>
+                  </button>
+                ) : (
+                  <button
+                    type="submit"
+                    aria-label="검색"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-primary transition-colors hover:bg-primary/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                  >
+                    <span className="material-symbols-outlined block text-lg leading-none">
+                      search
+                    </span>
+                  </button>
+                )}
               </div>
             </form>
 
@@ -3391,8 +3433,6 @@ export default function MainSearch() {
                   </div>
                   <div className="text-xs text-on-surface-variant/60">
                     MP4 · MP3 · WAV · M4A · WebM (최대 100 MB)
-                  </div>
-                  <div className="text-[11px] text-pink-400/80 mt-1">
                   </div>
                 </div>
               )}
