@@ -5,6 +5,7 @@ import AnimatedOrb from "../components/AnimatedOrb";
 import { useSidebar } from "../context/SidebarContext";
 import { useSpeechRecognition } from "../hooks/useSpeechRecognition";
 import { useMicLevelRef } from "../hooks/useMicLevelRef";
+import { useAIMainViewState } from "../hooks/useAIMainViewState";
 import { API_BASE } from "../api";
 
 /** Orb `assembleIntro` 길이와 헤일로 PNG `ai-orbit-halo-emerge` 동기 (초) */
@@ -1660,7 +1661,13 @@ export default function MainAI() {
   const location = useLocation();
   const { open } = useSidebar();
 
-  const [view, setView] = useState("home");
+  const { view, setView, pushView, pushHistory } = useAIMainViewState({
+    onPopToResults: () => setDetailVisible(false),
+    onPopToHome: () => {
+      setDetailVisible(false);
+      setResultsReady(false);
+    },
+  });
   const [query, setQuery] = useState("");
   const [inputValue, setInputValue] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
@@ -1824,20 +1831,6 @@ export default function MainAI() {
   useEffect(() => {
     if (view !== "results" && aiDockExpanded) setAiDockExpanded(false);
   }, [view, aiDockExpanded]);
-
-  // 뒤로가기
-  useEffect(() => {
-    const handle = () => {
-      setDetailVisible(false);
-      if (view === "detail") setTimeout(() => setView("results"), 320);
-      else if (view === "results") {
-        setResultsReady(false);
-        setView("home");
-      }
-    };
-    window.addEventListener("popstate", handle);
-    return () => window.removeEventListener("popstate", handle);
-  }, [view]);
 
   // 사이드바 검색 기록 클릭
   useEffect(() => {
@@ -2212,21 +2205,15 @@ export default function MainAI() {
       setTimeout(() => {
         setHomeExiting(false);
         setResultsReady(false);
-        setView("results");
+        pushView("results");
         // 검색 실행은 UI 보조 로직보다 우선 보장
         runAISearch(searchQ);
-        try {
-          window.history.pushState({ view: "results" }, "");
-        } catch {}
         dispatchAiSidebarView("results");
         requestAnimationFrame(() => setResultsReady(true));
       }, 420);
     } else {
-      setView("results");
+      pushView("results");
       runAISearch(searchQ);
-      try {
-        window.history.pushState({ view: "results" }, "");
-      } catch {}
       dispatchAiSidebarView("results");
     }
   };
@@ -2268,8 +2255,7 @@ export default function MainAI() {
     setSelectedScanChunks(latestTurn?.scanChunks ?? {});
     setFileDetail(null);
     setDetailVisible(false);
-    setView("detail");
-    window.history.pushState({ view: "detail" }, "");
+    pushView("detail");
     dispatchAiSidebarView("detail");
     requestAnimationFrame(() =>
       requestAnimationFrame(() => setDetailVisible(true)),
@@ -2292,7 +2278,7 @@ export default function MainAI() {
   const handleBackToResults = () => {
     setRightMode("cards");
     setDetailVisible(false);
-    window.history.pushState({ view: "results" }, "");
+    pushHistory("results");
     dispatchAiSidebarView("results");
     setTimeout(() => setView("results"), 320);
   };
