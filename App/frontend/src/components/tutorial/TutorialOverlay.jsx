@@ -72,6 +72,7 @@ export default function TutorialOverlay({
   const targetRect = useTargetRect(step?.selector, open);
   const introLines = Array.isArray(step?.introLines) ? step.introLines : null;
   const isCenteredStep = Boolean(step?.center);
+  const shouldPopOnAdvance = isCenteredStep && (step?.popOnAdvance ?? true);
   const [introLineIdx, setIntroLineIdx] = useState(0);
   const [orbPopping, setOrbPopping] = useState(false);
   const displayTitle = introLines ? introLines[introLineIdx] : step?.title;
@@ -88,10 +89,17 @@ export default function TutorialOverlay({
     if (!open || !step || !canGoNext) return;
     const handler = (e) => {
       const rawTarget = e.target;
-      if (rawTarget instanceof Element && rawTarget.closest('[data-tutorial-ui="1"]')) {
+      if (
+        rawTarget instanceof Element &&
+        rawTarget.closest('[data-tutorial-ui="1"]')
+      ) {
         return;
       }
-      if (introLines && !step.selector && introLineIdx < introLines.length - 1) {
+      if (
+        introLines &&
+        !step.selector &&
+        introLineIdx < introLines.length - 1
+      ) {
         setIntroLineIdx((i) => Math.min(i + 1, introLines.length - 1));
         return;
       }
@@ -103,15 +111,45 @@ export default function TutorialOverlay({
         return;
       }
       if (isCenteredStep) {
-        setOrbPopping(true);
-        window.setTimeout(() => onNext?.(), 220);
+        if (shouldPopOnAdvance) {
+          setOrbPopping(true);
+          window.setTimeout(() => onNext?.(), 220);
+          return;
+        }
+        onNext?.();
         return;
       }
       onNext?.();
     };
     document.addEventListener("click", handler, true);
     return () => document.removeEventListener("click", handler, true);
-  }, [open, step, canGoNext, onNext, introLines, introLineIdx, isCenteredStep]);
+  }, [
+    open,
+    step,
+    canGoNext,
+    onNext,
+    introLines,
+    introLineIdx,
+    isCenteredStep,
+    shouldPopOnAdvance,
+  ]);
+
+  useEffect(() => {
+    if (!open || !step || !canGoNext) return;
+    const onKeyDown = (e) => {
+      if (e.key !== "Enter") return;
+      if (!isCenteredStep) return;
+      e.preventDefault();
+      if (shouldPopOnAdvance) {
+        setOrbPopping(true);
+        window.setTimeout(() => onNext?.(), 220);
+        return;
+      }
+      onNext?.();
+    };
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => document.removeEventListener("keydown", onKeyDown, true);
+  }, [open, step, canGoNext, onNext, isCenteredStep, shouldPopOnAdvance]);
 
   const cutoutRect = useMemo(() => {
     if (!targetRect) return null;
@@ -127,13 +165,16 @@ export default function TutorialOverlay({
     const vw = typeof window !== "undefined" ? window.innerWidth : 1280;
     const vh = typeof window !== "undefined" ? window.innerHeight : 720;
     const textLen = `${displayTitle ?? ""} ${displayDescription}`.trim().length;
-    const autoWidth = Math.round(Math.max(220, Math.min(vw - 24, 140 + textLen * 4.4)));
+    const autoWidth = Math.round(
+      Math.max(220, Math.min(vw - 24, 140 + textLen * 4.4)),
+    );
     const width = Math.min(autoWidth, 320);
 
     if (isCenteredStep) {
       const orbX = Math.round(vw * 0.5);
       const bubbleWidth = Math.min(Math.max(300, width), 420);
       const bubbleTop = Math.max(24, Math.round(vh * 0.33));
+      const centerOrbOffset = step?.compactCenter ? 192 : 210;
       return {
         box: {
           left: Math.round((vw - bubbleWidth) / 2),
@@ -142,7 +183,7 @@ export default function TutorialOverlay({
         },
         orb: {
           x: orbX,
-          y: Math.min(vh - 58, bubbleTop + 210),
+          y: Math.min(vh - 58, bubbleTop + centerOrbOffset),
         },
         tail: null,
       };
@@ -179,7 +220,10 @@ export default function TutorialOverlay({
       : Math.max(12, targetRect.left - bubbleWidth - 16);
     const top = Math.max(
       12,
-      Math.min(vh - bubbleHeightEstimate - 12, targetMidY - bubbleHeightEstimate * 0.48),
+      Math.min(
+        vh - bubbleHeightEstimate - 12,
+        targetMidY - bubbleHeightEstimate * 0.48,
+      ),
     );
     const tailTop = Math.max(
       18,
@@ -197,7 +241,7 @@ export default function TutorialOverlay({
         top: `${tailTop}px`,
       },
     };
-  }, [targetRect, displayTitle, displayDescription, isCenteredStep]);
+  }, [targetRect, displayTitle, displayDescription, isCenteredStep, step]);
 
   const skipButtonPos = useMemo(() => {
     // 기본은 orb 상단, 단 말풍선과 겹치지 않도록 말풍선 위쪽 제한을 함께 적용.
@@ -321,17 +365,19 @@ export default function TutorialOverlay({
               transform: "translateY(-50%) rotate(45deg)",
               borderLeftWidth: guideLayout.tail.side === "left" ? "1px" : "0px",
               borderTopWidth: guideLayout.tail.side === "left" ? "1px" : "0px",
-              borderRightWidth: guideLayout.tail.side === "right" ? "1px" : "0px",
-              borderBottomWidth: guideLayout.tail.side === "right" ? "1px" : "0px",
+              borderRightWidth:
+                guideLayout.tail.side === "right" ? "1px" : "0px",
+              borderBottomWidth:
+                guideLayout.tail.side === "right" ? "1px" : "0px",
               borderStyle: "solid",
             }}
           />
         )}
-        <p className="text-[1.02rem] font-semibold tracking-tight text-white">
+        <p className="text-[1.08rem] font-semibold tracking-tight text-white">
           {displayTitle}
         </p>
         {displayDescription && (
-          <p className="mt-1.5 text-[13px] leading-relaxed text-slate-100/86">
+          <p className="mt-1.5 text-[14px] leading-relaxed text-slate-100/86">
             {displayDescription}
           </p>
         )}

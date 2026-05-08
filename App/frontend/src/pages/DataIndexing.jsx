@@ -1890,8 +1890,17 @@ export default function DataIndexing() {
       {
         title: "모든 준비가 끝났어요!",
         description:
-          "이제 AI가 여러분의 문서를 완벽하게 이해했습니다. 메인 화면에서 궁금한 내용을 물어보시면 필요한 정보를 빛의 속도로 찾아드릴게요! 도움이 다시 필요하시면 언제든 '설정' 탭에서 저를 불러주세요.",
+          "이제 AI가 여러분의 문서를 완벽하게 이해했습니다. 메인 화면에서 궁금한 내용을 물어보시면 필요한 정보를 빛의 속도로 찾아드릴게요!",
         center: true,
+        compactCenter: true,
+        popOnAdvance: false,
+      },
+      {
+        title: "사용 팁",
+        description:
+          "도움이 필요하면 언제든 설정 탭에서 튜토리얼을 다시 불러올 수 있어요. 이제 Enter를 눌러 바로 시작해 보세요.",
+        center: true,
+        popOnAdvance: true,
       },
     ],
     [],
