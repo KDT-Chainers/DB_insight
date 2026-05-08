@@ -42,13 +42,6 @@ EMBEDDERS = {
 # 인덱싱 가능한 타입 (UI 파일 트리에서 활성 표시)
 ACTIVE_TYPES = {"video", "audio", "image", "doc"}
 
-DIRTY_DOMAIN_MAP = {
-    "image": "image",
-    "doc": "doc",
-    "video": "movie",
-    "audio": "music",
-}
-
 # ---------------------------------------------------------------------------
 # 인메모리 job 저장소 (서버 재시작 시 초기화)
 # ---------------------------------------------------------------------------
@@ -61,12 +54,6 @@ _stop_flags: dict[str, bool] = {}   # job_id → True 이면 중단 요청됨
 def _get_file_type(path: str) -> str | None:
     ext = os.path.splitext(path)[1].lower()
     return EXT_TYPE_MAP.get(ext)
-
-
-def _to_dirty_domain(file_type: str | None) -> str | None:
-    if file_type is None:
-        return None
-    return DIRTY_DOMAIN_MAP.get(file_type)
 
 
 # ---------------------------------------------------------------------------
@@ -409,9 +396,7 @@ def _run_job(job_id: str, file_paths: list[str], results: list[dict]) -> None:
                     kwargs["defer_lexical_rebuild"] = True
                 result = embedder(path, **kwargs)
                 if result.get("status") == "done":
-                    dirty_domain = _to_dirty_domain(file_type)
-                    if dirty_domain is not None:
-                        domains_dirty.add(dirty_domain)
+                    domains_dirty.add(file_type)
                     _done_since_reload += 1
                     # [옵션 B] 주기적 reload 트리거 (3개 완료 또는 60초마다)
                     if _done_since_reload >= RELOAD_EVERY_DONE \

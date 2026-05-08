@@ -537,25 +537,20 @@ function IndexingModal({
     onStop?.();
   };
 
-  // 모든 파일 처리는 끝났지만 백엔드가 검색 엔진 reload / 후처리 중인 상태.
-  // 이 구간은 완료로 취급하지 않고 "검색 엔진 갱신 중"으로만 표시한다.
-  const isFinalizing =
-    isRunning &&
-    progress >= 100 &&
-    !runningResult &&
-    !isError &&
-    !isStopped &&
-    !isStopping;
-  const isEffectivelyDone = isDone;
+  // 100% 인데 백엔드 status 가 아직 'done' 으로 전환 안 된 상태도 완료로 간주
+  // (모든 파일 처리 끝 + running 상태 파일 없음 → 사실상 완료)
+  const isProgressComplete =
+    progress >= 100 && !runningResult && !isError && !isStopped && !isStopping;
+  const isEffectivelyDone = isDone || isProgressComplete;
 
-  const statusColor = isDone
+  const statusColor = isEffectivelyDone
     ? "text-emerald-400"
     : isError
       ? "text-red-400"
       : isStopped
         ? "text-amber-400"
         : "text-[#85adff]";
-  const statusLabel = isDone
+  const statusLabel = isEffectivelyDone
     ? "인덱싱 완료"
     : isError
       ? "오류 발생"
@@ -832,17 +827,12 @@ function IndexingModal({
                 {processed} / {total} 파일
               </p>
               {/* [ETA] 잔여 시간 — 진행률 기반 실시간 추정 (1초 tick). 100% 도달 시 표시 안 함. */}
-              {remainingSec != null && !isEffectivelyDone && !isFinalizing && (
+              {remainingSec != null && !isEffectivelyDone && (
                 <p className="text-xs text-on-surface-variant/65 tabular-nums">
                   <span className="text-on-surface-variant/40">잔여 약</span>{" "}
                   <span className="font-bold text-[#85adff]">
                     {_fmtDuration(remainingSec)}
                   </span>
-                </p>
-              )}
-              {isFinalizing && !isEffectivelyDone && (
-                <p className="text-xs text-[#85adff]/80 tabular-nums">
-                  검색 엔진 갱신 중...
                 </p>
               )}
               {isEffectivelyDone && (
