@@ -17,6 +17,7 @@ import {
   clearActiveJob,
 } from "../utils/indexingPersist";
 import { estimateIndexing } from "../api/indexing";
+import { fmtDuration, computeRemainingETA, fmtETA } from "../utils/etaUtils";
 const TYPE_ICON = {
   doc: "description",
   video: "movie",
@@ -461,6 +462,7 @@ function IndexingModal({
   selectedCount,
   jobStatus,
   jobId,
+  externalRemainingSec,
   onClose,
   onStop,
 }) {
@@ -826,12 +828,12 @@ function IndexingModal({
               <p className="mt-2 text-xs text-on-surface-variant/70 tabular-nums">
                 {processed} / {total} 파일
               </p>
-              {/* [ETA] 잔여 시간 — 진행률 기반 실시간 추정 (1초 tick). 100% 도달 시 표시 안 함. */}
-              {remainingSec != null && !isEffectivelyDone && (
+              {/* [ETA] 완료 예정 시각 — 진행률 기반 실시간 추정 (1초 tick). 100% 도달 시 표시 안 함. */}
+              {externalRemainingSec != null && !isEffectivelyDone && (
                 <p className="text-xs text-on-surface-variant/65 tabular-nums">
-                  <span className="text-on-surface-variant/40">잔여 약</span>{" "}
+                  <span className="text-on-surface-variant/40">완료 예정</span>{" "}
                   <span className="font-bold text-[#85adff]">
-                    {_fmtDuration(remainingSec)}
+                    {fmtETA(externalRemainingSec) ?? '—'}
                   </span>
                 </p>
               )}
@@ -1562,6 +1564,13 @@ export default function DataIndexing() {
   });
   const pollRef = useRef(null);
   const modalOpenTimerRef = useRef(null);
+  const smoothedFactorRef = useRef(1.0);
+  const jobStatusRef = useRef(null);
+  const estimateDataRef = useRef(null);
+  const [liveRemainingSec, setLiveRemainingSec] = useState(null);
+  const [liveElapsedSec, setLiveElapsedSec] = useState(null);
+  const [displayedRemainingSec, setDisplayedRemainingSec] = useState(null);
+  const displayedRemainingRef = useRef(null);
 
   const stopPolling = () => {
     // setInterval 폴링(레거시) 또는 EventSource 모두 정리.
@@ -1675,6 +1684,46 @@ export default function DataIndexing() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
+
+  useEffect(() => { jobStatusRef.current = jobStatus; }, [jobStatus]);
+  useEffect(() => { estimateDataRef.current = estimateData; }, [estimateData]);
+
+  useEffect(() => {
+    if (!indexing) {
+      setLiveRemainingSec(null);
+      setLiveElapsedSec(null);
+      setDisplayedRemainingSec(null);
+      displayedRemainingRef.current = null;
+      smoothedFactorRef.current = 1.0;
+      return;
+    }
+    const id = setInterval(() => {
+      const s = jobStatusRef.current;
+      const processed = (s?.done ?? 0) + (s?.skipped ?? 0) + (s?.errors ?? 0);
+      const elapsedSec = s?.started_at ? (Date.now() / 1000 - s.started_at) : 0;
+      setLiveElapsedSec(elapsedSec);
+      const computed = computeRemainingETA({
+        processed,
+        total: s?.total ?? 0,
+        elapsedSec,
+        estimateSec: estimateDataRef.current?.total_seconds ?? null,
+        factorRef: smoothedFactorRef,
+        results: s?.results ?? [],
+        byType: estimateDataRef.current?.by_type ?? {},
+      });
+      setLiveRemainingSec(computed);
+      // 표시값은 임계값(현재 표시값의 15%, 최소 30초) 초과 시에만 업데이트
+      const prev = displayedRemainingRef.current;
+      if (computed == null) {
+        displayedRemainingRef.current = null;
+        setDisplayedRemainingSec(null);
+      } else if (prev == null || Math.abs(computed - prev) > Math.max(30, prev * 0.15)) {
+        displayedRemainingRef.current = computed;
+        setDisplayedRemainingSec(computed);
+      }
+    }, 1000);
+    return () => clearInterval(id);
+  }, [indexing]);
 
   const handleSelectFolder = async () => {
     const path = await window.electronAPI?.selectFolder();
@@ -1990,7 +2039,14 @@ export default function DataIndexing() {
                 </p>
                 <p className="mt-0.5 text-[12px] text-white/42">개 파일</p>
                 <div className="mt-3 border-t border-white/[0.08] pt-3">
-                  <IndexingETA data={estimateData} loading={estimateLoading} />
+                  <IndexingETA
+                    data={estimateData}
+                    loading={estimateLoading}
+                    remainingSec={displayedRemainingSec}
+                    isRunning={indexing}
+                    processedCount={indexing ? (jobStatus?.done ?? 0) + (jobStatus?.skipped ?? 0) + (jobStatus?.errors ?? 0) : 0}
+                    elapsedSec={liveElapsedSec}
+                  />
                 </div>
               </>
             ) : (
@@ -2397,6 +2453,7 @@ export default function DataIndexing() {
           selectedCount={selectedCount}
           jobStatus={jobStatus}
           jobId={jobId}
+          externalRemainingSec={displayedRemainingSec}
           onClose={hideProgressModalByUser}
           onStop={() => {
             stopPolling();

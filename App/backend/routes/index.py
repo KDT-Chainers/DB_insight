@@ -162,7 +162,7 @@ def start():
         pass
 
     job_id = uuid.uuid4().hex
-    results = [{"path": p, "status": "pending"} for p in file_paths]
+    results = [{"path": p, "status": "pending", "file_type": _get_file_type(p)} for p in file_paths]
 
     import time as _t
     with _jobs_lock:
@@ -350,6 +350,7 @@ def _run_job(job_id: str, file_paths: list[str], results: list[dict]) -> None:
                      if _pending_ahead else {"total_seconds": 0.0})
 
         results[i]["status"] = "running"
+        results[i]["file_started_at"] = _t.time()
         _update_job(job_id, done, skipped, errors, "running",
                     estimated_remaining=_est_info["total_seconds"],
                     done_estimate=_done_est_acc,
@@ -435,6 +436,8 @@ def _run_job(job_id: str, file_paths: list[str], results: list[dict]) -> None:
                 print(f"[ERROR] {path}\n{tb}", flush=True)
                 errors += 1
 
+        results[i]["finished_at"] = _t.time()
+
         # [Phase 2] 실제 처리(done/error)된 파일의 추정치 누적 → 보정 계수 계산용
         if results[i]["status"] in ("done", "error"):
             _done_est_acc += _est_file(path)
@@ -501,6 +504,35 @@ def _run_job(job_id: str, file_paths: list[str], results: list[dict]) -> None:
     else:
         final_status = "done"
     _update_job(job_id, done, skipped, errors, final_status)
+    threading.Thread(target=_do_calibration, args=(results,), daemon=True).start()
+
+
+def _do_calibration(results: list[dict]) -> None:
+    """잡 완료 후 실측 시간으로 추정 계수를 비동기 갱신."""
+    measurements = []
+    for r in results:
+        if r.get("status") != "done":
+            continue
+        started  = r.get("file_started_at")
+        finished = r.get("finished_at")
+        if not (started and finished):
+            continue
+        actual_sec = finished - started
+        ftype      = r.get("file_type")
+        if not ftype:
+            continue
+        size_mb = 0.0
+        try:
+            size_mb = os.path.getsize(r.get("path", "")) / (1024 * 1024)
+        except OSError:
+            pass
+        measurements.append({"type": ftype, "size_mb": size_mb, "actual_sec": actual_sec})
+    if measurements:
+        try:
+            from services.calibration import update as _calib_update
+            _calib_update(measurements)
+        except Exception as e:
+            print(f"[calibration] update 실패: {e}", flush=True)
 
 
 def _update_job(

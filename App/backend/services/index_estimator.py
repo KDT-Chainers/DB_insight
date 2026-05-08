@@ -20,6 +20,7 @@ BGM vs audio 구분: 파일 경로에 "Bgm" 또는 "BGM" 폴더가 포함되면 
 from __future__ import annotations
 
 import os
+import time as _time
 from pathlib import Path
 from typing import Iterable
 
@@ -46,6 +47,26 @@ _COEF = {
     # [B1] BGM: CLAP 임베딩 — Whisper STT 없으므로 audio 대비 ~4배 빠름
     "bgm":   (1.0, 0.2),
 }
+
+# 캘리브레이션 계수 캐시 (60초 TTL — 잡 완료 후 자동 갱신 반영)
+_coef_cache: tuple | None = None
+_COEF_TTL = 60.0
+
+
+def _get_coef(ftype: str) -> tuple[float, float]:
+    """캘리브레이션 적용 계수 반환. 실패 시 기본값 fallback."""
+    global _coef_cache
+    now = _time.time()
+    if _coef_cache is None or now - _coef_cache[0] > _COEF_TTL:
+        try:
+            from services.calibration import load_coefs
+            _coef_cache = (now, load_coefs())
+        except Exception:
+            _coef_cache = (now, {t: {"base": b, "per_mb": p} for t, (b, p) in _COEF.items()})
+    c = _coef_cache[1].get(ftype, {})
+    default = _COEF.get(ftype, (5.0, 1.0))
+    return float(c.get("base", default[0])), float(c.get("per_mb", default[1]))
+
 
 # SHA-256 skip 케이스의 fixed overhead (디스크 read + hash compute).
 # 평균 작은 파일 기준이며 큰 영상은 ~0.5s 까지 늘어날 수 있어 상한 설정.
@@ -157,7 +178,7 @@ def _pdf_page_count(path: str) -> int | None:
 
 def _meta_estimate(path: str, ftype: str) -> float | None:
     """메타데이터 기반 정밀 추정. 실패 시 None → 크기 기반 폴백."""
-    base, _ = _COEF[ftype]
+    base, _ = _get_coef(ftype)
 
     if ftype == "video":
         info = _ffprobe_video_info(path)
@@ -217,7 +238,7 @@ def estimate_single(path: str, current_step: int | None = None) -> float:
     # [Phase 4] 메타데이터 기반 우선
     total_est = _meta_estimate(path, ftype)
     if total_est is None:
-        base, per_mb = _COEF[ftype]
+        base, per_mb = _get_coef(ftype)
         total_est = base + per_mb * _size_mb(path)
 
     if ftype == "video" and current_step is not None:
@@ -243,7 +264,7 @@ def estimate_file(path: str) -> float:
     meta = _meta_estimate(path, ftype)
     if meta is not None:
         return meta
-    base, per_mb = _COEF[ftype]
+    base, per_mb = _get_coef(ftype)
     return base + per_mb * _size_mb(path)
 
 
@@ -295,7 +316,7 @@ def estimate(paths: Iterable[str]) -> dict:
         if meta_sec is not None:
             sec = meta_sec
         else:
-            base, per_mb = _COEF[ftype]
+            base, per_mb = _get_coef(ftype)
             sec = base + per_mb * size_mb
         new_sec += sec
         total += sec
