@@ -2501,11 +2501,7 @@ export default function MainSearch() {
                               PLUS_DOMAIN_META[domainFilter] ||
                               PLUS_DOMAIN_META[""]
                             ).placeholder
-<<<<<<< HEAD
-                          : "Insight에 질문하세요..."
-=======
                           : "무엇이든 물어보세요.."
->>>>>>> QA_TY
                     }
                     value={listening ? "" : inputValue}
                     onChange={(e) =>
