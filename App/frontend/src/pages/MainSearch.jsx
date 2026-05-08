@@ -2485,7 +2485,10 @@ export default function MainSearch() {
       {view !== "home" && (
         <header
           className={`fixed ${leftEdge} right-0 z-40 border-b border-outline-variant/10 bg-slate-950/60 py-3 shadow-[0_0_20px_rgba(133,173,255,0.1)] backdrop-blur-xl transition-[left,opacity] duration-300`}
-          style={{ opacity: resultsReady ? 1 : 0, top: `${RESULTS_HEADER_TOP_PX}px` }}
+          style={{
+            opacity: resultsReady ? 1 : 0,
+            top: `${RESULTS_HEADER_TOP_PX}px`,
+          }}
         >
           <div className="mx-auto flex max-w-[1400px] items-center gap-4 px-8">
             <form
@@ -2659,7 +2662,7 @@ export default function MainSearch() {
                   <p className="text-red-400 text-lg">{searchError}</p>
                 ) : (
                   <p className="text-on-surface-variant">
-                    로컬 보관소에서{" "}
+                    기기 저장소에서{" "}
                     <span className="text-primary font-bold">
                       {results.length}건
                     </span>
