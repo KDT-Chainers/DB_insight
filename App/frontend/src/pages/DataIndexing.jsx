@@ -1508,6 +1508,7 @@ export default function DataIndexing() {
   const [loadError, setLoadError] = useState("");
 
   const [checkedPaths, setCheckedPaths] = useState(new Set());
+  const [selectAllLoading, setSelectAllLoading] = useState(false);
 
   // path → { indexed, domain } 캐시. 폴더가 펼쳐질 때마다 누적.
   const [indexedMap, setIndexedMap] = useState({});
@@ -1707,6 +1708,25 @@ export default function DataIndexing() {
       setLoading(false);
     }
   };
+
+  const handleSelectAllFiles = useCallback(async () => {
+    if (!rootPath) return;
+    setSelectAllLoading(true);
+    try {
+      const allFiles = await collectAllFilesRecursive(rootPath);
+      if (allFiles.length > 0) {
+        setCheckedPaths(new Set(allFiles));
+        registerPaths(allFiles);
+      }
+      registerOrphans(rootPath);
+    } finally {
+      setSelectAllLoading(false);
+    }
+  }, [rootPath, registerPaths, registerOrphans]);
+
+  const handleClearAllSelected = useCallback(() => {
+    setCheckedPaths(new Set());
+  }, []);
 
   const toggleFile = useCallback((path) => {
     setCheckedPaths((prev) => {
@@ -2313,7 +2333,30 @@ export default function DataIndexing() {
                     <SelectNewOnlyButton
                       indexedMap={indexedMap}
                       onApply={(paths) => setCheckedPaths(new Set(paths))}
+                      className="inline-flex h-7 items-center gap-1.5 rounded-full border border-white/[0.14] bg-white/[0.06] px-3 text-xs font-semibold text-white/85 transition hover:bg-white/[0.12] disabled:cursor-not-allowed disabled:opacity-45"
                     />
+                    <button
+                      type="button"
+                      onClick={handleSelectAllFiles}
+                      disabled={
+                        !rootPath ||
+                        loading ||
+                        indexing ||
+                        selectAllLoading ||
+                        rootItems.length === 0
+                      }
+                      className="inline-flex h-7 items-center rounded-full border border-white/[0.14] bg-white/[0.06] px-3 text-xs font-semibold text-white/85 transition hover:bg-white/[0.12] disabled:cursor-not-allowed disabled:opacity-45"
+                    >
+                      {selectAllLoading ? "전체 선택 중…" : "전체 선택"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleClearAllSelected}
+                      disabled={loading || indexing || checkedPaths.size === 0}
+                      className="inline-flex h-7 items-center rounded-full border border-white/[0.14] bg-white/[0.06] px-3 text-xs font-semibold text-white/85 transition hover:bg-white/[0.12] disabled:cursor-not-allowed disabled:opacity-45"
+                    >
+                      전체 해제
+                    </button>
                   </div>
                 </div>
 
