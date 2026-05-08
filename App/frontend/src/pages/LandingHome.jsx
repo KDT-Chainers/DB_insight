@@ -50,7 +50,7 @@ export default function LandingHome() {
             나만의 데이터 인사이트
           </h1>
           <p className="text-base text-on-surface-variant md:text-lg">
-            파일 이름 몰라도 괜찮아요. 내용만 떠올려보세요.
+            파일명이 기억나지 않아도 괜찮습니다. 내용으로 검색해 보세요.
           </p>
         </div>
 
