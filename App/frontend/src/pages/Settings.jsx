@@ -283,7 +283,6 @@ export default function Settings() {
 
       <div className="relative z-10 flex min-h-0 min-w-0 flex-1">
         <StudioThreePaneShell
-          discoverTitle="설정"
           areaSubtitle="시스템 설정"
           navSectionLabel="메뉴"
           navItems={navItems}
