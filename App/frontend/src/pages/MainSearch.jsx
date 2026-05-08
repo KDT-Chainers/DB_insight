@@ -2840,7 +2840,7 @@ export default function MainSearch() {
                       {[
                         ["총 결과", `${results.length}건`],
                         [
-                          "최고 신뢰도",
+                          "유사도",
                           `${Math.round((results[0]?.confidence ?? 0) * 100)}%`,
                         ],
                         [
