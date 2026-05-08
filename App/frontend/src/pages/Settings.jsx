@@ -210,36 +210,9 @@ export default function Settings() {
             외부 음원 인식을 끌 경우 기능이 동작하지 않습니다.
           </p>
         </div>
-        <div className="apple-widget-card rounded-[18px] p-4">
-          <div className="mb-2 flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-violet-200/85">
-              튜토리얼
-            </span>
-            <span className="material-symbols-outlined text-lg text-white/28">
-              school
-            </span>
-          </div>
-          <p className="mb-3 text-[12px] leading-relaxed text-white/42">
-            튜토리얼을 처음부터 다시 실행합니다.
-          </p>
-          <button
-            type="button"
-            onClick={() => {
-              localStorage.removeItem("tutorial_seen_v1");
-              localStorage.removeItem("tutorial_active_v1");
-              navigate("/search", { state: { goHomeAt: Date.now() } });
-            }}
-            className="inline-flex h-9 items-center gap-1.5 rounded-full border border-violet-300/35 bg-violet-400/14 px-3 text-[12px] font-semibold text-violet-100 transition hover:bg-violet-400/24"
-          >
-            <span className="material-symbols-outlined text-[16px]">
-              replay
-            </span>
-            튜토리얼 다시 보기
-          </button>
-        </div>
       </>
     ),
-    [navigate],
+    [],
   );
 
   const settingsHero = useMemo(
