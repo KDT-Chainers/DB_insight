@@ -23,7 +23,7 @@ const PLUS_DOMAIN_META = {
     bg50: "rgba(133,173,255,0.55)",
     glow: "rgba(133,173,255,0.35)",
     solid: "rgb(133,173,255)",
-    placeholder: "Ask anything...",
+    placeholder: "무엇이든 물어보세요...",
   },
   doc: {
     icon: "description",
@@ -1781,27 +1781,30 @@ export default function MainSearch() {
   }, []);
 
   // 이미지 검색 실행
-  const handleImageSearch = useCallback(async (file) => {
-    if (!file) return;
-    closeSummary();
-    setImageSearchActive(true);
-    setQuery(`[이미지 검색] ${file.name}`);
-    setInputValue(file.name);
-    setView("results");
-    setResultsReady(true);
-    setSearching(true);
-    setSearchError("");
-    setImageSearchModalOpen(false);
-    try {
-      const data = await searchByImage(file, 30);
-      setResults(data);
-    } catch (e) {
-      setSearchError(e.message);
-      setResults([]);
-    } finally {
-      setSearching(false);
-    }
-  }, [closeSummary]);
+  const handleImageSearch = useCallback(
+    async (file) => {
+      if (!file) return;
+      closeSummary();
+      setImageSearchActive(true);
+      setQuery(`[이미지 검색] ${file.name}`);
+      setInputValue(file.name);
+      setView("results");
+      setResultsReady(true);
+      setSearching(true);
+      setSearchError("");
+      setImageSearchModalOpen(false);
+      try {
+        const data = await searchByImage(file, 30);
+        setResults(data);
+      } catch (e) {
+        setSearchError(e.message);
+        setResults([]);
+      } finally {
+        setSearching(false);
+      }
+    },
+    [closeSummary],
+  );
 
   const doSearch = (q) => {
     if (!q.trim() || aiTransitioning) return;
@@ -2498,7 +2501,11 @@ export default function MainSearch() {
                               PLUS_DOMAIN_META[domainFilter] ||
                               PLUS_DOMAIN_META[""]
                             ).placeholder
+<<<<<<< HEAD
                           : "Insight에 질문하세요..."
+=======
+                          : "무엇이든 물어보세요.."
+>>>>>>> QA_TY
                     }
                     value={listening ? "" : inputValue}
                     onChange={(e) =>
@@ -2745,7 +2752,7 @@ export default function MainSearch() {
                     일치하는 파일을 찾지 못했습니다.
                   </p>
                   <p className="text-sm text-on-surface-variant/55">
-                    데이터 페이지에서 먼저 파일을 인덱싱하세요.
+                    데이터 페이지에서 파일을 추가해 주세요.
                   </p>
                 </div>
               )}
