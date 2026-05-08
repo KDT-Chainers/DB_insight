@@ -177,7 +177,7 @@ export default function Settings() {
       {
         key: "ws",
         icon: "database",
-        label: "워크스페이스",
+        label: "메인화면",
         subtitle: "검색 · 기록",
         active: false,
         onClick: () => navigate("/search"),
@@ -186,7 +186,7 @@ export default function Settings() {
         key: "data",
         icon: "account_tree",
         label: "데이터",
-        subtitle: "소스 · 인덱싱 · 벡터",
+        subtitle: "파일· 분석 · 저장소",
         active: false,
         onClick: () => navigate("/data"),
       },
@@ -194,7 +194,7 @@ export default function Settings() {
         key: "settings",
         icon: "tune",
         label: "시스템 설정",
-        subtitle: "보안 · 환경 · API",
+        subtitle: "보안 · 환경",
         active: true,
         onClick: () => {},
       },
@@ -326,7 +326,6 @@ export default function Settings() {
 
       <div className="relative z-10 flex min-h-0 min-w-0 flex-1">
         <StudioThreePaneShell
-          discoverTitle="설정"
           areaSubtitle="시스템 설정"
           navSectionLabel="메뉴"
           navItems={navItems}
@@ -357,7 +356,7 @@ export default function Settings() {
               <section className="di-glass-card settings-glass-strong rounded-md p-6">
                 <div className="flex items-center gap-2 mb-5">
                   <span className="text-sm font-manrope uppercase tracking-[0.2em] text-primary font-bold">
-                    보안 프로토콜
+                    보안 관리
                   </span>
                   <div className="h-px flex-grow bg-outline-variant/20" />
                 </div>
@@ -395,51 +394,35 @@ export default function Settings() {
                       <label className="text-xs uppercase tracking-widest text-on-surface-variant font-bold">
                         화면 크기
                       </label>
-                      <div className="flex items-center gap-1.5">
-                        {[0.7, 0.8, 0.9, 1.0].map((v) => (
-                          <button
-                            key={v}
-                            onClick={() => setScale(v)}
-                            className={`px-2.5 py-1 rounded-lg text-lg font-bold transition-all
-                              ${
-                                Math.abs(scale - v) < 0.01
-                                  ? "bg-primary/20 text-primary border border-primary/30"
-                                  : "bg-surface-container-high text-on-surface-variant hover:text-on-surface border border-outline-variant/20"
-                              }`}
-                          >
-                            {Math.round(v * 100)}%
-                          </button>
-                        ))}
-                      </div>
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className="text-sm text-on-surface-variant/50 w-8">
-                        {Math.round(MIN_SCALE * 100)}%
+                      <span className="w-12 text-sm font-semibold text-on-surface-variant/75">
+                        75%
                       </span>
                       <input
                         type="range"
-                        min={MIN_SCALE}
+                        min={0.75}
                         max={MAX_SCALE}
                         step={STEP}
-                        value={scale}
+                        value={Math.min(MAX_SCALE, Math.max(0.75, scale))}
                         onChange={(e) => setScale(parseFloat(e.target.value))}
-                        className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer bg-surface-container-highest
-                          [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4
+                        className="flex-1 h-2.5 rounded-full appearance-none cursor-pointer border border-outline-variant/30 bg-surface-container-high
+                          [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5
                           [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary
-                          [&::-webkit-slider-thumb]:shadow-[0_0_8px_rgba(133,173,255,0.5)] [&::-webkit-slider-thumb]:cursor-pointer"
+                          [&::-webkit-slider-thumb]:shadow-[0_0_0_2px_rgba(133,173,255,0.28),0_0_10px_rgba(133,173,255,0.45)] [&::-webkit-slider-thumb]:cursor-pointer"
                         style={{
-                          background: `linear-gradient(to right, var(--md-sys-color-primary) 0%, var(--md-sys-color-primary) ${((scale - MIN_SCALE) / (MAX_SCALE - MIN_SCALE)) * 100}%, rgba(255,255,255,0.1) ${((scale - MIN_SCALE) / (MAX_SCALE - MIN_SCALE)) * 100}%, rgba(255,255,255,0.1) 100%)`,
+                          background: `linear-gradient(to right, rgba(133,173,255,0.72) 0%, rgba(133,173,255,0.72) ${((Math.min(MAX_SCALE, Math.max(0.75, scale)) - 0.75) / Math.max(0.0001, MAX_SCALE - 0.75)) * 100}%, rgba(148,163,184,0.26) ${((Math.min(MAX_SCALE, Math.max(0.75, scale)) - 0.75) / Math.max(0.0001, MAX_SCALE - 0.75)) * 100}%, rgba(148,163,184,0.26) 100%)`,
                         }}
                       />
-                      <span className="text-sm text-on-surface-variant/50 w-8 text-right">
+                      <span className="w-12 text-right text-sm font-semibold text-on-surface-variant/75">
                         {Math.round(MAX_SCALE * 100)}%
                       </span>
-                      <span className="text-xs font-bold text-primary w-9 text-right">
+                      <span className="w-11 text-right text-sm font-extrabold text-primary">
                         {Math.round(scale * 100)}%
                       </span>
                     </div>
                     <p className="mt-2 text-base text-on-surface-variant/50">
-                      앱 전체 UI 크기를 조절합니다. 즉시 적용됩니다.
+                      앱 전체 크기를 조절합니다.
                     </p>
                   </div>
                 </div>
@@ -716,7 +699,7 @@ export default function Settings() {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="flex-1 py-2.5 rounded-full bg-gradient-to-tr from-primary to-secondary text-on-primary text-lg font-bold hover:brightness-110 active:scale-95 transition-all disabled:opacity-50"
+                    className="flex-1 rounded-full border border-primary/35 bg-primary/15 py-2.5 text-lg font-bold text-primary transition-all hover:bg-primary/22 hover:border-primary/55 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50"
                   >
                     {loading ? "변경 중..." : "변경"}
                   </button>

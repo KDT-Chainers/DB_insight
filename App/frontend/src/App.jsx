@@ -11,7 +11,7 @@ import MainAI from './pages/MainAI'
 import Settings from './pages/Settings'
 import DataIndexing from './pages/DataIndexing'
 import SplashOrb from './pages/SplashOrb'
-import teamLogoSrc from './assets/teamlogo.png'
+import AnimatedOrb from './components/AnimatedOrb'
 
 function AuthGate() {
   const [loading, setLoading] = useState(true);
@@ -56,17 +56,16 @@ function AuthGate() {
           <span className="aurora-band aurora-band-b" />
           <span className="aurora-band aurora-band-c" />
         </div>
-        <div className="auth-loading-halo pointer-events-none absolute left-1/2 top-1/2 h-[420px] w-[420px] -translate-x-1/2 -translate-y-1/2 rounded-full" />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(95%_58%_at_18%_26%,rgba(133,173,255,0.06),transparent_62%),radial-gradient(92%_56%_at_78%_22%,rgba(77,212,232,0.05),transparent_64%)]" />
         <div className="auth-loading-sweep pointer-events-none absolute inset-0" />
 
         <div className="relative z-10 flex min-h-screen flex-col items-center justify-center gap-4">
-          <img
-            src={teamLogoSrc}
-            alt=""
-            width={44}
-            height={44}
-            draggable={false}
-            className="auth-loading-logo h-11 w-11 rounded-xl object-contain"
+          <AnimatedOrb
+            size={320}
+            interactive={false}
+            hideCenterUI
+            particleCount={15000}
+            pointScaleMul={1.55}
           />
           <p className="text-on-surface-variant text-lg tracking-[0.08em]">
             Loading ...

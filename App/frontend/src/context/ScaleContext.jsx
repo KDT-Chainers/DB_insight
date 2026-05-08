@@ -4,7 +4,7 @@ const ScaleContext = createContext(null)
 
 const STORAGE_KEY = 'ui-scale'
 const DEFAULT_SCALE = 0.8
-const MIN_SCALE = 0.6
+const MIN_SCALE = 0.75
 const MAX_SCALE = 1.2
 const STEP = 0.05
 

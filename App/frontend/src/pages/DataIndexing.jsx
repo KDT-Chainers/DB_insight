@@ -495,14 +495,14 @@ function IndexingModal({
   //   correctionFactor = actualElapsed / doneEstimate  (최대 3배 클램프)
   //   remainingSec     = estimated_remaining * correctionFactor
   //   폴백: 백엔드 추정치 없으면 Phase 1 선형 외삽 유지.
-  const actualDone      = done + errors;              // skipped 제외 실제 처리 수
+  const actualDone = done + errors; // skipped 제외 실제 처리 수
   const actualRemaining = total - skipped - actualDone; // 실제 남은 신규 파일 수
   let remainingSec = null;
   if (isRunning && actualRemaining > 0 && jobStatus?.started_at) {
     const elapsedSec = Date.now() / 1000 - jobStatus.started_at;
     if (elapsedSec > 5.0) {
-      const estRemaining     = jobStatus?.estimated_remaining;
-      const doneEstimate     = jobStatus?.done_estimate;
+      const estRemaining = jobStatus?.estimated_remaining;
+      const doneEstimate = jobStatus?.done_estimate;
       const curFileRemaining = jobStatus?.current_file_remaining ?? 0;
       if (estRemaining != null && doneEstimate != null && doneEstimate > 0) {
         // [Phase 2+3] 가중 평균 보정 + 현재 파일 스테이지 잔여 합산
@@ -1857,20 +1857,20 @@ export default function DataIndexing() {
     () => [
       {
         selector: '[data-tutorial-id="indexing-folder-select"]',
-        title: "이제 폴더를 선택해볼게요.",
+        title: "1. 분석할 파일 가져오기",
         description:
-          "인덱싱은 파일 내용을 검색하기 좋은 형태로 정리해 두는 작업이에요. 먼저 폴더 선택 버튼으로 분석할 파일 위치를 지정해볼게요.",
+          "AI가 공부할 파일을 선택하는 단계입니다. '폴더 선택' 버튼을 눌러 분석하고 싶은 문서들이 담긴 폴더를 지정해 주세요. 지정된 폴더 안의 파일들을 AI가 하나하나 읽어낼 준비를 합니다.",
       },
       {
         selector: '[data-tutorial-id="indexing-start"]',
-        title: "다음은 인덱싱 시작입니다.",
+        title: "2. AI 지식 학습 시작",
         description:
-          "지금 하는 작업은 선택한 파일을 읽어서 검색용 임베딩을 만드는 과정입니다. 파일을 체크한 뒤 인덱싱 시작 버튼을 눌러 실행해보세요.",
+          "이제 선택한 파일의 내용을 AI가 검색하기 쉬운 형태로 정리할 차례입니다. 이 과정이 끝나면 복잡한 문서 내용도 질문 하나로 바로 찾아낼 수 있어요! '인덱싱 시작' 버튼을 눌러 학습을 시작해 보세요.",
       },
       {
-        title: "튜토리얼이 끝났어요.",
+        title: "모든 준비가 끝났어요!",
         description:
-          "이제 메인 검색 화면으로 돌아가 원하는 내용을 바로 찾아보세요! 제가 다시 필요할 경우 설정 탭에서 찾아주세요!",
+          "이제 AI가 여러분의 문서를 완벽하게 이해했습니다. 메인 화면에서 궁금한 내용을 물어보시면 필요한 정보를 빛의 속도로 찾아드릴게요! 도움이 다시 필요하시면 언제든 '설정' 탭에서 저를 불러주세요.",
         center: true,
       },
     ],
@@ -1910,16 +1910,16 @@ export default function DataIndexing() {
       {
         key: "sources",
         icon: "hub",
-        label: "데이터 소스",
-        subtitle: "원본 경로 및 등록",
+        label: "데이터",
+        subtitle: "파일 경로 및 등록",
         active: tab === "sources",
         onClick: () => setTabWithHistory("sources"),
       },
       {
         key: "indexing",
         icon: "account_tree",
-        label: "인덱싱",
-        subtitle: "파일 선택 및 임베딩",
+        label: "분석",
+        subtitle: "파일 변환 및 최적화",
         active: tab === "indexing",
         onClick: () => setTabWithHistory("indexing"),
       },
@@ -2256,7 +2256,6 @@ export default function DataIndexing() {
       <div className="relative z-10 flex min-h-0 min-w-0 flex-1">
         <StudioThreePaneShell
           discoverTitle="데이터"
-          areaSubtitle="데이터 인덱싱"
           navSectionLabel="메뉴"
           navItems={navItems}
           footerSub={footerSubLink}
