@@ -23,7 +23,7 @@ const PLUS_DOMAIN_META = {
     bg50: "rgba(133,173,255,0.55)",
     glow: "rgba(133,173,255,0.35)",
     solid: "rgb(133,173,255)",
-    placeholder: "Ask anything...",
+    placeholder: "무엇이든 물어보세요...",
   },
   doc: {
     icon: "description",
@@ -2416,7 +2416,7 @@ export default function MainSearch() {
                               PLUS_DOMAIN_META[domainFilter] ||
                               PLUS_DOMAIN_META[""]
                             ).placeholder
-                          : "인텔리전스에 질문하세요..."
+                          : "무엇이든 물어보세요.."
                     }
                     value={listening ? "" : inputValue}
                     onChange={(e) =>
