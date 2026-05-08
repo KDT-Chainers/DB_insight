@@ -457,3 +457,353 @@ cd C:\Honey\DB_insight\App\frontend && npm run build
 | Samsung PDF | `C:\Honey\DB_insight\Data\raw_DB\Docs\Samsung_Electronics_Sustainability_Report_2025_KOR.pdf` |
 | 백엔드 앱 | `C:\Honey\DB_insight\App\backend\app.py` (포트 5001) |
 | 프론트 빌드 | `C:\Honey\DB_insight\App\frontend\dist\` |
+
+---
+
+## 2026-05-08 세션 — 4b 환각 분석
+
+### LLM 사용 지점별 모델 매핑 (확정)
+
+| 단계 | 함수/노드 | 모델 | 위치 |
+|---|---|---|---|
+| router (rag/chat/followup 분류) | `_ollama_oneshot(prompt, model)` | **12b** | [aimode.py:712](App/backend/routes/aimode.py:712) |
+| intent (키워드 추출) | `_ollama_oneshot(prompt, model)` | **12b** | [aimode.py:325](App/backend/routes/aimode.py:325) |
+| search (벡터 검색) | BGE-M3 + reranker (LLM 미사용) | — | trichef 모듈 |
+| scan (관련 문장 추출) | `_ollama_oneshot(extract_prompt, model)` | **12b** | [aimode.py:626](App/backend/routes/aimode.py:626) |
+| select (found 파일 추리기) | rule-based, LLM 미사용 | — | — |
+| generate (RAG 답변) | `_ollama_stream(messages, gen_model)` | **4b** | [aimode.py:1390](App/backend/routes/aimode.py:1390) |
+| direct_generate (chat 답변) | `_ollama_stream(messages, gen_model)` | **4b** | [aimode.py:1092](App/backend/routes/aimode.py:1092) |
+| qa_generate (QA 페어) | `_ollama_oneshot(prompt, gen_model)` | **4b** | [aimode.py:1005](App/backend/routes/aimode.py:1005) |
+
+---
+
+### 문제 11: Q2 곡물 증가율 5.6% 환각 (4b, 해결)
+
+**증상**: 4b 답변 모델로 Q2 두 번 실행 → 두 번 다 정확히 `5.6%` 출력 (정답 5.8%). Deterministic 환각.
+
+```
+Q2: 2025/26년도 세계 곡물 총 생산량 전망치와 전년 대비 증가율은?
+A:  2025/26년도 세계 곡물 총 생산량 전망치는 3,035.5백만톤(5.6%↑)입니다.
+    (쌀 563.3백만톤 + 잡곡 1,633.2백만톤 + 밀 839.0백만톤)
+```
+
+3,035.5는 ✅, 5.8% → 5.6% ❌.
+
+**진단 방법** — DevTools Console에서 SSE 직접 호출 후 이벤트 파싱:
+
+```js
+(async () => {
+  const res = await fetch('http://127.0.0.1:5001/api/aimode/chat', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      query: '2025/26년도 세계 곡물 총 생산량 전망치와 전년 대비 증가율은?',
+      thread_id: 'debug_q2_' + Date.now(), topk: 5
+    })
+  });
+  const events = (await res.text()).split('\n')
+    .filter(l => l.startsWith('data: '))
+    .map(l => { try { return JSON.parse(l.slice(6)); } catch { return null; } })
+    .filter(Boolean);
+  const kf    = events.find(e => e.type === 'key_facts');
+  const scans = events.filter(e => e.type === 'scan_result' && e.found);
+  const done  = events.find(e => e.type === 'done');
+  console.log('key_facts has 5.8?', JSON.stringify(kf?.facts || []).includes('5.8'));
+  scans.forEach((s,i) => {
+    const j = (s.chunks || []).join(' ');
+    console.log(`scan[${i}] has5.8=${j.includes('5.8')} has3,035=${j.includes('3,035')}`);
+  });
+  console.log('answer:', done?.answer, 'gen_model:', done?.gen_model);
+})();
+```
+
+**진단 결과**:
+
+| 검사 | 결과 |
+|---|---|
+| scan_result chunks 에 "5.8" | ✅ **있음** |
+| key_facts 에 "5.8" | ❌ **없음** |
+| 답변에 "5.8" | ❌ |
+| gen_model | `gemma3:4b` ✅ |
+
+→ scan은 5.8% 라인을 청크에 잡았는데, **`_python_extract_key_facts` 가 forced-quote로 못 끌어올리고 있다**.
+
+**근본 원인 추정**: [`_python_extract_key_facts`](App/backend/routes/aimode.py:563) 의 필터 로직이 합계 행을 배제.
+
+```python
+# aimode.py:597
+if score >= min_score and kw_hits >= 1:   # ← kw_hits 강제 통과 조건
+    scored.append((score, sent))
+```
+
+PDF 표가 fitz로 추출되면 합계 행은 다음과 같은 단독 라인으로 떨어지는 경우가 많음:
+
+```
+전체  3,035.5  2,869.7  5.8%
+```
+
+질문 토큰(`년도, 세계, 곡물, 생산량, 전망치, 전년, 대비, 증가율, 2025, 26`)이 이 라인엔 하나도 없음 (`전체`/`총` 같은 1글자 키워드는 `[가-힣]{2,}` 정규식이 누락). 결과:
+- kw_hits = 0 → **필터 탈락**
+- 반면 `* 생산량 전망치(전년 대비): 쌀 563.3 / 잡곡 1,633.2 / 밀 839.0` 분해 행은 키워드 4개 매칭 → key_facts 통과
+
+forced-quote 에 분해 데이터만 노출됨 → 4b 가 가중평균을 자체 계산 시도 → 5.6% 환각 (정답 가중평균은 (563.3·2.0 + 1,633.2·7.6 + 839.0·4.9) / 3,035.5 ≈ 5.81%).
+
+**4b 의 행동 패턴 관찰**:
+- prior 가 약해 PDF 인용은 충실 (Q4 93.4% 이전 7b/12b 가 못 잡던 케이스를 4b 가 잡음 — `문제 8` 참고)
+- 다만 forced-quote 에 핵심 라인이 없으면 **자체 산술 시도** → 같은 잘못된 답이 deterministic 하게 재현
+
+**해결 후보**:
+1. `_python_extract_key_facts` 의 `kw_hits >= 1` 조건 완화 — 숫자 밀도가 높으면(예: `len(nums) >= 3` AND `%` 포함) 키워드 매칭 없어도 통과
+2. 동의어 매핑 추가 — 질문에 `총/전체/합계` 가 있으면 라인의 `전체/계` 도 kw_hits 로 카운트
+3. 1글자 키워드도 q_tokens 에 포함 (단 노이즈 위험 — `총`, `및`, `등` 자주 출현)
+4. 청크 머지 — fitz 추출 직후 표 헤더와 합계 행을 같은 sentence 로 병합
+
+가장 안전한 패치는 **(1)+(2) 결합**: 숫자 밀도 우회 통과 + 합계 동의어 보너스.
+
+**컨텍스트 재확인 (DevTools 콘솔에서 "5.8" 주변 ±150자 추출)**:
+
+> "...붙임2 2025/26년도 FAO 세계 곡물수급 전망 ... **2025/26년도 세계 곡물 생산량은 3,035.5백만톤으로 2024/25년도 대비 5.8%(167.8백만톤) 증가할 것으로 전망하였다.** * 생산량 전망치(전년 대비): 쌀 563.3백만톤(2.0%↑) / 잡곡 1,633.2(7.6%↑) / 밀 839.0(4.9%↑) ..."
+
+PDF 원문에서 5.8% 결론 문장은 깔끔하게 한 문장으로 들어가 있음. 키워드 매칭 7개(`2025`/`26`/`년도`/`세계`/`곡물`/`생산량`/`대비`) + 숫자 3개(`035.5`/`5.8%`/`167.8`) → **score = 16**.
+
+문제는 같은 chunk 안의 분해 표 행이 더 높은 점수:
+
+| 문장 | 숫자×3 | kw_hits | score |
+|---|---|---|---|
+| `* 생산량 전망치(전년 대비): 쌀 563.3 / 잡곡 1,633.2 / 밀 839.0` | 6×3=18 | 4 | **22** |
+| `* 소비량 전망치(전년 대비): 쌀 555.6 / 잡곡 1,585.4 / 밀 803.8` | 6×3=18 | 4 | **22** |
+| `* 재고량 전망치(전년 대비): 쌀 219.3 / 잡곡 385.0 / 밀 347.3` | 6×3=18 | 4 | **22** |
+| **2025/26년도 ... 5.8% 증가할 것으로 전망하였다** | 3×3=9 | 7 | **16** |
+
+`max_facts=4` 안에 분해 행 3개가 1·2·3등 차지, 4등 슬롯도 다른 narrative(소비량/재고량 ~16)와 경쟁 → 5.8% 결론 문장 누락. forced-quote에 분해만 노출되니 4b 가 가중평균을 자체 계산 → **5.6% 환각**.
+
+**해결**: [`_python_extract_key_facts`](App/backend/routes/aimode.py:563) 에 두 가지 가산/감점 추가.
+
+```python
+# 결론형 패턴 — "X.X%(...) 증가/감소/상승/하락/기록/전망/예상/달성"
+ANSWER_PATTERN = _re.compile(
+    r'\d+\.?\d*\s*%[^.\n]{0,40}'
+    r'(?:증가|감소|상승|하락|기록|전망|예상|달성|확대|축소|개선)'
+)
+
+for sent in sentences:
+    score = ...  # 기존 (숫자×3 + kw_hits)
+
+    # 결론형 narrative 가산점 (분해 표 행 대신 결과 문장 우선)
+    # 분해 표 행은 숫자수×3 으로 22점대 까지 올라가므로 +10 이상 필요.
+    if ANSWER_PATTERN.search(sent):
+        score += 10
+    # 불릿/표 행 감점 ("* 쌀 563.3 / 잡곡 ..." 같은 분해 행 억제)
+    if _re.match(r'^\s*[\*·•\-]', sent):
+        score -= 3
+```
+
+**적용 후 점수 재계산**:
+
+| 문장 | 기존 score | 결론형 +10 | 불릿 -3 | 최종 |
+|---|---|---|---|---|
+| `* 생산량 전망치 ... 쌀 563.3 / 잡곡 ...` | 22 | — | -3 | **19** |
+| **2025/26년도 ... 5.8% 증가할 것으로 전망하였다** | 16 | +10 | — | **26** |
+
+→ narrative 결론 문장이 분해 행을 추월, top-4 진입. forced-quote 에 "5.8%" 가 들어가 4b 가 정답 인용.
+
+**1차 패치 적용 후 추가 환각 발생** — 디버깅 계속.
+
+#### 1차 패치 후 환각 진화 (5번에 걸쳐 다른 답)
+
+| 시도 | 답변 | 형태 |
+|---|---|---|
+| 1차 | 3,035.5 / **5.6%** | 합 OK / % 환각 (가중평균 근사) |
+| 2차 | **3,102.5** / 2.0% | 합 환각 / 쌀 증가율 채택 |
+| 3차 | **951.5** / 9.2% | 재고량 narrative 채택 (완전 오답) |
+| 4차 | **3,777.3** / 7.6% | 합 환각 / 잡곡 증가율 |
+| 5차 | **3,372.2** / 7.6% | 합 환각 (재현 X) |
+| 6차 | **3,000** / 7.6% | 추정 합 / 잡곡 증가율 |
+
+**관찰**: ANSWER_PATTERN +10 패치가 narrative 점수는 올렸지만, 정답 narrative (3,035.5/5.8%) 가 여전히 key_facts 에 들어가지 않음.
+
+#### 진짜 원인 — `_join_pdf_lines` 와 sentence boundary 문제
+
+진단 스크립트 결과:
+
+```
+top1: * 생산량 전망치(전년 대비): 쌀 563.3 / 잡곡 1,633.2 / 밀 839.0(4.9%↑) 
+      2025/26년도 세계 곡물 소비량은 2,944.8백만톤으로 ... 2.4% 증가...
+3,035.5? false
+```
+
+key_facts 의 top1 이 **불릿 + 다음 narrative 가 합쳐진 괴물**. 5.8% 생산량 narrative 는 어디에도 없음.
+
+원인 추적 — 코드 흐름:
+
+```
+PDF → fitz 읽기 → _join_pdf_lines 적용 (소프트 줄바꿈 정리)
+    → scan_node 가 ±400자 sliding window 로 자름 → matched_chunks
+    → generate_node 가 _python_extract_key_facts 호출
+    → forced-quote 로 LLM 에 노출
+```
+
+[`_join_pdf_lines`](App/backend/routes/aimode.py:1996) 의 BULLET 정규식이 잘못됨:
+
+```python
+_BULLET = _re.compile(r"^[·•\-\d①②③④⑤]")  # ← 버그
+```
+
+문제점:
+1. **`*` 누락** — fitz 가 `* 생산량 전망치...` 를 추출했을 때 bullet 으로 인식 못함 → 직전 narrative 끝(`전망하였다.`) 과 합쳐버림
+2. **`.` 가 SENT_END 에 없음** — `_SENT_END = {"다","요","죠","함","임","!","?","。"}` — 마침표 자체가 없어서 narrative `...전망하였다.` 다음 줄과의 분리가 깨짐
+3. **`prev_is_bullet` 추적 없음** — 불릿 라인 끝에 `↑)` 같은 것이 오면 SENT_END 가 아니므로 다음 narrative 가 또 합쳐짐
+4. **`\d` 가 단독으로 bullet** — "2025/26", "2.4%", "3,035.5" 같은 문장 일부 숫자가 bullet 으로 오인됨
+
+연쇄 효과:
+- `...전망하였다.\n* 생산량 전망치...` → "*" 가 bullet 아니고 "." 가 SENT_END 아니라 → MERGE → `...전망하였다.* 생산량 전망치 ... (4.9%↑)` 한 줄
+- 그 후 `\n2025/26 세계 곡물 소비량은 ...` → 직전이 bullet 인지 추적 안 함, 끝이 `↑)` 로 SENT_END 아님, 시작이 "2" 인데 `\d` 라 bullet — 근데 같은 줄에 합쳐졌으니 검사도 다시 안 함 → MERGE
+- 결과: 생산량 narrative + 불릿 + 소비량 narrative 가 모두 한 줄
+
+`_python_extract_key_facts` 에 들어올 때 이미 깨진 상태라, 그 안에서 줄바꿈 정규화·점수 조정 해도 못 살림.
+
+#### 최종 패치 — `_join_pdf_lines` 수정
+
+```python
+_SENT_END = frozenset([
+    "다", "요", "죠", "함", "임",
+    ".",   # ← 추가: narrative 끝마침표 인식
+    "!", "?", "。",
+])
+# 진짜 불릿/번호 매김만 매치 — "2025/26", "2.4%", "3,035.5" 같은 숫자는 X. `*` 추가.
+_BULLET = _re.compile(r"^(?:[\*·•\-①②③④⑤]|\d+[.)]\s)")
+
+lines = text.split("\n")
+result = []
+prev_is_bullet = False  # ← 추가: 불릿 다음 줄 추적
+for line in lines:
+    is_bullet    = bool(_BULLET.match(line.strip()))
+    starts_paren = line.strip().startswith("[") or line.strip().startswith("(")
+    if (result
+            and line
+            and result[-1]
+            and not prev_is_bullet              # 불릿 다음엔 새 문장 시작
+            and result[-1][-1] not in _SENT_END
+            and not is_bullet
+            and not starts_paren
+    ):
+        result[-1] += line
+    else:
+        result.append(line)
+        prev_is_bullet = is_bullet
+return "\n".join(result)
+```
+
+`_python_extract_key_facts` 에는 추가로 (방어):
+- 동일 `prev_is_bullet` 추적 줄바꿈 정규화 (입력에 줄바꿈이 남아있는 경우 대비)
+- `min(len(nums), 5) × 3` 캡 — 식량가격지수 표 같은 숫자 25개+ 라인이 점수 폭주 방지
+- 결론형 ANSWER_PATTERN +10, bullet 라인 -3 (1차 패치 그대로)
+- ANSWER_PATTERN regex `[^.\n]` → lazy `.` (2차 패치) — 십진수 마침표 통과
+
+#### 7차 시도 — 정답 ✅
+
+```
+top1: 2025/26년도 세계 곡물 생산량은 3,035.5백만톤으로 2024/25년도 대비 5.8%(167.8백만톤) 증가할 것으로 전망하였다
+3,035.5? true
+answer: 2025/26년도 세계 곡물 총 생산량 전망치는 3,035.5백만톤이며, 전년 대비 증가율은 5.8%입니다.
+```
+
+**상태**: 완전 해결.
+
+#### 핵심 교훈
+
+1. **상위 단계 텍스트 정제가 망가져 있으면 하위 단계에서 어떤 점수 조정도 못 살림** — 추출기 점수 튜닝 전에 입력 텍스트가 sentence boundary 를 보존하는지 먼저 검증.
+2. **fitz 같은 PDF 추출기는 한국어 `*` 불릿/마침표/숫자 시작을 일관성 없이 처리** — bullet/SENT_END 정규식은 보수적으로 넓게 잡아야.
+3. **4b 가 forced-quote 에 정답 문장 있으면 그대로 인용, 없으면 자체 산술 시도해서 매번 다른 환각** — instruction-following 보다 prior 영향이 작아서 인용에는 충실.
+
+---
+
+### 테스트 결과 추가 (Gemma3:4b answer + 12b search 하이브리드)
+
+| 버전 | Q1 (128.5+원인) | Q2 (3,035.5/5.8%) | Q3 (이해관계자) | Q4 (93.4%) |
+|---|---|---|---|---|
+| v8.4 12b only | (이전 결과 참고) | | | |
+| **v9 하이브리드 (12b 검색 + 4b 답변)** | ⚠️ 128.5 ✅ / 5.1%·7.2% 상승률 ✅ / 원인 키워드 ❌ | ❌ 3,035.5 ✅ / **5.6% 환각** | ⚠️ 8대 그룹 ✅ / 채널 누락 | ✅ **93.4%** 안정적, framing 정확 |
+| **v10 (Q2 추출기 보강 후)** | ⚠️ 128.5 ✅ / 곡물(밀) 원인을 유지류·설탕에 잘못 매칭 | ✅ **3,035.5 / 5.8%** 정답 | ⚠️ 8대 그룹 ✅ / 채널 누락 (동일) | ⚠️ 93.4% ✅ / **"2030 목표 = 93.4%" 라벨링 회귀** |
+
+**핵심 통찰**: 4b 가 12b/7b 보다 **prior 영향 적어서 RAG 인용 충실도 높음**. Q4 (93.4%) 처럼 forced-quote 에 정답 라인이 들어가는 케이스는 4b 가 더 안정적. 단 Q2 처럼 forced-quote 에서 누락되는 라인이 생기면 자체 계산 시도해서 환각 — **추출기 정확도가 모델 크기보다 결정적**.
+
+**Q2 디버깅에 들어간 패치 6종 합본** ([aimode.py](App/backend/routes/aimode.py)):
+
+| # | 위치 | 변경 |
+|---|---|---|
+| 1 | `_python_extract_key_facts` 점수 | `ANSWER_PATTERN` +10 (결론형 narrative 우선) |
+| 2 | 위 ANSWER_PATTERN regex | `[^.\n]{0,40}` → `.{0,40}?` (lazy, 십진수 마침표 통과) |
+| 3 | 위 점수 | 불릿 라인 -3 |
+| 4 | 위 점수 | `min(len(nums), 5) × 3` 캡 (테이블 점수 폭주 차단) |
+| 5 | 위 텍스트 정규화 | `prev_is_bullet` 추적 + 불릿 패턴 정밀화 (defense in depth) |
+| 6 | `_join_pdf_lines` (`_read_source_full_text` 내부) | `*` 추가, `.` SENT_END, `prev_is_bullet`, `\d+[.)]\s` 정밀 매칭 ★ **결정타** |
+
+5/6 모두 적용된 후에야 정답. 단일 패치로는 해결 안 됨.
+
+---
+
+### 문제 12: Q4 chained-sentence parsing 회귀 (4b, 미해결)
+
+**증상**: v10 패치 후 Q4 답변에서 "2030 목표 = 93.4%" 로 라벨링 오류. 숫자는 맞지만 framing 어긋남.
+
+```
+Q4: 삼성전자의 2030년 탄소중립 목표와 2024년 재생에너지 전환율
+A:  삼성전자의 2030년 탄소중립 목표는 전체 에너지의 93.4%이며,
+    2024년 재생에너지 전환율은 93.4%입니다.
+```
+
+정답: "2030 목표 = 탄소중립(Scope 1, 2)" / "2024 = 93.4%" — 4b 가 두 정보를 잘못 결합.
+
+**진단**: key_facts 추출은 완벽. top1 이 정답 문장 그 자체:
+
+```
+[0] DX(Device eXperience)부문은 2030년 탄소중립 달성을 목표로 2024년 말 기준
+    전체 에너지의 93.4%가 재생에너지로 전환되었고, 대표 제품 모델에는 고효율
+    에너지 기술을 적용해 2019년 대비 평균 31.5%의 소비전력을 절감했습니다
+```
+
+이 한 문장 안에 두 절이 chained 됨:
+- "2030년 탄소중립 **달성을 목표로**" ← 2030 target = 탄소중립
+- "2024년 말 기준 ... 93.4%가 재생에너지로 전환되었고" ← 2024 actual = 93.4%
+
+4b 가 chained clause 분해 실패 → "2030 목표" 자리에 "93.4%" 를 잘못 매칭.
+
+**v9 (이전) 와의 차이**:
+- v9 key_facts 에는 "Scope 1, 2" 가 들어간 다른 문장이 동시 노출 → 4b 가 두 정보를 분리해 정확히 라벨링
+- v10 추출기는 정답 문장에 더 집중 → forced-quote 가 압축적이라 4b parsing 한계 노출
+
+**근본 원인**: 4b instruction-following 한계 (chained clause 의 각 절을 독립 fact 로 분해하지 못함). 추출기 측에서 해결 불가.
+
+**해결 후보**:
+1. **시스템 프롬프트 강화** — "한 문장 안에 여러 연도가 있으면 각 연도에 해당하는 절만 인용" 같은 명시 규칙 추가
+2. **chained sentence pre-split** — 추출 시 "년도 ... 목표로 ... 년도 말 기준 ..." 같은 패턴을 의미 단위로 강제 분할
+3. **답변 모델 12b 로 변경** — Gemma3:12b 는 chained clause parsing 더 잘함 (단 속도 ↓)
+4. **현 상태 수용** — 숫자(93.4%) 자체는 정답이고 framing 만 어긋남. Q2 5.8% 환각 해결 가치가 더 큼.
+
+**상태**: 미적용. v10 트레이드오프 — Q2 정답 vs Q4 framing. **전체 정확도는 v10 이 우세**.
+
+---
+
+### 문제 13: Q1 원인 카테고리 오인 (4b, 미해결)
+
+**증상**: v10 에서 Q1 답변이 곡물(밀) 원인을 유지류·설탕 원인으로 잘못 인용.
+
+```
+Q1: 2026년 3월 FAO 세계식량가격지수는 얼마이며, 유지류와 설탕 가격이 오른 원인은?
+A:  ... 유지류와 설탕 가격이 오른 원인은 다음과 같습니다:
+    • 미국 내 가뭄으로 작황지수가 악화됨   ← 곡물(밀) 원인
+    • 호주에서 비료 가격 상승 가능성에 대응하여 파종이 줄어들 것으로 예상됨   ← 곡물(밀) 원인
+```
+
+정답 (page 3 붙임1):
+- 유지류: 팜유 말레이시아 감산, 해바라기유 흑해 공급제약, 원유가격 상승
+- 설탕: 브라질 에탄올 수요 (원유가격 상승), 중동 분쟁 격화
+
+**진단 추정**: 질문 키워드(`유지류, 설탕, 가격, 원인`) → scan_node 가 곡물 가격지수 단락의 "X% 상승" / "원인" 토큰을 더 많이 매칭 → 곡물 원인 라인이 forced-quote 에 우선 노출.
+
+**근본 원인**: 추출 키워드 매칭이 카테고리(유지류/설탕)를 식별하지 못하고 일반 토큰(원인/상승)에 끌려감. troubleshooting 문서의 미해결 항목 #9 (`Q1 FAO 가격지수 원인 누락`) 과 동일 패턴이 v10 에서도 재현.
+
+**해결 후보**: 질문 토큰 → 관련 키워드 확장 로직 (예: "유지류" → "팜유, 대두유, 해바라기유, 유채유"). LLM 기반 query expansion 또는 도메인 사전.
+
+**상태**: 미적용. 이전부터 알려진 문제, v10 에서도 미해결.
