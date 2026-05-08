@@ -1,5 +1,6 @@
 import json
 import os
+import platform
 import subprocess
 from pathlib import Path
 
@@ -877,15 +878,83 @@ def indexed_files():
 
 # ── 파일 열기 ─────────────────────────────────────────────────────
 
+def _resolve_open_path(file_path: str) -> str:
+    raw_path = (file_path or "").strip()
+    if not raw_path:
+        return ""
+
+    candidate = Path(raw_path).expanduser()
+    if not candidate.is_absolute():
+        candidate = Path(os.path.abspath(str(candidate)))
+    if candidate.exists():
+        return os.path.normpath(str(candidate))
+
+    # BGM 검색 결과는 filename 만 들고 올 수 있으므로 raw 폴더를 한 번 더 확인.
+    try:
+        from services.bgm import bgm_config
+        bgm_candidate = bgm_config.RAW_BGM_DIR / Path(raw_path).name
+        if bgm_candidate.exists():
+            return os.path.normpath(str(bgm_candidate))
+    except Exception:
+        pass
+
+    return os.path.normpath(str(candidate))
+
+
+def _validate_open_path(file_path: str) -> tuple[str | None, tuple[dict, int] | None]:
+    resolved_path = _resolve_open_path(file_path)
+    if not resolved_path:
+        return None, ({"error": "파일 경로가 없습니다."}, 400)
+    if not os.path.exists(resolved_path):
+        return None, ({"error": "파일이 존재하지 않습니다."}, 404)
+    return resolved_path, None
+
+
+def _open_with_default_app(target_path: str) -> None:
+    system = platform.system()
+    if system == "Windows":
+        os.startfile(target_path)
+    elif system == "Darwin":
+        subprocess.Popen(["open", target_path])
+    else:
+        subprocess.Popen(["xdg-open", target_path])
+
+
+def _open_in_file_explorer(target_path: str) -> None:
+    system = platform.system()
+    if system == "Windows":
+        if os.path.isdir(target_path):
+            os.startfile(target_path)
+        else:
+            # explorer 는 `/select,"C:\path with spaces\file.ext"` 형태의
+            # 단일 command line 을 더 안정적으로 해석한다.
+            subprocess.Popen(f'explorer.exe /select,"{target_path}"')
+        return
+
+    if system == "Darwin":
+        if os.path.isdir(target_path):
+            subprocess.Popen(["open", target_path])
+        else:
+            subprocess.Popen(["open", "-R", target_path])
+        return
+
+    folder_path = target_path if os.path.isdir(target_path) else os.path.dirname(target_path)
+    subprocess.Popen(["xdg-open", folder_path or target_path])
+
 @search_bp.post("/files/open")
 def file_open():
     """POST /api/files/open  body: { "file_path": "C:/..." }"""
-    data      = request.get_json(silent=True) or {}
-    file_path = data.get("file_path", "")
-    if not file_path or not os.path.exists(file_path):
-        return jsonify({"error": "File not found"}), 404
-    os.startfile(file_path)
-    return jsonify({"success": True})
+    data = request.get_json(silent=True) or {}
+    file_path, error = _validate_open_path(data.get("file_path", ""))
+    if error:
+        body, status = error
+        return jsonify(body), status
+
+    try:
+        _open_with_default_app(file_path)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    return jsonify({"success": True, "file_path": file_path})
 
 
 @search_bp.post("/files/open-folder")
@@ -893,32 +962,21 @@ def folder_open():
     """POST /api/files/open-folder  body: { "file_path": "C:/..." }
 
     탐색기에서 해당 파일을 선택한 상태로 부모 폴더를 엽니다.
-    Windows: `explorer /select,<file>` — 콤마와 경로는 **하나의 인자** 로 전달해야 함.
-      * subprocess.Popen(["explorer", "/select,", path]) ← BAD: 콤마/경로가 분리되어
-        탐색기가 콤마만 받고 path 를 무시 → 기본 폴더(문서 등)로 엽니다.
-      * subprocess.Popen(f'explorer /select,"{path}"', shell=True) ← OK
+    Windows: `explorer /select,<file>` 를 하나의 인자로 전달합니다.
     경로가 디렉터리이면 부모 + select 가 의미 없으므로 그냥 디렉터리를 엽니다.
     """
-    data      = request.get_json(silent=True) or {}
-    file_path = data.get("file_path", "")
-    if not file_path or not os.path.exists(file_path):
-        return jsonify({"error": "File not found"}), 404
-
-    # Windows 백슬래시 정규화 (forward slash 도 explorer 가 받지만 일관성)
-    norm_path = os.path.normpath(file_path)
+    data = request.get_json(silent=True) or {}
+    file_path, error = _validate_open_path(data.get("file_path", ""))
+    if error:
+        body, status = error
+        return jsonify(body), status
 
     try:
-        if os.path.isdir(norm_path):
-            # 디렉터리면 그대로 열기
-            os.startfile(norm_path)
-        else:
-            # 파일 → 부모 폴더 열고 파일 선택. shell=True 로 단일 명령 문자열 전달
-            # (큰따옴표로 경로 감싸서 공백/한글 지원).
-            subprocess.Popen(f'explorer /select,"{norm_path}"', shell=True)
+        _open_in_file_explorer(file_path)
     except Exception as e:
-        # 최종 fallback — 부모 폴더만 열기
+        fallback = os.path.dirname(file_path) or file_path
         try:
-            os.startfile(os.path.dirname(norm_path))
+            _open_with_default_app(fallback)
         except Exception:
             return jsonify({"error": str(e)}), 500
-    return jsonify({"success": True})
+    return jsonify({"success": True, "file_path": file_path})

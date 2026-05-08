@@ -2,7 +2,7 @@
 
 단계:
   Step A (23:00~23:15) : 진단 — 캡션 품질 정량 측정
-  Step B (23:15~01:15) : Doc 한국어 요약 생성 (gemma3:12b Ollama)
+  Step B (23:15~01:15) : Doc 한국어 요약 생성 (gemma:12b Ollama)
   Step C (01:15~07:10) : Image 5-stage 재캡셔닝 (Qwen2.5-VL-3B)
   07:10~07:25         : 체크포인트 저장 + 진행 보고
 
