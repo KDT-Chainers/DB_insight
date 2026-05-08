@@ -1477,7 +1477,14 @@ export default function MainSearch() {
     setFileDetail(null);
     setSearchError("");
     setSearching(false);
+    setDomainFilter("");
   }, [location.state?.goHomeAt]);
+
+  // 메인(home) 진입 시 도메인 필터 초기화 — 결과 화면에서 선택한 필터가
+  // 메인 복귀 후 다음 검색까지 끌려가지 않도록 한다.
+  useEffect(() => {
+    if (view === "home") setDomainFilter("");
+  }, [view]);
 
   // STT
   const doSearchRef = useRef(null);
