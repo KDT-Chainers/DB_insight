@@ -1,7 +1,7 @@
-"""gen_doc_summaries_gemma.py — Doc 페이지 한국어 요약 생성 (gemma3:12b Ollama).
+"""gen_doc_summaries_gemma.py — Doc 페이지 한국어 요약 생성 (gemma:12b/gemma:4b Ollama).
 
 문제: 기존 Doc 캡션(.txt) = BLIP 영어 degenerated (완전 무용)
-해결: _body_texts.json (PDF 본문) → gemma3:12b → 한국어 3-tier 요약
+해결: _body_texts.json (PDF 본문) → gemma:12b/gemma:4b → 한국어 3-tier 요약
      저장: extracted_DB/Doc/captions/{doc_folder}/summary.caption.json
      형식: {"L1": "30자 제목", "L2": "80자 한문장", "L3": "200자 상세"}
 
@@ -28,7 +28,8 @@ BODY_TEXTS   = DOC_CACHE / "_body_texts.json"
 DOC_IDS_PATH = DOC_CACHE / "doc_page_ids.json"
 
 OLLAMA_URL   = "http://localhost:11434/api/generate"
-MODEL        = "gemma3:12b"
+MODEL_PRIORITY = ("gemma:12b", "gemma:4b")
+MODEL        = MODEL_PRIORITY[0]
 TIMEOUT_S    = 120   # 요청당 타임아웃
 
 PROMPT_TMPL = """\
@@ -46,8 +47,16 @@ PROMPT_TMPL = """\
 JSON_RE = re.compile(r'\{[^{}]+\}', re.DOTALL)
 
 
+def _select_model_from_tags(models: list[str]) -> str | None:
+    for preferred in MODEL_PRIORITY:
+        for model in models:
+            if preferred in str(model).lower():
+                return str(model)
+    return None
+
+
 def ollama_summarize(title: str, text: str) -> dict | None:
-    """gemma3:12b 로 한국어 3-tier 요약 생성."""
+    """지원 Gemma 모델로 한국어 3-tier 요약 생성."""
     prompt = PROMPT_TMPL.format(
         title=title[:80],
         text=text[:2000],  # 토큰 절약
@@ -106,18 +115,25 @@ def load_body_texts() -> dict[str, str]:
 
 
 def main():
+    global MODEL
     t0 = time.time()
-    print(f"[Step B] Doc 한국어 요약 생성 시작 (모델: {MODEL})", flush=True)
+    print(f"[Step B] Doc 한국어 요약 생성 시작 (우선순위: {', '.join(MODEL_PRIORITY)})", flush=True)
 
     # Ollama 상태 확인
     try:
         with urllib.request.urlopen("http://localhost:11434/api/tags", timeout=5) as r:
             tags = json.loads(r.read())
             models = [m["name"] for m in tags.get("models", [])]
-            if not any(MODEL.split(":")[0] in m for m in models):
-                print(f"  [경고] {MODEL} 미발견. 사용 가능: {models}", flush=True)
+            selected_model = _select_model_from_tags(models)
+            if not selected_model:
+                print(
+                    f"  [경고] 지원 Gemma 모델이 없습니다. {MODEL_PRIORITY[0]} 또는 {MODEL_PRIORITY[1]}를 설치해 주세요. 현재: {models}",
+                    flush=True,
+                )
+                return
             else:
-                print(f"  Ollama OK, 모델 확인 완료", flush=True)
+                MODEL = selected_model
+                print(f"  Ollama OK, 모델 확인 완료 ({MODEL})", flush=True)
     except Exception as e:
         print(f"  [경고] Ollama 연결 실패: {e} — 계속 시도", flush=True)
 

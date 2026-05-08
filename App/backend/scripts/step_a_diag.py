@@ -215,7 +215,7 @@ if stage_counts:
 
 lines += [
     "\n## 개선 우선순위",
-    "1. **Doc 캡션** — BLIP 영어 degeneration 100% → gemma3:12b 한국어 요약으로 교체 (Step B)",
+    "1. **Doc 캡션** — BLIP 영어 degeneration 100% → gemma:12b 한국어 요약으로 교체 (Step B)",
     "2. **Image 캡션** — Qwen2.5-VL-3B 5-stage 재캡셔닝 (Step C, resume 가능)",
     "3. **Im 캐시 재빌드** — BGE-M3 이미 cross-lingual → 캡션만 고치면 바로 개선 (Step D)",
 ]

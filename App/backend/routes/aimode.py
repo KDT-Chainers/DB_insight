@@ -39,6 +39,7 @@ logger = logging.getLogger(__name__)
 aimode_bp = Blueprint("aimode", __name__, url_prefix="/api/aimode")
 
 OLLAMA_URL  = "http://localhost:11434"
+SUPPORTED_GEMMA_MODELS = ("gemma:12b", "gemma:4b")
 SCAN_DELAY  = 0.25   # 파일 스캔 간 UI 애니메이션 딜레이 (초)
 
 
@@ -176,29 +177,33 @@ _prev_sources_lock = threading.Lock()
 
 
 # ── Ollama 함수 ────────────────────────────────────────────────────
+def _is_supported_gemma_model(name: str) -> bool:
+    lowered = name.lower()
+    return any(model in lowered for model in SUPPORTED_GEMMA_MODELS)
+
+
 def _get_ollama_model(task: str | None = None) -> str | None:
-    """task 별 모델 분기 (하이브리드 모드).
-
-    - task='generate' : 답변/요약 생성용 → 작은 빠른 모델 우선 (gemma3:4b 등)
-    - 그 외(검색/intent/scan/router) : 정확도 우선 큰 모델 (gemma3:12b 등)
-
-    동일 머신에 여러 모델 보유 시 자동 선택. VRAM 부족하면 Ollama가 모델 스왑.
-    """
+    """지원 Gemma 모델은 gemma:12b, gemma:4b만 허용한다."""
     try:
         r = _req.get(f"{OLLAMA_URL}/api/tags", timeout=3)
         models = r.json().get("models", [])
         if task == "generate":
-            # 답변 생성: 작은 모델 우선 (속도 우선). 4b 없으면 fallback 으로 큰 모델
-            preferred = ["gemma3:4b", "gemma3:1b", "qwen2.5:1.5b", "qwen2.5:3b",
-                         "gemma3", "qwen2.5", "llama3.2", "llama3", "mistral", "phi4"]
+            preferred = ["gemma:12b", "gemma:4b", "qwen2.5:1.5b", "qwen2.5:3b",
+                         "qwen2.5", "llama3.2", "llama3", "mistral", "phi4"]
         else:
-            # 검색/intent/scan/router: 정확도 우선 큰 모델
-            preferred = ["gemma3:12b", "gemma3", "qwen2.5", "llama3.2", "llama3", "mistral", "phi4"]
+            preferred = ["gemma:12b", "gemma:4b", "qwen2.5", "llama3.2", "llama3", "mistral", "phi4"]
         for pref in preferred:
             for m in models:
-                if pref in m.get("name", "").lower():
+                name = m.get("name", "").lower()
+                if pref in name:
                     return m["name"]
-        return models[0]["name"] if models else None
+        for m in models:
+            name = m.get("name", "").lower()
+            if name.startswith("gemma") and not _is_supported_gemma_model(name):
+                continue
+            if name:
+                return m["name"]
+        return None
     except Exception:
         return None
 
@@ -1521,7 +1526,7 @@ def _rag_sse(question: str, topk: int, thread_id: str,
     model = _get_ollama_model()
     if not model:
         yield emit({"type": "error",
-                    "message": "Ollama 미연결. 'ollama pull gemma3:4b', 'ollama pull gemma3:12b' 실행 후 재시도."})
+                    "message": "Ollama 미연결 또는 지원 Gemma 모델이 없습니다. 'ollama pull gemma:12b', 'ollama pull gemma:4b' 실행 후 재시도."})
         return
 
     yield emit({"type": "info", "model": model, "thread_id": thread_id,
@@ -2334,7 +2339,7 @@ def _summarize_sse(file_type: str, trichef_id: str, file_path: str,
     # 하이브리드: 요약은 답변 생성과 동일하게 작은 모델(4b) 사용
     model = _get_ollama_model("generate")
     if not model:
-        yield emit({"type": "error", "message": "Ollama 미연결 또는 모델 없음."})
+        yield emit({"type": "error", "message": "Ollama 미연결 또는 지원 Gemma 모델이 없습니다. gemma:12b 또는 gemma:4b를 설치해 주세요."})
         return
 
     fname = file_name or (file_path or "").rsplit("/", 1)[-1].rsplit("\\", 1)[-1] or "?"

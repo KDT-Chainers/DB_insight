@@ -24,6 +24,7 @@ from config import PATHS
 
 logger = logging.getLogger(__name__)
 ai_search_bp = Blueprint("ai_search", __name__, url_prefix="/api/ai")
+SUPPORTED_GEMMA_MODELS = ("gemma:12b", "gemma:4b")
 
 
 # ── 도메인 키워드 힌트 ────────────────────────────────────────────────────────
@@ -129,19 +130,29 @@ def _trichef_search(
 
 
 # ── Ollama LLM ────────────────────────────────────────────────────────────────
+def _is_supported_gemma_model(name: str) -> bool:
+    lowered = name.lower()
+    return any(model in lowered for model in SUPPORTED_GEMMA_MODELS)
+
+
 def _get_ollama_model() -> Optional[str]:
     try:
         import requests as _req
         r = _req.get("http://localhost:11434/api/tags", timeout=3)
         if r.status_code == 200:
             models = r.json().get("models", [])
-            preferred = ["qwen2.5", "llama3.2", "llama3", "mistral", "gemma3", "phi4", "gemma", "phi"]
+            preferred = ["qwen2.5", "llama3.2", "llama3", "mistral", "gemma:12b", "gemma:4b", "phi4", "phi"]
             for pref in preferred:
                 for m in models:
-                    if pref in m.get("name", "").lower():
+                    name = m.get("name", "").lower()
+                    if pref in name:
                         return m["name"]
-            if models:
-                return models[0]["name"]
+            for m in models:
+                name = m.get("name", "").lower()
+                if name.startswith("gemma") and not _is_supported_gemma_model(name):
+                    continue
+                if name:
+                    return m["name"]
     except Exception:
         pass
     return None
