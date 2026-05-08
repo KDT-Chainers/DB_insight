@@ -18,7 +18,8 @@ _DEFAULTS: dict[str, dict] = {
     "doc":   {"base": 5.0, "per_mb": 1.0},
     "image": {"base": 0.4, "per_mb": 0.1},
     "video": {"base": 3.0, "per_mb": 0.5},
-    "audio": {"base": 2.0, "per_mb": 0.8},
+    "audio": {"base": 6.0, "per_mb": 2.5},
+    "bgm":   {"base": 2.0, "per_mb": 0.5},
 }
 
 _ALPHA = 0.15  # EWMA 학습률

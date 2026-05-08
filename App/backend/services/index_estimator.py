@@ -39,13 +39,14 @@ _AUDIO_EXTS = {".mp3", ".wav", ".m4a", ".flac", ".ogg", ".aac", ".wma", ".opus"}
 _BGM_PATH_KEYWORDS = {"bgm", "Bgm", "BGM"}
 
 # 시간 추정 계수 — (base_seconds, seconds_per_mb)
+# audio/bgm 은 실측 대비 낙관적 오류가 잦아 2.5–3× 보수 계수 적용.
+# 캘리브레이션이 쌓이면 자동으로 줄어들어, ETA 는 항상 감소하는 방향으로 수렴.
 _COEF = {
-    "doc":   (5.0, 1.0),
-    "image": (0.4, 0.1),
-    "video": (3.0, 0.5),
-    "audio": (2.0, 0.8),
-    # [B1] BGM: CLAP 임베딩 — Whisper STT 없으므로 audio 대비 ~4배 빠름
-    "bgm":   (1.0, 0.2),
+    "doc":   (5.0,  1.0),
+    "image": (0.4,  0.1),
+    "video": (3.0,  0.5),
+    "audio": (6.0,  2.5),   # Whisper large-v3 실측 보수 계수
+    "bgm":   (2.0,  0.5),   # CLAP 임베딩 보수 계수
 }
 
 # 캘리브레이션 계수 캐시 (60초 TTL — 잡 완료 후 자동 갱신 반영)
@@ -198,7 +199,7 @@ def _meta_estimate(path: str, ftype: str) -> float | None:
         dur = _ffprobe_duration(path, stream_type="a")
         if dur is None:
             return None
-        per_sec = 0.015 if ftype == "bgm" else 0.03
+        per_sec = 0.05 if ftype == "bgm" else 0.12
         return base + per_sec * dur
 
     if ftype == "doc":
