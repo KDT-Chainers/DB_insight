@@ -1500,8 +1500,8 @@ export default function MainSearch() {
     }, []),
   });
 
-  const ml = open ? "ml-64" : "ml-0";
-  const leftEdge = open ? "left-64" : "left-0";
+  const ml = open ? "ml-[var(--sidebar-width,16rem)]" : "ml-0";
+  const leftEdge = open ? "left-[var(--sidebar-width,16rem)]" : "left-0";
   const sidebarPx = open ? 256 : 0;
 
   useEffect(() => {
