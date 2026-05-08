@@ -222,7 +222,10 @@ md/*.html
 
 # 임시 디버깅 스크립트 (1회용 진단/테스트)
 scripts/_diag_*.py
+scripts/_diag_*.json
 scripts/_test_*.py
+App/backend/scripts/_diag_*.json
+App/backend/scripts/_diag_*.py
 
 # App/backend 일회용 임시 스크립트 자동 제외
 # 규칙: _debug_*, _inspect_*, _list_* 접두어 파일은 커밋 대상에서 제외

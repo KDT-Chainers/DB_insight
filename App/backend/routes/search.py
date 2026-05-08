@@ -71,22 +71,26 @@ def search():
     try:
         results: list[dict] = []
 
+        # [v16] 사용자 요구: 단일 도메인 탭은 100건 cap (전체 검색은 도메인 20 + 합계 100)
+        _SINGLE_DOMAIN_CAP = 100
+        _single_topk = min(top_k, _SINGLE_DOMAIN_CAP)
+
         if file_type == "image":
-            results = _search_trichef(expanded_query, ["image"], top_k)
+            results = _search_trichef(expanded_query, ["image"], _single_topk)
         elif file_type == "doc":
-            results = _search_trichef(expanded_query, ["doc_page"], top_k)
+            results = _search_trichef(expanded_query, ["doc_page"], _single_topk)
         elif file_type == "video":
             # TRI-CHEF AV 우선 → 캐시 없으면 구형 ChromaDB fallback
-            results = _search_trichef_av(expanded_query, ["movie"], top_k)
+            results = _search_trichef_av(expanded_query, ["movie"], _single_topk)
             if not results:
-                results = _search_legacy_video(expanded_query, top_k)
+                results = _search_legacy_video(expanded_query, _single_topk)
         elif file_type == "audio":
             # TRI-CHEF AV 우선 → 캐시 없으면 구형 ChromaDB fallback
-            results = _search_trichef_av(expanded_query, ["music"], top_k)
+            results = _search_trichef_av(expanded_query, ["music"], _single_topk)
             if not results:
-                results = _search_legacy_audio(expanded_query, top_k)
+                results = _search_legacy_audio(expanded_query, _single_topk)
         elif file_type == "bgm":
-            results = _search_bgm(expanded_query, top_k)
+            results = _search_bgm(expanded_query, _single_topk)
         else:
             # ════════════════════════════════════════════════════════════════
             # [v10 전체 검색] 5도메인 병렬 실행 + CMP 통합 ranking + cap.
@@ -102,22 +106,19 @@ def search():
             from concurrent.futures import ThreadPoolExecutor
             from services.cmp_scoring import apply_cmp_to_results, CMP_THRESHOLD_NONE
 
-            # [v15.2] 사용자 요구: 각 도메인 100, 전체 500.
-            #   measure_raw_distribution 측정에서 doc 의미 매칭 평균은 32건이지만
-            #   사용자 요구사항 일관성 우선 → 모든 도메인 cap 100 통일.
+            # [v16] 사용자 요구: 각 도메인 20, 전체 100 (응답 속도 우선).
+            #   이전 v15.2 (도메인 100, 전체 500) 은 cross-encoder rerank 부하로
+            #   GPU OOM / 타임아웃 발생. 응답 안정성 우선으로 cap 5배 축소.
             DOMAIN_OPTIMAL_TOPK = {
-                "doc":   100,
-                "image": 100,
-                "video": 100,
-                "audio": 100,
-                "bgm":   100,
+                "doc":   20,
+                "image": 20,
+                "video": 20,
+                "audio": 20,
+                "bgm":   20,
             }
-            # 합계 max 500 (=사용자 요청)
-            # [v15.1 fix] scale factor 제거 — 항상 도메인 optimal cap 사용.
-            # top_k 가 작아도 (예: 30) 도메인별 50~100건 retrieve 후 quota
-            # 분배. 응답 시간 미세 증가 감수, 합격률 보장 우선.
+            # 합계 max 100
             DOMAIN_CAP_BY_DOMAIN = dict(DOMAIN_OPTIMAL_TOPK)
-            TOTAL_CAP  = min(top_k, 500)
+            TOTAL_CAP  = min(top_k, 100)
             DOMAIN_CAP = max(DOMAIN_CAP_BY_DOMAIN.values())
 
             # ── 1. 5도메인 병렬 검색 (GPU+CPU 활용, 도메인별 최적 cap) ──
@@ -363,7 +364,7 @@ def search():
     #   → 0.72 floor 가 너무 빡빡해 1건만 통과. 시각 일치성 검증(visual_check) 이
     #   캡션 거짓말 케이스를 후처리로 차단하므로 sim floor 는 완화 가능.
     _DOMAIN_MIN_SIM = {
-        "image": 0.60,   # 0.72 → 0.60 (visual_check 가 거짓 매칭 차단 담당)
+        "image": 0.50,   # 0.60 → 0.50 (cat search 회복용 — visual_check fail-safe)
         "doc":   0.68,   # 0.58 → 0.68 (보이저호/팝송 무관 67% 이하 차단)
         "video": 0.75,
         "audio": 0.85,   # AV CDF 부풀림으로 실효 floor 약함
@@ -470,6 +471,20 @@ def search():
     # 사용자 요청 top_k 정확히 맞춰 반환. (이전 v6 까지는 자르지 않아 30 요청에
     # 47건 반환되는 비직관적 동작 발생.)
     results = results[:top_k]
+
+    # [JSON 안전성] NaN/inf → null 치환 (frontend "Unexpected token N" 오류 방지).
+    import math as _math
+    def _sanitize_nan(x):
+        if isinstance(x, float):
+            if _math.isnan(x) or _math.isinf(x):
+                return None
+            return x
+        if isinstance(x, dict):
+            return {k: _sanitize_nan(v) for k, v in x.items()}
+        if isinstance(x, list):
+            return [_sanitize_nan(v) for v in x]
+        return x
+    results = _sanitize_nan(results)
 
     return jsonify({"query": query, "results": results})
 
