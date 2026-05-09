@@ -833,7 +833,7 @@ function IndexingModal({
                         ? "bg-red-500"
                         : isStopped
                           ? "bg-amber-500"
-                          : "bg-gradient-to-r from-[#85adff] to-[#ac8aff]"
+                        : "bg-[#85adff] shadow-[0_0_12px_rgba(133,173,255,0.45)]"
                   }`}
                   style={{ width: `${progress}%` }}
                 />
