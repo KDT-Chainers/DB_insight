@@ -338,21 +338,12 @@ export default function SearchSidebar({ entranceOn } = {}) {
                 </button>
               </div>
 
-              {/* Settings & Data buttons */}
-              <div className="mb-8 flex gap-2">
-                <button
-                  onClick={() => navigate('/settings')}
-                  className={`flex flex-1 items-center justify-center gap-2 rounded-xl border px-3 py-2 transition-all duration-200 ${
-                    location.pathname === '/settings' ? S.pillActive : S.pillIdle
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-base">settings</span>
-                  <span className="font-manrope uppercase tracking-[0.03em] text-sm whitespace-nowrap">설정</span>
-                </button>
+              {/* Data button (single wide tab) */}
+              <div className="mb-8">
                 <button
                   onClick={goDataPage}
                   data-tutorial-id="sidebar-data-tab"
-                  className={`flex flex-1 items-center justify-center gap-2 rounded-xl border px-3 py-2 transition-all duration-200 ${
+                  className={`flex w-full items-center justify-center gap-2 rounded-xl border px-3 py-2.5 transition-all duration-200 ${
                     location.pathname === '/data' ? S.pillActive : S.pillIdle
                   }`}
                 >
@@ -410,18 +401,14 @@ export default function SearchSidebar({ entranceOn } = {}) {
                 )}
               </div>
 
-              {/* Footer profile */}
+              {/* Footer settings (same style/size as data tab) */}
               <button
                 type="button"
-                onClick={goDataPage}
-                className="mt-auto flex w-full items-center gap-3 border-t border-outline-variant/10 px-2 pt-6 text-left transition-opacity hover:opacity-85"
+                onClick={() => navigate('/settings')}
+                className="mt-auto inline-flex w-fit items-center justify-center gap-2 rounded-xl border border-[#2c3858] bg-[#1f2a47] px-3 py-2.5 text-[#dfe6ff] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition-all duration-200 hover:bg-[#243055]"
               >
-                <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-primary-fixed-dim/20 bg-surface-container-highest">
-                  <span className="material-symbols-outlined text-xl text-primary">account_circle</span>
-                </div>
-                <div className="overflow-hidden">
-                  <p className="truncate text-sm font-bold text-on-surface">관리자</p>
-                </div>
+                <span className="material-symbols-outlined text-base">settings</span>
+                <span className="font-manrope uppercase tracking-[0.03em] text-sm whitespace-nowrap">설정</span>
               </button>
             </div>
           )}
