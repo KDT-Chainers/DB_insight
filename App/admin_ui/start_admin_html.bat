@@ -16,7 +16,7 @@ setlocal EnableDelayedExpansion
 cd /d "%~dp0"
 
 set "BACKEND_URL=http://127.0.0.1:5001"
-set "HEALTH_PATH=/api/admin/domains"
+set "HEALTH_PATH=/api/health"
 set "BACKEND_DIR=%~dp0..\backend"
 set "ADMIN_HTML=%~dp0admin.html"
 set "MAX_WAIT_SEC=90"

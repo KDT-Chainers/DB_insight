@@ -320,9 +320,14 @@ class TriChefEngine:
         #   현재: q_Z = zeros → C = 0 → Z 채널 무효화. Re(α=1) + Im(α=0.4) 만 활용.
         #   DINOv2 cache 는 search_by_image (이미지 업로드 검색) 시에만 의미 가짐.
         q_Z = np.zeros_like(q_Im)
+        # doc_page: Im alpha=0.8 — crossmodal 재캘리브레이션(2026-05-10) 기준.
+        # threshold=0.3724 (alpha=0.8, Im_body fusion DOC_IM_ALPHA=0.20 반영).
+        _im_alpha = float(TRICHEF_CFG.get("SEARCH_IM_ALPHA_DOC", 0.8)) \
+            if domain == "doc_page" else 0.4
         dense_scores = tri_gs.hermitian_score(
             q_Re[None, :], q_Im[None, :], q_Z[None, :],
             d["Re"], d["Im"], d["Z"],
+            alpha=_im_alpha,
         )[0]
 
         # [substring boost — Doc/Img]

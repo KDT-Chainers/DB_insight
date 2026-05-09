@@ -1,0 +1,43 @@
+{
+  "music": {
+    "mu_null": 0.8225681583086649,
+    "sigma_null": 0.05325001486026911,
+    "abs_threshold": 0.85,
+    "far": 0.05,
+    "N": 11039,
+    "method": "random_query_null_v2",
+    "note": "capped at 0.85: search_av does not use abs_thr; prevents search() full-block"
+  },
+  "movie": {
+    "mu_null": 0.2667715096225341,
+    "sigma_null": 0.019306961474301727,
+    "abs_threshold": 0.298528635193856,
+    "far": 0.05,
+    "N": 46497,
+    "method": "random_query_null_v2"
+  },
+  "image": {
+    "mu_null": 0.28569254527489346,
+    "sigma_null": 0.025669624518335286,
+    "abs_threshold": 0.2992,
+    "far": 0.3,
+    "N": 2390,
+    "method": "random_query_null_v2"
+  },
+  "doc_page": {
+    "mu_null": 0.3001,
+    "sigma_null": 0.0439,
+    "abs_threshold": 0.3724,
+    "far": 0.05,
+    "N": 34718,
+    "method": "crossmodal_v2_alpha08",
+    "alpha": 0.8,
+    "n_queries": 300,
+    "n_scores": 3000,
+    "also_alpha04": {
+      "mu_null": 0.1678,
+      "sigma_null": 0.0262,
+      "threshold": 0.2109
+    }
+  }
+}

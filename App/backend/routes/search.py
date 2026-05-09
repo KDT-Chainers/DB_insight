@@ -203,12 +203,27 @@ def search():
                 if mc >= 0.50: return base_quota
                 if mc >= 0.30: return max(1, base_quota // 2)
                 return 1
+            # [v18] 의도 매칭 없는 도메인은 guaranteed 슬롯 최대 2개로 제한.
+            # "글로벌 XR 활용 동향" 같은 doc 쿼리에서 music/bgm 99% 유사도로
+            # guaranteed 20슬롯을 독식하는 cross-domain 오염 방지.
+            _intent_map = {
+                "doc":   query_intent_boost(query, "doc"),
+                "image": query_intent_boost(query, "image"),
+                "video": query_intent_boost(query, "video"),
+                "audio": query_intent_boost(query, "audio"),
+                "bgm":   query_intent_boost(query, "bgm"),
+            }
+            def _intent_quota(domain_key: str, lst: list) -> int:
+                base = _adj_quota(_max_conf(lst))
+                if _intent_map[domain_key] > 1.0:
+                    return base          # 의도 매칭 → 전체 quota
+                return min(2, base)      # 의도 불일치 → 최대 2슬롯
             quotas = {
-                "doc":   _adj_quota(_max_conf(doc_only)),
-                "image": _adj_quota(_max_conf(img_only)),
-                "video": _adj_quota(_max_conf(video)),
-                "audio": _adj_quota(_max_conf(audio)),
-                "bgm":   _adj_quota(_max_conf(bgm)),
+                "doc":   _intent_quota("doc",   doc_only),
+                "image": _intent_quota("image", img_only),
+                "video": _intent_quota("video", video),
+                "audio": _intent_quota("audio", audio),
+                "bgm":   _intent_quota("bgm",   bgm),
             }
             guaranteed: list[dict] = []
             for key, lst in (("doc", doc_only), ("image", img_only),

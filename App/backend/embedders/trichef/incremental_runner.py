@@ -72,13 +72,57 @@ def _unload_qwen_captioner():
         pass
 
 
+def _is_english_only(text: str) -> bool:
+    """텍스트가 영어 전용인지 확인 (한국어 글자 없음)."""
+    return bool(text) and not any("가" <= c <= "힣" for c in text)
+
+
+def _clean_caption(text: str) -> str:
+    """캡션 텍스트 정제:
+    1. '1.1.1.1...' 소수점 반복 패턴 제거
+    2. 동일 문장 3회 이상 반복 → 1회로 축약 (Qwen hallucination 방지)
+    3. 정제 후 빈 텍스트이면 원문 반환
+    """
+    import re as _re
+    if not text:
+        return text
+
+    # 1) 소수점 반복 패턴 제거 (예: 1.1.1.1.1.1...)
+    cleaned = _re.sub(r'(\b\d+\.\d+\.){3,}', '', text)
+    cleaned = _re.sub(r'\s{2,}', ' ', cleaned).strip()
+
+    # 2) 줄·문장 단위 중복 제거
+    lines = [l.strip() for l in _re.split(r'[\n。]', cleaned) if l.strip()]
+    seen: dict[str, int] = {}
+    deduped: list[str] = []
+    for line in lines:
+        cnt = seen.get(line, 0)
+        seen[line] = cnt + 1
+        if cnt < 2:          # 동일 문장 최대 2회까지 허용
+            deduped.append(line)
+
+    result = '\n'.join(deduped)
+    return result if result else text
+
+
 def _caption_for_im(cap_dir: Path, img_path: Path, key: str | None = None) -> str:
     """캡션 로드/생성 우선순위:
-      1) `<hash_stem>.caption.json` (레거시 BLIP L1/L2/L3)
-      2) `<hash_stem>.txt`
-      3) `<plain_stem>.txt` (Qwen 재캡션 결과 — W4-B fallback)
+      1) page_text — PDF 원문 텍스트 (100자 이상 한국어 존재 시 우선 사용)
+      2) `<hash_stem>.caption.json` (레거시 BLIP L1/L2/L3, 한국어인 경우)
+      3) `<hash_stem>.txt` / `<plain_stem>.txt` (한국어인 경우)
       4) 없으면 Qwen2-VL 로 신규 한국어 캡션 생성 → plain_stem `.txt` 저장
     """
+    # 1) page_text 우선 — 영어 오캡션보다 실제 PDF 텍스트가 Im 축에 훨씬 유효
+    _pt_dir = Path(PATHS["TRICHEF_DOC_EXTRACT"]) / "page_text" / img_path.parent.name
+    _pt_file = _pt_dir / f"{img_path.stem}.txt"
+    if _pt_file.exists():
+        try:
+            pt = _clean_caption(_pt_file.read_text(encoding="utf-8").strip())
+            if len(pt) > 100 and any("가" <= c <= "힣" for c in pt):
+                return pt
+        except Exception:
+            pass
+
     stem = doc_page_render.stem_key_for(key) if key else img_path.stem
     plain = img_path.stem
     jp = cap_dir / f"{stem}.caption.json"
@@ -88,17 +132,17 @@ def _caption_for_im(cap_dir: Path, img_path: Path, key: str | None = None) -> st
         try:
             d = json.loads(jp.read_text(encoding="utf-8"))
             txt = d.get("L3") or d.get("L1") or ""
-            if txt:
+            if txt and not _is_english_only(txt):
                 return txt
         except Exception:
             pass
     if tp.exists():
-        t = tp.read_text(encoding="utf-8").strip()
-        if t:
+        t = _clean_caption(tp.read_text(encoding="utf-8").strip())
+        if t and not _is_english_only(t):
             return t
     if plain_tp.exists():
-        t = plain_tp.read_text(encoding="utf-8").strip()
-        if t:
+        t = _clean_caption(plain_tp.read_text(encoding="utf-8").strip())
+        if t and not _is_english_only(t):
             return t
     # 신규: Qwen 한국어 5-stage 캡션 생성 (rebuild_img_qwen_full_caption.py 와 동일 형식)
     # title / tagline / synopsis / tags_kr / tags_en 5종 → captions_triple.jsonl 호환.
@@ -478,6 +522,16 @@ def run_doc_incremental() -> IncrementalResult:
     current_keys = {str(p.relative_to(raw_dir)).replace("\\", "/") for p in doc_files}
     stale = set(registry.keys()) - current_keys
 
+    _extract_dir = Path(PATHS["TRICHEF_DOC_EXTRACT"])
+
+    def _page_text_exists(rel_key: str) -> bool:
+        """page_text 디렉토리가 신규(hash) 또는 구형(plain) 명칭으로 존재하는지 확인."""
+        stem_key = doc_page_render.stem_key_for(rel_key)
+        if (_extract_dir / "page_text" / stem_key).exists():
+            return True
+        plain = doc_page_render._sanitize(Path(rel_key).stem)
+        return (_extract_dir / "page_text" / plain).exists()
+
     sha_cache: dict[str, str] = {}
     new_docs: list[Path] = []
     modified_keys: set[str] = set()  # SHA 변경된 기존 파일 (캐시 stale 대상)
@@ -489,6 +543,9 @@ def run_doc_incremental() -> IncrementalResult:
             new_docs.append(p)
             if key in registry:
                 modified_keys.add(key)
+        elif not _page_text_exists(key):
+            # SHA 일치하더라도 page_text 누락 시 재처리 (과거 렌더만 되고 텍스트 미추출된 경우)
+            new_docs.append(p)
     logger.info(f"[doc_inc] 기존={len(registry)}, 신규={len(new_docs)}, "
                 f"수정={len(modified_keys)}, 삭제={len(stale)}")
 
@@ -584,6 +641,67 @@ def run_doc_incremental() -> IncrementalResult:
                 "for random_query_null_v2")
 
     return IncrementalResult("document", len(ingested_docs), len(registry), len(registry))
+
+
+# ── page_text 누락 문서 복구 ──────────────────────────────────────────────────
+
+def repair_missing_page_text() -> dict:
+    """page_images는 있으나 page_text가 없는 문서의 텍스트를 PDF에서 재추출한다.
+
+    구형 파이프라인으로 렌더링만 되고 텍스트 추출이 생략된 문서에 대해
+    PyMuPDF 텍스트 추출 → page_text 저장 → lexical 재빌드를 수행한다.
+
+    반환: {"fixed": [folder_name, ...], "skipped": int}
+    """
+    import fitz
+
+    pi_base = Path(PATHS["TRICHEF_DOC_EXTRACT"]) / "page_images"
+    pt_base = Path(PATHS["TRICHEF_DOC_EXTRACT"]) / "page_text"
+    raw_doc = Path(PATHS["RAW_DB"]) / "Doc"
+
+    # raw_DB 경로 → old-style folder(stem) 역매핑 구성
+    stem_to_raw: dict[str, Path] = {}
+    for p in raw_doc.rglob("*"):
+        if p.is_file() and p.suffix.lower() == ".pdf":
+            stem_to_raw[doc_page_render._sanitize(p.stem)] = p
+
+    fixed, skipped = [], 0
+    for img_dir in sorted(pi_base.iterdir()):
+        if not img_dir.is_dir():
+            continue
+        folder = img_dir.name
+        text_dir = pt_base / folder
+        if text_dir.exists():
+            continue  # 이미 page_text 있음
+
+        raw_pdf = stem_to_raw.get(folder)
+        if raw_pdf is None:
+            skipped += 1
+            continue
+
+        text_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            with fitz.open(raw_pdf) as doc:
+                for i, page in enumerate(doc):
+                    txt_path = text_dir / f"p{i:04d}.txt"
+                    if not txt_path.exists():
+                        txt = page.get_text("text").strip()
+                        if txt:
+                            txt_path.write_text(txt, encoding="utf-8")
+            fixed.append(folder)
+            logger.info(f"[repair_page_text] 복구 완료: {folder} ({len(list(img_dir.iterdir()))}페이지)")
+        except Exception as e:
+            logger.warning(f"[repair_page_text] 실패 {folder}: {e}")
+            skipped += 1
+
+    if fixed:
+        try:
+            lexical_rebuild.rebuild_doc_lexical()
+            logger.info(f"[repair_page_text] lexical 재빌드 완료 ({len(fixed)}개 문서 반영)")
+        except Exception as e:
+            logger.warning(f"[repair_page_text] lexical rebuild 실패: {e}")
+
+    return {"fixed": fixed, "skipped": skipped}
 
 
 # ── 단일 파일 임베딩 (UI 인덱싱 진입점) ────────────────────────────────────

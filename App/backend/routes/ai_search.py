@@ -106,9 +106,10 @@ def _trichef_search(
         except Exception as e:
             logger.warning(f"[ai_search] domain={d} 실패: {e}")
 
-    # 중복 제거
+    # 중복 제거 — 이미지: 파일명 기준 1개 / 문서: 파일명 기준 최대 3페이지 유지
+    _DOC_MAX_PAGES = 3
     seen_img: dict[str, dict] = {}
-    seen_doc: dict[str, dict] = {}
+    seen_doc: dict[str, list[dict]] = {}
     other: list[dict] = []
     for item in all_items:
         if item["domain"] == "image":
@@ -117,12 +118,17 @@ def _trichef_search(
                 seen_img[leaf] = item
         elif item["domain"] == "doc_page":
             key = item.get("file_name") or Path(item["id"]).name
-            if key not in seen_doc or item["confidence"] > seen_doc[key]["confidence"]:
-                seen_doc[key] = item
+            pages = seen_doc.setdefault(key, [])
+            if len(pages) < _DOC_MAX_PAGES:
+                pages.append(item)
+                pages.sort(key=lambda x: -x["confidence"])
+            elif item["confidence"] > pages[-1]["confidence"]:
+                pages[-1] = item
+                pages.sort(key=lambda x: -x["confidence"])
         else:
             other.append(item)
 
-    merged = list(seen_img.values()) + list(seen_doc.values()) + other
+    merged = list(seen_img.values()) + [p for pages in seen_doc.values() for p in pages] + other
     merged.sort(key=lambda x: -x["confidence"])
     for i, it in enumerate(merged[:topk], 1):
         it["global_rank"] = i

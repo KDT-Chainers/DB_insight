@@ -438,6 +438,23 @@ def reindex():
     return jsonify(results)
 
 
+@bp.post("/repair-page-text")
+def repair_page_text():
+    """page_images는 있으나 page_text가 없는 문서에 대해 PDF 텍스트를 재추출하고
+    lexical 인덱스를 재빌드한다. 관리자 수동 복구용."""
+    try:
+        from embedders.trichef.incremental_runner import repair_missing_page_text
+        result = repair_missing_page_text()
+        global _engine
+        with _engine_lock:
+            if _engine is not None:
+                _engine.reload()
+        return jsonify({"status": "ok", **result})
+    except Exception as e:
+        logger.exception("repair_page_text 실패")
+        return jsonify({"status": "error", "error": str(e)[:400]}), 500
+
+
 @bp.post("/reload")
 def reload_all():
     """검색 엔진 전체 핫-리로드 (재시작 없이 새 데이터 반영).

@@ -107,12 +107,19 @@ async function startBackend() {
 // 백엔드 디렉터리(app.py 가 있는 곳) 검색 — _startPythonBackend 와 동일 로직
 function _findBackendDir() {
   const exeDir = path.dirname(app.getPath('exe'))
+  // PORTABLE_EXECUTABLE_DIR: 포터블 exe 실행 시 electron-builder 가 설정하는
+  // 환경변수. exe 압축 해제 위치(임시폴더)가 아닌 실제 .exe 파일이 있는 폴더를 가리킴.
+  const portableDir = process.env.PORTABLE_EXECUTABLE_DIR || ''
   const candidates = [
+    // 포터블 exe 우선: PORTABLE_EXECUTABLE_DIR 기준 상대경로
+    portableDir && path.join(portableDir, '..', '..', 'backend'),   // out/ → App/backend
+    portableDir && path.join(portableDir, 'backend'),                // exe 옆 backend/
+    // 일반(non-portable) exe: app.getPath('exe') 기준
     path.join(exeDir, '..', '..', 'backend'),
     path.join(exeDir, '..', '..', '..', 'backend'),
     path.resolve(__dirname, '..', '..', 'backend'),
     path.join(exeDir, 'backend'),
-  ]
+  ].filter(Boolean)
   return candidates.find(d => {
     try { return fs.existsSync(path.join(d, 'app.py')) } catch { return false }
   })
@@ -186,17 +193,20 @@ function _startPythonBackend() {
   } catch (_) { logStream = 'ignore' }
 
   // 백엔드 소스 경로 후보
-  // app.getPath('exe') = 실행된 exe의 실제 경로 (portable 포함)
+  // PORTABLE_EXECUTABLE_DIR: 포터블 exe 실행 시 실제 .exe 위치 (임시폴더 X)
   const exeDir = path.dirname(app.getPath('exe'))
+  const portableDir = process.env.PORTABLE_EXECUTABLE_DIR || ''
   const candidates = [
-    path.join(exeDir, '..', '..', 'backend'),                     // portable: out/ → App/backend
-    path.join(exeDir, '..', '..', '..', 'backend'),               // win-unpacked: out/win-unpacked/ → App/backend
-    path.resolve(__dirname, '..', '..', 'backend'),                // 개발 모드 (소스에서 실행 시)
-    path.join(exeDir, 'backend'),                                  // exe 옆 backend/
-  ]
+    portableDir && path.join(portableDir, '..', '..', 'backend'),  // portable: out/ → App/backend
+    portableDir && path.join(portableDir, 'backend'),               // exe 옆 backend/
+    path.join(exeDir, '..', '..', 'backend'),                      // non-portable: out/ → App/backend
+    path.join(exeDir, '..', '..', '..', 'backend'),                // win-unpacked: out/win-unpacked/ → App/backend
+    path.resolve(__dirname, '..', '..', 'backend'),                 // 개발 모드 (소스에서 실행 시)
+    path.join(exeDir, 'backend'),                                   // exe 옆 backend/
+  ].filter(Boolean)
   const cwd = candidates.find(d => {
     try { return fs.existsSync(path.join(d, 'app.py')) } catch { return false }
-  }) || candidates[1]
+  }) || candidates[2]
 
   // Python 실행 파일 후보 (절대경로 우선 → PATH fallback)
   const pythonCandidates = [
