@@ -1,4 +1,11 @@
-import { useState, useRef, useEffect, useCallback, Fragment } from "react";
+import {
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  useMemo,
+  Fragment,
+} from "react";
 import { createPortal } from "react-dom";
 import { useNavigate, useLocation } from "react-router-dom";
 import SearchSidebar from "../components/SearchSidebar";
@@ -708,6 +715,44 @@ function trichefDomainDisplayLabel(raw) {
   return String(raw);
 }
 
+/** 결과 목록 정렬 — ResultCard 의 유사도/정확도/신뢰도 해석과 동일 (클라이언트만) */
+const RESULT_SORT_METRICS = [
+  { id: "dense", label: "유사도" },
+  { id: "rerank", label: "정확도" },
+  { id: "confidence", label: "신뢰도" },
+];
+
+function clamp01ForSort(x) {
+  if (x == null || Number.isNaN(Number(x))) return null;
+  return Math.max(0, Math.min(1, Number(x)));
+}
+
+function sigmCalibratedForSort(x) {
+  return 1 / (1 + Math.exp(-((Number(x) + 3) / 3)));
+}
+
+function resultMetricSortValue(r, metric) {
+  const conf = Number(r.confidence ?? r.similarity ?? 0) || 0;
+  if (metric === "confidence") return conf;
+  if (metric === "dense") {
+    const d = clamp01ForSort(r.dense);
+    return d != null ? d : -1;
+  }
+  if (metric === "rerank") {
+    const rerank = r.rerank_score ?? r.rerank ?? null;
+    if (rerank != null) return sigmCalibratedForSort(rerank);
+    return Math.max(0, Math.min(1, conf));
+  }
+  return conf;
+}
+
+function sortResultsByMetric(results, metric) {
+  return [...results].sort(
+    (a, b) =>
+      resultMetricSortValue(b, metric) - resultMetricSortValue(a, metric),
+  );
+}
+
 // ── 결과 카드 (admin.html card / avCard 구조 대응) ────────
 function ResultCard({
   result,
@@ -1384,6 +1429,10 @@ export default function MainSearch() {
   const [domainFilter, setDomainFilter] = useState("");
   // [노이즈 제거] 저신뢰도 결과 숨김 (기본 ON). 사용자가 토글로 모두 표시 가능.
   const [hideLowConf, setHideLowConf] = useState(true);
+  /** 검색 결과 카드 정렬 기준 (API 재호출 없음) */
+  const [resultSortMetric, setResultSortMetric] = useState("confidence");
+  const [resultSortMenuOpen, setResultSortMenuOpen] = useState(false);
+  const resultSortMenuRef = useRef(null);
   // 보안 모드 — 활성 시 결과 미리보기에 PII 마스킹 (주민번호/여권/계좌 등)
   const [securityMode, setSecurityMode] = useState(false);
   // + 버튼 radial 메뉴
@@ -1639,6 +1688,29 @@ export default function MainSearch() {
       setSearching(false);
     }
   }, []);
+
+  const resultsSortedForDisplay = useMemo(
+    () => sortResultsByMetric(results, resultSortMetric),
+    [results, resultSortMetric],
+  );
+
+  const resultSortLabel =
+    RESULT_SORT_METRICS.find((m) => m.id === resultSortMetric)?.label ??
+    "신뢰도";
+
+  useEffect(() => {
+    if (!resultSortMenuOpen) return;
+    const onDown = (e) => {
+      if (
+        resultSortMenuRef.current &&
+        !resultSortMenuRef.current.contains(e.target)
+      ) {
+        setResultSortMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [resultSortMenuOpen]);
 
   // [#2] 도메인 필터 변경 시 자동 재검색 (현재 query 가 있을 때만).
   useEffect(() => {
@@ -2644,7 +2716,7 @@ export default function MainSearch() {
         >
           <div className="px-8 pb-8 pt-2 max-w-[1400px] mx-auto">
             {/* 헤더 */}
-            <div className="apple-hero-card mb-6 flex items-end justify-between rounded-[22px] border border-white/[0.11] px-6 py-5">
+            <div className="apple-hero-card relative z-30 mb-6 flex items-end justify-between overflow-visible rounded-[22px] border border-white/[0.11] px-6 py-5">
               <div className="space-y-2 flex-1 min-w-0">
                 {/* 이미지 검색 시 — 미리보기 + 파일명 표시 */}
                 {imageSearchActive && imageSearchPreviewUrl ? (
@@ -2700,18 +2772,66 @@ export default function MainSearch() {
                 )}
               </div>
               <div className="flex gap-3">
-                <button className="px-4 py-2 rounded-full glass-panel border border-outline-variant/20 text-base font-bold hover:bg-primary/5 transition-all flex items-center gap-2">
-                  <span className="material-symbols-outlined text-lg">
-                    filter_list
-                  </span>
-                  관련도
-                </button>
+                <div className="relative z-40" ref={resultSortMenuRef}>
+                  <button
+                    type="button"
+                    aria-haspopup="menu"
+                    aria-expanded={resultSortMenuOpen}
+                    onClick={() => setResultSortMenuOpen((v) => !v)}
+                    title={`정렬: ${resultSortLabel}`}
+                    className={`group px-4 py-2 rounded-full border text-base font-bold transition-all duration-200 flex items-center gap-2
+                      ${
+                        resultSortMenuOpen
+                          ? "border-primary/40 bg-[linear-gradient(160deg,rgba(133,173,255,0.24)_0%,rgba(133,173,255,0.1)_50%,rgba(255,255,255,0.05)_100%)] text-on-surface shadow-[0_10px_26px_rgba(7,13,28,0.42),inset_0_1px_0_rgba(255,255,255,0.26)] backdrop-blur-xl"
+                          : "border-white/[0.16] bg-[linear-gradient(160deg,rgba(255,255,255,0.1)_0%,rgba(255,255,255,0.04)_45%,rgba(255,255,255,0.02)_100%)] text-on-surface hover:border-primary/35 hover:bg-[linear-gradient(160deg,rgba(133,173,255,0.16)_0%,rgba(133,173,255,0.07)_48%,rgba(255,255,255,0.04)_100%)] shadow-[0_8px_22px_rgba(7,13,28,0.34),inset_0_1px_0_rgba(255,255,255,0.2)] backdrop-blur-xl"
+                      }`}
+                  >
+                    <span className="material-symbols-outlined text-lg">
+                      filter_list
+                    </span>
+                    필터
+                    <span className="text-xs font-semibold text-on-surface-variant/85 ml-0.5 pl-2 border-l border-white/20">
+                      {resultSortLabel}
+                    </span>
+                  </button>
+                  {resultSortMenuOpen && (
+                    <div
+                      role="menu"
+                      className="absolute right-0 top-full z-[100] mt-2 min-w-[12rem] overflow-hidden rounded-2xl border border-white/[0.2] bg-[linear-gradient(165deg,rgba(20,35,70,0.84)_0%,rgba(11,22,44,0.8)_45%,rgba(8,16,34,0.76)_100%)] py-1.5 shadow-[0_14px_36px_rgba(5,10,23,0.52),inset_0_1px_0_rgba(255,255,255,0.18)] backdrop-blur-2xl"
+                    >
+                      {RESULT_SORT_METRICS.map(({ id, label }) => (
+                        <button
+                          key={id}
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            setResultSortMetric(id);
+                            setResultSortMenuOpen(false);
+                          }}
+                          className={`mx-1 my-0.5 flex w-[calc(100%-0.5rem)] items-center justify-between gap-2 rounded-xl px-3.5 py-2.5 text-left text-sm font-semibold transition-all ${
+                            resultSortMetric === id
+                              ? "text-[#9fc1ff] bg-[linear-gradient(90deg,rgba(133,173,255,0.24)_0%,rgba(133,173,255,0.1)_55%,rgba(255,255,255,0.03)_100%)] shadow-[inset_0_1px_0_rgba(255,255,255,0.14)]"
+                              : "text-on-surface hover:bg-white/[0.08]"
+                          }`}
+                        >
+                          {label}
+                          {resultSortMetric === id && (
+                            <span className="material-symbols-outlined text-base">
+                              check
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
-            <section className="rounded-[22px] border border-white/[0.07] bg-white/[0.02] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-[40px]">
-              {/* [#2] 도메인 필터 칩 — 검색창 구조 미변경, 결과 헤더 아래에 독립 마운트 */}
-              <div className="mb-6 -mt-3">
+            <section className="relative z-10 rounded-[22px] border border-white/[0.07] bg-white/[0.02] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-[40px]">
+              {/* [#2] 도메인 필터 칩 — 검색창 구조 미변경, 결과 헤더 아래에 독립 마운트.
+                  (이전 -mt-3 는 히어로 카드와 겹치며 필터 드롭다운을 가림) */}
+              <div className="mb-6">
                 <DomainFilter
                   value={domainFilter}
                   onChange={setDomainFilter}
@@ -2799,8 +2919,10 @@ export default function MainSearch() {
                 (() => {
                   const LOW = 0.2;
                   const visible = hideLowConf
-                    ? results.filter((r) => (r.confidence ?? 0) >= LOW)
-                    : results;
+                    ? resultsSortedForDisplay.filter(
+                        (r) => (r.confidence ?? 0) >= LOW,
+                      )
+                    : resultsSortedForDisplay;
                   if (visible.length === 0) {
                     return (
                       <div className="flex flex-col items-center justify-center py-20 gap-3">
@@ -2863,7 +2985,8 @@ export default function MainSearch() {
                     </h3>
                     <p className="text-on-surface leading-relaxed mb-6">
                       <span className="text-primary font-bold">"{query}"</span>
-                      에 대해 TRI-CHEF 엔진이 신뢰도 기준으로 정렬한 결과입니다.
+                      에 대해 TRI-CHEF 엔진이 {resultSortLabel} 기준으로 정렬한
+                      결과입니다.
                     </p>
                     <div className="grid grid-cols-4 gap-4">
                       {[
