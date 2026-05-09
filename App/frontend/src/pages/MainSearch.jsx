@@ -3106,38 +3106,6 @@ export default function MainSearch() {
                 <div className="grid grid-cols-12 gap-6 border-t border-white/[0.08] pt-6">
                   {/* 메인 컨텐츠 */}
                   <div className="col-span-8 space-y-6">
-                    <div className="flex w-full items-center justify-start gap-3">
-                      <button
-                        type="button"
-                        onClick={() => handleSummarize(selectedFile)}
-                        disabled={summarizing}
-                        title="이 파일의 핵심 내용을 AI가 요약합니다"
-                        className="inline-flex h-10 min-w-0 items-center justify-center gap-1.5 rounded-full border border-white/[0.1] bg-white/[0.06] px-4 text-xs font-bold uppercase tracking-[0.08em] text-slate-200 shadow-sm transition hover:border-primary/35 hover:bg-white/[0.1] hover:text-white active:scale-95 disabled:opacity-55"
-                      >
-                        <span
-                          className={`material-symbols-outlined text-[15px] text-[#85adff] ${summarizing ? "animate-spin" : ""}`}
-                        >
-                          {summarizing ? "progress_activity" : "auto_awesome"}
-                        </span>
-                        <span className="whitespace-nowrap">
-                          {summarizing ? "요약 중..." : "AI 요약"}
-                        </span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => openFolder(selectedFile.file_path)}
-                        className="inline-flex h-10 min-w-0 items-center justify-center rounded-full border border-white/[0.1] bg-[#0f131a]/90 px-4 text-xs font-bold uppercase tracking-[0.08em] text-primary transition hover:border-primary/30 hover:bg-white/[0.06] active:scale-95"
-                      >
-                        <span className="whitespace-nowrap">경로 열기</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => openFile(selectedFile.file_path)}
-                        className="inline-flex h-10 min-w-0 items-center justify-center rounded-full border border-primary/40 bg-primary px-4 text-xs font-bold uppercase tracking-[0.08em] text-on-primary shadow-[0_0_20px_rgba(133,173,255,0.22)] transition hover:brightness-110 active:scale-95"
-                      >
-                        <span className="whitespace-nowrap">파일 열기</span>
-                      </button>
-                    </div>
                     <div className="flex min-h-[400px] flex-col overflow-hidden rounded-[22px] border border-white/[0.07] bg-white/[0.02] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-[40px]">
                       <div className="flex items-center justify-between border-b border-white/[0.08] px-8 pb-5 pt-7">
                         <span className="text-sm font-bold tracking-[0.2em] text-primary uppercase">
