@@ -87,8 +87,21 @@ async function startIndexing(filePaths) {
 
 async function fetchStatus(jobId) {
   const res = await fetch(`${API}/api/index/status/${jobId}`);
+  if (res.status === 404) {
+    // stale job_id: 백엔드 메모리에서 사라진 것 (서버 재시작 등)
+    const err = new Error("stale");
+    err.stale = true;
+    throw err;
+  }
   if (!res.ok) throw new Error("Status failed");
-  return res.json();
+  const data = await res.json();
+  // 백엔드가 stale 플래그를 응답에 포함하는 경우 처리
+  if (data?.stale) {
+    const err = new Error("stale");
+    err.stale = true;
+    throw err;
+  }
+  return data;
 }
 
 async function stopIndexing(jobId) {
@@ -1510,6 +1523,7 @@ export default function DataIndexing() {
   const [loadError, setLoadError] = useState("");
 
   const [checkedPaths, setCheckedPaths] = useState(new Set());
+  const [selectAllLoading, setSelectAllLoading] = useState(false);
 
   // path → { indexed, domain } 캐시. 폴더가 펼쳐질 때마다 누적.
   const [indexedMap, setIndexedMap] = useState({});
@@ -1706,18 +1720,18 @@ export default function DataIndexing() {
         processed,
         total: s?.total ?? 0,
         elapsedSec,
-        estimateSec: estimateDataRef.current?.total_seconds ?? null,
+        estimateSec: estimateDataRef.current?.total_seconds ?? s?.estimated_remaining ?? null,
         factorRef: smoothedFactorRef,
         results: s?.results ?? [],
         byType: estimateDataRef.current?.by_type ?? {},
-      });
+      }) ?? s?.estimated_remaining ?? null;
       setLiveRemainingSec(computed);
-      // 표시값은 임계값(현재 표시값의 15%, 최소 30초) 초과 시에만 업데이트
+      // 표시값은 임계값(현재 표시값의 5%, 최소 10초) 초과 시에만 업데이트
       const prev = displayedRemainingRef.current;
       if (computed == null) {
         displayedRemainingRef.current = null;
         setDisplayedRemainingSec(null);
-      } else if (prev == null || Math.abs(computed - prev) > Math.max(30, prev * 0.15)) {
+      } else if (prev == null || Math.abs(computed - prev) > Math.max(10, prev * 0.05)) {
         displayedRemainingRef.current = computed;
         setDisplayedRemainingSec(computed);
       }
@@ -1774,6 +1788,25 @@ export default function DataIndexing() {
     });
   }, []);
 
+  const handleSelectAllFiles = useCallback(async () => {
+    if (!rootPath) return;
+    setSelectAllLoading(true);
+    try {
+      const allFiles = await collectAllFilesRecursive(rootPath);
+      if (allFiles.length > 0) {
+        setCheckedPaths(new Set(allFiles));
+        registerPaths(allFiles);
+      }
+      registerOrphans(rootPath);
+    } finally {
+      setSelectAllLoading(false);
+    }
+  }, [rootPath, registerPaths, registerOrphans]);
+
+  const handleClearAllSelected = useCallback(() => {
+    setCheckedPaths(new Set());
+  }, []);
+
   // SSE 연결 + 폴링 폴백을 캡슐화한 헬퍼 — handleStartIndexing 과
   // 페이지 재진입 시 job 복원에서 동일 로직 재사용.
   const attachJobStream = useCallback((job_id) => {
@@ -1789,16 +1822,29 @@ export default function DataIndexing() {
       }
       return false;
     };
+    // stale job: 모든 상태 초기화 + localStorage 정리
+    const onStale = () => {
+      stopPolling();
+      setIndexing(false);
+      setJobId(null);
+      setJobStatus(null);
+      clearActiveJob();
+    };
     const startPollFallback = () => {
       pollRef.current = setInterval(async () => {
         try {
           const s = await fetchStatus(job_id);
           setJobStatus(s);
           onTerminal(s);
-        } catch {
+        } catch (e) {
           stopPolling();
-          setIndexing(false);
-          setJobError("상태 조회 실패");
+          if (e?.stale) {
+            // stale job: 조용히 초기화 (에러 메시지 표시 안 함)
+            onStale();
+          } else {
+            setIndexing(false);
+            setJobError("상태 조회 실패");
+          }
         }
       }, 1000);
     };
@@ -1808,6 +1854,12 @@ export default function DataIndexing() {
       es.onmessage = (ev) => {
         try {
           const s = JSON.parse(ev.data);
+          // SSE로 stale 이벤트가 오는 경우 (백엔드가 data: {"stale":true} 전송)
+          if (s?.stale) {
+            es.close();
+            onStale();
+            return;
+          }
           setJobStatus(s);
           onTerminal(s);
         } catch {}
@@ -1919,8 +1971,17 @@ export default function DataIndexing() {
       {
         title: "모든 준비가 끝났어요!",
         description:
-          "이제 AI가 여러분의 문서를 완벽하게 이해했습니다. 메인 화면에서 궁금한 내용을 물어보시면 필요한 정보를 빛의 속도로 찾아드릴게요! 도움이 다시 필요하시면 언제든 '설정' 탭에서 저를 불러주세요.",
+          "이제 AI가 여러분의 문서를 완벽하게 이해했습니다. 메인 화면에서 궁금한 내용을 물어보시면 필요한 정보를 빛의 속도로 찾아드릴게요!",
         center: true,
+        compactCenter: true,
+        popOnAdvance: false,
+      },
+      {
+        title: "사용 팁",
+        description:
+          "도움이 필요하면 언제든 설정 탭에서 튜토리얼을 다시 불러올 수 있어요. 이제 Enter를 눌러 바로 시작해 보세요.",
+        center: true,
+        popOnAdvance: true,
       },
     ],
     [],
@@ -2045,7 +2106,7 @@ export default function DataIndexing() {
                     remainingSec={displayedRemainingSec}
                     isRunning={indexing}
                     processedCount={indexing ? (jobStatus?.done ?? 0) + (jobStatus?.skipped ?? 0) + (jobStatus?.errors ?? 0) : 0}
-                    elapsedSec={liveElapsedSec}
+                    startedAt={jobStatus?.started_at ?? null}
                   />
                 </div>
               </>
@@ -2110,7 +2171,7 @@ export default function DataIndexing() {
         </div>
       </>
     );
-  }, [tab, selectedCount, estimateData, estimateLoading]);
+  }, [tab, selectedCount, estimateData, estimateLoading, displayedRemainingSec, indexing, jobStatus]);
 
   const handleGoBack = useCallback(() => {
     // 탭 이동 히스토리가 있으면 마지막 누른 탭으로 복귀.
@@ -2369,7 +2430,30 @@ export default function DataIndexing() {
                     <SelectNewOnlyButton
                       indexedMap={indexedMap}
                       onApply={(paths) => setCheckedPaths(new Set(paths))}
+                      className="inline-flex h-7 items-center gap-1.5 rounded-full border border-white/[0.14] bg-white/[0.06] px-3 text-xs font-semibold text-white/85 transition hover:bg-white/[0.12] disabled:cursor-not-allowed disabled:opacity-45"
                     />
+                    <button
+                      type="button"
+                      onClick={handleSelectAllFiles}
+                      disabled={
+                        !rootPath ||
+                        loading ||
+                        indexing ||
+                        selectAllLoading ||
+                        rootItems.length === 0
+                      }
+                      className="inline-flex h-7 items-center rounded-full border border-white/[0.14] bg-white/[0.06] px-3 text-xs font-semibold text-white/85 transition hover:bg-white/[0.12] disabled:cursor-not-allowed disabled:opacity-45"
+                    >
+                      {selectAllLoading ? "전체 선택 중…" : "전체 선택"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleClearAllSelected}
+                      disabled={loading || indexing || checkedPaths.size === 0}
+                      className="inline-flex h-7 items-center rounded-full border border-white/[0.14] bg-white/[0.06] px-3 text-xs font-semibold text-white/85 transition hover:bg-white/[0.12] disabled:cursor-not-allowed disabled:opacity-45"
+                    >
+                      전체 해제
+                    </button>
                   </div>
                 </div>
 

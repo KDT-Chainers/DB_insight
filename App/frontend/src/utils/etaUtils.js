@@ -4,10 +4,11 @@ export function fmtCompletionTime(remainingSec) {
   return eta.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
 }
 
-// 1분 미만: "약 Xs" / 1분 이상: "오후 3:47 완료 예정"
+// 1분 미만: "약 Xs" / 8시간 이상: "약 Nh Nm" / 1분~8시간: "오후 3:47 완료 예정"
 export function fmtETA(remainingSec) {
   if (remainingSec == null || !isFinite(remainingSec) || remainingSec < 0) return null
   if (remainingSec < 60) return `약 ${Math.max(1, Math.round(remainingSec))}초`
+  if (remainingSec >= 8 * 3600) return fmtDuration(remainingSec)
   return fmtCompletionTime(remainingSec)
 }
 
@@ -50,7 +51,9 @@ function _inferType(path) {
  * @returns {number|null}
  */
 export function computeRemainingETA({ processed, total, elapsedSec, estimateSec, factorRef, results, byType }) {
-  if (!isFinite(total) || total <= 0) return null
+  if (!isFinite(total) || total <= 0) {
+    return (estimateSec > 0 && isFinite(estimateSec)) ? estimateSec : null
+  }
   if (processed >= total) return 0
   if (!isFinite(elapsedSec) || elapsedSec < 0.5) {
     return (estimateSec > 0 && isFinite(estimateSec)) ? estimateSec : null
@@ -94,9 +97,11 @@ export function computeRemainingETA({ processed, total, elapsedSec, estimateSec,
     const remainingEstWork = Math.max(0, estimateSec - estimatedWorkDone)
 
     if (processed >= 1 && estimatedWorkDone > 0.2) {
-      // EWMA factor 대신 실측 rate 직접 사용 → estimate 크기에 무관하게 정확
-      const actualRate = elapsedSec / estimatedWorkDone
-      return Math.max(0, remainingEstWork * actualRate)
+      // 상/하한선 적용: 폭발 방지(max 20x) & 0 수렴 방지(min 0.3x)
+      const actualRate = Math.max(0.3, Math.min(elapsedSec / estimatedWorkDone, 20))
+      const result = Math.max(0, remainingEstWork * actualRate)
+      console.log('[ETA]', { elapsedSec, estimatedWorkDone, actualRate, remainingEstWork, result })
+      return result
     }
 
     return Math.max(0, remainingEstWork * factorRef.current)

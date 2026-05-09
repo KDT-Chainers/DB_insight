@@ -44,9 +44,9 @@ _BGM_PATH_KEYWORDS = {"bgm", "Bgm", "BGM"}
 _COEF = {
     "doc":   (5.0,  1.0),
     "image": (0.4,  0.1),
-    "video": (3.0,  0.5),
-    "audio": (6.0,  2.5),   # Whisper large-v3 실측 보수 계수
-    "bgm":   (2.0,  0.5),   # CLAP 임베딩 보수 계수
+    "video": (20.0, 0.5),
+    "audio": (15.0, 40.0),  # Whisper large-v3: base 15s + 40s/MB (3분 3MB → ~135s)
+    "bgm":   (15.0, 10.0),  # CLAP 임베딩 (Whisper 없음): ~1/3 수준
 }
 
 # 캘리브레이션 계수 캐시 (60초 TTL — 잡 완료 후 자동 갱신 반영)
@@ -121,6 +121,7 @@ def _ffprobe_duration(path: str, stream_type: str = "v") -> float | None:
             capture_output=True,
             timeout=3,
         )
+        print(f"[FFPROBE] path={path}, result_rc={r.returncode}, stream_type={stream_type}", flush=True)
         if r.returncode != 0:
             return None
         data = _json.loads(r.stdout)
@@ -146,6 +147,7 @@ def _ffprobe_video_info(path: str) -> tuple[float, int, str] | None:
             capture_output=True,
             timeout=3,
         )
+        print(f"[FFPROBE] path={path}, result_rc={r.returncode}, stream_type=v:0", flush=True)
         if r.returncode != 0:
             return None
         data = _json.loads(r.stdout)
@@ -199,8 +201,10 @@ def _meta_estimate(path: str, ftype: str) -> float | None:
         dur = _ffprobe_duration(path, stream_type="a")
         if dur is None:
             return None
-        per_sec = 0.05 if ftype == "bgm" else 0.12
-        return base + per_sec * dur
+        # librosa loads max 90s — processing time doesn't grow beyond that
+        proc_dur = min(dur, 90.0)
+        per_sec = 0.10 if ftype == "bgm" else 0.50
+        return base + per_sec * proc_dur
 
     if ftype == "doc":
         ext = os.path.splitext(path)[1].lower()

@@ -75,6 +75,20 @@ _jobs_lock = threading.Lock()
 _stop_flags: dict[str, bool] = {}   # job_id → True 이면 중단 요청됨
 
 
+def _cleanup_old_jobs() -> None:
+    """완료 후 5분 이상 경과한 job을 _jobs에서 정리. /start 호출 시 실행."""
+    import time as _t
+    now = _t.time()
+    with _jobs_lock:
+        stale = [
+            jid for jid, j in _jobs.items()
+            if j.get("finished_at") and now - j["finished_at"] > 300
+        ]
+        for jid in stale:
+            del _jobs[jid]
+            _stop_flags.pop(jid, None)
+
+
 def _get_file_type(path: str) -> str | None:
     ext = os.path.splitext(path)[1].lower()
     return EXT_TYPE_MAP.get(ext)
@@ -174,6 +188,9 @@ def start():
     if not isinstance(file_paths, list) or not file_paths:
         return jsonify({"error": "No valid files provided"}), 400
 
+    # 완료된 오래된 job 정리 (5분 이상 경과)
+    _cleanup_old_jobs()
+
     # 인덱싱 시작 전 stale 캐시 정리 (이전 강제 종료로 누적된 임시 폴더 GC).
     # 1시간 미사용 폴더만 정리 → 동시 실행 작업 영향 없음.
     try:
@@ -260,7 +277,7 @@ def stream(job_id: str):
             with _jobs_lock:
                 job = _jobs.get(job_id)
                 if job is None:
-                    yield "event: error\ndata: {\"error\":\"Job not found\"}\n\n"
+                    yield 'data: {"error":"stale","stale":true}\n\n'
                     return
                 snap = _json.dumps(job)
                 status_now = job.get("status")
@@ -300,7 +317,7 @@ def status(job_id: str):
         job = _jobs.get(job_id)
 
     if job is None:
-        return jsonify({"error": "Job not found"}), 404
+        return jsonify({"error": "not_found", "stale": True}), 404
 
     return jsonify(job)
 
@@ -461,10 +478,13 @@ def _run_job(job_id: str, file_paths: list[str], results: list[dict]) -> None:
                 errors += 1
 
         results[i]["finished_at"] = _t.time()
+        actual_file_elapsed = results[i]["finished_at"] - results[i]["file_started_at"]
+        est_file = _est_file(path)
+        print(f"[JOB] path={path}, est={est_file:.1f}s, actual={actual_file_elapsed:.1f}s, ratio={actual_file_elapsed/max(est_file,0.1):.2f}x", flush=True)
 
         # [Phase 2] 실제 처리(done/error)된 파일의 추정치 누적 → 보정 계수 계산용
         if results[i]["status"] in ("done", "error"):
-            _done_est_acc += _est_file(path)
+            _done_est_acc += est_file
 
         _update_job(job_id, done, skipped, errors, "running",
                     estimated_remaining=_est_info["total_seconds"],
@@ -521,6 +541,7 @@ def _run_job(job_id: str, file_paths: list[str], results: list[dict]) -> None:
         pass
 
     # 최종 상태 결정
+    import time as _tfin
     if _is_stopped(job_id):
         final_status = "stopped"
     elif errors == len(file_paths):
@@ -528,6 +549,10 @@ def _run_job(job_id: str, file_paths: list[str], results: list[dict]) -> None:
     else:
         final_status = "done"
     _update_job(job_id, done, skipped, errors, final_status)
+    # TTL 기록 — 5분 후 _cleanup_old_jobs()에서 제거됨
+    with _jobs_lock:
+        if job_id in _jobs:
+            _jobs[job_id]["finished_at"] = _tfin.time()
     threading.Thread(target=_do_calibration, args=(results,), daemon=True).start()
 
 

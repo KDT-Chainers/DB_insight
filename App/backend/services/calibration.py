@@ -15,11 +15,11 @@ from pathlib import Path
 _CALIB_PATH = Path.home() / ".db_insight" / "calibration.json"
 
 _DEFAULTS: dict[str, dict] = {
-    "doc":   {"base": 5.0, "per_mb": 1.0},
-    "image": {"base": 0.4, "per_mb": 0.1},
-    "video": {"base": 3.0, "per_mb": 0.5},
-    "audio": {"base": 6.0, "per_mb": 2.5},
-    "bgm":   {"base": 2.0, "per_mb": 0.5},
+    "doc":   {"base": 5.0,  "per_mb": 1.0},
+    "image": {"base": 0.4,  "per_mb": 0.1},
+    "video": {"base": 20.0, "per_mb": 0.5},
+    "audio": {"base": 15.0, "per_mb": 40.0},
+    "bgm":   {"base": 15.0, "per_mb": 10.0},
 }
 
 _ALPHA = 0.15  # EWMA 학습률
@@ -78,6 +78,7 @@ def update(measurements: list[dict]) -> None:
 
         scale = max(0.1, min(10.0, avg_time / predicted))
         factor = 1 - _ALPHA + _ALPHA * scale
+        print(f"[CALIB] type={t}, predicted={predicted:.2f}, actual={avg_time:.2f}, scale={scale:.3f}, factor={factor:.3f}", flush=True)
         coefs[t]["base"]   = round(coefs[t]["base"]   * factor, 4)
         coefs[t]["per_mb"] = round(coefs[t]["per_mb"] * factor, 4)
         changed = True
