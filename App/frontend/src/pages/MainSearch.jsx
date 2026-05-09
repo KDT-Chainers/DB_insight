@@ -3405,14 +3405,7 @@ export default function MainSearch() {
                                   `${selectedFile.segments?.length ?? 0}개`,
                                 ],
                               ]
-                            : [
-                                [
-                                  "청크 수",
-                                  fileDetail
-                                    ? `${fileDetail.chunks?.length ?? "-"}개`
-                                    : "-",
-                                ],
-                              ]),
+                            : []),
                           ["경로", selectedFile.file_path],
                         ].map(([k, v]) => (
                           <div
