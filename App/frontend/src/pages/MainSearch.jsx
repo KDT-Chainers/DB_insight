@@ -689,6 +689,25 @@ function HighlightedText({ text, query, className = "" }) {
   );
 }
 
+/** 카드 배지: API/파일 타입 키는 유지, 색상 맵·표시 문구만 통일 */
+function trichefDomainStyleKey(raw) {
+  if (raw == null || raw === "") return "unknown";
+  const d = String(raw).toLowerCase();
+  if (d === "video" || d === "movie") return "movie";
+  if (d === "audio" || d === "music") return "music";
+  if (d === "doc") return "doc_page";
+  return String(raw);
+}
+
+function trichefDomainDisplayLabel(raw) {
+  if (raw == null || raw === "") return "";
+  const d = String(raw).toLowerCase();
+  if (d === "movie" || d === "video" || d === "동영상") return "Video";
+  if (d === "music" || d === "audio" || d === "음성") return "Audio";
+  if (d === "doc_page" || d === "doc") return "doc";
+  return String(raw);
+}
+
 // ── 결과 카드 (admin.html card / avCard 구조 대응) ────────
 function ResultCard({
   result,
@@ -782,6 +801,8 @@ function ResultCard({
 
   const streamUrl = isAV ? avStreamUrl(result) : null;
   const domainLabel = result.trichef_domain ?? result.file_type ?? "unknown";
+  const domainStyleKey = trichefDomainStyleKey(domainLabel);
+  const domainDisplay = trichefDomainDisplayLabel(domainLabel);
   const segments = result.segments ?? [];
 
   const DOMAIN_CLS = {
@@ -904,7 +925,7 @@ function ResultCard({
               )}
             </>
           ) : (
-            <span className="text-[#64748b] text-xs">{domainLabel}</span>
+            <span className="text-[#64748b] text-xs">{domainDisplay}</span>
           )}
         </div>
       )}
@@ -914,15 +935,10 @@ function ResultCard({
         {/* 1. 도메인 배지 */}
         <div className="flex gap-1 flex-wrap">
           <span
-            className={`text-[10px] px-2 py-0.5 rounded-full border ${DOMAIN_CLS[domainLabel] ?? "bg-[#0b1220] text-[#64748b] border-[#334155]"}`}
+            className={`text-[10px] px-2 py-0.5 rounded-full border ${DOMAIN_CLS[domainStyleKey] ?? "bg-[#0b1220] text-[#64748b] border-[#334155]"}`}
           >
-            {domainLabel}
+            {domainDisplay}
           </span>
-          {isAV && (
-            <span className="text-[10px] px-2 py-0.5 rounded-full border border-[#334155] bg-[#0b1220] text-[#64748b]">
-              세그 {segments.length}
-            </span>
-          )}
         </div>
 
         {/* 2. 핵심 3지표 (요청에 따라 도메인 배지 바로 아래로 이동) */}
