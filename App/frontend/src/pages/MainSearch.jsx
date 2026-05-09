@@ -2687,17 +2687,6 @@ export default function MainSearch() {
                   shield
                 </span>
               </button>
-              {view === "detail" && (
-                <button
-                  onClick={handleBackToResults}
-                  className="flex items-center gap-2 rounded-full border border-outline-variant/20 bg-surface-container-high px-4 py-2 text-base font-bold text-on-surface-variant transition-all hover:border-primary/30 hover:text-primary"
-                >
-                  <span className="material-symbols-outlined text-lg">
-                    arrow_back
-                  </span>
-                  결과로
-                </button>
-              )}
             </div>
           </div>
         </header>
@@ -3052,42 +3041,17 @@ export default function MainSearch() {
                 className={`fixed ${leftEdge} right-0 z-30 bg-[#0b1220]/78 py-4 transition-[left] duration-300`}
                 style={{ top: `${RESULTS_CONTENT_TOP_PX}px` }}
               >
-                <div className="mx-auto w-full max-w-[1400px] px-8">
-                  <div className="grid grid-cols-12 gap-6">
-                    <div className="col-span-8" />
-                    <div className="col-span-4 flex w-full items-center justify-start gap-3">
-                      <button
-                        type="button"
-                        onClick={() => handleSummarize(selectedFile)}
-                        disabled={summarizing}
-                        title="이 파일의 핵심 내용을 AI가 요약합니다"
-                        className="inline-flex h-10 min-w-0 items-center justify-center gap-1.5 rounded-full border border-white/[0.1] bg-white/[0.06] px-4 text-xs font-bold uppercase tracking-[0.08em] text-slate-200 shadow-sm transition hover:border-primary/35 hover:bg-white/[0.1] hover:text-white active:scale-95 disabled:opacity-55"
-                      >
-                        <span
-                          className={`material-symbols-outlined text-[15px] text-[#85adff] ${summarizing ? "animate-spin" : ""}`}
-                        >
-                          {summarizing ? "progress_activity" : "auto_awesome"}
-                        </span>
-                        <span className="whitespace-nowrap">
-                          {summarizing ? "요약 중..." : "AI 요약"}
-                        </span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => openFolder(selectedFile.file_path)}
-                        className="inline-flex h-10 min-w-0 items-center justify-center rounded-full border border-white/[0.1] bg-[#0f131a]/90 px-4 text-xs font-bold uppercase tracking-[0.08em] text-primary transition hover:border-primary/30 hover:bg-white/[0.06] active:scale-95"
-                      >
-                        <span className="whitespace-nowrap">경로 열기</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => openFile(selectedFile.file_path)}
-                        className="inline-flex h-10 min-w-0 items-center justify-center rounded-full border border-primary/40 bg-primary px-4 text-xs font-bold uppercase tracking-[0.08em] text-on-primary shadow-[0_0_20px_rgba(133,173,255,0.22)] transition hover:brightness-110 active:scale-95"
-                      >
-                        <span className="whitespace-nowrap">파일 열기</span>
-                      </button>
-                    </div>
-                  </div>
+                <div className="mx-auto flex w-full max-w-[1400px] items-center px-8">
+                  <button
+                    type="button"
+                    onClick={handleBackToResults}
+                    className="-ml-[295px] inline-flex h-10 items-center gap-2 rounded-full border border-outline-variant/25 bg-surface-container-high px-4 py-2 text-base font-bold text-on-surface transition-all hover:border-primary/35 hover:text-primary"
+                  >
+                    <span className="material-symbols-outlined text-lg">
+                      arrow_back
+                    </span>
+                    결과로
+                  </button>
                 </div>
               </div>
 

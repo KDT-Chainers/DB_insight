@@ -833,7 +833,7 @@ function IndexingModal({
                         ? "bg-red-500"
                         : isStopped
                           ? "bg-amber-500"
-                          : "bg-gradient-to-r from-[#85adff] to-[#ac8aff]"
+                          : "bg-[#85adff] shadow-[0_0_12px_rgba(133,173,255,0.45)]"
                   }`}
                   style={{ width: `${progress}%` }}
                 />
@@ -846,7 +846,7 @@ function IndexingModal({
                 <p className="text-xs text-on-surface-variant/65 tabular-nums">
                   <span className="text-on-surface-variant/40">완료 예정</span>{" "}
                   <span className="font-bold text-[#85adff]">
-                    {fmtETA(externalRemainingSec) ?? '—'}
+                    {fmtETA(externalRemainingSec) ?? "—"}
                   </span>
                 </p>
               )}
@@ -1699,8 +1699,12 @@ export default function DataIndexing() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
 
-  useEffect(() => { jobStatusRef.current = jobStatus; }, [jobStatus]);
-  useEffect(() => { estimateDataRef.current = estimateData; }, [estimateData]);
+  useEffect(() => {
+    jobStatusRef.current = jobStatus;
+  }, [jobStatus]);
+  useEffect(() => {
+    estimateDataRef.current = estimateData;
+  }, [estimateData]);
 
   useEffect(() => {
     if (!indexing) {
@@ -1714,24 +1718,33 @@ export default function DataIndexing() {
     const id = setInterval(() => {
       const s = jobStatusRef.current;
       const processed = (s?.done ?? 0) + (s?.skipped ?? 0) + (s?.errors ?? 0);
-      const elapsedSec = s?.started_at ? (Date.now() / 1000 - s.started_at) : 0;
+      const elapsedSec = s?.started_at ? Date.now() / 1000 - s.started_at : 0;
       setLiveElapsedSec(elapsedSec);
-      const computed = computeRemainingETA({
-        processed,
-        total: s?.total ?? 0,
-        elapsedSec,
-        estimateSec: estimateDataRef.current?.total_seconds ?? s?.estimated_remaining ?? null,
-        factorRef: smoothedFactorRef,
-        results: s?.results ?? [],
-        byType: estimateDataRef.current?.by_type ?? {},
-      }) ?? s?.estimated_remaining ?? null;
+      const computed =
+        computeRemainingETA({
+          processed,
+          total: s?.total ?? 0,
+          elapsedSec,
+          estimateSec:
+            estimateDataRef.current?.total_seconds ??
+            s?.estimated_remaining ??
+            null,
+          factorRef: smoothedFactorRef,
+          results: s?.results ?? [],
+          byType: estimateDataRef.current?.by_type ?? {},
+        }) ??
+        s?.estimated_remaining ??
+        null;
       setLiveRemainingSec(computed);
       // 표시값은 임계값(현재 표시값의 5%, 최소 10초) 초과 시에만 업데이트
       const prev = displayedRemainingRef.current;
       if (computed == null) {
         displayedRemainingRef.current = null;
         setDisplayedRemainingSec(null);
-      } else if (prev == null || Math.abs(computed - prev) > Math.max(10, prev * 0.05)) {
+      } else if (
+        prev == null ||
+        Math.abs(computed - prev) > Math.max(10, prev * 0.05)
+      ) {
         displayedRemainingRef.current = computed;
         setDisplayedRemainingSec(computed);
       }
@@ -2105,7 +2118,13 @@ export default function DataIndexing() {
                     loading={estimateLoading}
                     remainingSec={displayedRemainingSec}
                     isRunning={indexing}
-                    processedCount={indexing ? (jobStatus?.done ?? 0) + (jobStatus?.skipped ?? 0) + (jobStatus?.errors ?? 0) : 0}
+                    processedCount={
+                      indexing
+                        ? (jobStatus?.done ?? 0) +
+                          (jobStatus?.skipped ?? 0) +
+                          (jobStatus?.errors ?? 0)
+                        : 0
+                    }
                     startedAt={jobStatus?.started_at ?? null}
                   />
                 </div>
@@ -2171,7 +2190,15 @@ export default function DataIndexing() {
         </div>
       </>
     );
-  }, [tab, selectedCount, estimateData, estimateLoading, displayedRemainingSec, indexing, jobStatus]);
+  }, [
+    tab,
+    selectedCount,
+    estimateData,
+    estimateLoading,
+    displayedRemainingSec,
+    indexing,
+    jobStatus,
+  ]);
 
   const handleGoBack = useCallback(() => {
     // 탭 이동 히스토리가 있으면 마지막 누른 탭으로 복귀.
@@ -2238,7 +2265,7 @@ export default function DataIndexing() {
             데이터 소스
           </h2>
           <p className="mt-2 max-w-3xl text-[14px] leading-relaxed text-white/42">
-            등록된 로컬 및 네트워크 원본을 한곳에서 관리합니다.
+            등록된 데이터의 원본을 한곳에서 관리합니다.
           </p>
         </div>
       );
