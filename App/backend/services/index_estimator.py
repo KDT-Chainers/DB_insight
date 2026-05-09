@@ -20,6 +20,7 @@ BGM vs audio 구분: 파일 경로에 "Bgm" 또는 "BGM" 폴더가 포함되면 
 from __future__ import annotations
 
 import os
+import time as _time
 from pathlib import Path
 from typing import Iterable
 
@@ -38,14 +39,35 @@ _AUDIO_EXTS = {".mp3", ".wav", ".m4a", ".flac", ".ogg", ".aac", ".wma", ".opus"}
 _BGM_PATH_KEYWORDS = {"bgm", "Bgm", "BGM"}
 
 # 시간 추정 계수 — (base_seconds, seconds_per_mb)
+# audio/bgm 은 실측 대비 낙관적 오류가 잦아 2.5–3× 보수 계수 적용.
+# 캘리브레이션이 쌓이면 자동으로 줄어들어, ETA 는 항상 감소하는 방향으로 수렴.
 _COEF = {
-    "doc":   (5.0, 1.0),
-    "image": (0.4, 0.1),
-    "video": (3.0, 0.5),
-    "audio": (2.0, 0.8),
-    # [B1] BGM: CLAP 임베딩 — Whisper STT 없으므로 audio 대비 ~4배 빠름
-    "bgm":   (1.0, 0.2),
+    "doc":   (5.0,  1.0),
+    "image": (0.4,  0.1),
+    "video": (20.0, 0.5),
+    "audio": (15.0, 40.0),  # Whisper large-v3: base 15s + 40s/MB (3분 3MB → ~135s)
+    "bgm":   (15.0, 10.0),  # CLAP 임베딩 (Whisper 없음): ~1/3 수준
 }
+
+# 캘리브레이션 계수 캐시 (60초 TTL — 잡 완료 후 자동 갱신 반영)
+_coef_cache: tuple | None = None
+_COEF_TTL = 60.0
+
+
+def _get_coef(ftype: str) -> tuple[float, float]:
+    """캘리브레이션 적용 계수 반환. 실패 시 기본값 fallback."""
+    global _coef_cache
+    now = _time.time()
+    if _coef_cache is None or now - _coef_cache[0] > _COEF_TTL:
+        try:
+            from services.calibration import load_coefs
+            _coef_cache = (now, load_coefs())
+        except Exception:
+            _coef_cache = (now, {t: {"base": b, "per_mb": p} for t, (b, p) in _COEF.items()})
+    c = _coef_cache[1].get(ftype, {})
+    default = _COEF.get(ftype, (5.0, 1.0))
+    return float(c.get("base", default[0])), float(c.get("per_mb", default[1]))
+
 
 # SHA-256 skip 케이스의 fixed overhead (디스크 read + hash compute).
 # 평균 작은 파일 기준이며 큰 영상은 ~0.5s 까지 늘어날 수 있어 상한 설정.
@@ -99,6 +121,7 @@ def _ffprobe_duration(path: str, stream_type: str = "v") -> float | None:
             capture_output=True,
             timeout=3,
         )
+        print(f"[FFPROBE] path={path}, result_rc={r.returncode}, stream_type={stream_type}", flush=True)
         if r.returncode != 0:
             return None
         data = _json.loads(r.stdout)
@@ -124,6 +147,7 @@ def _ffprobe_video_info(path: str) -> tuple[float, int, str] | None:
             capture_output=True,
             timeout=3,
         )
+        print(f"[FFPROBE] path={path}, result_rc={r.returncode}, stream_type=v:0", flush=True)
         if r.returncode != 0:
             return None
         data = _json.loads(r.stdout)
@@ -157,7 +181,7 @@ def _pdf_page_count(path: str) -> int | None:
 
 def _meta_estimate(path: str, ftype: str) -> float | None:
     """메타데이터 기반 정밀 추정. 실패 시 None → 크기 기반 폴백."""
-    base, _ = _COEF[ftype]
+    base, _ = _get_coef(ftype)
 
     if ftype == "video":
         info = _ffprobe_video_info(path)
@@ -177,8 +201,10 @@ def _meta_estimate(path: str, ftype: str) -> float | None:
         dur = _ffprobe_duration(path, stream_type="a")
         if dur is None:
             return None
-        per_sec = 0.015 if ftype == "bgm" else 0.03
-        return base + per_sec * dur
+        # librosa loads max 90s — processing time doesn't grow beyond that
+        proc_dur = min(dur, 90.0)
+        per_sec = 0.10 if ftype == "bgm" else 0.50
+        return base + per_sec * proc_dur
 
     if ftype == "doc":
         ext = os.path.splitext(path)[1].lower()
@@ -217,7 +243,7 @@ def estimate_single(path: str, current_step: int | None = None) -> float:
     # [Phase 4] 메타데이터 기반 우선
     total_est = _meta_estimate(path, ftype)
     if total_est is None:
-        base, per_mb = _COEF[ftype]
+        base, per_mb = _get_coef(ftype)
         total_est = base + per_mb * _size_mb(path)
 
     if ftype == "video" and current_step is not None:
@@ -243,7 +269,7 @@ def estimate_file(path: str) -> float:
     meta = _meta_estimate(path, ftype)
     if meta is not None:
         return meta
-    base, per_mb = _COEF[ftype]
+    base, per_mb = _get_coef(ftype)
     return base + per_mb * _size_mb(path)
 
 
@@ -295,7 +321,7 @@ def estimate(paths: Iterable[str]) -> dict:
         if meta_sec is not None:
             sec = meta_sec
         else:
-            base, per_mb = _COEF[ftype]
+            base, per_mb = _get_coef(ftype)
             sec = base + per_mb * size_mb
         new_sec += sec
         total += sec

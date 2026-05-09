@@ -17,6 +17,7 @@ import {
   clearActiveJob,
 } from "../utils/indexingPersist";
 import { estimateIndexing } from "../api/indexing";
+import { fmtDuration, computeRemainingETA, fmtETA } from "../utils/etaUtils";
 const TYPE_ICON = {
   doc: "description",
   video: "movie",
@@ -86,8 +87,21 @@ async function startIndexing(filePaths) {
 
 async function fetchStatus(jobId) {
   const res = await fetch(`${API}/api/index/status/${jobId}`);
+  if (res.status === 404) {
+    // stale job_id: 백엔드 메모리에서 사라진 것 (서버 재시작 등)
+    const err = new Error("stale");
+    err.stale = true;
+    throw err;
+  }
   if (!res.ok) throw new Error("Status failed");
-  return res.json();
+  const data = await res.json();
+  // 백엔드가 stale 플래그를 응답에 포함하는 경우 처리
+  if (data?.stale) {
+    const err = new Error("stale");
+    err.stale = true;
+    throw err;
+  }
+  return data;
 }
 
 async function stopIndexing(jobId) {
@@ -461,6 +475,7 @@ function IndexingModal({
   selectedCount,
   jobStatus,
   jobId,
+  externalRemainingSec,
   onClose,
   onStop,
 }) {
@@ -826,12 +841,12 @@ function IndexingModal({
               <p className="mt-2 text-xs text-on-surface-variant/70 tabular-nums">
                 {processed} / {total} 파일
               </p>
-              {/* [ETA] 잔여 시간 — 진행률 기반 실시간 추정 (1초 tick). 100% 도달 시 표시 안 함. */}
-              {remainingSec != null && !isEffectivelyDone && (
+              {/* [ETA] 완료 예정 시각 — 진행률 기반 실시간 추정 (1초 tick). 100% 도달 시 표시 안 함. */}
+              {externalRemainingSec != null && !isEffectivelyDone && (
                 <p className="text-xs text-on-surface-variant/65 tabular-nums">
-                  <span className="text-on-surface-variant/40">잔여 약</span>{" "}
+                  <span className="text-on-surface-variant/40">완료 예정</span>{" "}
                   <span className="font-bold text-[#85adff]">
-                    {_fmtDuration(remainingSec)}
+                    {fmtETA(externalRemainingSec) ?? '—'}
                   </span>
                 </p>
               )}
@@ -1563,6 +1578,13 @@ export default function DataIndexing() {
   });
   const pollRef = useRef(null);
   const modalOpenTimerRef = useRef(null);
+  const smoothedFactorRef = useRef(1.0);
+  const jobStatusRef = useRef(null);
+  const estimateDataRef = useRef(null);
+  const [liveRemainingSec, setLiveRemainingSec] = useState(null);
+  const [liveElapsedSec, setLiveElapsedSec] = useState(null);
+  const [displayedRemainingSec, setDisplayedRemainingSec] = useState(null);
+  const displayedRemainingRef = useRef(null);
 
   const stopPolling = () => {
     // setInterval 폴링(레거시) 또는 EventSource 모두 정리.
@@ -1677,6 +1699,46 @@ export default function DataIndexing() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
 
+  useEffect(() => { jobStatusRef.current = jobStatus; }, [jobStatus]);
+  useEffect(() => { estimateDataRef.current = estimateData; }, [estimateData]);
+
+  useEffect(() => {
+    if (!indexing) {
+      setLiveRemainingSec(null);
+      setLiveElapsedSec(null);
+      setDisplayedRemainingSec(null);
+      displayedRemainingRef.current = null;
+      smoothedFactorRef.current = 1.0;
+      return;
+    }
+    const id = setInterval(() => {
+      const s = jobStatusRef.current;
+      const processed = (s?.done ?? 0) + (s?.skipped ?? 0) + (s?.errors ?? 0);
+      const elapsedSec = s?.started_at ? (Date.now() / 1000 - s.started_at) : 0;
+      setLiveElapsedSec(elapsedSec);
+      const computed = computeRemainingETA({
+        processed,
+        total: s?.total ?? 0,
+        elapsedSec,
+        estimateSec: estimateDataRef.current?.total_seconds ?? s?.estimated_remaining ?? null,
+        factorRef: smoothedFactorRef,
+        results: s?.results ?? [],
+        byType: estimateDataRef.current?.by_type ?? {},
+      }) ?? s?.estimated_remaining ?? null;
+      setLiveRemainingSec(computed);
+      // 표시값은 임계값(현재 표시값의 5%, 최소 10초) 초과 시에만 업데이트
+      const prev = displayedRemainingRef.current;
+      if (computed == null) {
+        displayedRemainingRef.current = null;
+        setDisplayedRemainingSec(null);
+      } else if (prev == null || Math.abs(computed - prev) > Math.max(10, prev * 0.05)) {
+        displayedRemainingRef.current = computed;
+        setDisplayedRemainingSec(computed);
+      }
+    }, 1000);
+    return () => clearInterval(id);
+  }, [indexing]);
+
   const handleSelectFolder = async () => {
     const path = await window.electronAPI?.selectFolder();
     if (!path) return;
@@ -1745,6 +1807,25 @@ export default function DataIndexing() {
     });
   }, []);
 
+  const handleSelectAllFiles = useCallback(async () => {
+    if (!rootPath) return;
+    setSelectAllLoading(true);
+    try {
+      const allFiles = await collectAllFilesRecursive(rootPath);
+      if (allFiles.length > 0) {
+        setCheckedPaths(new Set(allFiles));
+        registerPaths(allFiles);
+      }
+      registerOrphans(rootPath);
+    } finally {
+      setSelectAllLoading(false);
+    }
+  }, [rootPath, registerPaths, registerOrphans]);
+
+  const handleClearAllSelected = useCallback(() => {
+    setCheckedPaths(new Set());
+  }, []);
+
   // SSE 연결 + 폴링 폴백을 캡슐화한 헬퍼 — handleStartIndexing 과
   // 페이지 재진입 시 job 복원에서 동일 로직 재사용.
   const attachJobStream = useCallback((job_id) => {
@@ -1760,16 +1841,29 @@ export default function DataIndexing() {
       }
       return false;
     };
+    // stale job: 모든 상태 초기화 + localStorage 정리
+    const onStale = () => {
+      stopPolling();
+      setIndexing(false);
+      setJobId(null);
+      setJobStatus(null);
+      clearActiveJob();
+    };
     const startPollFallback = () => {
       pollRef.current = setInterval(async () => {
         try {
           const s = await fetchStatus(job_id);
           setJobStatus(s);
           onTerminal(s);
-        } catch {
+        } catch (e) {
           stopPolling();
-          setIndexing(false);
-          setJobError("상태 조회 실패");
+          if (e?.stale) {
+            // stale job: 조용히 초기화 (에러 메시지 표시 안 함)
+            onStale();
+          } else {
+            setIndexing(false);
+            setJobError("상태 조회 실패");
+          }
         }
       }, 1000);
     };
@@ -1779,6 +1873,12 @@ export default function DataIndexing() {
       es.onmessage = (ev) => {
         try {
           const s = JSON.parse(ev.data);
+          // SSE로 stale 이벤트가 오는 경우 (백엔드가 data: {"stale":true} 전송)
+          if (s?.stale) {
+            es.close();
+            onStale();
+            return;
+          }
           setJobStatus(s);
           onTerminal(s);
         } catch {}
@@ -2019,7 +2119,14 @@ export default function DataIndexing() {
                 </p>
                 <p className="mt-0.5 text-[12px] text-white/42">개 파일</p>
                 <div className="mt-3 border-t border-white/[0.08] pt-3">
-                  <IndexingETA data={estimateData} loading={estimateLoading} />
+                  <IndexingETA
+                    data={estimateData}
+                    loading={estimateLoading}
+                    remainingSec={displayedRemainingSec}
+                    isRunning={indexing}
+                    processedCount={indexing ? (jobStatus?.done ?? 0) + (jobStatus?.skipped ?? 0) + (jobStatus?.errors ?? 0) : 0}
+                    startedAt={jobStatus?.started_at ?? null}
+                  />
                 </div>
               </>
             ) : (
@@ -2083,7 +2190,7 @@ export default function DataIndexing() {
         </div>
       </>
     );
-  }, [tab, selectedCount, estimateData, estimateLoading]);
+  }, [tab, selectedCount, estimateData, estimateLoading, displayedRemainingSec, indexing, jobStatus]);
 
   const handleGoBack = useCallback(() => {
     // 탭 이동 히스토리가 있으면 마지막 누른 탭으로 복귀.
@@ -2448,6 +2555,7 @@ export default function DataIndexing() {
           selectedCount={selectedCount}
           jobStatus={jobStatus}
           jobId={jobId}
+          externalRemainingSec={displayedRemainingSec}
           onClose={hideProgressModalByUser}
           onStop={() => {
             stopPolling();
