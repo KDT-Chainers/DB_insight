@@ -1479,7 +1479,16 @@ export default function MainSearch() {
     setSearchError("");
     setSearching(false);
     setDomainFilter("");
-  }, [location.state?.goHomeAt]);
+    setQuery("");
+    setInputValue("");
+    // 이미지 검색 상태 초기화
+    setImageSearchActive(false);
+    setImageSearchFile(null);
+    if (imageSearchPreviewUrl) {
+      URL.revokeObjectURL(imageSearchPreviewUrl);
+      setImageSearchPreviewUrl(null);
+    }
+  }, [location.state?.goHomeAt]); // imageSearchPreviewUrl 제거하여 이미지 선택 시 재실행 방지
 
   // 메인(home) 진입 시 도메인 필터 초기화 — 결과 화면에서 선택한 필터가
   // 메인 복귀 후 다음 검색까지 끌려가지 않도록 한다.
