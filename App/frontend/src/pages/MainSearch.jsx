@@ -2597,7 +2597,7 @@ export default function MainSearch() {
               <div
                 className={`flex items-center gap-3 rounded-full border px-4 py-2 transition-all
               ${listening ? "bg-red-500/5 border-red-400/50 shadow-[0_0_15px_rgba(248,113,113,0.15)]" : "bg-surface-container-high border-outline-variant/20 focus-within:border-primary/50"}`}
-              >
+                >
                 <div className="flex-1 relative">
                   <input
                     ref={resultsInputRef}
@@ -2666,6 +2666,19 @@ export default function MainSearch() {
                 )}
               </div>
             </form>
+
+            {view === "detail" && (
+              <button
+                type="button"
+                onClick={handleBackToResults}
+                className="inline-flex h-14 shrink-0 items-center gap-2 rounded-full border border-outline-variant/20 bg-surface-container-high px-4 text-lg font-bold text-on-surface transition-all hover:border-primary/35 hover:text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+              >
+                <span className="material-symbols-outlined block text-lg leading-none">
+                  arrow_back
+                </span>
+                결과로
+              </button>
+            )}
 
             <div className="ml-auto flex shrink-0 items-center gap-2">
               <button
@@ -3036,26 +3049,10 @@ export default function MainSearch() {
                   "opacity 0.35s ease, transform 0.35s ease, margin 0.3s",
               }}
             >
-              {/* 액션 바 — 헤더와 겹치지 않게 간격 두고, 본문과 동일 max-w 로 가로 정렬 */}
-              <div
-                className={`fixed ${leftEdge} right-0 z-30 bg-[#0b1220]/78 py-4 transition-[left] duration-300`}
-                style={{ top: `${RESULTS_CONTENT_TOP_PX}px` }}
+              <section
+                className="mx-auto max-w-[1400px] space-y-6 px-8 pb-12"
+                style={{ paddingTop: `${RESULTS_CONTENT_TOP_PX + 24}px` }}
               >
-                <div className="mx-auto flex w-full max-w-[1400px] items-center px-8">
-                  <button
-                    type="button"
-                    onClick={handleBackToResults}
-                    className="-ml-[295px] inline-flex h-10 items-center gap-2 rounded-full border border-outline-variant/25 bg-surface-container-high px-4 py-2 text-base font-bold text-on-surface transition-all hover:border-primary/35 hover:text-primary"
-                  >
-                    <span className="material-symbols-outlined text-lg">
-                      arrow_back
-                    </span>
-                    결과로
-                  </button>
-                </div>
-              </div>
-
-              <section className="mx-auto max-w-[1400px] space-y-6 px-8 pb-12 pt-52">
                 {/* AI 요약 패널 — 보라 제거 · 배경 따름 + 글래스 */}
                 {(summarizing ||
                   summaryText ||
@@ -3288,6 +3285,55 @@ export default function MainSearch() {
 
                   {/* 메타데이터 패널 */}
                   <div className="col-span-4 min-w-0 space-y-5 pt-16">
+                    <div className="-mt-[60px] grid min-w-0 grid-cols-3">
+                      <div className="flex justify-center px-1">
+                        <button
+                          type="button"
+                          onClick={() => handleSummarize(selectedFile)}
+                          disabled={summarizing}
+                          className="inline-flex min-h-11 w-full max-w-[14rem] items-center justify-center gap-2 rounded-full border border-white/[0.1] bg-white/[0.04] px-4 py-2.5 text-sm font-bold text-on-surface transition hover:border-primary/35 hover:text-primary disabled:pointer-events-none disabled:opacity-50"
+                        >
+                          <span
+                            className="material-symbols-outlined text-xl leading-none text-sky-300"
+                            style={{ fontVariationSettings: '"FILL" 1' }}
+                          >
+                            auto_awesome
+                          </span>
+                          AI 요약
+                        </button>
+                      </div>
+                      <div className="flex justify-center px-1">
+                        <button
+                          type="button"
+                          onClick={handleOpenFileClick}
+                          className="inline-flex min-h-11 w-full max-w-[14rem] items-center justify-center gap-2 rounded-full border border-white/[0.1] bg-white/[0.04] px-4 py-2.5 text-sm font-bold text-on-surface transition hover:border-primary/35 hover:text-primary"
+                        >
+                          <span
+                            className="material-symbols-outlined text-xl leading-none text-[#85adff]"
+                            style={{ fontVariationSettings: '"FILL" 1' }}
+                          >
+                            draft
+                          </span>
+                          파일 열기
+                        </button>
+                      </div>
+                      <div className="flex justify-center px-1">
+                        <button
+                          type="button"
+                          onClick={handleOpenFolderClick}
+                          className="inline-flex min-h-11 w-full max-w-[14rem] items-center justify-center gap-2 rounded-full border border-white/[0.1] bg-white/[0.04] px-4 py-2.5 text-sm font-bold text-on-surface transition hover:border-primary/35 hover:text-primary"
+                        >
+                          <span
+                            className="material-symbols-outlined text-xl leading-none text-emerald-400"
+                            style={{ fontVariationSettings: '"FILL" 1' }}
+                          >
+                            folder_open
+                          </span>
+                          경로 열기
+                        </button>
+                      </div>
+                    </div>
+
                     {/* 신뢰도/정확도/유사도 3지표 */}
                     {(() => {
                       // [BUGFIX] search card 와 동일한 sigmCalibrated 사용.
