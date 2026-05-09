@@ -1787,7 +1787,7 @@ export default function MainSearch() {
       closeSummary();
       setImageSearchActive(true);
       setQuery(`[이미지 검색] ${file.name}`);
-      setInputValue(file.name);
+      setInputValue("");
       setView("results");
       setResultsReady(true);
       setSearching(true);
@@ -2294,10 +2294,12 @@ export default function MainSearch() {
                       placeholder={
                         listening
                           ? ""
-                          : (
-                              PLUS_DOMAIN_META[domainFilter] ||
-                              PLUS_DOMAIN_META[""]
-                            ).placeholder
+                          : imageSearchActive
+                            ? "이미지로 검색 중..."
+                            : (
+                                PLUS_DOMAIN_META[domainFilter] ||
+                                PLUS_DOMAIN_META[""]
+                              ).placeholder
                       }
                       className="h-full w-full bg-transparent py-3 text-base text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none md:py-4 md:text-base"
                       readOnly={listening}
@@ -2506,12 +2508,14 @@ export default function MainSearch() {
                     placeholder={
                       listening
                         ? ""
-                        : domainFilter
-                          ? (
-                              PLUS_DOMAIN_META[domainFilter] ||
-                              PLUS_DOMAIN_META[""]
-                            ).placeholder
-                          : "무엇이든 물어보세요.."
+                        : imageSearchActive
+                          ? "이미지로 검색 중..."
+                          : domainFilter
+                            ? (
+                                PLUS_DOMAIN_META[domainFilter] ||
+                                PLUS_DOMAIN_META[""]
+                              ).placeholder
+                            : "무엇이든 물어보세요.."
                     }
                     value={listening ? "" : inputValue}
                     onChange={(e) =>
