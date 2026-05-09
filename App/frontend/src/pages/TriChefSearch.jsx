@@ -3,6 +3,16 @@ import { API_BASE } from "../api";
 import SearchSidebar from "../components/SearchSidebar";
 import { useSidebar } from "../context/SidebarContext";
 
+/** API domain 키는 유지하고, UI 라벨만 통일 (요청 body의 domains 값은 변경하지 않음) */
+function trichefDomainLabel(raw) {
+  if (raw == null || raw === "") return "";
+  const d = String(raw).toLowerCase();
+  if (d === "movie" || d === "동영상") return "Video";
+  if (d === "music" || d === "음성") return "Audio";
+  if (d === "doc_page") return "doc";
+  return String(raw);
+}
+
 export default function TriChefSearch() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState(null);
@@ -135,7 +145,9 @@ export default function TriChefSearch() {
                   key={d}
                   className="px-3 py-2 bg-surface-container-high rounded-lg border border-outline-variant/10"
                 >
-                  <span className="text-primary font-bold uppercase">{d}</span>
+                  <span className="text-primary font-bold">
+                    {trichefDomainLabel(d)}
+                  </span>
                   {s.error ? (
                     <span className="ml-2 text-error">{s.error}</span>
                   ) : (
@@ -176,8 +188,8 @@ export default function TriChefSearch() {
                 </div>
                 <div className="p-2">
                   <div className="flex justify-between items-center text-lg text-on-surface-variant mb-1">
-                    <span className="uppercase text-primary/80">
-                      {it.domain}
+                    <span className="text-primary/80">
+                      {trichefDomainLabel(it.domain)}
                     </span>
                     <span>conf {it.confidence}</span>
                   </div>
