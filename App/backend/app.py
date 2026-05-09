@@ -179,14 +179,25 @@ def create_app() -> Flask:
             "elapsed": round(time.time() - _warmup_progress["started"], 2),
         }, 200
 
+    # [VRAM 8GB 대응] 부팅 시 검색 엔진(SigLIP2+DINOv2+BGE-M3 ~5GB) 자동 prewarm 비활성.
+    # 8GB 환경에서 prewarm 으로 5GB 점유된 상태에서 인덱싱(Qwen-VL ~1.2GB) 추가 적재 시
+    # fragmented VRAM 으로 첫 inference 가 hang. 검색은 첫 호출 시 lazy 로드(6~15s) 한 번만 페널티.
+    # 명시적 prewarm 필요시 OMC_FORCE_WARMUP=1 환경변수로 부활 가능.
     import os as _os_w_outer
-    if _os_w_outer.environ.get("OMC_SYNC_WARMUP", "").strip() == "1":
-        _warmup_engine()
+    if _os_w_outer.environ.get("OMC_FORCE_WARMUP", "").strip() == "1":
+        if _os_w_outer.environ.get("OMC_SYNC_WARMUP", "").strip() == "1":
+            _warmup_engine()
+        else:
+            try:
+                _th_w.Thread(target=_warmup_engine, daemon=True, name="engine-warmup").start()
+            except Exception:
+                pass
     else:
-        try:
-            _th_w.Thread(target=_warmup_engine, daemon=True, name="engine-warmup").start()
-        except Exception:
-            pass
+        # 워밍업 안 해도 _warmup_event 를 set 해서 /api/warmup-status 가 ready=true 반환.
+        # (Electron 등 외부에서 ready 폴링하는 경우 무한 대기 방지)
+        _warmup_progress["stage"] = "skipped"
+        _warmup_progress["done"] = True
+        _warmup_event.set()
 
     # [VRAM] PyTorch allocator 튜닝 — 8GB GPU 단편화 방지.
     # expandable_segments: 큰 텐서 alloc 시 reserved 영역을 늘리는 대신 새 segment 추가.
@@ -201,22 +212,24 @@ def create_app() -> Flask:
     except Exception:
         pass
 
-    # BGM CLAP 워밍업 — laion/clap-htsat-unfused GPU 선로딩 (첫 검색 ~3s 지연 제거)
-    # background thread → 서버 기동 지연 없음. GPU(RTX 4070 Laptop) 우선 사용.
-    try:
-        import threading, logging as _lg
-        def _prewarm_bgm():
-            try:
-                from services.bgm.search_engine import get_engine as _bgm_engine
-                _e = _bgm_engine()
-                if _e.is_ready():
-                    _e.search("워밍업", top_k=1)
-                    _lg.getLogger(__name__).info("[warmup] bgm CLAP OK (GPU)")
-            except Exception as _ex:
-                _lg.getLogger(__name__).warning(f"[warmup] bgm skip: {_ex}")
-        threading.Thread(target=_prewarm_bgm, daemon=True, name="bgm-clap-prewarm").start()
-    except Exception:
-        pass
+    # [VRAM 8GB 대응] BGM CLAP 모델(~0.5GB) prewarm 도 비활성. 위와 동일 사유.
+    # 첫 BGM 검색 시 ~3s lazy load 1회 — 트레이드오프 수용.
+    # 명시적 prewarm 필요시 OMC_FORCE_WARMUP=1.
+    if _os_w_outer.environ.get("OMC_FORCE_WARMUP", "").strip() == "1":
+        try:
+            import threading, logging as _lg
+            def _prewarm_bgm():
+                try:
+                    from services.bgm.search_engine import get_engine as _bgm_engine
+                    _e = _bgm_engine()
+                    if _e.is_ready():
+                        _e.search("워밍업", top_k=1)
+                        _lg.getLogger(__name__).info("[warmup] bgm CLAP OK (GPU)")
+                except Exception as _ex:
+                    _lg.getLogger(__name__).warning(f"[warmup] bgm skip: {_ex}")
+            threading.Thread(target=_prewarm_bgm, daemon=True, name="bgm-clap-prewarm").start()
+        except Exception:
+            pass
 
     # [P0 #D] Qwen-VL 캡션 모델 prewarm — 인덱싱 전용 (검색에는 영향 없음).
     # [startup-speedup] default 비활성. OMC_QWEN_PREWARM=1 일 때만 시작 시 적재.
