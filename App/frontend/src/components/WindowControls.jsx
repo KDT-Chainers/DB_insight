@@ -27,7 +27,7 @@ export default function WindowControls() {
       <button
         onClick={maximize}
         title="최대화"
-        className="w-7 h-7 flex items-center justify-center rounded-full text-[#a5aac2] hover:bg-white/10 hover:text-[#dfe4fe] transition-colors"
+        className="w-7 h-7 flex items-center justify-center rounded-full text-[#a5aac2] hover:bg-white/10 hover:text-[#dfe4fe] transition-colors outline-none focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0"
       >
         <span className="material-symbols-outlined text-[13px]">crop_square</span>
       </button>
