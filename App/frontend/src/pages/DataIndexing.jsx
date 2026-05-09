@@ -1807,25 +1807,6 @@ export default function DataIndexing() {
     });
   }, []);
 
-  const handleSelectAllFiles = useCallback(async () => {
-    if (!rootPath) return;
-    setSelectAllLoading(true);
-    try {
-      const allFiles = await collectAllFilesRecursive(rootPath);
-      if (allFiles.length > 0) {
-        setCheckedPaths(new Set(allFiles));
-        registerPaths(allFiles);
-      }
-      registerOrphans(rootPath);
-    } finally {
-      setSelectAllLoading(false);
-    }
-  }, [rootPath, registerPaths, registerOrphans]);
-
-  const handleClearAllSelected = useCallback(() => {
-    setCheckedPaths(new Set());
-  }, []);
-
   // SSE 연결 + 폴링 폴백을 캡슐화한 헬퍼 — handleStartIndexing 과
   // 페이지 재진입 시 job 복원에서 동일 로직 재사용.
   const attachJobStream = useCallback((job_id) => {
