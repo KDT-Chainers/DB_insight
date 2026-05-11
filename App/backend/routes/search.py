@@ -495,7 +495,18 @@ def search():
             rr = r.get("rerank_score")
             if rr is not None and r.get("file_type") in ("doc", "image"):
                 mplc = float(r.get("_rank_score", r.get("confidence", 0)) or 0)
-                r["_rank_score"] = 0.4 * mplc + 0.6 * _rr_sigmoid(float(rr))
+                # [FIX] image: 시각 유사도가 매우 낮으면(raw_dense < 0.20)
+                # cross-encoder의 형태소 혼동(예: "햄" ↔ "햄버거")으로 무관 이미지가
+                # rerank 가산점을 얻어 상위 진입하는 것 방지.
+                # 저유사도 이미지에 한해 rerank 영향력 15%로 감소 (기본 60%).
+                if r.get("file_type") == "image":
+                    _raw_d = float(r.get("raw_dense") or r.get("dense") or 0)
+                    if _raw_d < 0.20:
+                        r["_rank_score"] = 0.85 * mplc + 0.15 * _rr_sigmoid(float(rr))
+                    else:
+                        r["_rank_score"] = 0.4 * mplc + 0.6 * _rr_sigmoid(float(rr))
+                else:
+                    r["_rank_score"] = 0.4 * mplc + 0.6 * _rr_sigmoid(float(rr))
                 _rerank_updated = True
         if _rerank_updated:
             results.sort(
@@ -559,6 +570,12 @@ def search():
     # 주의: rerank_score 미존재(reranker 비활성) 시 0.0 → 이 필터 미적용.
     for _vfc_r in results:
         if _vfc_r.get("file_type") != "video":
+            continue
+        # [방법 A] OR-merge 부스트 결과는 fail-safe cap 면제.
+        # 이유: 복합 쿼리("역전다방 계산자")는 서브쿼리에서 매칭됐으므로 관련성 있음.
+        # cross-encoder가 STT 스니펫을 짧은 텍스트로만 보고 낮은 점수를 주더라도
+        # OR-merge 신호(여러 서브쿼리에 매칭)가 더 신뢰할 수 있는 근거.
+        if _vfc_r.get("_or_boosted"):
             continue
         if float(_vfc_r.get("rerank_score") or 0.0) < -4.6:
             for _vf in ("confidence", "similarity"):
@@ -726,18 +743,34 @@ def search():
         except Exception:
             return 0.0
 
+    # [v19] 파일명 매칭 토큰 사전 추출 (option A의 보강 신호)
+    # 쿼리 토큰이 file_name에 포함되면 강한 가산점 부여.
+    _q_tokens = [t.lower() for t in query.split() if len(t) >= 2]
+
+    def _filename_match_bonus(r: dict) -> float:
+        """파일명에 쿼리 토큰이 포함되면 0.05 ~ 0.20 가산.
+        모든 토큰 포함 시 만점, 일부면 비례."""
+        if not _q_tokens:
+            return 0.0
+        fn = (r.get("file_name") or "").lower()
+        if not fn:
+            return 0.0
+        hits = sum(1 for t in _q_tokens if t in fn)
+        if hits == 0:
+            return 0.0
+        # 만점 0.20 (가중평균 primary 점수 1.0 기준 20% 가산).
+        # 한 토큰만 매칭이어도 최소 0.10 → "박태웅 의장" 중 "박태웅"만 들어가도 의미 있게 부각.
+        return 0.10 + 0.10 * (hits / len(_q_tokens))
+
     def _sort_key(r):
         # [v18.10] _rank_score 를 primary key 로 사용.
-        # 이유: _rank_score 는 MPLC + intent boost + BGM/Audio raw_dense 보정 +
-        #   doc rerank blend 를 모두 반영한 최적값.
-        #   기존 primary key 였던 dense 는 generous_curve 적용 여부가 도메인마다
-        #   달라 cross-domain 비교가 불공정함 (BGM=raw CLAP, image=curved).
         rank = float(r.get("_rank_score", r.get("confidence", 0)) or 0)
         ds = float(r.get("dense") or 0)
         rs_raw = r.get("rerank_score")
         rs = float(rs_raw) if rs_raw is not None else -999.0
         cf = float(r.get("confidence") or 0)
         rs_n = _r_norm(r)
+        fn_bonus = _filename_match_bonus(r)
         if _variant == "B":
             return (rs, ds, cf)
         if _variant == "C":
@@ -752,8 +785,14 @@ def search():
             return (0.4 * ds + 0.6 * rs_n,)
         if _variant == "H":
             return (0.7 * rs_n + 0.3 * ds,)
-        # A (default): _rank_score → dense → rerank
-        return (rank, ds, rs)
+        # A (default, v19): 옵션 A — 유사도 우선 + 파일명 매칭 보너스.
+        # 정책:
+        #   primary = 0.65·유사도 + 0.25·정확도 + 0.10·신뢰도 + 파일명_보너스(0~0.20)
+        # 파일명 보너스:
+        #   - 쿼리 토큰이 file_name에 포함되면 0.10 ~ 0.20 가산
+        #   - "박태웅 의장" 검색 시 파일명에 "박태웅 의장" 포함 파일이 STT 점수가 낮아도 #1 진입
+        primary = 0.65 * ds + 0.25 * rs_n + 0.10 * cf + fn_bonus
+        return (primary, ds, rs)
 
     results.sort(key=_sort_key, reverse=True)
 
@@ -849,14 +888,26 @@ def _search_trichef(query: str, domains: list[str], top_k: int, _dense_only: boo
                     file_name = Path(rid).name
                 snippet     = ""
                 from urllib.parse import quote as _q
-                preview_url = f"/api/trichef/file?domain=doc_page&path={_q(rid, safe='/')}"
+                # [FIX] 문서 미리보기: 매칭된 페이지(p.188 등 빈 페이지)가 아닌
+                # 항상 표지(p0000.jpg)를 preview_url 로 사용.
+                # matched_trichef_id 에 실제 매칭 페이지 id 보존.
+                _preview_rid = rid  # fallback: 매칭 페이지
+                if len(parts) >= 3 and parts[0] == "page_images":
+                    _cover_cand = f"page_images/{parts[1]}/p0000.jpg"
+                    if (doc_extract / "page_images" / parts[1] / "p0000.jpg").exists():
+                        _preview_rid = _cover_cand
+                preview_url = f"/api/trichef/file?domain=doc_page&path={_q(_preview_rid, safe='/')}"
+                # 매칭 페이지 번호 추출 (1-based, UI 표시용)
+                import re as _re_pn
+                _pnum_m = _re_pn.search(r'p(\d+)\.[a-zA-Z]+$', rid)
+                _match_page_num = int(_pnum_m.group(1)) + 1 if _pnum_m else None
 
             conf     = round(hit.confidence, 4)
             hit_meta = hit.metadata
             dense_v  = round(float(hit_meta.get("dense", 0.0)), 4)
             lex_v    = round(float(hit_meta["lexical"]), 4) if "lexical" in hit_meta else None
             asf_v    = round(float(hit_meta["asf"]), 4) if "asf" in hit_meta else None
-            results.append({
+            _entry = {
                 "file_path":      orig_path,
                 "file_name":      file_name,
                 "file_type":      file_type,
@@ -872,7 +923,11 @@ def _search_trichef(query: str, domains: list[str], top_k: int, _dense_only: boo
                 "lexical":        lex_v,
                 "asf":            asf_v,
                 "z_score":        conf,         # image/doc: confidence 값을 z_score 로 노출
-            })
+            }
+            # doc 전용: 실제 매칭 페이지 번호 (1-based) 저장 — UI 에서 "p.N 에서 발견" 표시용
+            if file_type == "doc":
+                _entry["match_page"] = locals().get("_match_page_num")
+            results.append(_entry)
 
     results.sort(key=lambda r: r["confidence"], reverse=True)
 
@@ -905,6 +960,11 @@ def _search_trichef_av(query: str, domains: list[str], top_k: int) -> list[dict]
       caption str     캡션 (영상)
       type    str     "stt" | "caption"
       preview str     snippet 미리보기
+
+    [방법 A] 복합 쿼리 분해 + OR 매칭:
+      "역전다방 계산자" → ["역전다방", "계산자"] 로 분해하여 각각 검색.
+      파일명에 '역전다방', STT 세그먼트에 '계산자'가 따로 있어도 검색 가능.
+      여러 서브쿼리에 매칭된 영상은 confidence 부스트.
     """
     from routes.trichef import _get_engine
 
@@ -913,82 +973,186 @@ def _search_trichef_av(query: str, domains: list[str], top_k: int) -> list[dict]
     except Exception:
         return []
 
+    # ── [방법 A] 쿼리 분해 준비 ──────────────────────────────────────────
+    # 공백 분리 후 2글자 이상 토큰만 서브쿼리로 사용.
+    # 1개이면 분해 불필요 → 기존 단일 검색 경로 사용.
+    _sub_queries = [t for t in query.split() if len(t) >= 2]
+    _use_decomp  = len(_sub_queries) >= 2  # 복합 쿼리일 때만 분해
+
+    # ── AV 결과 → 표준 dict 변환 헬퍼 ────────────────────────────────────
+    def _av_to_dict(r, file_type: str, domain: str, conf_override: float | None = None,
+                    segs_override=None, dense_override: float | None = None,
+                    or_boosted: bool = False) -> dict:
+        from services.path_resolver import resolve_raw_path
+        _fp      = r.file_path or ""
+        _fp_norm = _fp.replace("\\", "/")
+        _domain_dir = "Movie" if file_type == "video" else "Rec"
+        _marker     = f"/raw_DB/{_domain_dir}/"
+        _rel = _fp_norm.split(_marker, 1)[1] if _marker in _fp_norm else _fp_norm
+        file_path = resolve_raw_path(_rel, file_type)
+
+        segs    = segs_override if segs_override is not None else r.segments
+        top_seg = segs[0] if segs else {}
+        snippet = (
+            top_seg.get("preview", "") or top_seg.get("text", "") or top_seg.get("caption", "")
+        )[:300]
+        conf    = round(conf_override if conf_override is not None else r.confidence, 4)
+        av_meta = r.metadata
+        # [방법 A] dense_override: OR-merge에서 서브쿼리 중 최대 dense_agg 사용.
+        # 이유: best_r(최고 conf)가 낮은 dense_agg를 가질 수 있고 _passes_floor에서
+        # raw_dense < 0.22 필터에 걸림. 관련성 높은 서브쿼리의 dense_agg를 보존.
+        _dense_val = dense_override if dense_override is not None else float(av_meta.get("dense_agg", 0.0))
+        return {
+            "file_path":      file_path,
+            "file_name":      r.file_name,
+            "file_type":      file_type,
+            "confidence":     conf,
+            "similarity":     conf,
+            "snippet":        snippet,
+            "preview_url":    None,
+            "segments":       segs,
+            "trichef_domain": domain,
+            "dense":          round(_dense_val, 4),
+            "prebst_cosine":  round(float(av_meta.get("raw_dense_agg", 0.0)), 4),
+            "cosine_top1":    round(float(av_meta.get("cosine_top1",   0.0)), 4),
+            "z_score":        round(float(av_meta.get("z_dense",       0.0)), 4),
+            "asf":            round(float(av_meta.get("asf_agg",       0.0)), 4),
+            "lexical":        round(float(av_meta.get("sparse_agg",    0.0)), 4),
+            # [방법 A] OR-merge 결과 표시 — video fail-safe cap 면제용
+            "_or_boosted":    or_boosted,
+        }
+
     results: list[dict] = []
 
     for domain in domains:
         file_type = "video" if domain == "movie" else "audio"
-        try:
-            av_res = engine.search_av(query, domain=domain, topk=top_k, top_segments=5)
-        except Exception as _av_ex:
-            try:
-                import traceback as _tb, datetime as _dtt
-                _dbg = r"C:\yssong\KDT-FT-team3-Chainers\DB_insight\av_debug.log"
-                with open(_dbg, "a", encoding="utf-8") as _lf:
-                    _lf.write(f"[{_dtt.datetime.now()}] search_av EXCEPTION: domain={domain} q={query[:60]}\n{_tb.format_exc()}\n---\n")
-            except Exception:
-                pass
-            continue
 
-        if not av_res:
-            # [DEBUG] AV 검색 결과 0건 — 로그 기록
+        if _use_decomp:
+            # ── [방법 A v5] 전체 쿼리 우선, supplementary는 full_res 비어있을 때만 ─
+            # v5 정책 (사용자 피드백 반영 - 무관 supplementary 항목 #1 등극 회귀 방지):
+            #   1) 전체 쿼리 검색 → 결과가 있으면 그대로 사용 (or_boosted=True로 표시
+            #      → 복합 쿼리에서 발견된 결과는 video fail-safe cap 면제로 보호)
+            #   2) full_res가 비어있을 때만 서브쿼리 OR-merge 활성화
+            #      → "역전다방 계산자"처럼 의미론적 결합이 안 되는 경우만 보완
+            #      → "코스모스 보이저호"처럼 결합이 잘 되는 경우 supplementary 차단
+            # v4 회귀: supplementary 항목이 boost로 conf=1.0 → 무관 영상 #1 등극
+
+            # 1) 전체 쿼리 검색
+            try:
+                full_res = engine.search_av(query, domain=domain, topk=top_k, top_segments=5) or []
+            except Exception:
+                full_res = []
+
+            for r in full_res:
+                # full_res 항목도 or_boosted=True 부여 → 복합 쿼리 발견 결과
+                # video fail-safe cap, _passes_floor에서 보호 받음.
+                results.append(_av_to_dict(r, file_type, domain, or_boosted=True))
+
+            # 2) full_res가 비어있을 때만 서브쿼리 OR-merge 활성화
+            if not full_res:
+                _file_map: dict[str, dict] = {}
+                for sub_q in _sub_queries:
+                    try:
+                        sub_res = engine.search_av(sub_q, domain=domain, topk=top_k, top_segments=5)
+                    except Exception:
+                        try:
+                            import traceback as _tb, datetime as _dtt
+                            _dbg = r"C:\yssong\KDT-FT-team3-Chainers\DB_insight\av_debug.log"
+                            with open(_dbg, "a", encoding="utf-8") as _lf:
+                                _lf.write(
+                                    f"[{_dtt.datetime.now()}] search_av(sub) EXCEPTION: "
+                                    f"domain={domain} sub_q={sub_q[:40]}\n{_tb.format_exc()}\n---\n"
+                                )
+                        except Exception:
+                            pass
+                        continue
+
+                    for r in (sub_res or []):
+                        fn_key = (r.file_name or "").lower()
+                        if not fn_key:
+                            continue
+                        conf      = float(r.confidence)
+                        dense_agg = float(r.metadata.get("dense_agg", 0.0))
+                        if fn_key not in _file_map:
+                            _file_map[fn_key] = {
+                                "best_r":     r,
+                                "best_conf":  conf,
+                                "best_dense": dense_agg,
+                                "matched":    set(),
+                                "segs":       list(r.segments or []),
+                            }
+                        entry = _file_map[fn_key]
+                        entry["matched"].add(sub_q)
+                        if conf > entry["best_conf"]:
+                            entry["best_conf"] = conf
+                            entry["best_r"]    = r
+                        if dense_agg > entry["best_dense"]:
+                            entry["best_dense"] = dense_agg
+                        existing_starts = {s.get("start") for s in entry["segs"]}
+                        for seg in (r.segments or []):
+                            if seg.get("start") not in existing_starts:
+                                entry["segs"].append(seg)
+                                existing_starts.add(seg.get("start"))
+
+                # supplementary 결과 — 부스트 적용
+                supplementary: list[dict] = []
+                for fn_key, entry in _file_map.items():
+                    n_matched    = len(entry["matched"])
+                    boost        = 1.0 + 0.3 * (n_matched - 1) if n_matched >= 2 else 1.0
+                    boosted_conf = min(1.0, entry["best_conf"] * boost)
+                    merged_segs  = sorted(entry["segs"], key=lambda s: s.get("start", 0))
+                    supplementary.append(
+                        _av_to_dict(entry["best_r"], file_type, domain,
+                                    conf_override=boosted_conf, segs_override=merged_segs,
+                                    dense_override=entry["best_dense"],
+                                    or_boosted=True)
+                    )
+                supplementary.sort(key=lambda r: r.get("confidence", 0), reverse=True)
+                results.extend(supplementary)
+
+            # 3) 부스트 디버그 로그
             try:
                 import datetime as _dtt
                 _dbg = r"C:\yssong\KDT-FT-team3-Chainers\DB_insight\av_debug.log"
                 with open(_dbg, "a", encoding="utf-8") as _lf:
-                    _lf.write(f"[{_dtt.datetime.now()}] search_av 0건: domain={domain} q={query[:60]}\n")
+                    _lf.write(
+                        f"[{_dtt.datetime.now()}] DECOMP OR-merge: "
+                        f"domain={domain} sub_qs={_sub_queries} "
+                        f"files_found={len(_file_map)}\n"
+                    )
+                    for fn_key, entry in _file_map.items():
+                        _lf.write(
+                            f"  {fn_key[:50]}: matched={entry['matched']} "
+                            f"best_conf={entry['best_conf']:.3f}\n"
+                        )
             except Exception:
                 pass
 
-        for r in av_res:
-            # 대표 스니펫: 최고 점수 세그먼트 텍스트
-            top_seg = r.segments[0] if r.segments else {}
-            snippet = (
-                top_seg.get("preview", "")
-                or top_seg.get("text", "")
-                or top_seg.get("caption", "")
-            )[:300]
+        else:
+            # ── 기존 단일 쿼리 검색 (하위 호환) ─────────────────────────────
+            try:
+                av_res = engine.search_av(query, domain=domain, topk=top_k, top_segments=5)
+            except Exception as _av_ex:
+                try:
+                    import traceback as _tb, datetime as _dtt
+                    _dbg = r"C:\yssong\KDT-FT-team3-Chainers\DB_insight\av_debug.log"
+                    with open(_dbg, "a", encoding="utf-8") as _lf:
+                        _lf.write(f"[{_dtt.datetime.now()}] search_av EXCEPTION: domain={domain} q={query[:60]}\n{_tb.format_exc()}\n---\n")
+                except Exception:
+                    pass
+                continue
 
-            # AV 파일 서빙: /api/admin/file?domain=movie|music&id={file_path}
-            # file_path 가 절대경로이므로 관리자 스트림 엔드포인트 재사용
-            av_domain = domain  # "movie" | "music"
-            preview_url = None
+            if not av_res:
+                try:
+                    import datetime as _dtt
+                    _dbg = r"C:\yssong\KDT-FT-team3-Chainers\DB_insight\av_debug.log"
+                    with open(_dbg, "a", encoding="utf-8") as _lf:
+                        _lf.write(f"[{_dtt.datetime.now()}] search_av 0건: domain={domain} q={query[:60]}\n")
+                except Exception:
+                    pass
 
-            conf    = round(r.confidence, 4)
-            av_meta = r.metadata
-            # [v9 PC 호환] r.file_path 가 절대경로(인덱싱 PC) 또는 rel_key 인 경우
-            # 모두 처리. abs 면 rel_key 추출 후 현재 RAW_DB 로 재결합.
-            from services.path_resolver import resolve_raw_path
-            _fp = r.file_path or ""
-            _fp_norm = _fp.replace("\\", "/")
-            # rel_key 추출: raw_DB/<domain>/ 이후 부분
-            _domain_dir = "Movie" if file_type == "video" else "Rec"
-            _marker = f"/raw_DB/{_domain_dir}/"
-            if _marker in _fp_norm:
-                _rel = _fp_norm.split(_marker, 1)[1]
-            else:
-                _rel = _fp_norm  # 이미 rel_key 형태
-            file_path = resolve_raw_path(_rel, file_type)
-            results.append({
-                "file_path":      file_path,
-                "file_name":      r.file_name,
-                "file_type":      file_type,
-                "confidence":     conf,
-                "similarity":     conf,    # 하위 호환
-                "snippet":        snippet,
-                "preview_url":    preview_url,
-                "segments":       r.segments,
-                "trichef_domain": av_domain,
-                # 점수 상세 (UI 메트릭 표시용)
-                "dense":          round(float(av_meta.get("dense_agg",     0.0)), 4),
-                # [E13 fix v2] prebst_cosine = 부스트 전 실제 cosine (≤1.0).
-                # raw_dense 는 score_adjust 에서 dense(=dense_agg) 로 설정 — 0.22 floor/의도보정 캡에 사용.
-                # prebst_cosine 은 _passes_floor raw>1.05 오탐 방지 + 오디오 인플레이션 캡에만 사용.
-                "prebst_cosine":  round(float(av_meta.get("raw_dense_agg", 0.0)), 4),
-                "cosine_top1":    round(float(av_meta.get("cosine_top1",   0.0)), 4),  # raw segment max cosine
-                "z_score":        round(float(av_meta.get("z_dense",       0.0)), 4),
-                "asf":            round(float(av_meta.get("asf_agg",       0.0)), 4),
-                "lexical":        round(float(av_meta.get("sparse_agg",    0.0)), 4),
-            })
+            for r in av_res:
+                results.append(_av_to_dict(r, file_type, domain))
 
     results.sort(key=lambda x: -x["confidence"])
 

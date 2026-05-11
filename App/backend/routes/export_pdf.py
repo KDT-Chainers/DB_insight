@@ -120,9 +120,13 @@ def _score_strs(item: dict) -> tuple[str, str, str]:
 
 
 def _snippet_text(item: dict) -> str:
+    """스니펫 텍스트 추출. item._masked=True 면 PII 패턴을 가린 결과 반환."""
+    def _maybe_mask(txt: str) -> str:
+        return _mask_pii_text(txt) if item.get("_masked") else txt
+
     snippet = (item.get("snippet") or "").strip()
     if snippet:
-        return snippet.split("\n")[0]
+        return _maybe_mask(snippet.split("\n")[0])
     segs = item.get("segments") or []
     if segs:
         seg0  = segs[0]
@@ -130,12 +134,130 @@ def _snippet_text(item: dict) -> str:
         s     = seg0.get("start")
         ts    = f"[{_fmt_time(s)}] " if s is not None else ""
         if label:
-            return ts + label
+            return ts + _maybe_mask(label)
     bgm_title = item.get("bgm_title") or ""
     if bgm_title:
         artist = item.get("bgm_artist") or ""
-        return f"{bgm_title}" + (f" — {artist}" if artist else "")
+        return _maybe_mask(f"{bgm_title}" + (f" — {artist}" if artist else ""))
     return ""
+
+
+# ── [보안] PII 텍스트 마스킹 ────────────────────────────────────────────
+# routes/security_mask.py 의 정규식을 그대로 재사용해서 일관성 유지.
+def _get_pii_patterns():
+    """security_mask._PII_PATTERNS 를 lazy import (순환 의존 방지)."""
+    try:
+        from routes.security_mask import _PII_PATTERNS
+        return _PII_PATTERNS
+    except Exception:
+        # 폴백: 핵심 한국형 패턴만 (주민번호·운전면허·전화번호)
+        return [
+            ("KR_RRN",            r"\b\d{6}\s*[-–—]\s*\d{7}\b"),
+            ("KR_RRN_SPACE",      r"\b\d{6}\s+\d{7}\b"),
+            ("KR_DRIVER_LICENSE", r"\b\d{2}-\d{2}-\d{6}-\d{2}\b"),
+            ("KR_PHONE",          r"\b(?:010|011|016|017|018|019|02|\d{3})[\s-]\d{3,4}[\s-]\d{4}\b"),
+            ("EMAIL",             r"\b[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}\b"),
+        ]
+
+
+def _mask_pii_text(text: str) -> str:
+    """PII 패턴 매칭 부분을 '●' 동일 길이 마스크로 치환."""
+    if not text:
+        return text
+    import re as _re
+    out = text
+    for _label, pat in _get_pii_patterns():
+        try:
+            out = _re.sub(pat, lambda m: "●" * len(m.group(0)), out)
+        except Exception:
+            continue
+    return out
+
+
+def _load_masked_preview_bytes(item: dict, max_dim: int = 160) -> bytes | None:
+    """선택된(보안 대상) 파일의 미리보기에 PII 마스킹 적용 후 JPEG bytes 반환.
+
+    1) 원본/표지 이미지 로드 (image/doc만 지원, video는 일반 thumb로 폴백)
+    2) EasyOCR로 PII 영역 탐지 → 픽셀화 모자이크
+    3) 썸네일 크기로 축소 후 JPEG 반환
+    실패 시 None — 호출자가 일반 _load_preview로 폴백 처리.
+    """
+    ft = _norm_type(item.get("file_type", ""))
+    if ft not in ("image", "doc"):
+        return None
+    # 원본 이미지 경로 결정
+    src_path: str | None = None
+    if ft == "image":
+        src_path = (item.get("file_path") or "").strip() or None
+    else:  # doc: 표지(p0000) 우선
+        import re as _re
+        tid = (item.get("trichef_id") or "").strip()
+        m   = _re.match(r"^page_images/(.+)/p(\d+)\.(jpg|png)$", tid)
+        if m:
+            try:
+                from config import EXTRACTED_DB_DOC as _EDD
+                stem, page_str, ext = m.group(1), m.group(2), m.group(3)
+                cover = _EDD / "page_images" / stem / f"p0000.{ext}"
+                src_path = str(cover if cover.exists() else _EDD / "page_images" / stem / f"p{page_str}.{ext}")
+            except Exception:
+                pass
+        if not src_path:
+            src_path = (item.get("file_path") or "").strip() or None
+    if not src_path or not Path(src_path).exists():
+        return None
+
+    try:
+        from PIL import Image as PILImage, ImageFilter
+        from routes.security_mask import (
+            _detect_pii_in_blocks, _mosaic_regions,
+        )
+        img = PILImage.open(src_path).convert("RGB")
+        regions: list = []
+        # OCR 전처리 (security_mask와 동일 - 업스케일·대비)
+        try:
+            import easyocr
+            import numpy as np
+            from PIL import ImageEnhance
+            proc = img.copy()
+            w, h = proc.size
+            if max(w, h) < 1200:
+                scale = 1200 / max(w, h)
+                proc = proc.resize((int(w * scale), int(h * scale)), PILImage.LANCZOS)
+            proc = ImageEnhance.Contrast(proc).enhance(2.5)
+            proc = proc.convert("L").convert("RGB")
+            reader = easyocr.Reader(["en", "ko"], gpu=False, verbose=False)
+            ocr_results = reader.readtext(np.array(proc), detail=1, paragraph=False)
+            scale_x = img.width / proc.width
+            scale_y = img.height / proc.height
+            scaled_ocr = []
+            for bbox, text, conf in ocr_results:
+                scaled_bbox = [[int(p[0] * scale_x), int(p[1] * scale_y)] for p in bbox]
+                scaled_ocr.append((scaled_bbox, text, conf))
+            regions = _detect_pii_in_blocks(scaled_ocr)
+            logger.info(f"[export_pdf] OCR 완료: {Path(src_path).name} PII regions={len(regions)}")
+        except ImportError:
+            logger.warning("[export_pdf] EasyOCR 미설치 → 전체 마스킹")
+        except Exception as e:
+            logger.warning(f"[export_pdf] OCR 실패 → 전체 마스킹: {e}")
+
+        # [정책 v2] 사용자 의도 정확히 반영:
+        #   - PII 영역 검출 시: 부분 모자이크 (마스킹된 미리보기)
+        #   - PII 미검출 시: 원본 그대로 (None 반환 → 호출자가 일반 _load_preview로 폴백)
+        #   - 즉 화면에 "안전" 배지가 뜬 파일은 PDF에서도 원본 그대로 나타남
+        if not regions:
+            # PII 없음 → None 반환 → 일반 미리보기 폴백
+            return None
+
+        masked = _mosaic_regions(img, regions)
+
+        # 썸네일 크기로 축소 후 JPEG
+        masked.thumbnail((max_dim, max_dim))
+        buf = io.BytesIO()
+        masked.save(buf, format="JPEG", quality=75)
+        return buf.getvalue()
+    except Exception as e:
+        logger.warning(f"[export_pdf] 마스킹 미리보기 실패: {e}")
+        return None
 
 
 # ── 썸네일 로드 ───────────────────────────────────────────────────────────
@@ -206,7 +328,10 @@ def _warmup_video_thumb_sync(file_path: str, max_dim: int = 160) -> bool:
 
 
 def _load_preview(item: dict, max_dim: int = 160) -> bytes | None:
-    """썸네일 바이트 반환 (image/doc: PIL, video: ffmpeg, audio/bgm: None)."""
+    """썸네일 바이트 반환 (image/doc: PIL, video: ffmpeg, audio/bgm: None).
+
+    item 에 _masked=True 플래그가 있으면 image/doc 미리보기에 PII 마스킹 적용.
+    """
     ft = _norm_type(item.get("file_type", ""))
 
     if ft == "video":
@@ -217,6 +342,13 @@ def _load_preview(item: dict, max_dim: int = 160) -> bytes | None:
 
     if ft not in ("image", "doc"):
         return None
+
+    # [보안] 마스킹 대상 파일은 OCR+모자이크 적용된 미리보기 반환.
+    if item.get("_masked"):
+        masked_bytes = _load_masked_preview_bytes(item, max_dim)
+        if masked_bytes:
+            return masked_bytes
+        # 폴백: 마스킹 실패 시 일반 미리보기로 계속 진행
 
     paths_to_try: list[str] = []
 
@@ -239,7 +371,14 @@ def _load_preview(item: dict, max_dim: int = 160) -> bytes | None:
             try:
                 from config import EXTRACTED_DB_DOC as _EDD
                 stem, page_str, ext = m.group(1), m.group(2), m.group(3)
-                paths_to_try.append(str(_EDD / "page_images" / stem / f"p{page_str}.{ext}"))
+                # [FIX] 앱 미리보기와 동일하게 — 항상 표지(p0000) 우선 시도.
+                # 매칭 페이지(p.188 등)는 빈 페이지일 수 있어 흰 이미지로 나옴.
+                cover_path = _EDD / "page_images" / stem / f"p0000.{ext}"
+                if cover_path.exists():
+                    paths_to_try.append(str(cover_path))
+                # 표지 없으면 매칭 페이지로 폴백
+                matched_path = _EDD / "page_images" / stem / f"p{page_str}.{ext}"
+                paths_to_try.append(str(matched_path))
             except Exception:
                 pass
         if not paths_to_try:
@@ -267,15 +406,17 @@ def _preload_thumbs(items: list[dict], max_dim: int = 160) -> list[bytes | None]
     """★ ThreadPoolExecutor 병렬 사전 로드 + 글로벌 타임아웃.
 
     - 개별 ffmpeg: 타임아웃 2초 (내부에서 kill)
-    - 전체 썸네일 로드: 최대 8초 글로벌 타임아웃 (걸리면 나머지 None 처리)
+    - 전체 썸네일 로드 기본 8초. 마스킹(OCR) 대상이 있으면 60초로 확장.
+      (EasyOCR 초기 로드 5~10초 + 이미지당 OCR 2~5초 소요)
     """
     from concurrent.futures import wait as _wait, FIRST_EXCEPTION as _FE
     result_map: dict[int, bytes | None] = {}
+    _has_masked = any(it.get("_masked") for it in items)
+    _timeout    = 60 if _has_masked else 8
     with ThreadPoolExecutor(max_workers=8, thread_name_prefix="pdf-thumb") as ex:
         futures = {ex.submit(_load_preview, item, max_dim): i
                    for i, item in enumerate(items)}
-        # ★ 전체 최대 8초 대기 — 초과하면 남은 것은 None 처리
-        done, not_done = _wait(futures, timeout=8)
+        done, not_done = _wait(futures, timeout=_timeout)
         for fut in done:
             idx = futures[fut]
             try:
@@ -400,8 +541,188 @@ def _render_row(pdf, item: dict, ry: float, ft: str,
         pdf.cell(text_w, 4, _trunc(snippet, 80))
 
 
+# ── AI 요약 페이지 렌더링 ────────────────────────────────────────────────
+def _render_summary_pages(pdf, summary: dict, continue_on_page: bool = False) -> None:
+    """AI 요약 텍스트를 PDF에 페이지(들)로 렌더링.
+
+    summary = { file_path, file_name, text, model }
+    텍스트는 마크다운 형식(## 헤더, * 리스트 등) → 간단 파싱.
+
+    continue_on_page=True: 현재 페이지 잔여 공간에 이어서 작성 (공간 부족시 새 페이지).
+    """
+    text = (summary.get("text") or "").strip()
+    if not text:
+        return
+    fname = summary.get("file_name") or Path(summary.get("file_path", "") or "").name
+    model = summary.get("model") or ""
+
+    line_h_body = 5
+    text_w = A4_W - MARGIN * 2
+    bot_limit = A4_H - FOOTER_H - 4
+
+    # 현재 페이지에 이어쓰기 가능한지 판정 — 헤더(약 18mm) + 본문 첫 줄 들어가야 함.
+    cur_y = pdf.get_y()
+    can_continue = continue_on_page and (cur_y > 0) and (cur_y < bot_limit - 30)
+
+    if can_continue:
+        # 구분선 + 인라인 헤더 (같은 페이지)
+        y = cur_y + 6
+        pdf.set_draw_color(80, 60, 150)
+        pdf.line(MARGIN, y, A4_W - MARGIN, y)
+        y += 5
+        pdf.set_xy(MARGIN, y)
+        pdf._sf(12, bold=True)
+        pdf.set_text_color(200, 180, 255)
+        pdf.cell(0, 7, "AI 상세 요약", new_x="LMARGIN", new_y="NEXT")
+        y = pdf.get_y() + 1
+        pdf.set_xy(MARGIN, y)
+        pdf._sf(8)
+        pdf.set_text_color(140, 150, 180)
+        pdf.cell(0, 4, _trunc(f"대상: {fname}", 90), new_x="LMARGIN", new_y="NEXT")
+        if model:
+            pdf.set_x(MARGIN)
+            pdf.cell(0, 4, f"모델: {model}", new_x="LMARGIN", new_y="NEXT")
+        y = pdf.get_y() + 3
+    else:
+        # 새 페이지 (기존 동작)
+        pdf.add_page()
+        pdf.dark_bg()
+        pdf.color_bar(180, 140, 255, height=3)
+
+        # 헤더
+        pdf.set_xy(MARGIN, 6)
+        pdf._sf(13, bold=True)
+        pdf.set_text_color(200, 180, 255)
+        pdf.cell(0, 8, "AI 상세 요약", new_x="LMARGIN", new_y="NEXT")
+        pdf.set_xy(MARGIN, 16)
+        pdf._sf(8)
+        pdf.set_text_color(140, 150, 180)
+        pdf.cell(0, 5, _trunc(f"대상: {fname}", 90), new_x="LMARGIN", new_y="NEXT")
+        if model:
+            pdf.set_x(MARGIN)
+            pdf.cell(0, 4, f"모델: {model}", new_x="LMARGIN", new_y="NEXT")
+        pdf.set_draw_color(80, 60, 150)
+        pdf.line(MARGIN, 26, A4_W - MARGIN, 26)
+
+        # 본문 시작 y
+        y = 32
+
+    def _new_page_if_needed(needed: float = 6) -> None:
+        nonlocal y
+        if y + needed > bot_limit:
+            pdf.add_page()
+            pdf.dark_bg()
+            pdf.color_bar(180, 140, 255, height=3)
+            pdf.set_xy(MARGIN, 6)
+            pdf._sf(10, bold=True)
+            pdf.set_text_color(200, 180, 255)
+            pdf.cell(0, 6, f"AI 상세 요약 (이어서)", new_x="LMARGIN", new_y="NEXT")
+            pdf.set_draw_color(80, 60, 150)
+            pdf.line(MARGIN, 16, A4_W - MARGIN, 16)
+            y = 22
+
+    for raw_line in text.split("\n"):
+        line = raw_line.rstrip()
+        if not line.strip():
+            y += 2
+            continue
+
+        # 헤더 (## XXX / # XXX)
+        if line.lstrip().startswith("##"):
+            _new_page_if_needed(10)
+            head = line.lstrip("# ").strip()
+            pdf.set_xy(MARGIN, y)
+            pdf._sf(10, bold=True)
+            pdf.set_text_color(150, 200, 255)
+            pdf.multi_cell(text_w, 6, head)
+            y = pdf.get_y() + 1
+            continue
+        if line.lstrip().startswith("#"):
+            _new_page_if_needed(12)
+            head = line.lstrip("# ").strip()
+            pdf.set_xy(MARGIN, y)
+            pdf._sf(11, bold=True)
+            pdf.set_text_color(180, 220, 255)
+            pdf.multi_cell(text_w, 7, head)
+            y = pdf.get_y() + 1
+            continue
+
+        # 리스트 (- / * / • / 숫자.)
+        stripped = line.lstrip()
+        is_list = (
+            stripped.startswith(("- ", "* ", "• "))
+            or (len(stripped) >= 3 and stripped[0].isdigit() and stripped[1:3] in (". ", ") "))
+        )
+        if is_list:
+            _new_page_if_needed(line_h_body + 2)
+            # bullet
+            pdf.set_xy(MARGIN + 2, y)
+            pdf._sf(8)
+            pdf.set_text_color(180, 200, 255)
+            pdf.cell(4, line_h_body, "•")
+            # body
+            body = stripped.lstrip("-*•").lstrip()
+            # 숫자. 형식
+            if body and body[0].isdigit():
+                dot = body.find(". ")
+                if 0 <= dot < 4:
+                    body = body[dot+2:]
+            pdf.set_xy(MARGIN + 7, y)
+            pdf._sf(8)
+            pdf.set_text_color(220, 228, 240)
+            pdf.multi_cell(text_w - 7, line_h_body, body)
+            y = pdf.get_y() + 0.5
+            continue
+
+        # 일반 본문
+        _new_page_if_needed(line_h_body + 2)
+        pdf.set_xy(MARGIN, y)
+        pdf._sf(8)
+        pdf.set_text_color(220, 228, 240)
+        pdf.multi_cell(text_w, line_h_body, line)
+        y = pdf.get_y() + 0.5
+
+
 # ── PDF 빌더 ──────────────────────────────────────────────────────────────
-def _build_pdf(query: str, results: list[dict], max_per_type: int = 50) -> bytes:
+def _build_pdf(query: str, results: list[dict], max_per_type: int = 50,
+               summaries: list[dict] | None = None,
+               masked_paths: list[str] | None = None) -> bytes:
+    # [보안] 마스킹 대상 파일 경로 집합. OS별 슬래시 정규화 후 매칭.
+    def _norm_path(p: str) -> str:
+        """경로 정규화 — Windows 백슬래시·슬래시 혼용 흡수."""
+        return (p or "").replace("\\", "/").strip().lower()
+
+    _masked_set_norm = {_norm_path(p) for p in (masked_paths or [])}
+
+    # [DEBUG] 진단 파일에 직접 기록 (백엔드 로그가 출력 안 되는 환경 대비)
+    _diag_path = r"D:\Download\pdf_masking_diag.log"
+    try:
+        import datetime as _dtt
+        with open(_diag_path, "a", encoding="utf-8") as _df:
+            _df.write(f"\n===== {_dtt.datetime.now()} =====\n")
+            _df.write(f"masked_paths 수신: {len(_masked_set_norm)}건\n")
+            _df.write(f"raw masked_paths: {masked_paths!r}\n")
+            _df.write(f"results 총: {len(results or [])}건\n")
+            for _mp in list(_masked_set_norm)[:5]:
+                _df.write(f"  masked_path(norm): {_mp!r}\n")
+            for r in (results or [])[:5]:
+                fp = r.get("file_path", "")
+                _df.write(f"  result_path: {fp!r}  → norm: {_norm_path(fp)!r}\n")
+    except Exception:
+        pass
+
+    _matched_count = 0
+    if _masked_set_norm:
+        for _r in (results or []):
+            if _norm_path(_r.get("file_path") or "") in _masked_set_norm:
+                _r["_masked"] = True
+                _matched_count += 1
+    try:
+        with open(_diag_path, "a", encoding="utf-8") as _df:
+            _df.write(f"_masked=True 주입된 items: {_matched_count}건\n")
+    except Exception:
+        pass
+    logger.warning(f"[export_pdf] masked={len(_masked_set_norm)} matched={_matched_count}")
     font_path = _find_font()
     use_kr    = font_path is not None
     pdf       = _make_pdf(use_kr, font_path)
@@ -447,6 +768,7 @@ def _build_pdf(query: str, results: list[dict], max_per_type: int = 50) -> bytes
     thumb_map: dict[int, bytes | None] = {i: b for i, b in enumerate(flat_thumbs)}
 
     # ── 표지 ──────────────────────────────────────────────────────────────
+    summary_only = (total == 0)   # results 없이 summaries만 있는 모드
     pdf.add_page()
     pdf.dark_bg()
 
@@ -457,7 +779,8 @@ def _build_pdf(query: str, results: list[dict], max_per_type: int = 50) -> bytes
 
     pdf._sf(26, bold=True)
     pdf.set_text_color(230, 235, 255)
-    pdf.cell(0, 13, "검색 결과 리포트", align="C", new_x="LMARGIN", new_y="NEXT")
+    _cover_title = "AI 상세 요약 리포트" if summary_only else "검색 결과 리포트"
+    pdf.cell(0, 13, _cover_title, align="C", new_x="LMARGIN", new_y="NEXT")
 
     pdf.ln(3)
     pdf.set_draw_color(60, 80, 130)
@@ -473,70 +796,101 @@ def _build_pdf(query: str, results: list[dict], max_per_type: int = 50) -> bytes
     pdf.set_text_color(140, 140, 160)
     pdf.cell(0, 7, ts_str, align="C", new_x="LMARGIN", new_y="NEXT")
 
-    # 요약 카드
-    pdf.ln(12)
-    card_x, card_w = 55, 100
-    card_h = 12 + sum(1 for t in _TYPE_ORDER if groups.get(t)) * 9 + 12
-    pdf.set_fill_color(22, 30, 52)
-    pdf.set_draw_color(50, 70, 110)
-    pdf.rect(card_x, pdf.get_y(), card_w, card_h, "FD")
+    # 요약 카드 (results 있을 때만)
+    if not summary_only:
+        pdf.ln(12)
+        card_x, card_w = 55, 100
+        card_h = 12 + sum(1 for t in _TYPE_ORDER if groups.get(t)) * 9 + 12
+        pdf.set_fill_color(22, 30, 52)
+        pdf.set_draw_color(50, 70, 110)
+        pdf.rect(card_x, pdf.get_y(), card_w, card_h, "FD")
 
-    pdf.set_xy(card_x, pdf.get_y() + 6)
-    pdf._sf(11, bold=True)
-    pdf.set_text_color(200, 210, 255)
-    pdf.cell(card_w, 8, f"총 {total}건", align="C", new_x="LMARGIN", new_y="NEXT")
+        pdf.set_xy(card_x, pdf.get_y() + 6)
+        pdf._sf(11, bold=True)
+        pdf.set_text_color(200, 210, 255)
+        pdf.cell(card_w, 8, f"총 {total}건", align="C", new_x="LMARGIN", new_y="NEXT")
 
-    for t in _TYPE_ORDER:
-        cnt = len(groups.get(t, []))
-        if cnt == 0:
-            continue
-        rc, gc, bc = _TYPE_COLORS.get(t, (200, 200, 200))
-        pdf.set_x(card_x + 14)
-        pdf._sf(10)
-        pdf.set_text_color(rc, gc, bc)
-        pdf.cell(52, 8, _TYPE_LABELS.get(t, t), new_x="RIGHT", new_y="TOP")
-        pdf.set_text_color(220, 220, 240)
-        pdf.cell(card_w - 52 - 14, 8, f"{cnt}건", align="R", new_x="LMARGIN", new_y="NEXT")
-
-    # ── 섹션 리스트 ──────────────────────────────────────────────────────
-    CONTENT_TOP = HEADER_H + SECTION_H
-    CONTENT_BOT = A4_H - FOOTER_H
-    rows_per_page = max(1, int((CONTENT_BOT - CONTENT_TOP) / ROW_H))
-
-    flat_idx = 0   # flat_items 의 현재 위치
-    for t in _TYPE_ORDER:
-        items = groups.get(t, [])[:max_per_type]
-        if not items:
-            flat_idx += 0
-            continue
-
-        rc, gc, bc = _TYPE_COLORS.get(t, (200, 200, 200))
-        label      = _TYPE_LABELS.get(t, t)
-
-        for page_start in range(0, len(items), rows_per_page):
-            page_items = items[page_start: page_start + rows_per_page]
-
-            pdf.add_page()
-            pdf.dark_bg()
-            pdf.color_bar(rc, gc, bc, height=3)
-
-            pdf.set_xy(MARGIN, 5)
-            pdf._sf(11, bold=True)
+        for t in _TYPE_ORDER:
+            cnt = len(groups.get(t, []))
+            if cnt == 0:
+                continue
+            rc, gc, bc = _TYPE_COLORS.get(t, (200, 200, 200))
+            pdf.set_x(card_x + 14)
+            pdf._sf(10)
             pdf.set_text_color(rc, gc, bc)
-            end_idx = min(page_start + rows_per_page, len(items))
-            pdf.cell(0, 7,
-                     f"{label}  {page_start + 1}–{end_idx} / 총 {len(items)}건",
-                     new_x="LMARGIN", new_y="NEXT")
+            pdf.cell(52, 8, _TYPE_LABELS.get(t, t), new_x="RIGHT", new_y="TOP")
+            pdf.set_text_color(220, 220, 240)
+            pdf.cell(card_w - 52 - 14, 8, f"{cnt}건", align="R", new_x="LMARGIN", new_y="NEXT")
 
-            pdf.set_draw_color(rc // 2, gc // 2, bc // 2)
-            pdf.line(MARGIN, HEADER_H, A4_W - MARGIN, HEADER_H)
+    # ── 섹션 리스트 (results 있을 때만) ─────────────────────────────────
+    if not summary_only:
+        CONTENT_TOP = HEADER_H + SECTION_H
+        CONTENT_BOT = A4_H - FOOTER_H
+        rows_per_page = max(1, int((CONTENT_BOT - CONTENT_TOP) / ROW_H))
 
-            for i, item in enumerate(page_items):
-                ry         = CONTENT_TOP + i * ROW_H
-                item_flat  = flat_idx + page_start + i
-                _render_row(pdf, item, ry, t, thumb_map.get(item_flat))
+        flat_idx = 0   # flat_items 의 현재 위치
+        for t in _TYPE_ORDER:
+            items = groups.get(t, [])[:max_per_type]
+            if not items:
+                flat_idx += 0
+                continue
 
-        flat_idx += len(items)
+            rc, gc, bc = _TYPE_COLORS.get(t, (200, 200, 200))
+            label      = _TYPE_LABELS.get(t, t)
+
+            for page_start in range(0, len(items), rows_per_page):
+                page_items = items[page_start: page_start + rows_per_page]
+
+                pdf.add_page()
+                pdf.dark_bg()
+                pdf.color_bar(rc, gc, bc, height=3)
+
+                pdf.set_xy(MARGIN, 5)
+                pdf._sf(11, bold=True)
+                pdf.set_text_color(rc, gc, bc)
+                end_idx = min(page_start + rows_per_page, len(items))
+                pdf.cell(0, 7,
+                         f"{label}  {page_start + 1}–{end_idx} / 총 {len(items)}건",
+                         new_x="LMARGIN", new_y="NEXT")
+
+                # [FIX] 가로선을 텍스트 아래(y=14)에 그려 겹침 방지.
+                # 기존 y=HEADER_H(=8) 이면 cell 텍스트(y=5~12)와 겹쳤음.
+                pdf.set_draw_color(rc // 2, gc // 2, bc // 2)
+                pdf.line(MARGIN, 14, A4_W - MARGIN, 14)
+
+                for i, item in enumerate(page_items):
+                    ry         = CONTENT_TOP + i * ROW_H
+                    item_flat  = flat_idx + page_start + i
+                    _render_row(pdf, item, ry, t, thumb_map.get(item_flat))
+
+                # [FIX] 마지막 결과 행의 바닥 위치를 pdf.get_y() 에 반영 →
+                # _render_summary_pages 가 같은 페이지에 이어 쓸 수 있도록.
+                last_row_bottom = CONTENT_TOP + len(page_items) * ROW_H
+                pdf.set_y(last_row_bottom)
+
+            flat_idx += len(items)
+
+    # ── AI 요약 페이지 ─────────────────────────────────────────────────────
+    # summary_only(results 없음) 모드: 모든 summaries 렌더링
+    # 일반 모드: PDF 대상 파일에 해당하는 summaries만 렌더링
+    if summaries:
+        result_paths = {(r.get("file_path") or "").strip() for r in results}
+        # 일반 모드 → 첫 요약은 마지막 결과 페이지 빈 공간에 이어 쓰기 시도
+        _continue_first = (not summary_only)
+        _first_rendered = False
+        for s in summaries:
+            fp = (s.get("file_path") or "").strip()
+            has_text = bool((s.get("text") or "").strip())
+            # summary_only: file_path 매칭 없이 모두 포함
+            if has_text and (summary_only or (fp and fp in result_paths)):
+                try:
+                    _render_summary_pages(
+                        pdf, s,
+                        continue_on_page=_continue_first and not _first_rendered,
+                    )
+                    _first_rendered = True
+                except Exception as ex:
+                    logger.warning(f"[export_pdf] 요약 렌더링 실패: {ex}")
 
     return bytes(pdf.output())
 
@@ -550,14 +904,21 @@ def generate_pdf():
         results      = body.get("results") or []
         save_path    = (body.get("save_path") or "").strip()
         max_per_type = int(body.get("max_per_type") or 50)
+        summaries    = body.get("summaries") or []   # AI 요약 [{file_path, file_name, text, model}, ...]
+        masked_paths = body.get("masked_paths") or []   # [보안] PII 마스킹 적용할 file_path 목록
 
-        if not results:
-            return jsonify({"error": "results 가 비어 있습니다."}), 400
+        # results 없어도 summaries(AI 요약)만 있으면 요약 전용 PDF 허용
+        if not results and not summaries:
+            return jsonify({"error": "results 또는 summaries 가 비어 있습니다."}), 400
 
-        logger.info(f"[export_pdf] 생성 시작: query={query!r} n={len(results)}")
+        logger.info(
+            f"[export_pdf] 생성 시작: query={query!r} n={len(results)} "
+            f"summaries={len(summaries)} masked={len(masked_paths)}"
+        )
         t0 = time.time()
 
-        pdf_bytes = _build_pdf(query, results, max_per_type=max_per_type)
+        pdf_bytes = _build_pdf(query, results, max_per_type=max_per_type,
+                                summaries=summaries, masked_paths=masked_paths)
 
         elapsed = time.time() - t0
         logger.info(f"[export_pdf] 완료: {len(pdf_bytes)//1024}KB ({elapsed:.2f}s)")

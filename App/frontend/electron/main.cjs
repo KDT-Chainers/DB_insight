@@ -246,6 +246,10 @@ function _startPythonBackend() {
           PYTHONDONTWRITEBYTECODE: '1',
           // 진행률·에러 로그 즉시 flush → 디버깅 가시성 ↑ (헤드리스 spawn 환경 필수).
           PYTHONUNBUFFERED:        '1',
+          // [좀비 방지] 부모 PID 전달 — 백엔드 app.py 의 _start_parent_watchdog()
+          // 가 3초마다 이 PID를 체크하여 Electron이 강제 종료/크래시 되어도
+          // 백엔드가 자동으로 자기 종료 → GPU VRAM 즉시 해제.
+          ELECTRON_PID: String(process.pid),
         },
       })
       backendProcess.on('error', (err) => {

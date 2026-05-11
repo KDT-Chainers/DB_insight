@@ -256,7 +256,72 @@ def create_app() -> Flask:
 app = create_app()
 
 
+def _start_parent_watchdog() -> None:
+    """부모(Electron) 프로세스 감시 — 좀비 백엔드 방지.
+
+    Electron이 ELECTRON_PID 환경변수로 자신의 PID를 전달.
+    백그라운드 스레드가 3초마다 부모가 살아있는지 확인.
+    부모가 사라지면(=강제 종료/정상 종료/크래시 모든 경우) 즉시 자기 종료.
+    → GPU VRAM 자동 해제.
+
+    Electron 정상 종료 시에는 main.cjs의 killBackend()가 먼저 작동.
+    이 watchdog은 강제 종료/시스템 크래시 시의 안전망.
+    """
+    import os
+    import sys
+    import threading
+    import time
+
+    parent_pid_str = os.environ.get("ELECTRON_PID", "").strip()
+    if not parent_pid_str.isdigit():
+        return  # 부모 PID 미지정 → 단독 실행 (admin.html 등) → watchdog 미작동
+    parent_pid = int(parent_pid_str)
+    if parent_pid <= 0:
+        return
+
+    def _watch():
+        # psutil이 가장 정확하지만 미설치 환경 대비 OS 호출 폴백
+        try:
+            import psutil  # type: ignore
+            check_alive = lambda: psutil.pid_exists(parent_pid)
+        except ImportError:
+            if sys.platform == "win32":
+                import ctypes
+                _kernel = ctypes.windll.kernel32
+                PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+                def check_alive():
+                    h = _kernel.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, parent_pid)
+                    if not h:
+                        return False
+                    _kernel.CloseHandle(h)
+                    return True
+            else:
+                def check_alive():
+                    try:
+                        os.kill(parent_pid, 0)
+                        return True
+                    except OSError:
+                        return False
+
+        while True:
+            time.sleep(3)
+            if not check_alive():
+                # 부모 사라짐 → 즉시 종료 (GPU VRAM 자동 해제)
+                try:
+                    print(f"[watchdog] Parent PID {parent_pid} dead → exiting backend", flush=True)
+                except Exception:
+                    pass
+                os._exit(0)
+
+    t = threading.Thread(target=_watch, name="parent-watchdog", daemon=True)
+    t.start()
+    print(f"[watchdog] 부모 프로세스 감시 시작: PID {parent_pid}", flush=True)
+
+
 if __name__ == "__main__":
+    # [좀비 방지] Electron 강제 종료/크래시 시 백엔드 자동 종료 watchdog
+    _start_parent_watchdog()
+
     # 127.0.0.1 → 로컬호스트 전용, Windows 방화벽 팝업 안 뜸
     # threaded=True → 인덱싱(긴 요청) 중에도 /search /status /estimate 응답 가능.
     # 단일 스레드 dev server 는 인덱싱 처리 중 모든 요청 큐에 대기 → UI 멈춤 체감.

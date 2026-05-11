@@ -776,12 +776,14 @@ function ResultCard({
   // 검색 결과가 수백 건일 때 동시 마운트로 UI 스레드 점유 방지.
   const [playerMounted, setPlayerMounted] = useState(false);
 
-  // ── 보안 모드: 이미지/문서 미리보기에 PII 마스킹 적용 ──
+  // ── 보안 모드: 선택된 파일만 PII 마스킹 적용 ──
+  // 정책: securityMode=ON AND selected=true 인 카드에 한해 OCR+마스킹 호출.
+  //   → 미선택 카드는 원본 그대로 표시 (대량 미선택 카드에 대한 OCR 비용 회피)
   const [maskedSrc, setMaskedSrc] = useState(null);
   const [secState, setSecState] = useState("idle"); // idle | loading | done | nopii
   const [piiTypes, setPiiTypes] = useState([]);
   useEffect(() => {
-    if (!securityMode || !hasPreview || isAV) return;
+    if (!securityMode || !selected || !hasPreview || isAV) return;
     if (secState !== "idle") return;
     setSecState("loading");
     const rel = result.trichef_id || result.file_path;
@@ -805,20 +807,21 @@ function ResultCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     securityMode,
+    selected,
     hasPreview,
     isAV,
     result.trichef_id,
     result.file_path,
     secState,
   ]);
-  // 보안 모드 OFF 시 상태 초기화
+  // securityMode OFF 또는 선택 해제 시 상태 초기화
   useEffect(() => {
-    if (!securityMode) {
+    if (!securityMode || !selected) {
       setSecState("idle");
       setMaskedSrc(null);
       setPiiTypes([]);
     }
-  }, [securityMode]);
+  }, [securityMode, selected]);
 
   // 점수 계산 (admin.html 동일)
   // [BUGFIX] 백엔드는 'rerank_score' 필드로 송신. 'rerank' 만 보던 기존 코드는
@@ -844,10 +847,13 @@ function ResultCard({
   // 신뢰도/정확도/유사도 모두 0~100% 형식으로 통일 표시
   const sim =
     clamp01(dense) != null ? `${(clamp01(dense) * 100).toFixed(1)}%` : "—";
-  // 정확도: rerank_score 있을 때만 표시. 없으면 "—" (신뢰도와 중복 방지)
+  // 정확도: rerank_score 있으면 calibrated sigmoid %, 없으면 신뢰도(conf) 기반 추정값(~)
+  // reranker VRAM 부족 등으로 비활성 시에도 빈 값이 아닌 의미 있는 수치 제공
   const acc =
     rerank != null
       ? `${(sigmCalibrated(rerank) * 100).toFixed(1)}%`
+      : conf > 0
+      ? `~${(conf * 100).toFixed(1)}%`
       : "—";
 
   const streamUrl = isAV ? avStreamUrl(result) : null;
@@ -966,11 +972,14 @@ function ResultCard({
                 className="max-w-full max-h-full object-contain cursor-zoom-in"
                 onError={() => setImgError(true)}
               />
-              {/* 보안 모드 로딩 스피너 */}
-              {securityMode && secState === "loading" && (
-                <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                  <span className="material-symbols-outlined text-amber-400 animate-spin">
+              {/* 보안 모드 로딩 스피너 — 선택된 파일에만 표시 (선택+보안 모드 조건은 effect에서 이미 보장) */}
+              {securityMode && selected && secState === "loading" && (
+                <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center gap-2 backdrop-blur-sm">
+                  <span className="material-symbols-outlined text-amber-300 animate-spin text-4xl drop-shadow-[0_0_8px_rgba(252,211,77,0.6)]">
                     progress_activity
+                  </span>
+                  <span className="text-amber-200 text-xs font-bold tracking-wider">
+                    PII 마스킹 중...
                   </span>
                 </div>
               )}
@@ -990,6 +999,12 @@ function ResultCard({
                     check_circle
                   </span>
                   안전
+                </span>
+              )}
+              {/* 매칭 페이지 배지 — 표지 외 다른 페이지에서 발견된 경우 */}
+              {result.file_type === "doc" && result.match_page != null && result.match_page > 1 && (
+                <span className="absolute bottom-2 left-2 px-2 py-0.5 rounded-md bg-black/60 text-[#85adff] text-[10px] font-semibold shadow border border-[#85adff]/30">
+                  p.{result.match_page} 에서 발견
                 </span>
               )}
             </>
@@ -1068,7 +1083,11 @@ function ResultCard({
                     const t0 = s.start ?? s.start_sec ?? 0;
                     const t1 = s.end ?? s.end_sec ?? 0;
                     const sc = s.score ?? 0;
+                    // [FIX] preview 필드 추가 — AV 엔진은 segments[*].preview 에
+                    // 표시용 텍스트를 채우는 경우가 있다. 백엔드 _snippet_text 도
+                    // preview → text → caption 순서로 폴백한다. 프론트도 같은 순서로 맞춤.
                     const preview = (
+                      s.preview ||
                       s.text ||
                       s.stt_text ||
                       s.caption ||
@@ -1369,7 +1388,7 @@ function AVDetailContent({ result }) {
               const t0 = seg.start ?? seg.start_sec ?? 0;
               const t1 = seg.end ?? seg.end_sec ?? 0;
               const sc = seg.score ?? 0;
-              const text = seg.text || seg.caption || "";
+              const text = seg.preview || seg.text || seg.caption || "";
               const pct = Math.round(sc * 100);
               return (
                 <button
@@ -1488,6 +1507,10 @@ export default function MainSearch() {
   const [summaryDone, setSummaryDone] = useState(false);
   const [summaryError, setSummaryError] = useState("");
   const [summaryMeta, setSummaryMeta] = useState(null); // {model, length, kind}
+  // 완료된 모든 AI 요약을 file_path 기준으로 보관 (PDF 생성 시 활용)
+  const [summariesMap, setSummariesMap] = useState({});
+  // 요약 진행 중인 파일 (selectedFile에 의존하지 않고 추적)
+  const summaryFileRef = useRef(null);
   // 보안 모드: SecurityCritic 차단/마스킹 결과
   const [summaryBlocked, setSummaryBlocked] = useState(null); // {stage, reason, pii_types}
   const [summarySecurity, setSummarySecurity] = useState(null); // {masked, pii_types, reason}
@@ -1817,13 +1840,18 @@ export default function MainSearch() {
       if (summaryAbortRef.current) summaryAbortRef.current.abort();
       const ctrl = new AbortController();
       summaryAbortRef.current = ctrl;
-      // 150초 타임아웃 — 본문 추출 + VRAM 스왑(최대 ~40s) + LLM 생성 합계 기준
-      // [v] gemma3:4b-it-qat VRAM 스왑+재로드 시에도 여유 있게 150s로 상향
+      // 요약 대상 파일 추적 (selectedFile 변경에 영향 안 받음)
+      summaryFileRef.current = {
+        file_path: file.file_path || "",
+        file_name: file.file_name || "",
+      };
+      // 240초 타임아웃 — 첫 요청 시 모델 콜드 로드(최대 60s) + 긴 문서 생성 고려.
+      // 이후 요청은 keep_alive=180s로 캐시됨 → 빨라짐.
       const _summaryTimer = setTimeout(() => {
         ctrl.abort();
-        setSummaryError("요약 시간이 초과됐습니다 (150초). 잠시 후 다시 시도해 주세요.");
+        setSummaryError("요약 시간이 초과됐습니다 (240초). 잠시 후 다시 시도해 주세요.");
         setSummarizing(false);
-      }, 150000);
+      }, 240000);
       setSummarizing(true);
       setSummaryText("");
       setSummaryDone(false);
@@ -1876,8 +1904,38 @@ export default function MainSearch() {
               setSummaryMeta((m) => ({ ...(m || {}), model: ev.model }));
             else if (ev.type === "done") {
               setSummaryDone(true);
-              if (ev.summary) setSummaryText(ev.summary);
+              const finalText = ev.summary || null;
+              if (finalText) setSummaryText(finalText);
               if (ev.security) setSummarySecurity(ev.security);
+              // ★ 완료된 요약을 map에 영구 저장 (PDF 생성 시 활용)
+              const _target = summaryFileRef.current;
+              if (_target?.file_path) {
+                // ev.summary 가 없으면 누적된 토큰 텍스트 사용 (setSummaryText prev로 가져오기)
+                if (finalText) {
+                  setSummariesMap((prev) => ({
+                    ...prev,
+                    [_target.file_path]: {
+                      file_path: _target.file_path,
+                      file_name: _target.file_name,
+                      text: finalText,
+                      model: ev.model || "",
+                    },
+                  }));
+                } else {
+                  setSummaryText((cur) => {
+                    setSummariesMap((prev) => ({
+                      ...prev,
+                      [_target.file_path]: {
+                        file_path: _target.file_path,
+                        file_name: _target.file_name,
+                        text: cur,
+                        model: ev.model || "",
+                      },
+                    }));
+                    return cur;
+                  });
+                }
+              }
             } else if (ev.type === "blocked") {
               setSummaryBlocked({
                 stage: ev.stage || "final",
@@ -1962,6 +2020,51 @@ export default function MainSearch() {
     [closeSummary],
   );
 
+  // AI 요약 전용 PDF 내보내기 (검색 결과 항목 제외, 요약 텍스트만)
+  const [summaryPdfExporting, setSummaryPdfExporting] = useState(false);
+  const handleExportSummaryOnlyPdf = useCallback(async () => {
+    if (!summaryDone || !summaryText) return;
+    setSummaryPdfExporting(true);
+    try {
+      const summaryEntry = {
+        file_path: summaryFileRef.current?.file_path || selectedFile?.file_path || "",
+        file_name: summaryFileRef.current?.file_name || selectedFile?.file_name || "",
+        text: summaryText,
+        model: summaryMeta?.model || "",
+      };
+      const payload = {
+        query,
+        results: [],          // 검색 결과 항목 없음
+        summaries: [summaryEntry],
+        max_per_type: 0,
+      };
+      const res = await fetch(`${API_BASE}/api/export/pdf`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const cd = res.headers.get("content-disposition") || "";
+      const m = cd.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+      a.download = m ? m[1].replace(/['"]/g, "") : `AI요약_${query}_${Date.now()}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      alert(`AI 요약 PDF 생성 실패: ${e.message}`);
+    } finally {
+      setSummaryPdfExporting(false);
+    }
+  }, [summaryDone, summaryText, summaryMeta, summaryFileRef, selectedFile, query]);
+
   // PDF 내보내기 핸들러
   const handleExportPdf = useCallback(async () => {
     if (!results.length) return;
@@ -1991,6 +2094,28 @@ export default function MainSearch() {
 
     try {
       const payload = { query, results: pdfResults, max_per_type: 50 };
+      // ★ [보안] securityMode ON 인 경우, 선택된(=마스킹 대상) 파일 경로를 payload에 포함.
+      // 백엔드는 이 목록에 속한 파일의 미리보기 이미지에 OCR+모자이크를 적용하고,
+      // 스니펫/캡션 텍스트에서도 PII 패턴(주민번호·운전면허·전화번호 등)을 가린다.
+      if (securityMode) {
+        payload.masked_paths = pdfResults.map(r => r.file_path).filter(Boolean);
+      }
+      // ★ summariesMap 기준 — PDF 대상에 포함된 모든 완료된 요약을 첨부
+      const pdfPaths = new Set(pdfResults.map(r => r.file_path));
+      const summariesToSend = Object.values(summariesMap || {})
+        .filter(s => s && s.text && pdfPaths.has(s.file_path));
+      // 현재 보고 있는 파일의 요약도 포함 (아직 map에 저장 안 됐을 경우 대비)
+      if (summaryDone && summaryText && selectedFile?.file_path
+          && pdfPaths.has(selectedFile.file_path)
+          && !summariesToSend.some(s => s.file_path === selectedFile.file_path)) {
+        summariesToSend.push({
+          file_path: selectedFile.file_path,
+          file_name: selectedFile.file_name,
+          text: summaryText,
+          model: summaryMeta?.model || "",
+        });
+      }
+      if (summariesToSend.length > 0) payload.summaries = summariesToSend;
       if (pdfSavePath.trim()) payload.save_path = pdfSavePath.trim();
       const res = await fetch(`${API_BASE}/api/export/pdf`, {
         method: "POST",
@@ -2036,7 +2161,9 @@ export default function MainSearch() {
       setPdfExporting(false);
       pdfAbortRef.current = null;
     }
-  }, [results, query, pdfSavePath, domainFilter]);
+  }, [results, query, pdfSavePath, domainFilter, selectedForPdf,
+      summariesMap, summaryDone, summaryText, summaryMeta, selectedFile,
+      securityMode]);  // ★ [BUGFIX] securityMode 의존성 누락 → 캡처된 옛 값 사용 → masked_paths=[] 회귀
 
   const doSearch = (q) => {
     if (!q.trim() || aiTransitioning) return;
@@ -3307,6 +3434,23 @@ export default function MainSearch() {
                           스트리밍
                         </span>
                       )}
+                      {/* AI 요약 전용 PDF 저장 버튼 — 완료된 경우만 표시 */}
+                      {summaryDone && (
+                        <button
+                          type="button"
+                          onClick={handleExportSummaryOnlyPdf}
+                          disabled={summaryPdfExporting}
+                          className="ml-1 flex h-8 items-center gap-1 rounded-full border border-[#85adff]/30 bg-[#85adff]/10 px-3 text-[11px] font-semibold text-[#85adff] transition hover:bg-[#85adff]/20 disabled:opacity-50 disabled:pointer-events-none"
+                          title="AI 요약만 PDF로 저장"
+                        >
+                          {summaryPdfExporting ? (
+                            <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span>
+                          ) : (
+                            <span className="material-symbols-outlined text-sm">picture_as_pdf</span>
+                          )}
+                          PDF 저장
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={closeSummary}
@@ -3527,14 +3671,13 @@ export default function MainSearch() {
                         selectedFile.rerank_score ??
                         selectedFile.rerank ??
                         null;
-                      const _z = selectedFile.z_score ?? null;
+                      const _conf = selectedFile.confidence ?? selectedFile.similarity ?? 0;
+                      // rerank_score 있으면 calibrated sigmoid %, 없으면 conf 기반 추정(~)
+                      const _rrFallback = _rr == null;
                       const accuracyPct =
                         _rr != null
                           ? Math.round(_sigmCal(_rr) * 100)
-                          : Math.round(
-                              Math.max(0, Math.min(1, ((_z ?? 0) + 3) / 6)) *
-                                100,
-                            );
+                          : Math.round(_conf * 100);
                       // [BUGFIX] dense 는 raw cosine → clamp 후 %, 없으면 similarity 폴백
                       const simPct =
                         selectedFile.dense != null
@@ -3548,21 +3691,23 @@ export default function MainSearch() {
                                 0) * 100,
                             );
                       const bars = [
-                        { label: "유사도", pct: simPct, text: "text-sky-300" },
+                        { label: "유사도", pct: simPct, text: "text-sky-300", est: false },
                         {
                           label: "정확도",
                           pct: accuracyPct,
                           text: "text-[#85adff]",
+                          est: _rrFallback,
                         },
                         {
                           label: "신뢰도",
                           pct: confPct,
                           text: "text-emerald-400",
+                          est: false,
                         },
                       ];
                       return (
                         <div className="flex min-w-0 divide-x divide-white/[0.08] rounded-[22px] border border-white/[0.07] bg-white/[0.02] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-[36px]">
-                          {bars.map(({ label, pct, text }) => (
+                          {bars.map(({ label, pct, text, est }) => (
                             <div
                               key={label}
                               className="flex-1 flex flex-col items-center gap-1 px-3"
@@ -3570,6 +3715,7 @@ export default function MainSearch() {
                               <span
                                 className={`text-2xl font-extrabold tabular-nums leading-none ${text}`}
                               >
+                                {est && <span className="text-base font-normal opacity-60">~</span>}
                                 {pct}
                                 <span className="text-sm font-bold">%</span>
                               </span>
@@ -4067,6 +4213,39 @@ export default function MainSearch() {
                   <span className="ml-auto text-primary font-bold">{t.count}건</span>
                 </div>
               ))}
+              {/* AI 요약 포함 안내 — summariesMap 기준 (선택된 파일들 중 요약 완료된 것 모두) */}
+              {(() => {
+                const _nft = (ft) =>
+                  ({ doc_page:"doc", movie:"video", music:"audio" }[(ft||"").toLowerCase()] || (ft||"").toLowerCase());
+                const pdfItems = selectedForPdf.size > 0
+                  ? results.filter(r => selectedForPdf.has(r.file_path))
+                  : domainFilter
+                    ? results.filter(r => _nft(r.file_type) === domainFilter)
+                    : results;
+                const pdfPaths = new Set(pdfItems.map(r => r.file_path));
+                const matched = Object.values(summariesMap || {})
+                  .filter(s => s && s.text && pdfPaths.has(s.file_path));
+                // 현재 보고 있는 파일도 추가 (아직 map에 저장 안 됐을 수 있음)
+                if (summaryDone && summaryText && selectedFile?.file_path
+                    && pdfPaths.has(selectedFile.file_path)
+                    && !matched.some(s => s.file_path === selectedFile.file_path)) {
+                  matched.push({ file_path: selectedFile.file_path, file_name: selectedFile.file_name });
+                }
+                if (matched.length === 0) return null;
+                return (
+                  <div className="pt-2 mt-1 border-t border-white/5 space-y-1">
+                    {matched.map((s) => (
+                      <div key={s.file_path} className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-sm text-fuchsia-300">auto_awesome</span>
+                        <span className="text-fuchsia-200">AI 상세 요약 포함</span>
+                        <span className="ml-auto text-xs text-on-surface-variant/60 truncate max-w-[55%]">
+                          {s.file_name}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
               <div className="pt-1 text-on-surface-variant/60">미리보기 이미지 · 파일 경로 · 캡션/내용 포함</div>
             </div>
 

@@ -202,8 +202,25 @@ def _get_ollama_model(task: str | None = None) -> str | None:
         # gemma3:4b 설치 시 자동으로 gemma3:4b 우선 적용.
         # 미검증 모델(llama3, mistral, phi4 등) 제외 — 한국어 품질·VRAM 보장 불가.
         if task == "summarize":
-            preferred = ["gemma3:4b", "qwen2.5:3b", "gemma3:4b-it-qat", "qwen2.5:1.5b",
-                         "gemma3:12b"]
+            # 1순위: 이미 로드돼 있는 모델 재사용 (재로드 30~60s 방지)
+            loaded = _get_loaded_model_names()
+            for cand in ("gemma3:4b", "gemma3:4b-it-qat", "qwen2.5:3b", "qwen2.5:1.5b"):
+                if any(cand in n for n in loaded):
+                    logger.info(f"[model_select] 이미 로드됨 → {cand} 재사용")
+                    for m in models:
+                        if cand in m.get("name", "").lower():
+                            return m["name"]
+            # 2순위: VRAM 잔여 확인. gemma3:4b 우선, 부족 시 qwen2.5:3b 폴백
+            free_mb = _get_free_vram_mb()
+            # 안전 임계치: 4500MB (gemma3:4b 3.5GB + context 1GB 버퍼)
+            if free_mb >= 4500:
+                preferred = ["gemma3:4b", "gemma3:4b-it-qat", "qwen2.5:3b",
+                             "qwen2.5:1.5b", "gemma3:12b"]
+                logger.info(f"[model_select] VRAM 충분({free_mb}MB) → gemma3:4b 우선")
+            else:
+                preferred = ["qwen2.5:3b", "qwen2.5:1.5b", "gemma3:4b",
+                             "gemma3:4b-it-qat", "gemma3:12b"]
+                logger.info(f"[model_select] VRAM 부족({free_mb}MB) → qwen2.5:3b 폴백")
         else:
             preferred = ["gemma3:4b-it-qat", "gemma3:4b", "qwen2.5:3b", "qwen2.5:1.5b",
                          "gemma3:12b"]
@@ -231,6 +248,37 @@ _MODEL_VRAM_MB: dict[str, int] = {
     "gemma3:4b-it-qat": 4200,
     "gemma3:12b":      8300,
 }
+
+
+def _get_free_vram_mb() -> int:
+    """현재 GPU 잔여 VRAM (MB). nvidia-smi 호출.
+
+    1) 이미 로드된 모델 고려 (Ollama가 재사용)
+    2) 임베더 점유분 고려
+    측정 실패 시 0 반환 → 폴백(작은 모델) 선택.
+    """
+    try:
+        import subprocess as _sp
+        r = _sp.run(
+            ["nvidia-smi", "--query-gpu=memory.free", "--format=csv,noheader,nounits"],
+            stdout=_sp.PIPE, stderr=_sp.DEVNULL, timeout=3, text=True,
+        )
+        if r.returncode == 0:
+            # 멀티 GPU 가능 — 첫 번째 GPU 값 사용
+            line = r.stdout.strip().split("\n")[0].strip()
+            return int(line) if line.isdigit() else 0
+    except Exception as e:
+        logger.debug(f"[vram] nvidia-smi 실패: {e}")
+    return 0
+
+
+def _get_loaded_model_names() -> set[str]:
+    """현재 Ollama에 로드돼 있는 모델 이름 집합 (재사용 가능 판단)."""
+    try:
+        r = _req.get(f"{OLLAMA_URL}/api/ps", timeout=2)
+        return {m.get("name", "") for m in (r.json().get("models") or [])}
+    except Exception:
+        return set()
 
 
 def _ollama_oneshot(prompt: str, model: str, num_predict: int = 150,
@@ -2846,11 +2894,10 @@ def _summarize_sse(file_type: str, trichef_id: str, file_path: str,
     last_scan_len = 0
     SCAN_INTERVAL = 200
     try:
-        # [VRAM 최적화] keep_alive=0 — 요약 완료 즉시 모델 언로드.
-        # 요약은 단발성 작업이므로 5분 유지 불필요. 임베더(~5GB)와의 공존을 위해
-        # 요약 후 즉각 VRAM 반납 → 검색·인덱싱에 VRAM 최대 확보.
+        # keep_alive=180 — 모델을 3분간 메모리 유지 (콜드스타트 방지).
+        # keep_alive=0이면 매 요청마다 모델 재로드(30~60s)되어 150s 타임아웃 초과.
         for tok in _ollama_stream(messages, model, num_predict=dynamic_np, temperature=0.25,
-                                   keep_alive=0):
+                                   keep_alive=180):
             full += tok
             if secure:
                 if len(full) - last_scan_len >= SCAN_INTERVAL:
