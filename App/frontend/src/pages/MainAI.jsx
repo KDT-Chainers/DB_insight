@@ -1688,6 +1688,8 @@ export default function MainAI() {
   const [aimodeQuery, setAimodeQuery] = useState("");
   const [aimodeContentKws, setAimodeContentKws] = useState([]);
   const [aimodeDetailKws, setAimodeDetailKws] = useState([]);
+  const [aimodeMode, setAimodeMode] = useState(""); // [v3] "structured" | "open" | "followup" | ""
+  const [aimodeReferences, setAimodeReferences] = useState([]); // [v3] extract 노드 references
   const [aimodeSources, setAimodeSources] = useState([]);
   const [aimodeSelected, setAimodeSelected] = useState(null);
   const [aimodeAnswer, setAimodeAnswer] = useState("");
@@ -1872,6 +1874,8 @@ export default function MainAI() {
       setAimodeQuery("");
       setAimodeContentKws([]);
       setAimodeDetailKws([]);
+      setAimodeMode("");
+      setAimodeReferences([]);
       setAimodeSources([]);
       setAimodeSelected(null);
       setAimodeAnswer("");
@@ -2066,7 +2070,13 @@ export default function MainAI() {
         if (ev.message) setAimodeQuery(ev.message);
         if (ev.file_keywords) setAimodeContentKws(ev.file_keywords);
         if (ev.detail_keywords) setAimodeDetailKws(ev.detail_keywords);
+        if (ev.mode) setAimodeMode(ev.mode); // [v3] structured | open | followup
         setAimodeStage("searching");
+        break;
+
+      case "extract":
+        // [v3] extract 노드 references — UI 패널 + 답변 인용 chip 매핑
+        if (Array.isArray(ev.references)) setAimodeReferences(ev.references);
         break;
 
       case "scanning":
@@ -2323,6 +2333,8 @@ export default function MainAI() {
     setAimodeQuery("");
     setAimodeContentKws([]);
     setAimodeDetailKws([]);
+    setAimodeMode("");
+    setAimodeReferences([]);
     setAimodeSources([]);
     setAimodeSelected(null);
     setAimodeAnswer("");
@@ -2848,7 +2860,7 @@ export default function MainAI() {
                   />
                 ))}
 
-                {/* ════ AIMODE: 인텐트 헤더 (질문 의도 + 키워드 칩) ════ */}
+                {/* ════ AIMODE: 인텐트 헤더 (질문 의도 + 키워드 칩 + [v3] mode 배지) ════ */}
                 {useAimode && aimodeQuery && (
                   <div className="mb-4 rounded-2xl border border-violet-400/20 bg-gradient-to-br from-violet-500/[0.06] via-transparent to-fuchsia-500/[0.06] px-4 py-3">
                     <div className="flex items-center gap-2 mb-2">
@@ -2867,6 +2879,31 @@ export default function MainAI() {
                       >
                         질문 의도 분석
                       </span>
+                      {/* [v3] mode 배지 — structured / open / followup */}
+                      {aimodeMode && (
+                        <span
+                          className={`ml-auto rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] border ${
+                            aimodeMode === "open"
+                              ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-200"
+                              : aimodeMode === "followup"
+                                ? "border-amber-400/40 bg-amber-500/15 text-amber-200"
+                                : "border-sky-400/40 bg-sky-500/15 text-sky-200"
+                          }`}
+                          title={
+                            aimodeMode === "open"
+                              ? "키워드로 모든 자료에서 검색"
+                              : aimodeMode === "followup"
+                                ? "이전 대화 파일에서 후속 검색"
+                                : "구조형 검색 (파일 한정 + 내용)"
+                          }
+                        >
+                          {aimodeMode === "open"
+                            ? "🔍 키워드 검색"
+                            : aimodeMode === "followup"
+                              ? "↩ 후속 질문"
+                              : "📂 구조 검색"}
+                        </span>
+                      )}
                     </div>
                     <p className="text-[13px] text-violet-50/95 leading-relaxed mb-2">
                       {aimodeQuery}
@@ -2894,6 +2931,8 @@ export default function MainAI() {
                     )}
                   </div>
                 )}
+
+                {/* [v3.1] References 패널은 답변 카드 아래로 이동 (옵션 A) */}
 
                 {/* ════ AIMODE: 처리중 인디케이터 (눈에 띄게) ════ */}
                 {useAimode && streaming && !aimodeAnswer && !aimodeBlocked && (
@@ -3091,7 +3130,66 @@ export default function MainAI() {
                       )}
                     </div>
                     <div className="relative px-5 py-4 text-[14px] leading-[1.7] text-violet-50/95 whitespace-pre-wrap">
-                      {stripMarkdown(aimodeAnswer)}
+                      {(() => {
+                        // [v3] 답변 본문의 (XX페이지) / [MM:SS] 자동 감지 → 클릭 chip 렌더.
+                        const text = stripMarkdown(aimodeAnswer);
+                        const CITE_RE = /(\((\d{1,4})\s*페이지\))|(\[(\d{1,2}:\d{2}(?::\d{2})?)\])/g;
+                        const parts = [];
+                        let lastIdx = 0;
+                        let match;
+                        let key = 0;
+                        while ((match = CITE_RE.exec(text)) !== null) {
+                          if (match.index > lastIdx) {
+                            parts.push(
+                              <span key={`t-${key++}`}>
+                                {text.slice(lastIdx, match.index)}
+                              </span>,
+                            );
+                          }
+                          const isPage = !!match[1];
+                          const tagLabel = match[0];
+                          const value = isPage ? parseInt(match[2], 10) : match[4];
+                          const ref = aimodeReferences.find((r) =>
+                            isPage ? r.page === value : r.timestamp === value,
+                          );
+                          const targetSrc = ref
+                            ? aimodeSources.find(
+                                (s) =>
+                                  s.file_name === ref.src ||
+                                  s.file_name?.includes(ref.src),
+                              )
+                            : null;
+                          parts.push(
+                            <button
+                              key={`c-${key++}`}
+                              type="button"
+                              onClick={() => {
+                                if (targetSrc) handleSelectFile(targetSrc);
+                              }}
+                              disabled={!targetSrc}
+                              title={ref?.snippet || ""}
+                              className={`inline-flex items-center mx-0.5 px-1.5 py-[1px] rounded-md border text-[11px] font-bold align-baseline transition-colors ${
+                                isPage
+                                  ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-200"
+                                  : "border-amber-400/40 bg-amber-500/15 text-amber-200"
+                              } ${
+                                targetSrc
+                                  ? "cursor-pointer hover:bg-emerald-500/25"
+                                  : "cursor-default opacity-70"
+                              }`}
+                            >
+                              {tagLabel}
+                            </button>,
+                          );
+                          lastIdx = match.index + match[0].length;
+                        }
+                        if (lastIdx < text.length) {
+                          parts.push(
+                            <span key={`t-${key++}`}>{text.slice(lastIdx)}</span>,
+                          );
+                        }
+                        return parts;
+                      })()}
                       {!aimodeDone && (
                         <span className="inline-block w-2 h-5 bg-violet-300 ml-1 animate-pulse align-middle rounded-sm" />
                       )}
@@ -3171,6 +3269,74 @@ export default function MainAI() {
                     })()}
                   </div>
                 )}
+
+                {/* ════ [v3.1] AIMODE: References 패널 (답변 카드 아래) ════
+                    extract 노드가 만든 references — 페이지/타임스탬프 클릭 시 detail 열기.
+                    옵션 A: 답변 위에서 답변 아래로 이동 (답변 → 출처 흐름이 자연스러움). */}
+                {useAimode &&
+                  aimodeReferences.length > 0 &&
+                  aimodeAnswer &&
+                  !aimodeBlocked && (
+                    <div className="mb-4 rounded-2xl border border-emerald-400/20 bg-emerald-500/[0.04] px-4 py-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span
+                          className="material-symbols-outlined text-base text-emerald-300"
+                          style={{ fontVariationSettings: '"FILL" 1' }}
+                        >
+                          bookmark
+                        </span>
+                        <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-200">
+                          원본 위치 ({aimodeReferences.length})
+                        </span>
+                      </div>
+                      <div className="flex flex-col gap-1.5 max-h-[220px] overflow-y-auto pr-1">
+                        {aimodeReferences.slice(0, 12).map((ref, i) => {
+                          const tag =
+                            ref.page != null
+                              ? `${ref.page}페이지`
+                              : ref.timestamp
+                                ? ref.timestamp
+                                : "";
+                          const src = aimodeSources.find(
+                            (s) =>
+                              s.file_name === ref.src ||
+                              s.file_name?.includes(ref.src),
+                          );
+                          const clickable = !!src;
+                          return (
+                            <button
+                              key={i}
+                              type="button"
+                              onClick={() => {
+                                if (clickable) handleSelectFile(src);
+                              }}
+                              disabled={!clickable}
+                              className={`flex items-start gap-2 rounded-lg px-2.5 py-1.5 text-left transition-colors ${
+                                clickable
+                                  ? "border border-emerald-400/20 bg-emerald-500/[0.06] hover:bg-emerald-500/15 cursor-pointer"
+                                  : "border border-emerald-400/10 bg-emerald-500/[0.02] cursor-default opacity-70"
+                              }`}
+                              title={ref.snippet || ""}
+                            >
+                              {tag && (
+                                <span className="shrink-0 rounded-md border border-emerald-400/40 bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold text-emerald-100">
+                                  {tag}
+                                </span>
+                              )}
+                              <span className="flex-1 min-w-0">
+                                <span className="block text-[11px] font-semibold text-emerald-100 truncate">
+                                  {ref.src}
+                                </span>
+                                <span className="block text-[10px] text-emerald-200/70 line-clamp-2 mt-0.5">
+                                  {(ref.snippet || "").slice(0, 100)}
+                                </span>
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
 
                 <div ref={conversationEndRef} />
               </div>

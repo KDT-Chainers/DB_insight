@@ -56,33 +56,35 @@ try:
     from langgraph.checkpoint.memory import MemorySaver
     from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
 
-    class RAGState(TypedDict):
+    class RAGState(TypedDict, total=False):
         # 입력
-        question:         str
-        thread_id:        str
-        topk:             int
-        model:            str
-        # router_node 출력
-        route:            str          # "rag" | "chat" | "followup" | "qa_gen"
-        prev_sources:     list[dict]   # followup 시 이전 턴 matched_sources
+        question:                str
+        thread_id:               str
+        topk:                    int
+        model:                   str
+        # router_node 출력 [v3] route 는 "rag" | "followup" 만
+        route:                   str
+        prev_sources:            list[dict]   # followup 시 이전 턴 matched_sources
+        fallback_from_followup:  bool         # followup → rag 사이클 폴백 마커 (무한루프 방지)
         # intent_node 출력
-        intent_message:   str
-        file_keywords:    list[str]
-        detail_keywords:  list[str]
+        intent_message:          str
+        file_keywords:           list[str]
+        detail_keywords:         list[str]
+        rag_mode:                str          # [v3] "structured" | "open"
         # search_node 출력
-        candidates:       list[dict]
+        candidates:              list[dict]
         # scan_node 출력
-        scan_results:     list[dict]
+        scan_results:            list[dict]
         # select_node 출력
-        matched_sources:  list[dict]
+        matched_sources:         list[dict]
+        # [v3] extract_node 출력
+        references:              list[dict]   # [{src, type, page, timestamp, snippet, score}]
         # generate_node 출력
-        answer:           str
-        # qa_generate_node 출력
-        qa_question:      str
-        qa_answer:        str
-        qa_attempts:      int
-        # ※ 대화 이력은 _load_history/_save_history 로 별도 관리
-        #   (LangGraph State에서 제외 — messages reducer 의존성 제거)
+        answer:                  str
+        # [legacy] qa_generate_node 출력 (v3 그래프 미사용)
+        qa_question:             str
+        qa_answer:               str
+        qa_attempts:             int
 
     _LANGGRAPH_OK = True
 except Exception as _e:
@@ -118,6 +120,12 @@ def _get_history_graph():
 
 
 def _load_history(thread_id: str) -> list[dict]:
+    """[v3] LangGraph store 시도 후 비어있으면 fallback dict 확인.
+
+    이전 버전: LangGraph 가 성공 응답해도 messages 필드가 비어있으면 빈 리스트 반환 →
+    router 가 history 없음으로 판단 → followup 분류 실패.
+    수정: LangGraph 결과가 비어있으면 fallback dict 까지 확인 (이중 보장).
+    """
     g = _get_history_graph()
     if g is not None:
         try:
@@ -125,18 +133,28 @@ def _load_history(thread_id: str) -> list[dict]:
             st = g.get_state(cfg)
             if st and st.values:
                 msgs = st.values.get("messages") or []
-                out = []
-                for m in msgs:
-                    role = "user" if m.__class__.__name__ == "HumanMessage" else "assistant"
-                    out.append({"role": role, "content": getattr(m, "content", "")})
-                return out
+                if msgs:
+                    out = []
+                    for m in msgs:
+                        role = "user" if m.__class__.__name__ == "HumanMessage" else "assistant"
+                        out.append({"role": role, "content": getattr(m, "content", "")})
+                    return out
         except Exception as e:
             logger.debug(f"[aimode] history load 실패: {e}")
+    # LangGraph 가 비어있거나 실패 → fallback dict
     with _fallback_lock:
         return list(_fallback_history.get(thread_id, []))
 
 
 def _save_history(thread_id: str, question: str, answer: str):
+    """[v3] LangGraph store + fallback dict 양쪽 저장 (이중 보장).
+
+    이전 버전: LangGraph update_state 성공 시 fallback 안 거치고 return.
+    문제: RAGState TypedDict 에 messages 필드 없어서 silent drop 가능성 →
+    update_state 가 성공해도 messages 가 저장 안 됨 → 후속 _load_history 빈 결과.
+    수정: 양쪽 모두 저장. _load_history 가 어느 쪽에서든 읽을 수 있음.
+    """
+    # 1) LangGraph store 시도 (실패해도 무시)
     g = _get_history_graph()
     if g is not None and _LANGGRAPH_OK:
         try:
@@ -147,9 +165,10 @@ def _save_history(thread_id: str, question: str, answer: str):
                 "answer":   answer,
                 "messages": [HumanMessage(content=question), AIMessage(content=answer)],
             })
-            return
         except Exception as e:
-            logger.debug(f"[aimode] history save 실패, 폴백: {e}")
+            logger.debug(f"[aimode] LangGraph history save 실패 (fallback 사용): {e}")
+
+    # 2) 항상 fallback dict 에도 저장 (이중 보장 — LangGraph silent drop 대비)
     with _fallback_lock:
         h = _fallback_history.setdefault(thread_id, [])
         h.append({"role": "user",      "content": question})
@@ -245,10 +264,28 @@ def _ollama_oneshot(prompt: str, model: str, num_predict: int = 150,
             timeout=30,
         )
         r.raise_for_status()
-        return (r.json().get("response") or "").strip()
+        raw = (r.json().get("response") or "").strip()
+        # [v3] Gemma3 special token (<unused344> 등) 노출 차단
+        return _strip_special_tokens(raw)
     except Exception as e:
         logger.warning(f"[aimode] Ollama oneshot 실패: {e}")
         return ""
+
+
+# [v3] Gemma3 special token 정규식 — 모델이 vocab 의 unused/제어 토큰을 문자 그대로
+# 출력하는 케이스 차단. 예: "<unused344>", "<pad>", "<eos>", "<start_of_turn>" 등.
+import re as _re_spec
+_GEMMA_SPECIAL_RE = _re_spec.compile(
+    r"<(?:unused\d+|pad|eos|bos|/s|s|end_of_turn|start_of_turn|im_start|im_end)>",
+    _re_spec.IGNORECASE,
+)
+
+
+def _strip_special_tokens(text: str) -> str:
+    """Gemma3 등 LLM 이 텍스트로 흘려보내는 vocab 특수 토큰 제거."""
+    if not text:
+        return text
+    return _GEMMA_SPECIAL_RE.sub("", text)
 
 
 def _ollama_stream(messages: list[dict], model: str,
@@ -262,6 +299,9 @@ def _ollama_stream(messages: list[dict], model: str,
     한 글자씩 떠오르는 답답함을 줄이고 "줄 단위로 차라락" 나오는 UX 제공.
     chunk_size=0 이면 토큰을 받는 즉시 yield (기존 동작).
     keep_alive: Ollama 모델 메모리 유지 시간(초). 0=즉시 해제, -1=기본값(5분).
+
+    [v3] 모든 yield 전에 _strip_special_tokens 적용 — Gemma3 의 <unused344> 같은
+    vocab 토큰이 답변에 그대로 노출되는 케이스 차단.
     """
     try:
         with _req.post(
@@ -287,16 +327,22 @@ def _ollama_stream(messages: list[dict], model: str,
                 tok = d.get("message", {}).get("content", "")
                 if tok:
                     if chunk_size <= 0:
-                        yield tok
+                        cleaned = _strip_special_tokens(tok)
+                        if cleaned:
+                            yield cleaned
                     else:
                         buf += tok
                         if "\n" in buf or len(buf) >= chunk_size:
-                            yield buf
+                            cleaned = _strip_special_tokens(buf)
+                            if cleaned:
+                                yield cleaned
                             buf = ""
                 if d.get("done"):
                     break
             if buf:
-                yield buf
+                cleaned = _strip_special_tokens(buf)
+                if cleaned:
+                    yield cleaned
     except Exception as e:
         logger.warning(f"[aimode] Ollama stream 실패: {e}")
 
@@ -325,6 +371,72 @@ _STOPWORDS = frozenset((
     "것을", "것은", "것도", "이것", "그것", "저것",
     "경우", "방법", "방식", "결과", "과정", "상황", "이유",
 ))
+
+
+def _classify_query_mode(question: str, model: str) -> str:
+    """[v3] 사용자 query 분류 — structured vs open.
+
+    structured: "X에서 Y 찾아줘" — 파일이 명시됨 (file 후보 좁히기 → 본문 매칭)
+    open:       "Y 찾아줘"       — 파일 미지정 (모든 색인 청크에서 substring 직접 매칭)
+    """
+    prompt = (
+        "사용자 질문을 두 가지 모드로 분류해. 다른 글자 절대 금지.\n\n"
+        "structured → 질문에 '~에서', '~에 있는', '~보고서의', '~문서의' 등으로 특정 파일/문서를 명시한 경우\n"
+        "              예: 'SW산업 보고서에서 취업유발효과 찾아줘'\n"
+        "              예: '삼성전자 ESG 보고서의 탄소중립 목표는?'\n"
+        "              예: '코스모스 다큐에서 보이저호 나오는 부분 알려줘'\n"
+        "open       → 질문에 파일이 명시되지 않고 키워드만 있는 경우\n"
+        "              예: '취업유발효과 찾아줘'\n"
+        "              예: '보이저호 어디 나와?'\n"
+        "              예: 'DBMS 시장 전망'\n"
+        "              예: '삼성전자 재생에너지 전환율'\n\n"
+        f"질문: {question}\n"
+        "분류 결과 (structured 또는 open):"
+    )
+    raw = _ollama_oneshot(prompt, model, num_predict=10).strip().lower()
+    return "structured" if "structured" in raw else "open"
+
+
+def _extract_open_keywords(question: str) -> list[str]:
+    """[v3] open mode 키워드 추출 — 동사·조사 제거 후 명사구 1~3개.
+
+    예: "취업유발효과 찾아줘" → ["취업유발효과"]
+    예: "SW산업 연간보고서" → ["SW산업", "연간보고서"] 또는 ["SW산업 연간보고서"]
+    """
+    import re as _re_ok
+    # 검색 동사 제거
+    _SEARCH_VERBS = (
+        "찾아줘", "찾아 줘", "찾아주", "찾아봐", "찾고", "찾을",
+        "보여줘", "보여 줘", "보여주", "보여",
+        "알려줘", "알려 줘", "알려",
+        "어디", "있어", "있나", "있을", "있는",
+        "나와", "나오", "나타",
+    )
+    cleaned = question
+    for v in _SEARCH_VERBS:
+        cleaned = cleaned.replace(v, " ")
+    # 의문 부호 제거
+    cleaned = _re_ok.sub(r"[?？!]", "", cleaned)
+    # 2자 이상 단어 추출 (한글/영문/숫자)
+    tokens = _re_ok.findall(r"[가-힣A-Za-z0-9]{2,}", cleaned)
+    # 조사 제거 (간단)
+    _JOSA = ("에서의", "에서", "에는", "에게", "한테", "부터", "까지",
+             "이랑", "과의", "와의", "으로", "로서", "으로서",
+             "의", "에", "과", "와", "이", "가", "을", "를", "은", "는",
+             "도", "로", "만")
+    def _strip(w: str) -> str:
+        for j in _JOSA:
+            if w.endswith(j) and len(w) > len(j) + 1:
+                return w[:-len(j)]
+        return w
+    kws: list[str] = []
+    seen: set = set()
+    for t in tokens:
+        s = _strip(t)
+        if len(s) >= 2 and s not in _STOPWORDS and s.lower() not in seen:
+            seen.add(s.lower())
+            kws.append(s)
+    return kws[:3]
 
 
 def _extract_rag_intent(question: str, model: str) -> tuple[str, list[str], list[str]]:
@@ -428,6 +540,98 @@ def _extract_rag_intent(question: str, model: str) -> tuple[str, list[str], list
 
 
 # ── RAG 파일 스캔 ──────────────────────────────────────────────────
+def _scan_pdf_pages(file_path: str, keywords: list[str],
+                    window: int = 400, max_chunks: int = 6
+                    ) -> list[dict]:
+    """[v3] PDF 를 페이지 단위로 fitz 추출 + 키워드 매칭 → 페이지 정보 포함 chunks.
+
+    각 chunk: {"text": str, "page": int (1-indexed), "score": int}
+
+    - 페이지마다 fitz 추출
+    - 페이지 내부에서 키워드 매칭 위치 ±window 자 윈도우
+    - 페이지별 점수 = 매칭된 distinct 키워드 수 (목차/색인은 보통 키워드 1~2종만 cluster → 낮은 점수)
+    - 본문 섹션은 키워드 cluster + 단위 숫자(%, 억, 만, 원) 보너스
+    - max_chunks 개 반환 (페이지 점수 내림차순)
+    """
+    from pathlib import Path
+    import re as _re
+
+    fp = Path(file_path)
+    if not fp.exists() or fp.suffix.lower() != ".pdf" or not keywords:
+        return []
+
+    kws_lower = [k.lower() for k in keywords if k]
+    if not kws_lower:
+        return []
+
+    page_hits: list[tuple[int, int, str]] = []  # (page_num, score, chunk_text)
+    try:
+        import fitz as _fitz
+        with _fitz.open(str(fp)) as doc:
+            for page_idx, page in enumerate(doc):
+                page_text = (page.get_text("text") or "").strip()
+                if not page_text:
+                    continue
+                tl = page_text.lower()
+
+                # 페이지 내 키워드 위치
+                positions: dict[str, list[int]] = {}
+                for kw in kws_lower:
+                    plist = []
+                    start = 0
+                    while True:
+                        p = tl.find(kw, start)
+                        if p < 0:
+                            break
+                        plist.append(p)
+                        start = p + 1
+                    if plist:
+                        positions[kw] = plist
+
+                if not positions:
+                    continue
+
+                # distinct 매칭 키워드 수 = 페이지 기본 점수
+                distinct = len(positions)
+                # 단위 포함 숫자 보너스 (본문 섹션 우대) — 목차는 페이지번호만 있어서 단위 없음
+                unit_nums = len(_re.findall(r"\d+\.?\d*\s*(?:%|억|만|천|원|달러|건|개)", page_text))
+                # 목차 점선 패널티
+                toc_dots = page_text.count("…")
+                score = distinct * 3 + min(unit_nums, 5) - min(toc_dots // 5, 5)
+
+                # 페이지에서 키워드 가장 dense 한 위치 ±window 자 chunk
+                # composite center 잡기 (페이지 내부에서 키워드 모인 곳)
+                centers: list[tuple[int, int]] = []  # (score, pos)
+                for kw, pos_list in positions.items():
+                    for pos in pos_list:
+                        nearby = sum(
+                            1 for other_kw, other_list in positions.items()
+                            if other_kw != kw and any(abs(p2 - pos) <= window * 2 for p2 in other_list)
+                        )
+                        centers.append((nearby + 1, pos))
+                if not centers:
+                    continue
+                centers.sort(key=lambda x: -x[0])
+                best_pos = centers[0][1]
+                c_start = max(0, best_pos - window)
+                c_end = min(len(page_text), best_pos + window)
+                chunk_text = page_text[c_start:c_end].strip()
+                chunk_text = _re.sub(r"\n{3,}", "\n\n", chunk_text)
+
+                if chunk_text:
+                    page_hits.append((page_idx + 1, score, chunk_text))  # 1-indexed page
+    except Exception as e:
+        logger.debug(f"[scan_pdf_pages] {fp.name}: {e}")
+        return []
+
+    # 점수 내림차순 → top max_chunks
+    page_hits.sort(key=lambda x: -x[1])
+    return [
+        {"text": text, "page": page_num, "score": score}
+        for page_num, score, text in page_hits[:max_chunks]
+    ]
+
+
 def _scan_file_for_keywords(
     source: dict,
     keywords: list[str],
@@ -579,13 +783,12 @@ def _build_rag_messages(
     prior_history: list[dict],
     extracted: str = "",
     key_facts: list[str] | None = None,
+    references: list[dict] | None = None,
 ) -> list[dict]:
     """RAG 시스템 프롬프트 + 대화 이력 + 사용자 질문 → messages 리스트.
 
-    [재설계 v7] forced-quote:
-    - key_facts: Python이 문서에서 직접 추출한 핵심 수치 문장 목록
-      → 시스템 프롬프트 맨 앞 + 유저 메시지 앞에 강제 인용으로 배치
-    - 모델의 학습 prior를 이기기 위해 핵심 수치를 이중으로 노출
+    [v7] forced-quote: key_facts 이중 노출.
+    [v3] references: extract_node 가 만든 (page/timestamp 메타) → 인용 형식 강제.
     """
     source_list = "\n".join(
         f"  [출처{i+1}] {s.get('file_name', '?')} ({s.get('file_type', '?')})"
@@ -604,34 +807,59 @@ def _build_rag_messages(
 
 """
 
-    # 비디오/오디오 출처 포함 여부 — timestamp 인용 규칙 활성화 트리거
+    # [v3.1] 위치 정보 블록 — 답변에 페이지/timestamp 인용 강제. 사용 가능한 태그만 명시.
+    refs_block = ""
+    available_tags: list[str] = []
+    if references:
+        ref_lines = []
+        for r in references[:8]:
+            src = r.get("src", "?")
+            if r.get("page") is not None:
+                tag = f"({r['page']}페이지)"
+                available_tags.append(tag)
+            elif r.get("timestamp"):
+                tag = f"[{r['timestamp']}]"
+                available_tags.append(tag)
+            else:
+                tag = ""
+            snip = (r.get("snippet") or "")[:120]
+            ref_lines.append(f"  {tag} {src}: {snip}")
+        if ref_lines:
+            tags_str = ", ".join(dict.fromkeys(available_tags)) if available_tags else "(없음)"
+            refs_block = (
+                "[원본 위치 정보 — 답변에서 출처 표시 시 아래 태그 그대로 사용]\n"
+                + "\n".join(ref_lines)
+                + f"\n사용 가능한 태그: {tags_str}\n\n"
+            )
+
+    # 비디오/오디오 출처 포함 여부
     has_av = any(
         s.get("file_type") in ("video", "movie", "audio", "music", "bgm")
         for s in matched_sources
     )
-    av_rule = (
-        "5. 비디오/오디오 출처일 때는 답변에 [MM:SS] 또는 [HH:MM:SS] 타임스탬프를 "
-        "그대로 인용해서 어느 부분에서 나오는지 함께 적으세요.\n"
-        if has_av else ""
-    )
+    has_doc = any(s.get("file_type") == "doc" for s in matched_sources)
+    citation_rules = []
+    if has_doc:
+        citation_rules.append("- 문서 인용 시: 각 문장 또는 항목 끝에 반드시 (XX페이지) 형식으로 페이지 번호 표시. 페이지 번호 누락 금지.")
+    if has_av:
+        citation_rules.append("- 비디오/오디오 인용 시: 반드시 [MM:SS] 또는 [HH:MM:SS] 타임스탬프 표기. 타임스탬프 누락 금지.")
+    if has_doc or has_av:
+        citation_rules.append("- 위 [원본 위치 정보] 에 나열된 페이지/타임스탬프 외에 새 페이지·시각을 만들면 안 됩니다.")
+    citation_block = "[인용 형식 — 반드시 준수]\n" + "\n".join(citation_rules) + "\n" if citation_rules else ""
 
     sys_msg = f"""당신은 아래 [문서 발췌]를 보고 [질문]에 답하는 AI입니다. 반드시 한국어로만 답변하세요.
-{forced_block}
+{forced_block}{refs_block}{citation_block}
 [절대 규칙]
 1. [핵심 인용] 또는 [문서 발췌]에 관련 내용이 있으면 **반드시 그 내용을 사용해 답변** 하세요.
 2. 숫자·비율·날짜는 반드시 [핵심 인용] 또는 [문서 발췌]에 있는 것만 쓰세요.
 3. 학습 데이터에서 알고 있는 수치/사실을 쓰면 안 됩니다. 문서 내용만 사용.
 4. 발췌에 없는 내용 추가 금지. 외국어 출력 금지.
-5. [핵심 인용]·[문서 발췌] 모두 비어있는 경우에만 "제공 문서에 해당 정보가 없습니다"라고 쓰세요. 발췌에 관련 내용이 일부라도 있으면 그것을 인용하여 답변할 것.
-{av_rule}
-[비디오·오디오 답변 가이드]
-- [MM:SS] 또는 [HH:MM:SS] 타임스탬프를 답변에 그대로 인용
-- 각 timestamp 뒤에 해당 STT 텍스트의 핵심 내용을 한 문장으로 요약
-- 사용자가 "찾아줘"·"어디서"·"장면" 같은 위치 질문을 하면 timestamp 위주로 답변
+5. **답변의 모든 사실 진술 뒤에 반드시 (XX페이지) 또는 [MM:SS] 태그를 붙이세요.** 태그는 위 [원본 위치 정보] 에 나열된 것만 사용 가능.
+6. [핵심 인용]·[문서 발췌] 모두 비어있는 경우에만 "제공 문서에 해당 정보가 없습니다"라고 쓰세요.
 
-[답변 형식]
-- 항목별 번호(1. 2.)와 줄바꿈 사용
-- 마크다운(** # `) 사용 금지
+[답변 형식 예시]
+1. DBMS 시장은 2016년 317억 달러로 6.4% 성장 (40페이지)
+2. 2019년 384억 달러 규모 전망 (40페이지)
 
 [참고 파일]
 {source_list if source_list else '  (매칭 파일 없음)'}
@@ -786,112 +1014,86 @@ def _emit(obj: dict) -> None:
 
 # ── 노드 0: 라우터 — rag / chat / followup 판단 ──────────────────────
 def router_node(state: dict) -> dict:
-    """LLM이 대화 맥락을 보고 라우트를 결정한다.
+    """[v3] 단순화: RAG / FOLLOWUP 2가지만 분류. chat·qa_gen 라우트 제거.
 
-    Returns:
-        route: "rag" | "chat" | "followup"
-        prev_sources: followup 시 이전 파일 목록
+    핵심 규칙:
+    - history 비어있음 (새 채팅 첫 메시지)  → 무조건 RAG
+    - history 있음 + 이전 파일 있음          → LLM 분류 (RAG / FOLLOWUP)
+    - history 있음 + 이전 파일 없음          → RAG
+    - state["fallback_from_followup"] = True → FOLLOWUP 사이클 폴백 직후 → RAG 강제 (무한루프 방지)
     """
     question  = state["question"]
     model     = state["model"]
     thread_id = state["thread_id"]
 
-    # 이전 대화 이력 (최근 3턴)
+    # [무한루프 방지] followup → rag 폴백 한 번 발생 후 다시 진입한 경우 RAG 강제.
+    if state.get("fallback_from_followup"):
+        logger.info("[router_node] fallback_from_followup → rag 강제")
+        _emit({"type": "route", "mode": "rag"})
+        return {"route": "rag", "prev_sources": []}
+
+    # 이전 대화 이력
     history = _load_history(thread_id)
-    history_text = ""
-    if history:
-        for m in history[-6:]:
-            role = "사용자" if m["role"] == "user" else "AI"
-            history_text += f"{role}: {m['content'][:300]}\n"
+
+    # [v3 핵심] 새 채팅 (history 비어있음) → 무조건 RAG.
+    if not history:
+        logger.info("[router_node] history empty → rag (새 채팅)")
+        _emit({"type": "route", "mode": "rag"})
+        return {"route": "rag", "prev_sources": []}
 
     # 이전 파일 목록
     with _prev_sources_lock:
         prev_sources = list(_prev_sources_store.get(thread_id, []))
 
-    prev_files_text = ""
-    if prev_sources:
-        names = [s.get("file_name", "?") for s in prev_sources[:5]]
-        prev_files_text = ", ".join(names)
+    # 이전 파일 없으면 followup 불가 → RAG
+    if not prev_sources:
+        logger.info("[router_node] prev_sources empty → rag")
+        _emit({"type": "route", "mode": "rag"})
+        return {"route": "rag", "prev_sources": []}
 
+    history_text = ""
+    for m in history[-6:]:
+        role = "사용자" if m["role"] == "user" else "AI"
+        history_text += f"{role}: {m['content'][:300]}\n"
+    prev_files_text = ", ".join(s.get("file_name", "?") for s in prev_sources[:5])
+
+    # LLM 분류 — RAG / FOLLOWUP 2가지만
     prompt = (
         "아래 질문을 딱 하나로만 분류해. 다른 글자 절대 금지.\n\n"
         "분류 기준:\n"
-        "followup  → 이전 답변·파일에 대한 추가 요청. 이전 파일이 있고 질문이\n"
-        "            '더 설명해줘', '요약해줘', '쉽게 설명해줘', '다시 정리해줘',\n"
-        "            '한국어로 해줘', '예시 들어줘', '좀 더 자세히', '그게 뭐야',\n"
-        "            '거기서 ~는?', '방금 그거' 처럼 새 파일 검색 없이 이전 내용\n"
-        "            을 다루는 경우. 이전 파일이 있을 때만 가능.\n"
-        "qa_gen    → 사용자가 직접 '문제 만들어줘', '퀴즈 내줘', '출제해줘' 같이\n"
-        "            시험 문제·퀴즈 생성을 명시적으로 요청한 경우만 해당\n"
-        "chat      → 순수 잡담·인사·날씨·프로그래밍 방법 등 파일과 무관한 대화\n"
-        "rag       → 특정 회사·수치·사건·문서에 대해 새로운 정보를 탐색하는 질문\n\n"
-        "핵심 원칙:\n"
-        "- 이전 파일이 있고 현재 질문이 그 내용을 다시 요청하는 것이면 → followup\n"
-        "- '문제 만들어줘' 같은 생성 요청이 없으면 qa_gen 절대 금지\n\n"
+        "followup  → 이전 답변·파일에 대한 추가 요청. 이전 파일 본문 안에서 다시 찾을 수 있는 내용.\n"
+        "            예: '쉽게 설명해줘', '요약해줘', '더 자세히', '그게 뭐야',\n"
+        "                '거기서 ~는?', '방금 그거', '취업유발계수가 뭐야?' (이전 답변에 언급된 용어)\n"
+        "rag       → 새로운 주제·다른 파일을 찾는 질문. 이전 파일과 무관한 내용.\n\n"
         "예시:\n"
-        "질문: 안녕 → chat\n"
-        "질문: 파이썬 문법 알려줘 → chat\n"
-        "질문: FAO 식량가격지수는 얼마인가? → rag\n"
-        "질문: 삼성전자 재생에너지 전환율은? → rag\n"
-        "질문: 코스모스에서 보이저호 찾아줘 → rag\n"
-        "질문: 보이저호가 나오는 장면 어디 있어? → rag\n"
-        "질문: 박스 안에 있는 고양이 사진 보여줘 → rag\n"
-        "질문: 햄버거 이미지 찾아줘 → rag\n"
-        "질문: AI 인공지능 다큐 어디서 볼 수 있어? → rag\n"
-        "이전 파일: Samsung.pdf / 질문: 쉽게 설명해줘 → followup\n"
-        "이전 파일: Samsung.pdf / 질문: 요약해줘 → followup\n"
-        "이전 파일: Samsung.pdf / 질문: 더 자세히 알려줘 → followup\n"
-        "이전 파일: Samsung.pdf / 질문: 다시 정리해줘 → followup\n"
-        "이전 파일: Samsung.pdf / 질문: 거기서 탄소중립 목표가 뭐야? → followup\n"
-        "이전 파일: 없음 / 질문: 쉽게 설명해줘 → chat\n"
-        "질문: 삼성전자 문서로 시험 문제 만들어줘 → qa_gen\n\n"
-        f"이전 대화:\n{history_text or '없음'}\n"
-        f"이전에 찾은 파일: {prev_files_text or '없음'}\n"
+        "이전 파일: SW산업.pdf / 질문: 쉽게 설명해줘 → followup\n"
+        "이전 파일: SW산업.pdf / 질문: 취업유발계수가 뭐야? → followup\n"
+        "이전 파일: SW산업.pdf / 질문: 거기서 DBMS 시장은? → followup\n"
+        "이전 파일: SW산업.pdf / 질문: 양자컴퓨터 동향은? → rag\n"
+        "이전 파일: SW산업.pdf / 질문: 삼성전자 ESG 보고서 찾아줘 → rag\n\n"
+        f"이전 대화:\n{history_text}\n"
+        f"이전에 찾은 파일: {prev_files_text}\n"
         f"현재 질문: {question}\n\n"
-        "분류 결과:"
+        "분류 결과 (followup 또는 rag):"
     )
 
-    raw = _ollama_oneshot(prompt, model, num_predict=15).strip().lower()
+    raw = _ollama_oneshot(prompt, model, num_predict=10).strip().lower()
+    route = "followup" if "followup" in raw else "rag"
 
-    if "followup" in raw and prev_sources:
-        route = "followup"
-    elif "qa_gen" in raw or "qa gen" in raw:
-        route = "qa_gen"
-    elif "chat" in raw:
-        route = "chat"
-    else:
-        route = "rag"
-
-    # [강제 RAG] 검색 의도 키워드가 명확하면 LLM 분류와 무관하게 RAG 강제.
-    # qwen2.5:3b 가 "찾아줘"·"어디서"·"장면" 같은 검색 명령을 chat 으로 오분류 빈번.
-    _SEARCH_INTENT_KW = (
-        "찾아줘", "찾아 줘", "찾아주", "찾을 수", "찾고 싶", "찾는",
-        "어디서", "어디에", "어디 있", "어디있", "있어?", "있나?",
-        "보여줘", "보여 줘", "보여주", "알려줘", "알려 줘",
-        "장면", "사진", "이미지", "영상", "동영상", "비디오", "음악", "음원", "문서", "파일",
-        "자료", "정보", "내용",
-    )
-    # chat 오분류 → rag 강제 (prev_sources 무관)
-    if route == "chat":
-        if any(kw in question for kw in _SEARCH_INTENT_KW):
-            logger.info(f"[router_node] LLM='chat' 이지만 검색 의도 키워드 감지 → rag 강제")
-            route = "rag"
-
-    # [강제 RAG v2] followup 오분류 방지 — prev_sources 가 있어도 명확한 새 검색 의도면 rag 강제.
-    # 예) "코스모스 보이저호" 대화 후 "경주 동궁에 대한 자료를 찾아줘" → followup 오분류 방지.
+    # [강제 RAG] 명백한 새 검색 의도 키워드가 있으면 LLM 분류 무시하고 RAG 강제.
+    # 예: "○○ 찾아줘", "○○에 대한 자료" 등.
     _FORCE_RAG_KW = (
-        "찾아줘", "찾아 줘", "찾아주", "찾아봐", "찾고 싶",
-        "보여줘", "보여 줘", "알려줘", "알려 줘",
+        "찾아줘", "찾아 줘", "찾아주", "찾아봐",
         "에 대한", "에 관한", "에 관련",
-        "자료", "정보를", "내용을",
+        "자료", "정보를",
     )
     if route == "followup" and any(kw in question for kw in _FORCE_RAG_KW):
-        logger.info(f"[router_node] followup → rag 강제 (새 검색 의도 키워드 감지: {question[:30]!r})")
+        logger.info(f"[router_node] followup → rag 강제 (새 검색 의도)")
         route = "rag"
 
-    # Fallback: 이전 파일이 있고 질문이 짧고 새 고유명사가 없으면 followup 강제
+    # [강제 FOLLOWUP] 짧고 트리거 단어 + 새 고유명사 없으면 followup 강제.
     import re as _re_r
-    if route == "rag" and prev_sources:
+    if route == "rag":
         _FOLLOWUP_TRIGGERS = [
             "쉽게", "다시", "요약", "정리", "자세히", "설명해", "풀어줘",
             "더 알려줘", "그게", "거기서", "방금", "한국어로", "예시", "예를",
@@ -901,7 +1103,7 @@ def router_node(state: dict) -> dict:
         new_nouns = _re_r.findall(r"[가-힣A-Z][가-힣A-Za-z]{3,}", question)
         if q_len <= 30 and has_trigger and len(new_nouns) == 0:
             route = "followup"
-            logger.info(f"[router_node] fallback followup (short+trigger, q_len={q_len})")
+            logger.info(f"[router_node] fallback followup (short+trigger)")
 
     logger.info(f"[router_node] raw={raw!r} → route={route}")
     _emit({"type": "route", "mode": route})
@@ -913,29 +1115,60 @@ def router_node(state: dict) -> dict:
 
 
 def _route_edge(state: dict) -> str:
-    """조건부 엣지 함수 — router_node 결과로 다음 노드 결정."""
+    """[v3] router 이후 — rag / followup 만."""
     route = state.get("route", "rag")
-    # qa_gen도 intent → search → scan → select 파이프라인 사용
-    return "rag" if route == "qa_gen" else route
+    return "followup" if route == "followup" else "rag"
 
 
-def _after_select_edge(state: dict) -> str:
-    """select_node 이후 — qa_gen 이면 qa_generate, 아니면 generate."""
-    return "qa_generate" if state.get("route") == "qa_gen" else "generate"
+def _after_followup_search_edge(state: dict) -> str:
+    """[v3] followup_search 이후 — 이전 파일에서 매칭됐으면 extract, 아니면 RAG 사이클."""
+    matched = state.get("matched_sources") or []
+    if matched:
+        return "exist"
+    return "none"
+
+
+def _after_intent_edge(state: dict) -> str:
+    """[v3] RAG intent 이후 — rag_mode 에 따라 분기.
+
+    structured: 기존 search → scan → select 경로
+    open:       fulltext_search 1노드로 (search/scan/select 압축)
+    """
+    return "open" if state.get("rag_mode") == "open" else "structured"
 
 
 # ── 노드 1: 의도 파악 + 키워드 추출 ─────────────────────────────────
 def intent_node(state: dict) -> dict:
+    """[v3] RAG intent — mode 분류 (structured / open) + 키워드 추출.
+
+    - structured: "X에서 Y 찾아줘" → 기존 _extract_rag_intent (file_kw + detail_kw 분리)
+    - open:       "Y 찾아줘"       → _extract_open_keywords (단순 명사구)
+    """
     question = state["question"]
     model    = state["model"]
 
-    intent_msg, file_kws, detail_kws = _extract_rag_intent(question, model)
+    # [v3] mode 분류
+    mode = _classify_query_mode(question, model)
+    logger.info(f"[intent_node] mode={mode} | question={question[:50]!r}")
+
+    if mode == "structured":
+        intent_msg, file_kws, detail_kws = _extract_rag_intent(question, model)
+    else:  # open
+        kws = _extract_open_keywords(question)
+        if not kws:
+            # LLM 백업 — 마지막 폴백
+            _, f1, d1 = _extract_rag_intent(question, model)
+            kws = list(dict.fromkeys((f1 or []) + (d1 or [])))[:3]
+        intent_msg = f"'{', '.join(kws) or question}' 키워드로 모든 자료에서 찾아볼게요."
+        file_kws   = kws
+        detail_kws = kws
 
     _emit({
         "type":            "intent",
         "message":         intent_msg,
         "file_keywords":   file_kws,
         "detail_keywords": detail_kws,
+        "mode":            mode,
     })
     time.sleep(0.3)
 
@@ -943,6 +1176,7 @@ def intent_node(state: dict) -> dict:
         "intent_message":  intent_msg,
         "file_keywords":   file_kws,
         "detail_keywords": detail_kws,
+        "rag_mode":        mode,
     }
 
 
@@ -964,17 +1198,66 @@ def search_node(state: dict) -> dict:
 
 
 # ── 노드 3: 파일 하나씩 내용 확인 ────────────────────────────────────
+def _scan_one(src: dict, detail_kws: list[str]) -> tuple[bool, list[dict]]:
+    """[v3] 파일 1개 스캔 → (found, chunks). chunks 는 메타 포함 dict 리스트.
+
+    chunk dict 스키마:
+      doc:   {"text", "page" (1-indexed), "score"}
+      video/audio/movie/music: {"text", "timestamp" (MM:SS or null), "score"}
+      image: {"text", "page": None, "score"}
+    """
+    file_type = src.get("file_type", "")
+
+    # ── doc: 페이지 단위 fitz 스캔 (원본 PDF 직접 읽기) ─────────────
+    if file_type == "doc":
+        file_path = (src.get("file_path") or "").strip()
+        if file_path:
+            chunks_meta = _scan_pdf_pages(file_path, detail_kws)
+            if chunks_meta:
+                return True, chunks_meta
+        # 폴백: 페이지 단위 스캔 실패 시 기존 fulltext 스캔
+        found, chunk_texts = _scan_file_for_keywords(src, detail_kws)
+        return found, [{"text": t, "page": None, "score": 1} for t in chunk_texts]
+
+    # ── video/audio: STT segments 활용 (벡터 검색이 이미 검증했다고 가정) ──
+    _av_types = ("video", "movie", "audio", "music")
+    if file_type in _av_types:
+        av_chunks: list[dict] = []
+        for seg in (src.get("segments") or [])[:5]:
+            text = (seg.get("text") or seg.get("preview") or "").strip()
+            if not text:
+                continue
+            ts_sec = seg.get("start")
+            ts = _fmt_seg_ts(ts_sec) if ts_sec is not None else None
+            av_chunks.append({"text": text, "timestamp": ts, "score": 1})
+        if not av_chunks:
+            snip = src.get("snippet") or ""
+            if snip:
+                av_chunks.append({"text": snip, "timestamp": None, "score": 1})
+        return True, av_chunks if av_chunks else [{"text": src.get("file_name", ""), "timestamp": None, "score": 0}]
+
+    # ── image: snippet (캡션) 매칭 ─────────────────────────────────
+    snip = src.get("snippet") or ""
+    if not snip:
+        return False, []
+    sl = snip.lower()
+    hits = sum(1 for kw in detail_kws if kw and kw.lower() in sl)
+    if hits == 0:
+        return False, []
+    return True, [{"text": snip, "page": None, "score": hits}]
+
+
 def scan_node(state: dict) -> dict:
+    """[v3] 페이지/타임스탬프 메타 포함 chunks 생성."""
     from concurrent.futures import ThreadPoolExecutor
 
     candidates  = state.get("candidates") or []
     detail_kws  = state.get("detail_keywords") or []
     scan_results: list[dict] = []
 
-    # 병렬로 스캔 시작 (결과는 순서대로 수집)
     with ThreadPoolExecutor(max_workers=6) as executor:
         futures = [
-            executor.submit(_scan_file_for_keywords, src, detail_kws)
+            executor.submit(_scan_one, src, detail_kws)
             for src in candidates
         ]
 
@@ -983,7 +1266,6 @@ def scan_node(state: dict) -> dict:
             file_name = src.get("file_name")  or "?"
             file_type = src.get("file_type")  or "?"
 
-            # 스캔 시작 이벤트
             _emit({
                 "type":      "scanning",
                 "index":     i,
@@ -992,42 +1274,27 @@ def scan_node(state: dict) -> dict:
                 "file_type": file_type,
             })
 
-            # [scan_node v2] video/audio 타입은 벡터 검색으로 이미 관련성 검증됨.
-            # STT 텍스트가 영어인 경우 한국어 키워드 매칭 실패 → found=False 오류 방지.
-            # → found=True 고정, chunks는 segments 텍스트 + snippet으로 구성.
-            _av_types = ("video", "movie", "audio", "music")
-            if file_type in _av_types:
-                fut.cancel()  # 불필요한 스캔 취소 (에러 무시)
-                found = True
-                _av_chunks = []
-                _snip = src.get("snippet") or ""
-                if _snip:
-                    _av_chunks.append(_snip)
-                for _seg in (src.get("segments") or [])[:5]:
-                    _st = (_seg.get("text") or _seg.get("preview") or "").strip()
-                    if _st and _st not in _av_chunks:
-                        _av_chunks.append(_st)
-                chunks = _av_chunks if _av_chunks else [file_name]
-            else:
-                try:
-                    found, chunks = fut.result(timeout=20)
-                except Exception as _e:
-                    logger.debug(f"[scan_node] {file_name}: {_e}")
-                    found, chunks = False, []
+            try:
+                found, chunks_meta = fut.result(timeout=30)
+            except Exception as e:
+                logger.debug(f"[scan_node] {file_name}: {e}")
+                found, chunks_meta = False, []
 
-            # 스캔 결과 이벤트
+            # SSE: 프론트엔드 호환 위해 chunks 는 text 만 평탄화. 메타는 chunks_meta 로.
             _emit({
-                "type":    "scan_result",
-                "index":   i,
-                "file_id": file_id,
-                "found":   found,
-                "chunks":  chunks,
+                "type":        "scan_result",
+                "index":       i,
+                "file_id":     file_id,
+                "found":       found,
+                "chunks":      [c.get("text", "") for c in chunks_meta],
+                "chunks_meta": chunks_meta,
             })
 
             scan_results.append({
                 **src,
                 "found":          found,
-                "matched_chunks": chunks,
+                "matched_chunks": [c.get("text", "") for c in chunks_meta],
+                "chunks_meta":    chunks_meta,
             })
             time.sleep(SCAN_DELAY)
 
@@ -1067,13 +1334,461 @@ def select_node(state: dict) -> dict:
     return {"matched_sources": matched}
 
 
-# ── 노드 4-b: followup 시 이전 파일 재사용 ───────────────────────────
+# ── 노드 4-b: [legacy] followup 시 이전 파일 재사용 ───────────────────
+#   v3 그래프에서는 followup_search_node 사용. 아래는 fallback 용으로 남겨둠.
 def followup_select_node(state: dict) -> dict:
     """이전 턴의 파일을 그대로 matched_sources 로 사용."""
     prev = state.get("prev_sources") or []
     _emit({"type": "selected", "sources": prev})
     time.sleep(0.1)
     return {"matched_sources": prev}
+
+
+# ── 노드 [v3] followup_intent: 후속 질문에서 키워드 추출 ──────────────
+def followup_intent_node(state: dict) -> dict:
+    """[v3] 후속 질문 → 이전 본문에서 찾을 키워드 추출.
+
+    예: 이전 답이 "취업유발계수" 언급 → "취업유발계수가 뭐야?" → keywords=["취업유발계수"]
+    """
+    question = state["question"]
+    model    = state["model"]
+    thread_id = state["thread_id"]
+
+    # 이전 대화 이력으로 컨텍스트 보강
+    history = _load_history(thread_id)
+    last_ai = ""
+    if history:
+        for m in reversed(history):
+            if m.get("role") == "assistant":
+                last_ai = (m.get("content") or "")[:600]
+                break
+
+    # [v3] 핵심 보강: 이전 답변의 **주제어**(고유명사·수치 명·문서 영역) + 현재 질문의
+    # **묻는 측면**(증가율·정의·원인 등)을 결합해서 검색 키워드 만들기.
+    # 사용자가 후속 질문할 땐 보통 이전 답변 주제 위에서 깊이 들어가는 거라,
+    # 키워드에 이전 답변 주제어가 빠지면 followup_search 가 엉뚱한 청크 매칭.
+    # 예) 이전 답: "SW산업 수출액 92억달러" / 질문: "전년대비 얼마나 상승?"
+    #     → 키워드: ["SW산업 수출액 전년대비"] (단순 "전년대비"만 뽑으면 CRM 등 다른 시장 매칭 위험)
+    prompt = (
+        "이전 답변에서 다루던 주제어와 현재 질문의 의도를 결합해서 본문 검색용 키워드 1~3개를 만들어.\n"
+        "출력은 쉼표로만 구분. 다른 글자 금지.\n\n"
+        "규칙:\n"
+        "- 이전 답변에서 핵심 주제(고유명사·수치 명·문서 영역)를 base 로 사용\n"
+        "- 현재 질문이 묻는 측면(증가율·정의·근거·원인 등)을 base 에 덧붙임\n"
+        "- 이전 답변 주제가 키워드에 반드시 포함되어야 함 (단독으로 '전년대비'·'정의'·'근거' 같은 일반어만 출력 금지)\n\n"
+        "예시:\n"
+        "이전 답변: 'SW산업 수출액은 2015년 92억달러로 ...' / 질문: '전년대비 얼마나 상승한거야?'\n"
+        "  → SW산업 수출액 전년대비, 수출액 증감, SW산업 수출\n"
+        "이전 답변: '취업유발계수는 0.816으로 제조업보다 높다' / 질문: '그게 뭐야?'\n"
+        "  → 취업유발계수 정의, 취업유발계수\n"
+        "이전 답변: 'DBMS 시장은 6.4% 성장' / 질문: '그 근거?'\n"
+        "  → DBMS 시장 성장 근거, DBMS 시장 전망\n"
+        "이전 답변: '삼성전자 2030 탄소중립 목표' / 질문: '거기서 재생에너지 전환율은?'\n"
+        "  → 삼성전자 재생에너지 전환율, 재생에너지\n\n"
+        f"이전 답변:\n{last_ai or '(없음)'}\n"
+        f"현재 질문: {question}\n"
+        "키워드:"
+    )
+    raw = _ollama_oneshot(prompt, model, num_predict=30).strip()
+    # 쉼표/공백 분리 + 정리
+    import re as _re_fi
+    parts = _re_fi.split(r"[,、\n]+", raw)
+    keywords: list[str] = []
+    for p in parts:
+        p = p.strip().strip(".").strip(":").strip("'").strip('"')
+        if 2 <= len(p) <= 40 and p not in keywords:
+            keywords.append(p)
+    keywords = keywords[:3]
+
+    # LLM 실패 → 질문에서 2자 이상 명사 추출
+    if not keywords:
+        import re as _re_fi2
+        toks = _re_fi2.findall(r"[가-힣A-Za-z0-9]{2,}", question)
+        keywords = [t for t in toks if t not in _STOPWORDS][:3]
+
+    intent_msg = f"이전 파일에서 '{', '.join(keywords) or question}' 관련 부분을 찾아볼게요."
+    _emit({
+        "type":            "intent",
+        "message":         intent_msg,
+        "file_keywords":   keywords,
+        "detail_keywords": keywords,
+        "mode":            "followup",
+    })
+    time.sleep(0.2)
+
+    return {
+        "intent_message":  intent_msg,
+        "file_keywords":   keywords,
+        "detail_keywords": keywords,
+    }
+
+
+# ── 노드 [v3] followup_search: 이전 source 본문에서만 키워드 매칭 ─────
+def followup_search_node(state: dict) -> dict:
+    """[v3] 이전 turn 의 prev_sources 본문에서 새 키워드 매칭.
+
+    매칭된 source 들만 matched_sources 로. 매칭 0이면 빈 리스트 → RAG 사이클 폴백.
+
+    [v3.1] phrase 토큰 분해 추가: followup_intent 가 "SW산업 수출액 전년대비" 같은
+    multi-word phrase 를 만들어내면, PDF 본문에 그 phrase 그대로 안 나타나 매칭 실패
+    하는 케이스가 빈번. → phrase + 분해된 단어 모두 키워드 리스트에 넣고
+    distinct 매칭 단어 수로 점수 매김.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    prev_sources = state.get("prev_sources") or []
+    detail_kws   = state.get("detail_keywords") or []
+    if not prev_sources or not detail_kws:
+        _emit({"type": "followup_search_result", "matched": 0, "tried": len(prev_sources)})
+        return {"matched_sources": []}
+
+    # [v3.1] phrase 토큰 분해 — multi-word 키워드를 단어 단위로도 매칭 시도
+    _STOP_TOKENS = {"의", "는", "은", "이", "가", "을", "를", "와", "과", "에",
+                    "정의", "근거", "원인", "변화", "추이", "현황"}
+    expanded: list[str] = []
+    seen: set = set()
+    for kw in detail_kws:
+        if not kw:
+            continue
+        # 원본 phrase 그대로 (정확 매칭 시 가산점 받음)
+        k_lower = kw.lower()
+        if k_lower not in seen:
+            seen.add(k_lower)
+            expanded.append(kw)
+        # 공백 포함이면 단어 분해
+        if " " in kw:
+            for w in kw.split():
+                w = w.strip()
+                wl = w.lower()
+                if len(w) >= 2 and wl not in seen and w not in _STOP_TOKENS:
+                    seen.add(wl)
+                    expanded.append(w)
+
+    logger.info(
+        f"[followup_search] original kws={detail_kws} → expanded={expanded}"
+    )
+
+    matched: list[dict] = []
+
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        futures = [
+            executor.submit(_scan_one, src, expanded)
+            for src in prev_sources
+        ]
+        for i, (src, fut) in enumerate(zip(prev_sources, futures)):
+            try:
+                found, chunks_meta = fut.result(timeout=30)
+            except Exception as e:
+                logger.debug(f"[followup_search] {src.get('file_name','?')}: {e}")
+                continue
+            if found and chunks_meta:
+                matched.append({
+                    **src,
+                    "found":          True,
+                    "matched_chunks": [c.get("text", "") for c in chunks_meta],
+                    "chunks_meta":    chunks_meta,
+                })
+
+    _emit({
+        "type":    "followup_search_result",
+        "matched": len(matched),
+        "tried":   len(prev_sources),
+        "expanded_kw_count": len(expanded),
+    })
+    if matched:
+        _emit({"type": "selected", "sources": matched})
+    time.sleep(0.2)
+    return {"matched_sources": matched}
+
+
+# ══════════════════════════════════════════════════════════════════════
+# [v3 open mode] 전체 색인 캐시에서 substring 매칭
+# ══════════════════════════════════════════════════════════════════════
+
+def fulltext_search_node(state: dict) -> dict:
+    """[v3 open mode] 모든 색인된 doc 페이지 캐시 본문 + 파일명에서 키워드 substring 매칭.
+
+    - page_text 캐시 (`TRICHEF_DOC_EXTRACT/page_text/<stem>/p####.txt`) 순회
+    - 키워드 substring 매칭 → 페이지 단위 chunk + 점수
+    - 파일명에 키워드 substring 있으면 보너스 +20
+    - 같은 파일의 페이지들 묶어서 하나의 source 로 정리
+    - 결과를 candidates / scan_results / matched_sources 모두에 동일하게 세팅
+      (search/scan/select 단계를 압축 — 이후 extract → generate 로 직진)
+    """
+    from pathlib import Path
+    import re as _re_ft
+
+    keywords = state.get("detail_keywords") or state.get("file_keywords") or []
+    kws_lower = [k.lower() for k in keywords if k and len(k) >= 2]
+    if not kws_lower:
+        logger.warning("[fulltext_search] 키워드 없음 — 빈 결과")
+        _emit({"type": "candidates", "items": []})
+        return {"candidates": [], "scan_results": [], "matched_sources": []}
+
+    # ── 페이지 텍스트 캐시 루트 ─────────────────────────────────────────
+    try:
+        from config import PATHS
+        page_text_root = Path(PATHS["TRICHEF_DOC_EXTRACT"]) / "page_text"
+    except Exception as e:
+        logger.warning(f"[fulltext_search] PATHS 로드 실패: {e}")
+        _emit({"type": "candidates", "items": []})
+        return {"candidates": [], "scan_results": [], "matched_sources": []}
+
+    if not page_text_root.is_dir():
+        logger.warning(f"[fulltext_search] page_text 캐시 없음: {page_text_root}")
+        _emit({"type": "candidates", "items": []})
+        return {"candidates": [], "scan_results": [], "matched_sources": []}
+
+    # ── doc registry 로드 (파일명 + 절대경로 추출) ─────────────────────
+    doc_reg: dict = {}
+    try:
+        from config import PATHS as _PATHS_R
+        import json as _json_r
+        reg_path = Path(_PATHS_R["EMBEDDED_DB"]) / "Doc" / "registry.json"
+        if reg_path.is_file():
+            doc_reg = _json_r.loads(reg_path.read_text(encoding="utf-8")) or {}
+    except Exception as e:
+        logger.debug(f"[fulltext_search] doc registry 로드 실패: {e}")
+
+    # ── 1단계: 모든 페이지 캐시 순회 + substring 매칭 ──────────────────
+    matched_pages: dict[str, list[dict]] = {}  # stem → [{page, text, score}]
+
+    for stem_dir in page_text_root.iterdir():
+        if not stem_dir.is_dir():
+            continue
+        stem = stem_dir.name
+        for txt_path in sorted(stem_dir.glob("p*.txt")):
+            try:
+                page_idx = int(txt_path.stem.lstrip("p"))
+            except ValueError:
+                continue
+            try:
+                text = txt_path.read_text(encoding="utf-8", errors="ignore")
+            except Exception:
+                continue
+            if not text or len(text) < 30:
+                continue
+            tl = text.lower()
+            # substring 매칭 점수 — 키워드 등장 횟수 + distinct 키워드 가산점
+            hit_counts = {kw: tl.count(kw) for kw in kws_lower}
+            hits = sum(hit_counts.values())
+            if hits == 0:
+                continue
+            distinct = sum(1 for c in hit_counts.values() if c > 0)
+            # 단위 포함 숫자 보너스 (본문 우대 — DBMS 케이스 목차 vs 본문 구분)
+            unit_nums = len(_re_ft.findall(r"\d+\.?\d*\s*(?:%|억|만|천|원|달러|건|개)", text))
+            # 목차 페널티 강화 [v3.1]
+            toc_dots = text.count("…")
+            # "…42" 같은 페이지 참조 패턴 (목차 핵심 특징)
+            toc_page_refs = len(_re_ft.findall(r"…+\s*\d{1,3}\b", text))
+            # 목차 의심 강도 (0~1) — 페이지 참조가 많거나 점선 비율 높으면 강한 페널티
+            is_toc_strong = (toc_page_refs >= 5) or (toc_dots >= 30)
+
+            if is_toc_strong:
+                # 목차로 확정 → 강한 페널티 (점수 1/4 + 추가 차감)
+                score = (hits + distinct + min(unit_nums, 5)) // 2 - toc_page_refs
+            else:
+                # 본문 우대: 단위 숫자 가중치 ↑, 점선 가벼운 페널티
+                score = hits * 2 + distinct * 5 + min(unit_nums, 5) * 3 - toc_dots // 3
+
+            if score <= 0:
+                continue
+
+            # 매칭 위치 ±400자 윈도우
+            first_pos = next((tl.find(kw) for kw in kws_lower if tl.find(kw) >= 0), 0)
+            c_start = max(0, first_pos - 400)
+            c_end   = min(len(text), first_pos + 400)
+            chunk_text = text[c_start:c_end].strip()
+            chunk_text = _re_ft.sub(r"\n{3,}", "\n\n", chunk_text)
+
+            matched_pages.setdefault(stem, []).append({
+                "text":  chunk_text,
+                "page":  page_idx + 1,  # 1-indexed 사용자 표시
+                "score": score,
+            })
+
+    # ── 2단계: stem → source 정리 (파일명 매칭 보너스 포함) ─────────────
+    def _stem_to_real_name(s: str) -> str:
+        """trichef stem '2015_SW산업 연간보고서__491c85c9' → '2015_SW산업 연간보고서.pdf'"""
+        real = _re_ft.sub(r"__[a-f0-9]+$", "", s)
+        return real + ".pdf"
+
+    def _resolve_path(stem: str) -> str:
+        """registry 에서 절대경로 찾기."""
+        for key, val in doc_reg.items():
+            if key.startswith(stem) or stem in key:
+                if isinstance(val, dict):
+                    abs_p = val.get("abs") or val.get("path") or ""
+                    if abs_p:
+                        return abs_p
+        return ""
+
+    candidates: list[dict] = []
+    for stem, pages in matched_pages.items():
+        file_name = _stem_to_real_name(stem)
+        file_path = _resolve_path(stem)
+        # 파일명 매칭 보너스
+        fn_lower = file_name.lower()
+        name_bonus = 0
+        for kw in kws_lower:
+            if kw in fn_lower:
+                name_bonus += 20
+        pages.sort(key=lambda x: -x["score"])
+        top_pages = pages[:6]
+        total_score = sum(p["score"] for p in top_pages) + name_bonus
+        candidates.append({
+            "file_name":      file_name,
+            "file_path":      file_path,
+            "file_type":      "doc",
+            "trichef_id":     stem,
+            "similarity":     round(min(1.0, total_score / 100.0), 4),
+            "confidence":     round(min(1.0, total_score / 100.0), 4),
+            "found":          True,
+            "matched_chunks": [p["text"] for p in top_pages],
+            "chunks_meta":    top_pages,
+            "score":          total_score,
+            "name_bonus":     name_bonus,
+        })
+
+    # ── 3단계: 파일명만 매칭되고 본문 매칭 없는 파일도 추가 ─────────────
+    matched_stems = set(matched_pages.keys())
+    for key, val in doc_reg.items():
+        if not isinstance(val, dict):
+            continue
+        # stem 추출 — registry key 가 stem 일 수도 있음
+        stem = key
+        if stem in matched_stems:
+            continue
+        file_name = _stem_to_real_name(stem)
+        fn_lower = file_name.lower()
+        name_hits = sum(1 for kw in kws_lower if kw in fn_lower)
+        if name_hits == 0:
+            continue
+        # 파일명만 매칭 — chunks 없음 (본문 없는 source)
+        file_path = val.get("abs") or val.get("path") or ""
+        candidates.append({
+            "file_name":      file_name,
+            "file_path":      file_path,
+            "file_type":      "doc",
+            "trichef_id":     stem,
+            "similarity":     round(min(1.0, (name_hits * 20) / 100.0), 4),
+            "confidence":     round(min(1.0, (name_hits * 20) / 100.0), 4),
+            "found":          True,
+            "matched_chunks": [],
+            "chunks_meta":    [],
+            "score":          name_hits * 20,
+            "name_bonus":     name_hits * 20,
+        })
+
+    # ── 정렬 + topk 컷 ────────────────────────────────────────────────
+    candidates.sort(key=lambda x: -x.get("score", 0))
+    topk = max(5, state.get("topk", 10))
+    candidates = candidates[:topk]
+
+    logger.info(
+        f"[fulltext_search] keywords={kws_lower} → {len(candidates)} sources "
+        f"(top score={candidates[0].get('score') if candidates else 0})"
+    )
+
+    _emit({"type": "candidates", "items": candidates})
+    time.sleep(0.2)
+    if candidates:
+        _emit({"type": "selected", "sources": candidates})
+    time.sleep(0.1)
+
+    return {
+        "candidates":      candidates,
+        "scan_results":    candidates,
+        "matched_sources": candidates,
+    }
+
+
+# ── 노드 [v3] extract: chunks 메타 정리 → references ──────────────────
+
+def _looks_like_toc_snippet(text: str) -> bool:
+    """[v3.1] 목차/색인 페이지 chunk 감지 — extract 단계에서 제외.
+
+    판정 기준 (OR):
+    - 점선 `…` 5개 이상
+    - "…42" 같은 페이지 참조 패턴 3개 이상 (목차 핵심 특징)
+    - 줄당 평균 길이 짧고 (≤30자) 거의 모든 줄이 숫자로 끝남
+    """
+    import re as _re_t
+    if not text:
+        return False
+    if text.count("…") >= 5:
+        return True
+    if len(_re_t.findall(r"…+\s*\d{1,3}\b", text)) >= 3:
+        return True
+    # 줄 단위 분석
+    lines = [ln.strip() for ln in text.split("\n") if ln.strip()]
+    if not lines:
+        return False
+    short_lines = sum(1 for ln in lines if len(ln) <= 30)
+    page_ending = sum(1 for ln in lines if _re_t.search(r"\d{1,3}\s*$", ln))
+    # 절반 이상이 짧고 페이지번호로 끝나면 목차
+    if len(lines) >= 4 and short_lines / len(lines) > 0.6 and page_ending / len(lines) > 0.5:
+        return True
+    return False
+
+
+def extract_node(state: dict) -> dict:
+    """[v3] matched_sources 의 chunks_meta 를 정리해서 references 만들기.
+
+    references 형식:
+      {"src": file_name, "type": doc/video/audio/image,
+       "page": 35 (doc only) | None,
+       "timestamp": "MM:SS" (av only) | None,
+       "snippet": str (200자), "score": int}
+
+    [v3.1] 목차/색인 chunk 자동 제외 (_looks_like_toc_snippet).
+    SSE 'extract' 이벤트로 references 노출. generate 가 인용 시 사용.
+    """
+    matched = state.get("matched_sources") or []
+    references: list[dict] = []
+    skipped_toc = 0
+    for src in matched:
+        ftype = src.get("file_type", "")
+        fname = src.get("file_name", "?")
+        for cm in (src.get("chunks_meta") or []):
+            text = (cm.get("text") or "").strip()
+            if not text:
+                continue
+            # [v3.1] 목차/색인 의심 chunk 제외 (doc 한정)
+            if ftype == "doc" and _looks_like_toc_snippet(text):
+                skipped_toc += 1
+                continue
+            ref = {
+                "src":      fname,
+                "type":     ftype,
+                "snippet":  text[:200],
+                "score":    cm.get("score", 0),
+            }
+            if ftype == "doc":
+                ref["page"] = cm.get("page")
+                ref["timestamp"] = None
+            elif ftype in ("video", "movie", "audio", "music"):
+                ref["page"] = None
+                ref["timestamp"] = cm.get("timestamp")
+            else:
+                ref["page"] = None
+                ref["timestamp"] = None
+            references.append(ref)
+
+    # score 내림차순 정렬 (forced-quote 에서 상위 노출)
+    references.sort(key=lambda r: -r.get("score", 0))
+
+    if skipped_toc:
+        logger.info(f"[extract_node] 목차/색인 chunk {skipped_toc}개 제외 → {len(references)} refs")
+
+    _emit({
+        "type":        "extract",
+        "references":  references,
+        "count":       len(references),
+        "skipped_toc": skipped_toc,
+    })
+    time.sleep(0.1)
+    return {"references": references}
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -1584,10 +2299,11 @@ def generate_node(state: dict) -> dict:
     # generating 시작 알림
     _emit({"type": "generating"})
 
-    # ── 직접 생성 (핵심 수치 강제 인용 포함) ─────────────────────────────
+    # ── 직접 생성 (핵심 수치 강제 인용 + [v3] 위치 정보 references 포함) ──
+    references = state.get("references") or []
     messages = _build_rag_messages(
         question, context, matched_sources, prior_history,
-        extracted="", key_facts=key_facts,
+        extracted="", key_facts=key_facts, references=references,
     )
 
     full_answer  = ""
@@ -1679,57 +2395,81 @@ def _get_rag_graph():
                 raise RuntimeError("LangGraph 미설치")
 
             builder = StateGraph(RAGState)
-            builder.add_node("router",           router_node)
-            builder.add_node("intent",           intent_node)
-            builder.add_node("search",           search_node)
-            builder.add_node("scan",             scan_node)
-            builder.add_node("select",           select_node)
-            builder.add_node("followup_select",  followup_select_node)
-            builder.add_node("direct_generate",  direct_generate_node)
-            builder.add_node("generate",         generate_node)
-            builder.add_node("qa_generate",      qa_generate_node)
+            # [v3] 노드: chat·qa_gen 제거. followup_intent / followup_search / fulltext_search / extract 신규.
+            builder.add_node("router",            router_node)
+            builder.add_node("intent",            intent_node)
+            builder.add_node("search",            search_node)
+            builder.add_node("scan",              scan_node)
+            builder.add_node("select",            select_node)
+            builder.add_node("fulltext_search",   fulltext_search_node)
+            builder.add_node("followup_intent",   followup_intent_node)
+            builder.add_node("followup_search",   followup_search_node)
+            builder.add_node("extract",           extract_node)
+            builder.add_node("generate",          generate_node)
 
             # START → router
             builder.add_edge(START, "router")
 
-            # router → 조건 분기
-            # (qa_gen → _route_edge 내부에서 "rag" 반환 → intent 공유)
+            # router → rag / followup
             builder.add_conditional_edges(
                 "router",
                 _route_edge,
                 {
                     "rag":      "intent",
-                    "chat":     "direct_generate",
-                    "followup": "followup_select",
+                    "followup": "followup_intent",
                 },
             )
 
-            # rag / qa_gen 공통 경로 (intent → search → scan → select)
-            builder.add_edge("intent",  "search")
+            # RAG intent 후 mode 분기:
+            #   structured → search → scan → select → extract
+            #   open       → fulltext_search → extract  (search/scan/select 한 노드로 압축)
+            builder.add_conditional_edges(
+                "intent",
+                _after_intent_edge,
+                {
+                    "structured": "search",
+                    "open":       "fulltext_search",
+                },
+            )
+
+            # structured 경로: intent → search → scan → select → extract → generate
             builder.add_edge("search",  "scan")
             builder.add_edge("scan",    "select")
+            builder.add_edge("select",  "extract")
 
-            # select 이후 분기: qa_gen → qa_generate, rag → generate
+            # open 경로: intent → fulltext_search → extract → generate
+            builder.add_edge("fulltext_search", "extract")
+
+            # FOLLOWUP 경로: followup_intent → followup_search
+            builder.add_edge("followup_intent", "followup_search")
+
+            # followup_search 분기:
+            #   exist → extract → generate
+            #   none  → intent (RAG 사이클, fallback_from_followup=True 로 무한루프 방지)
             builder.add_conditional_edges(
-                "select",
-                _after_select_edge,
+                "followup_search",
+                _after_followup_search_edge,
                 {
-                    "generate":    "generate",
-                    "qa_generate": "qa_generate",
+                    "exist": "extract",
+                    "none":  "_followup_fallback_marker",
                 },
             )
 
-            # followup 경로
-            builder.add_edge("followup_select", "generate")
+            # followup → rag 폴백 마커 노드 (state flag 설정 후 intent 로 진입)
+            def _followup_fallback_marker(state: dict) -> dict:
+                _emit({"type": "followup_fallback", "reason": "이전 파일에서 못 찾음 → 전체 검색 시작"})
+                return {"fallback_from_followup": True, "route": "rag"}
 
-            # 종료
-            builder.add_edge("generate",        END)
-            builder.add_edge("direct_generate", END)
-            builder.add_edge("qa_generate",     END)
+            builder.add_node("_followup_fallback_marker", _followup_fallback_marker)
+            builder.add_edge("_followup_fallback_marker", "intent")
+
+            # extract → generate → END
+            builder.add_edge("extract",  "generate")
+            builder.add_edge("generate", END)
 
             checkpointer = MemorySaver()
             _rag_graph = builder.compile(checkpointer=checkpointer)
-            logger.info("[aimode] LangGraph RAG 그래프 빌드 완료")
+            logger.info("[aimode v3] LangGraph 그래프 빌드 완료 (router/intent/search/scan/select/extract/followup_intent/followup_search/generate)")
         except Exception as e:
             logger.warning(f"[aimode] 그래프 빌드 실패, 폴백 모드: {e}")
             _rag_graph = None
@@ -1741,33 +2481,46 @@ def _get_rag_graph():
 # ══════════════════════════════════════════════════════════════════════
 
 def _run_nodes_fallback(state: dict) -> None:
-    """LangGraph 없을 때 노드를 순서대로 직접 호출."""
+    """[v3] LangGraph 미설치 시 노드 순차 호출. RAG / FOLLOWUP 2-route."""
     update = router_node(state); state.update(update)
     route = state.get("route", "rag")
 
-    if route == "chat":
-        direct_generate_node(state)
-        return
-
+    # ── FOLLOWUP ──
     if route == "followup":
-        update = followup_select_node(state); state.update(update)
+        update = followup_intent_node(state); state.update(update)
+        update = followup_search_node(state); state.update(update)
+        if state.get("matched_sources"):
+            update = extract_node(state);    state.update(update)
+            generate_node(state)
+            return
+        # 매칭 없음 → RAG 폴백
+        _emit({"type": "followup_fallback", "reason": "이전 파일에서 못 찾음 → 전체 검색 시작"})
+        state["fallback_from_followup"] = True
+        state["route"] = "rag"
+        # 폴백 후 RAG 흐름으로 fall through
+
+    # ── RAG ──
+    update = intent_node(state);   state.update(update)
+
+    # [v3] mode 분기: structured (기존) vs open (fulltext_search)
+    if state.get("rag_mode") == "open":
+        update = fulltext_search_node(state); state.update(update)
+        if not state.get("candidates"):
+            _emit({"type": "error", "message": "키워드와 일치하는 자료를 찾지 못했습니다."})
+            return
+        update = extract_node(state);  state.update(update)
         generate_node(state)
         return
 
-    # rag / qa_gen 공통 파이프라인 (intent → search → scan → select)
-    update = intent_node(state);   state.update(update)
+    # structured 경로
     update = search_node(state);   state.update(update)
     if not state.get("candidates"):
         _emit({"type": "error", "message": "검색 결과 없음 — 다른 질문을 시도해보세요."})
         return
     update = scan_node(state);     state.update(update)
     update = select_node(state);   state.update(update)
-
-    # 최종 생성 분기
-    if route == "qa_gen":
-        update = qa_generate_node(state); state.update(update)
-    else:
-        update = generate_node(state);    state.update(update)
+    update = extract_node(state);  state.update(update)
+    generate_node(state)
 
 
 def _rag_sse(question: str, topk: int, thread_id: str,
@@ -1798,22 +2551,25 @@ def _rag_sse(question: str, topk: int, thread_id: str,
     q: Queue = Queue()
 
     initial_state = {
-        "question":        question,
-        "thread_id":       thread_id,
-        "topk":            topk,
-        "model":           model,
-        "route":           "",
-        "prev_sources":    [],
-        "intent_message":  "",
-        "file_keywords":   [],
-        "detail_keywords": [],
-        "candidates":      [],
-        "scan_results":    [],
-        "matched_sources": [],
-        "answer":          "",
-        "qa_question":     "",
-        "qa_answer":       "",
-        "qa_attempts":     0,
+        "question":               question,
+        "thread_id":              thread_id,
+        "topk":                   topk,
+        "model":                  model,
+        "route":                  "",
+        "prev_sources":           [],
+        "fallback_from_followup": False,
+        "intent_message":         "",
+        "file_keywords":          [],
+        "detail_keywords":        [],
+        "rag_mode":               "structured",
+        "candidates":             [],
+        "scan_results":           [],
+        "matched_sources":        [],
+        "references":             [],
+        "answer":                 "",
+        "qa_question":            "",
+        "qa_answer":              "",
+        "qa_attempts":            0,
     }
 
     def run_graph():
