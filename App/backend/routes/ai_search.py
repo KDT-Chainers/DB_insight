@@ -24,7 +24,7 @@ from config import PATHS
 
 logger = logging.getLogger(__name__)
 ai_search_bp = Blueprint("ai_search", __name__, url_prefix="/api/ai")
-SUPPORTED_GEMMA_MODELS = ("gemma3:12b", "gemma3:4b")
+SUPPORTED_GEMMA_MODELS = ("gemma3:12b", "gemma3:4b", "gemma3:4b-it-qat")
 
 
 # ── 도메인 키워드 힌트 ────────────────────────────────────────────────────────

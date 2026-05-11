@@ -59,9 +59,10 @@ for i, (d, b, col) in enumerate(zip(deltas, bottoms, colors)):
                 ha="center", va="bottom",
                 fontsize=13, color=col, fontweight="bold", zorder=4)
 
-    # Cumulative label above bar
+    # Cumulative label above bar — zero-height bars need extra offset to avoid "0%" overlap
     top = b + d
-    ax.text(i, top + 1.8, f"{top}%",
+    cum_offset = 5.5 if d == 0 else 1.8
+    ax.text(i, top + cum_offset, f"{top}%",
             ha="center", va="bottom",
             fontsize=14, fontweight="bold", color="#222222", zorder=4)
 
@@ -73,13 +74,13 @@ for i in range(n - 1):
 
 # 90% target line
 ax.axhline(90, color="#AAAAAA", ls="--", lw=1.8, alpha=0.7, zorder=1)
-ax.text(n - 0.5, 91.5, "90% target", fontsize=13, color="#AAAAAA",
-        ha="right", fontweight="bold")
+ax.text(-0.50, 91.5, "90% target", fontsize=13, color="#AAAAAA",
+        ha="left", fontweight="bold")
 
 # Axis formatting
 ax.set_xticks(x)
-ax.set_xticklabels(labels, fontsize=13, fontweight="bold")
-ax.set_ylabel("Top-1 Confidence ≥ 0.90  (%)", fontsize=16, fontweight="bold")
+ax.set_xticklabels(labels, fontsize=16, fontweight="bold")
+ax.set_ylabel("Top-1 Confidence ≥ 0.90  (%)", fontsize=20, fontweight="bold")
 ax.set_ylim(0, 108)
 ax.set_xlim(-0.55, n - 0.45)
 
@@ -89,11 +90,11 @@ ax.axvspan(3.5,   5.5, alpha=0.04, color="#607D8B", zorder=0)  # channel phase
 ax.axvspan(5.5,   6.5, alpha=0.04, color="#C62828", zorder=0)  # calibration
 
 # Category labels
-ax.text(1.5,  105, "Embedding Axes", ha="center", fontsize=13,
+ax.text(1.5,  105, "Embedding Axes", ha="center", fontsize=16,
         color="#2E7D52", fontweight="bold")
-ax.text(4.5,  105, "Fusion\nChannels", ha="center", fontsize=13,
+ax.text(4.5,  105, "Fusion Channels", ha="center", fontsize=16,
         color="#607D8B", fontweight="bold")
-ax.text(6.0,  105, "Calib.", ha="center", fontsize=13,
+ax.text(6.0,  105, "Calib.", ha="center", fontsize=16,
         color="#C62828", fontweight="bold")
 ax.axvline(3.5, color="#CCCCCC", lw=1.2, ls=":", zorder=1)
 ax.axvline(5.5, color="#CCCCCC", lw=1.2, ls=":", zorder=1)
@@ -103,8 +104,8 @@ summary = ("Total gain:  60% → 93%  (+33pp)\n"
            "Largest contributor:  +Im  (+13pp)\n"
            "Calibration:  +6pp  (final stage)\n"
            "Sparse & ASF:  +0pp  (on this metric)")
-ax.text(0.02, 0.28, summary, transform=ax.transAxes,
-        fontsize=12, va="top", ha="left",
+ax.text(0.15, 0.20, summary, transform=ax.transAxes,
+        fontsize=15, va="top", ha="left",
         bbox=dict(boxstyle="round,pad=0.5", facecolor="#E8F5E9",
                   edgecolor="#4CAF50", alpha=0.95, lw=1.5))
 

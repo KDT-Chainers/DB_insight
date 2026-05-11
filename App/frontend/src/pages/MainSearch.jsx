@@ -763,6 +763,8 @@ function ResultCard({
   onClick,
   securityMode = false,
   query = "",
+  selected = false,
+  onToggleSelect = null,
 }) {
   const isAV = result.file_type === "video" || result.file_type === "audio";
   const hasPreview =
@@ -881,6 +883,24 @@ function ResultCard({
       <div className="absolute top-2 left-2 z-20 bg-gradient-to-r from-[#1c253e] via-[#243357] to-[#2b3f6e] border border-[#5c78b8]/45 text-[#dbe7ff] min-w-[32px] h-7 px-2 rounded-full flex items-center justify-center font-bold text-xs shadow-[0_0_10px_rgba(92,120,184,0.22)]">
         #{rank}
       </div>
+
+      {/* PDF 선택 체크박스 — onToggleSelect 전달 시에만 표시 */}
+      {onToggleSelect && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onToggleSelect(result.file_path); }}
+          title={selected ? "PDF 선택 해제" : "PDF에 포함"}
+          className={`absolute top-2 right-2 z-30 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all duration-150
+            ${selected
+              ? "border-primary bg-primary shadow-[0_0_8px_rgba(133,173,255,0.6)]"
+              : "border-white/30 bg-black/40 hover:border-primary/70 hover:bg-primary/20"
+            }`}
+        >
+          {selected && (
+            <span className="material-symbols-outlined text-[11px] text-on-primary font-bold">check</span>
+          )}
+        </button>
+      )}
 
       {/* AV: 플레이어 — [PERF] 클릭 시에만 마운트 (지연 로딩) */}
       {isAV && (
@@ -1474,6 +1494,14 @@ export default function MainSearch() {
   const summaryAbortRef = useRef(null);
   const pendingSearchTimeoutRef = useRef(null);
 
+  // PDF 내보내기
+  const [pdfModalOpen, setPdfModalOpen] = useState(false);
+  const [pdfSavePath, setPdfSavePath] = useState("");
+  const [pdfExporting, setPdfExporting] = useState(false);
+  const [pdfResult, setPdfResult] = useState(null); // { ok, message }
+  const pdfAbortRef = useRef(null); // AbortController — 생성 취소용
+  const [selectedForPdf, setSelectedForPdf] = useState(new Set()); // 선택된 결과 file_path 집합
+
   // home → results 애니메이션
   const [flyStyle, setFlyStyle] = useState(null);
   const [homeExiting, setHomeExiting] = useState(false);
@@ -1674,6 +1702,17 @@ export default function MainSearch() {
       // (lazy loading으로 UI freeze 해결됨)
       const data = await searchFiles(q, topK, type);
       setResults(data);
+      // 동영상 썸네일 백그라운드 사전 캐싱 (PDF 생성 속도 향상)
+      const videoPaths = data
+        .filter(r => ["video","movie"].includes((r.file_type||"").toLowerCase()))
+        .map(r => r.file_path).filter(Boolean);
+      if (videoPaths.length > 0) {
+        fetch(`${API_BASE}/api/export/warmup-thumbs`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ paths: videoPaths }),
+        }).catch(() => {});
+      }
       // 검색 기록 저장 → 완료 후 사이드바 갱신 이벤트
       fetch(`${API_BASE}/api/history`, {
         method: "POST",
@@ -1725,6 +1764,11 @@ export default function MainSearch() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [domainFilter]);
 
+  // 검색 결과 변경 시 PDF 선택 초기화
+  useEffect(() => {
+    setSelectedForPdf(new Set());
+  }, [results]);
+
   // 모달에서 파일 선택 (드래그앤드롭 또는 클릭)
   const handleImageFileSelect = useCallback(
     (file) => {
@@ -1773,12 +1817,13 @@ export default function MainSearch() {
       if (summaryAbortRef.current) summaryAbortRef.current.abort();
       const ctrl = new AbortController();
       summaryAbortRef.current = ctrl;
-      // 90초 타임아웃 — 본문 추출 + LLM 생성 합계 기준
+      // 150초 타임아웃 — 본문 추출 + VRAM 스왑(최대 ~40s) + LLM 생성 합계 기준
+      // [v] gemma3:4b-it-qat VRAM 스왑+재로드 시에도 여유 있게 150s로 상향
       const _summaryTimer = setTimeout(() => {
         ctrl.abort();
-        setSummaryError("요약 시간이 초과됐습니다 (90초). 잠시 후 다시 시도해 주세요.");
+        setSummaryError("요약 시간이 초과됐습니다 (150초). 잠시 후 다시 시도해 주세요.");
         setSummarizing(false);
-      }, 90000);
+      }, 150000);
       setSummarizing(true);
       setSummaryText("");
       setSummaryDone(false);
@@ -1916,6 +1961,82 @@ export default function MainSearch() {
     },
     [closeSummary],
   );
+
+  // PDF 내보내기 핸들러
+  const handleExportPdf = useCallback(async () => {
+    if (!results.length) return;
+    setPdfExporting(true);
+    setPdfResult(null);
+
+    // AbortController — 취소 버튼에서 호출
+    const abortCtrl = new AbortController();
+    pdfAbortRef.current = abortCtrl;
+
+    // 선택 항목 우선 → 없으면 domainFilter 기준 필터링 → 없으면 전체
+    const _normFt = (ft) =>
+      ({ doc_page: "doc", movie: "video", music: "audio" }[(ft || "").toLowerCase()] ||
+       (ft || "").toLowerCase());
+    const pdfResults = selectedForPdf.size > 0
+      ? results.filter((r) => selectedForPdf.has(r.file_path))
+      : domainFilter
+        ? results.filter((r) => _normFt(r.file_type) === domainFilter)
+        : results;
+
+    // 빈 결과 방지
+    if (pdfResults.length === 0) {
+      setPdfResult({ ok: false, message: "PDF에 포함할 항목이 없습니다. 항목을 선택하거나 검색 결과를 확인하세요." });
+      setPdfExporting(false);
+      return;
+    }
+
+    try {
+      const payload = { query, results: pdfResults, max_per_type: 50 };
+      if (pdfSavePath.trim()) payload.save_path = pdfSavePath.trim();
+      const res = await fetch(`${API_BASE}/api/export/pdf`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: abortCtrl.signal,
+      });
+      if (pdfSavePath.trim()) {
+        const data = await res.json();
+        if (data.ok) {
+          setPdfResult({ ok: true, message: `저장 완료 (${data.size_kb}KB)\n${data.saved_path}`, saved_path: data.saved_path });
+        } else {
+          setPdfResult({ ok: false, message: data.error || "저장 실패" });
+        }
+      } else {
+        if (!res.ok) {
+          let errText = await res.text();
+          try { errText = JSON.parse(errText).error || errText; } catch {}
+          throw new Error(errText);
+        }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        const cd = res.headers.get("content-disposition") || "";
+        const m = cd.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+        a.download = m ? m[1].replace(/['"]/g, "") : `insight_${query}_${Date.now()}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        let tmpPath = res.headers.get("X-Saved-Path") || res.headers.get("x-saved-path") || "";
+        try { tmpPath = decodeURIComponent(tmpPath); } catch {}
+        setPdfResult({ ok: true, message: "PDF 다운로드가 시작됐습니다.", saved_path: tmpPath || undefined });
+      }
+    } catch (e) {
+      if (e.name === "AbortError") {
+        setPdfResult({ ok: false, message: "PDF 생성이 취소됐습니다." });
+      } else {
+        setPdfResult({ ok: false, message: e.message });
+      }
+    } finally {
+      setPdfExporting(false);
+      pdfAbortRef.current = null;
+    }
+  }, [results, query, pdfSavePath, domainFilter]);
 
   const doSearch = (q) => {
     if (!q.trim() || aiTransitioning) return;
@@ -2468,12 +2589,7 @@ export default function MainSearch() {
                   <button
                     type="button"
                     onClick={() => setSecurityMode((v) => !v)}
-                    title={
-                      securityMode
-                        ? "보안 모드 켜짐: 결과 미리보기에 PII 마스킹 적용"
-                        : "보안 모드 꺼짐"
-                    }
-                    className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 shrink-0
+                    className={`relative group/sec w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 shrink-0
                       ${
                         securityMode
                           ? "bg-red-500/20 text-red-400 ring-2 ring-red-400/40 shadow-[0_0_20px_rgba(248,113,113,0.3)]"
@@ -2489,6 +2605,27 @@ export default function MainSearch() {
                       }
                     >
                       shield
+                    </span>
+                    <span className="pointer-events-none absolute right-full top-1/2 -translate-y-1/2 mr-2 whitespace-nowrap rounded bg-[#1e293b] border border-white/10 px-2 py-1 text-xs text-on-surface opacity-0 group-hover/sec:opacity-100 transition-opacity duration-150 z-50">
+                      {securityMode ? "보안 모드 켜짐: PII 마스킹 적용" : "보안 모드 꺼짐"}
+                    </span>
+                  </button>
+                  {/* PDF 내보내기 버튼 — 검색 결과 있을 때만 활성 */}
+                  <button
+                    type="button"
+                    onClick={() => { setPdfModalOpen(true); setPdfResult(null); }}
+                    disabled={!results.length}
+                    className={`relative group/pdf w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 shrink-0
+                      ${results.length
+                        ? "text-on-surface-variant hover:text-primary hover:bg-primary/10"
+                        : "text-on-surface-variant/25 cursor-not-allowed"
+                      }`}
+                  >
+                    <span className="material-symbols-outlined text-[22px] leading-none">
+                      picture_as_pdf
+                    </span>
+                    <span className="pointer-events-none absolute right-full top-1/2 -translate-y-1/2 mr-2 whitespace-nowrap rounded bg-[#1e293b] border border-white/10 px-2 py-1 text-xs text-on-surface opacity-0 group-hover/pdf:opacity-100 transition-opacity duration-150 z-50">
+                      {results.length ? `PDF 저장 (${results.length}건)` : "검색 결과 없음"}
                     </span>
                   </button>
                 </div>
@@ -2695,11 +2832,11 @@ export default function MainSearch() {
             )}
 
             <div className="ml-auto flex shrink-0 items-center gap-2">
+              {/* 보안 모드 토글 */}
               <button
                 type="button"
                 onClick={() => setSecurityMode((v) => !v)}
-                title={securityMode ? "보안 모드 켜짐" : "보안 모드 꺼짐"}
-                className={`flex h-10 w-10 items-center justify-center rounded-full border transition-all duration-200 ${
+                className={`relative group/sec flex h-10 w-10 items-center justify-center rounded-full border transition-all duration-200 ${
                   securityMode
                     ? "border-red-400/50 bg-red-500/15 text-red-400"
                     : "border-white/[0.08] bg-white/[0.04] text-on-surface-variant hover:text-red-400"
@@ -2712,6 +2849,25 @@ export default function MainSearch() {
                   }
                 >
                   shield
+                </span>
+                <span className="pointer-events-none absolute right-full top-1/2 -translate-y-1/2 mr-2 whitespace-nowrap rounded bg-[#1e293b] border border-white/10 px-2 py-1 text-xs text-on-surface opacity-0 group-hover/sec:opacity-100 transition-opacity duration-150 z-50">
+                  {securityMode ? "보안 모드 켜짐" : "보안 모드 꺼짐"}
+                </span>
+              </button>
+              {/* PDF 내보내기 버튼 */}
+              <button
+                type="button"
+                onClick={() => { setPdfModalOpen(true); setPdfResult(null); }}
+                disabled={!results.length}
+                className={`relative group/pdf flex h-10 w-10 items-center justify-center rounded-full border transition-all duration-200 ${
+                  results.length
+                    ? "border-white/[0.08] bg-white/[0.04] text-on-surface-variant hover:text-primary hover:border-primary/30 hover:bg-primary/10"
+                    : "border-white/[0.04] bg-transparent text-on-surface-variant/25 cursor-not-allowed"
+                }`}
+              >
+                <span className="material-symbols-outlined text-lg">picture_as_pdf</span>
+                <span className="pointer-events-none absolute right-full top-1/2 -translate-y-1/2 mr-2 whitespace-nowrap rounded bg-[#1e293b] border border-white/10 px-2 py-1 text-xs text-on-surface opacity-0 group-hover/pdf:opacity-100 transition-opacity duration-150 z-50">
+                  {results.length ? `PDF 저장 (${results.length}건)` : "검색 결과 없음"}
                 </span>
               </button>
             </div>
@@ -2847,7 +3003,9 @@ export default function MainSearch() {
             <section className="relative z-10 rounded-[22px] border border-white/[0.07] bg-white/[0.02] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] backdrop-blur-[40px]">
               {/* [#2] 도메인 필터 칩 — 검색창 구조 미변경, 결과 헤더 아래에 독립 마운트.
                   (이전 -mt-3 는 히어로 카드와 겹치며 필터 드롭다운을 가림) */}
-              <div className="mb-6">
+              {/* relative z-[90]: 로딩 오버레이(z-[80])가 같은 스태킹 컨텍스트 내에서
+                  DomainFilter 를 덮는 문제 방지 — 검색 중에도 탭 전환 가능 */}
+              <div className="mb-6 relative z-[90]">
                 <DomainFilter
                   value={domainFilter}
                   onChange={setDomainFilter}
@@ -2978,6 +3136,14 @@ export default function MainSearch() {
                           onClick={() => handleSelectFile(r)}
                           securityMode={securityMode}
                           query={query}
+                          selected={selectedForPdf.has(r.file_path)}
+                          onToggleSelect={(fp) => {
+                            setSelectedForPdf(prev => {
+                              const next = new Set(prev);
+                              next.has(fp) ? next.delete(fp) : next.add(fp);
+                              return next;
+                            });
+                          }}
                         />
                       ))}
                     </div>
@@ -3782,6 +3948,208 @@ export default function MainSearch() {
       )}
 
       {/* (요약 모달 제거됨 — 상세 페이지 하단 인라인 패널로 변경됨) */}
+
+      {/* ── PDF 내보내기 모달 ────────────────────────────────────── */}
+      {pdfModalOpen && (
+        <div
+          className="fixed inset-0 z-[110] flex items-center justify-center bg-[#020612]/75 backdrop-blur-[8px]"
+          onClick={() => { if (!pdfExporting) setPdfModalOpen(false); }}
+        >
+          <div
+            className="relative w-full max-w-md rounded-3xl border border-white/[0.09] bg-[#0d1424] p-7 shadow-[0_24px_64px_rgba(0,0,0,0.6)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* 헤더 */}
+            <div className="flex items-center gap-3 mb-6">
+              <span className="material-symbols-outlined text-3xl text-primary">picture_as_pdf</span>
+              <div>
+                <h2 className="text-base font-bold text-on-surface">검색 결과 PDF 저장</h2>
+                <p className="text-xs text-on-surface-variant mt-0.5">
+                  {selectedForPdf.size > 0
+                    ? <><span className="text-primary font-bold">{selectedForPdf.size}건 선택</span> 을 PDF로 정리합니다</>
+                    : <>총 <span className="text-primary font-bold">
+                        {domainFilter
+                          ? results.filter(r => {
+                              const ft = (r.file_type||"").toLowerCase().replace("doc_page","doc").replace("movie","video").replace("music","audio");
+                              return ft === domainFilter;
+                            }).length
+                          : results.length}건
+                      </span>을 PDF로 정리합니다</>
+                  }
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPdfModalOpen(false)}
+                disabled={pdfExporting}
+                className="ml-auto text-on-surface-variant hover:text-on-surface disabled:opacity-40"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            {/* 선택 모드 안내 + 전체 선택/해제 */}
+            <div className="mb-4 flex items-center gap-2 text-xs text-on-surface-variant/70">
+              <span className="material-symbols-outlined text-sm text-primary/60">touch_app</span>
+              <span>카드 우측 상단 ○ 클릭으로 개별 선택</span>
+              <button
+                type="button"
+                disabled={pdfExporting}
+                onClick={() => {
+                  const _nft2 = (ft) =>
+                    ({ doc_page:"doc", movie:"video", music:"audio" }[(ft||"").toLowerCase()] || (ft||"").toLowerCase());
+                  const filteredItems = domainFilter
+                    ? results.filter(r => _nft2(r.file_type) === domainFilter)
+                    : results;
+                  const allSelected = filteredItems.length > 0 &&
+                    filteredItems.every(r => selectedForPdf.has(r.file_path));
+                  if (allSelected) {
+                    setSelectedForPdf(new Set());
+                  } else {
+                    setSelectedForPdf(new Set(filteredItems.map(r => r.file_path)));
+                  }
+                }}
+                className="ml-auto px-3 py-1 rounded-full border border-white/10 hover:bg-white/5 transition disabled:opacity-40 whitespace-nowrap"
+              >
+                {(() => {
+                  const _nft2 = (ft) =>
+                    ({ doc_page:"doc", movie:"video", music:"audio" }[(ft||"").toLowerCase()] || (ft||"").toLowerCase());
+                  const filteredItems = domainFilter
+                    ? results.filter(r => _nft2(r.file_type) === domainFilter)
+                    : results;
+                  return filteredItems.length > 0 && filteredItems.every(r => selectedForPdf.has(r.file_path))
+                    ? "전체 해제" : "전체 선택";
+                })()}
+              </button>
+            </div>
+
+            {/* 저장 경로 */}
+            <div className="mb-5">
+              <label className="block text-xs font-semibold text-on-surface-variant mb-2">
+                저장 경로 <span className="text-on-surface-variant/50 font-normal">(비워두면 브라우저 다운로드)</span>
+              </label>
+              <input
+                type="text"
+                value={pdfSavePath}
+                onChange={(e) => { setPdfSavePath(e.target.value); setPdfResult(null); }}
+                placeholder="예: C:\Users\사용자\Desktop"
+                disabled={pdfExporting}
+                className="w-full rounded-xl border border-white/[0.1] bg-white/[0.05] px-4 py-2.5 text-sm text-on-surface placeholder:text-on-surface-variant/40 focus:border-primary/40 focus:outline-none disabled:opacity-50"
+              />
+            </div>
+
+            {/* PDF 포함 내용 안내 */}
+            <div className="mb-5 rounded-xl bg-white/[0.03] border border-white/[0.06] p-4 text-xs text-on-surface-variant space-y-1">
+              <div className="flex items-center gap-2 text-on-surface font-semibold mb-2">
+                <span className="material-symbols-outlined text-sm">info</span>
+                PDF 포함 내용
+              </div>
+              {(() => {
+                // 실제 PDF에 들어갈 결과만 카운트 (선택 > domainFilter > 전체)
+                const _nft = (ft) =>
+                  ({ doc_page:"doc", movie:"video", music:"audio" }[(ft||"").toLowerCase()] || (ft||"").toLowerCase());
+                const pdfItems = selectedForPdf.size > 0
+                  ? results.filter(r => selectedForPdf.has(r.file_path))
+                  : domainFilter
+                    ? results.filter(r => _nft(r.file_type) === domainFilter)
+                    : results;
+                return [
+                  { icon: "image",       label: "이미지", count: pdfItems.filter(r => _nft(r.file_type) === "image").length },
+                  { icon: "description", label: "문서",   count: pdfItems.filter(r => _nft(r.file_type) === "doc").length },
+                  { icon: "movie",       label: "동영상", count: pdfItems.filter(r => _nft(r.file_type) === "video").length },
+                  { icon: "mic",         label: "음성",   count: pdfItems.filter(r => _nft(r.file_type) === "audio").length },
+                  { icon: "music_note",  label: "BGM",    count: pdfItems.filter(r => _nft(r.file_type) === "bgm").length },
+                ];
+              })().filter(t => t.count > 0).map(t => (
+                <div key={t.label} className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-sm text-primary/70">{t.icon}</span>
+                  <span>{t.label}</span>
+                  <span className="ml-auto text-primary font-bold">{t.count}건</span>
+                </div>
+              ))}
+              <div className="pt-1 text-on-surface-variant/60">미리보기 이미지 · 파일 경로 · 캡션/내용 포함</div>
+            </div>
+
+            {/* 결과 메시지 */}
+            {pdfResult && (
+              <div className={`mb-4 rounded-xl px-4 py-3 text-sm ${
+                pdfResult.ok
+                  ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-300"
+                  : "bg-rose-500/10 border border-rose-500/30 text-rose-300"
+              }`}>
+                <div className="flex items-start gap-2">
+                  <span className="material-symbols-outlined text-base mt-0.5">
+                    {pdfResult.ok ? "check_circle" : "error"}
+                  </span>
+                  <span className="whitespace-pre-wrap break-all">{pdfResult.message}</span>
+                </div>
+              </div>
+            )}
+
+            {/* 버튼 */}
+            <div className="flex gap-3 justify-end flex-wrap">
+              <button
+                type="button"
+                onClick={() => { if (!pdfExporting) setPdfModalOpen(false); }}
+                disabled={pdfExporting}
+                className="px-5 py-2 rounded-full border border-outline-variant/30 text-on-surface-variant hover:bg-white/5 transition disabled:opacity-40"
+              >
+                닫기
+              </button>
+              {/* 취소 버튼 — PDF 생성 중에만 표시 */}
+              {pdfExporting && (
+                <button
+                  type="button"
+                  onClick={() => pdfAbortRef.current?.abort()}
+                  className="px-5 py-2 rounded-full border border-rose-500/40 bg-rose-500/10 text-rose-300 font-bold hover:bg-rose-500/20 hover:border-rose-500/60 transition flex items-center gap-2"
+                >
+                  <span className="material-symbols-outlined text-base">cancel</span>
+                  취소
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={handleExportPdf}
+                disabled={pdfExporting || !results.length || searching}
+                className="px-6 py-2 rounded-full border border-primary/40 bg-primary/15 text-primary font-bold hover:bg-primary/25 hover:border-primary/60 transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {pdfExporting ? (
+                  <>
+                    <span className="material-symbols-outlined text-base animate-spin">progress_activity</span>
+                    생성 중...
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-base">download</span>
+                    {pdfSavePath.trim() ? "저장" : "다운로드"}
+                  </>
+                )}
+              </button>
+              {/* 파일 열기 — 저장 경로 지정 후 저장 성공 시에만 표시 */}
+              {pdfResult?.ok && pdfResult?.saved_path && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await fetch(`${API_BASE}/api/export/open-file`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ path: pdfResult.saved_path }),
+                      });
+                    } catch (e) {
+                      // silent — 열기 실패해도 모달 유지
+                    }
+                  }}
+                  className="px-6 py-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 font-bold hover:bg-emerald-500/20 hover:border-emerald-500/60 transition flex items-center gap-2"
+                >
+                  <span className="material-symbols-outlined text-base">open_in_new</span>
+                  파일 열기
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

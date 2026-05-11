@@ -188,19 +188,25 @@ def _get_ollama_model(task: str | None = None) -> str | None:
     허용 모델: qwen2.5:1.5b / qwen2.5:3b / gemma3:4b / gemma3:4b-it-qat / gemma3:12b
     한국어 품질·VRAM 미검증 모델(llama3, mistral, phi4 등)은 fallback 에서 제외.
 
-    모든 태스크에서 gemma3:4b-it-qat(QAT) 최우선 — 품질 일관성 유지.
-    task="summarize" : gemma3:4b-it-qat → gemma3:4b → qwen2.5:3b → qwen2.5:1.5b → gemma3:12b
+    task="summarize" : gemma3:4b(설치 시 우선) → qwen2.5:3b(VRAM 스왑 없이 공존) → gemma3:4b-it-qat → qwen2.5:1.5b → gemma3:12b
+                       [이유] gemma3:4b-it-qat(4.2GB)는 VRAM 스왑+디스크 재로드로 30~60s 소요 → 90s 타임아웃 위험.
+                             qwen2.5:3b(2.0GB)는 임베더와 공존 가능(스왑 불필요) → GPU ~40 tok/s 즉시 추론.
     task="generate"  : gemma3:4b-it-qat → gemma3:4b → qwen2.5:3b → qwen2.5:1.5b → gemma3:12b
     task=None        : gemma3:4b-it-qat → gemma3:4b → qwen2.5:3b → qwen2.5:1.5b → gemma3:12b
     """
     try:
         r = _req.get(f"{OLLAMA_URL}/api/tags", timeout=3)
         models = r.json().get("models", [])
-        # 모든 태스크: gemma3:4b-it-qat(QAT, 4.2GB) 최우선.
-        # VRAM 부족 시 gemma3:4b(3.5GB) → qwen2.5:3b(2.0GB) 순으로 강등.
+        # summarize: gemma3:4b 우선(3.5GB) → qwen2.5:3b(2.0GB, 스왑 불필요) → gemma3:4b-it-qat(폴백)
+        # 현재 gemma3:4b 미설치 환경: qwen2.5:3b 선택 → VRAM 스왑 없이 즉시 GPU 추론 → 타임아웃 해소.
+        # gemma3:4b 설치 시 자동으로 gemma3:4b 우선 적용.
         # 미검증 모델(llama3, mistral, phi4 등) 제외 — 한국어 품질·VRAM 보장 불가.
-        preferred = ["gemma3:4b-it-qat", "gemma3:4b", "qwen2.5:3b", "qwen2.5:1.5b",
-                     "gemma3:12b"]
+        if task == "summarize":
+            preferred = ["gemma3:4b", "qwen2.5:3b", "gemma3:4b-it-qat", "qwen2.5:1.5b",
+                         "gemma3:12b"]
+        else:
+            preferred = ["gemma3:4b-it-qat", "gemma3:4b", "qwen2.5:3b", "qwen2.5:1.5b",
+                         "gemma3:12b"]
         for pref in preferred:
             for m in models:
                 name = m.get("name", "").lower()
@@ -228,13 +234,12 @@ _MODEL_VRAM_MB: dict[str, int] = {
 
 
 def _ollama_oneshot(prompt: str, model: str, num_predict: int = 150,
-                    keep_alive: int = 300) -> str:
+                    keep_alive: int = 0) -> str:
     """단발 Ollama 추론.
 
-    keep_alive=300(기본): 5분간 VRAM 상주 → 세션 내 재로드 없이 즉시 추론.
-    [GPU 최적화] _get_ollama_model(None) 이 qwen2.5:3b(1.9GB)를 우선 선택하므로
-    임베딩 모델(~5GB)과 공존 가능. gemma3:12b(8.1GB) 사용 시에는 호출부에서
-    keep_alive=0 을 명시적으로 전달해 VRAM 을 즉시 반납해야 함.
+    [VRAM 최적화] keep_alive=0 기본값: 추론 완료 즉시 모델 언로드.
+    임베딩/검색 모델(SigLIP2+BGE-M3 ~5GB)과 VRAM 경합 방지.
+    AI 검색 세션 내 연속 호출 시 재로드 오버헤드(~2s)는 감수.
     """
     try:
         r = _req.post(
@@ -1288,7 +1293,8 @@ def direct_generate_node(state: dict) -> dict:
     # 하이브리드: 답변 생성은 작은 모델(4b) 사용. fallback 으로 state model 유지.
     gen_model = _get_ollama_model("generate") or model
     try:
-        for tok in _ollama_stream(messages, gen_model, num_predict=-1):
+        for tok in _ollama_stream(messages, gen_model, num_predict=-1,
+                                   keep_alive=0):   # [VRAM] 즉시 언로드
             full_answer += tok
             _emit({"type": "token", "text": tok})
     except Exception as e:
@@ -1632,7 +1638,7 @@ def generate_node(state: dict) -> dict:
 
     try:
         for tok in _ollama_stream(messages, gen_model, num_predict=np_limit,
-                                  keep_alive=0 if _gen_vram_swapped else -1):
+                                  keep_alive=0):   # [VRAM] 항상 즉시 언로드
             full_answer += tok
             _emit({"type": "token", "text": tok})
     except Exception as e:
@@ -2840,8 +2846,11 @@ def _summarize_sse(file_type: str, trichef_id: str, file_path: str,
     last_scan_len = 0
     SCAN_INTERVAL = 200
     try:
+        # [VRAM 최적화] keep_alive=0 — 요약 완료 즉시 모델 언로드.
+        # 요약은 단발성 작업이므로 5분 유지 불필요. 임베더(~5GB)와의 공존을 위해
+        # 요약 후 즉각 VRAM 반납 → 검색·인덱싱에 VRAM 최대 확보.
         for tok in _ollama_stream(messages, model, num_predict=dynamic_np, temperature=0.25,
-                                   keep_alive=0 if _vram_swapped else -1):
+                                   keep_alive=0):
             full += tok
             if secure:
                 if len(full) - last_scan_len >= SCAN_INTERVAL:

@@ -217,9 +217,12 @@ def calibrate_image_crossmodal(captions: list[str],
         j_idx = j_idx[j_idx != i_src][:pairs_per_q]
         if len(j_idx) == 0:
             continue
+        # 검색 엔진과 동일한 alpha 사용 — config SEARCH_IM_ALPHA_IMG (기본 0.45)
+        _alpha = float(TRICHEF_CFG.get("SEARCH_IM_ALPHA_IMG", 0.45))
         s = tri_gs.hermitian_score(
             q_Re[k:k+1], q_Im[k:k+1], q_Z[k:k+1],
             Re[j_idx], Im_perp[j_idx], Z_perp[j_idx],
+            alpha=_alpha,
         )[0]
         scores.extend(float(x) for x in s)
 
