@@ -37,10 +37,11 @@ const SIDEBAR_MIN_WIDTH_PX = 256
 const SIDEBAR_MAX_WIDTH_PX = 420
 
 /**
- * @param {{ entranceOn?: boolean }} props
+ * @param {{ entranceOn?: boolean, onAiQuery?: (query: string) => void }} props
  * entranceOn: 메인과 동일 타이밍(~180ms 후 true)으로 패널 **전체**가 배경에 묻인 듯했다가 선명해지며 등장. 미전달 시 애니 없음.
+ * onAiQuery: AI 모드에서 사이드바 기록 클릭 시 직접 호출 (CustomEvent 폴백 포함)
  */
-export default function SearchSidebar({ entranceOn } = {}) {
+export default function SearchSidebar({ entranceOn, onAiQuery } = {}) {
   const navigate = useNavigate()
   const location = useLocation()
   const { open, toggle } = useSidebar()
@@ -107,11 +108,13 @@ export default function SearchSidebar({ entranceOn } = {}) {
   // 사이드바 열릴 때마다 기록 갱신
   const loadHistory = useCallback(async () => {
     try {
-      const res  = await fetch(`${API_BASE}/api/history?limit=30`)
+      // AI 모드에서는 AI 검색 기록만, 일반 검색 모드에서는 일반 기록만 표시
+      const modeParam = aiPath ? 'ai' : 'search'
+      const res  = await fetch(`${API_BASE}/api/history?limit=30&mode=${modeParam}`)
       const data = await res.json()
       setHistoryList(data.history ?? [])
     } catch (_) {}
-  }, [])
+  }, [aiPath])
 
   useEffect(() => {
     if (open) loadHistory()
@@ -154,7 +157,16 @@ export default function SearchSidebar({ entranceOn } = {}) {
   }
 
   const runQuery = (query) => {
-    navigate('/search', { state: { query, historyNonce: Date.now() } })
+    if (aiPath) {
+      // AI 모드: prop 콜백 우선, 없으면 CustomEvent 폴백
+      if (typeof onAiQuery === 'function') {
+        onAiQuery(query)
+      } else {
+        window.dispatchEvent(new CustomEvent('ai-sidebar-query', { detail: { query } }))
+      }
+    } else {
+      navigate('/search', { state: { query, historyNonce: Date.now() } })
+    }
   }
 
   const S = ai ? SIDEBAR.ai : SIDEBAR.search
@@ -338,12 +350,22 @@ export default function SearchSidebar({ entranceOn } = {}) {
                 </button>
               </div>
 
-              {/* Data button (single wide tab) */}
-              <div className="mb-8">
+              {/* Data button + Settings button (same row) */}
+              <div className="mb-8 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => navigate('/settings')}
+                  className={`inline-flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2.5 transition-all duration-200 ${
+                    location.pathname === '/settings' ? S.pillActive : S.pillIdle
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-base">settings</span>
+                  <span className="font-manrope uppercase tracking-[0.03em] text-sm whitespace-nowrap">설정</span>
+                </button>
                 <button
                   onClick={goDataPage}
                   data-tutorial-id="sidebar-data-tab"
-                  className={`flex w-full items-center justify-center gap-2 rounded-xl border px-3 py-2.5 transition-all duration-200 ${
+                  className={`flex flex-1 items-center justify-center gap-2 rounded-xl border px-3 py-2.5 transition-all duration-200 ${
                     location.pathname === '/data' ? S.pillActive : S.pillIdle
                   }`}
                 >
@@ -401,15 +423,6 @@ export default function SearchSidebar({ entranceOn } = {}) {
                 )}
               </div>
 
-              {/* Footer settings (same style/size as data tab) */}
-              <button
-                type="button"
-                onClick={() => navigate('/settings')}
-                className="mt-auto inline-flex w-fit items-center justify-center gap-2 rounded-xl border border-[#2c3858] bg-[#1f2a47] px-3 py-2.5 text-[#dfe6ff] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition-all duration-200 hover:bg-[#243055]"
-              >
-                <span className="material-symbols-outlined text-base">settings</span>
-                <span className="font-manrope uppercase tracking-[0.03em] text-sm whitespace-nowrap">설정</span>
-              </button>
             </div>
           )}
         </aside>

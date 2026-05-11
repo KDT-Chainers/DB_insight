@@ -1808,6 +1808,8 @@ export default function MainAI() {
 
   // STT
   const doSearchRef = useRef(null);
+  // AI 사이드바 기록 클릭 콜백 — prop으로 SearchSidebar에 직접 전달 (CustomEvent 폴백용)
+  const onAiQuery = useCallback((q) => doSearchRef.current?.(q), []);
   const {
     listening,
     interim,
@@ -1832,7 +1834,7 @@ export default function MainAI() {
     if (view !== "results" && aiDockExpanded) setAiDockExpanded(false);
   }, [view, aiDockExpanded]);
 
-  // 사이드바 검색 기록 클릭
+  // 사이드바 검색 기록 클릭 (navigate 경유)
   useEffect(() => {
     const q = location.state?.query;
     if (q) {
@@ -1840,6 +1842,13 @@ export default function MainAI() {
       doSearchRef.current?.(q);
     }
   }, [location.state]);
+
+  // 사이드바 검색 기록 클릭 (CustomEvent 경유 — navigate race condition 방지)
+  useEffect(() => {
+    const handler = (e) => doSearchRef.current?.(e.detail.query);
+    window.addEventListener('ai-sidebar-query', handler);
+    return () => window.removeEventListener('ai-sidebar-query', handler);
+  }, []);
 
   // ── SSE 실행 (AIMODE 시각화 또는 기존 에이전트) ─────────────
   const runAISearch = useCallback(
@@ -1870,6 +1879,7 @@ export default function MainAI() {
       setAimodeBlocked(null);
       setAimodeSecurity(null);
       setAimodeScanStates({});
+      setSelectedScanChunks({});
       setAimodeStage("intent");
 
       const endpoint = useAimode
@@ -2075,6 +2085,13 @@ export default function MainAI() {
             ...prev,
             [ev.file_id]: ev.found ? "found" : "not_found",
           }));
+          // 문서 매칭 청크 저장 — 대화 영역 "검색어 위치" 표시용
+          if (ev.found && ev.chunks?.length) {
+            setSelectedScanChunks((prev) => ({
+              ...prev,
+              [ev.file_id]: ev.chunks,
+            }));
+          }
         }
         break;
 
@@ -2417,6 +2434,7 @@ export default function MainAI() {
       {/* 사이드바 */}
       <SearchSidebar
         entranceOn={view === "home" ? aiHomeEntranceOn : undefined}
+        onAiQuery={onAiQuery}
       />
 
       {/* ════ HOME VIEW ════ */}
@@ -3078,20 +3096,73 @@ export default function MainAI() {
                         <span className="inline-block w-2 h-5 bg-violet-300 ml-1 animate-pulse align-middle rounded-sm" />
                       )}
                     </div>
-                    {/* AV 출처 자동 노출 — selectedFile 없으면 aimodeSources 의 비디오/오디오 fallback */}
+                    {/* 매칭 출처 표시:
+                        - 문서/이미지: 파일명 + 매칭 청크(검색어 위치 텍스트) 표시. AV 플레이어 없음.
+                        - 순수 영상/음성 쿼리: AV 플레이어 자동 표시 */}
                     {(() => {
+                      const docSrcs = aimodeSources.filter(
+                        (s) => s.file_type === "doc" || s.file_type === "image",
+                      );
+                      // ── 문서/이미지 쿼리: 청크 표시, AV 플레이어 없음 ──
+                      if (docSrcs.length > 0) {
+                        return (
+                          <div style={{ marginBottom: 13, display: "flex", flexDirection: "column", gap: 8 }}>
+                            {docSrcs.map((src, i) => {
+                              const fid = src.trichef_id || src.file_name;
+                              const chunks = selectedScanChunks?.[fid] || [];
+                              const pageNum = src.page_num;
+                              const snippet = src.snippet;
+                              const displayChunks = chunks.length > 0 ? chunks : snippet ? [snippet] : [];
+                              return (
+                                <div key={i} style={{
+                                  borderRadius: 9,
+                                  overflow: "hidden",
+                                  border: "1px solid rgba(99,102,241,0.25)",
+                                  background: "rgba(99,102,241,0.05)",
+                                }}>
+                                  {/* 파일명 + 페이지 */}
+                                  <div style={{
+                                    padding: "6px 11px",
+                                    borderBottom: displayChunks.length > 0 ? "1px solid rgba(99,102,241,0.15)" : undefined,
+                                    display: "flex", alignItems: "center", gap: 6,
+                                    fontSize: 10, fontWeight: 700, color: "#818cf8",
+                                  }}>
+                                    <span className="material-symbols-outlined" style={{ fontSize: 12 }}>
+                                      {src.file_type === "image" ? "image" : "description"}
+                                    </span>
+                                    {src.file_name}
+                                    {pageNum != null && (
+                                      <span style={{ marginLeft: 4, color: "#94a3b8", fontWeight: 400 }}>
+                                        · {pageNum}페이지
+                                      </span>
+                                    )}
+                                  </div>
+                                  {/* 매칭 청크 */}
+                                  {displayChunks.map((ck, j) => (
+                                    <div key={j} style={{
+                                      padding: "7px 11px",
+                                      fontSize: 11, color: "#94a3b8", lineHeight: 1.6,
+                                      borderTop: j > 0 ? "1px solid rgba(99,102,241,0.08)" : undefined,
+                                    }}>
+                                      …{String(ck).slice(0, 300)}…
+                                    </div>
+                                  ))}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      }
+                      // ── 순수 AV 쿼리: 우측 패널에서 직접 선택 시에만 플레이어 표시 ──
+                      // (자동 표시 제거 — 문서 쿼리에서 무관한 영상이 auto-show 되는 문제 방지)
                       const avSrc =
                         selectedFile &&
-                        ["video", "audio", "movie", "music"].includes(
-                          selectedFile.file_type,
+                        ["video", "audio", "movie", "music"].includes(selectedFile.file_type) &&
+                        aimodeSources.some(
+                          (s) => s.trichef_id === selectedFile.trichef_id || s.file_name === selectedFile.file_name,
                         )
                           ? selectedFile
-                          : aimodeSources.find(
-                              (s) =>
-                                ["video", "audio", "movie", "music"].includes(
-                                  s.file_type,
-                                ) && s.segments?.length,
-                            );
+                          : null;
                       return avSrc ? (
                         <div style={{ marginBottom: 13 }}>
                           <AVDetailContent result={avSrc} />

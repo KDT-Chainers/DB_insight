@@ -386,21 +386,34 @@ class TriChefEngine:
         rrf_scores = _rrf_merge(rankings, n=len(dense_scores))
 
         cal = calibration.get_thresholds(domain)
-        abs_thr = cal["abs_threshold"]
 
         # ── Per-query adaptive confidence ──────────────────────────────────
         # null calibration(same-modal cross-pair)과 text-query cross-modal 점수
         # 분포가 달라 직접 비교 불가. 대신 이 쿼리에 대한 dense_scores 분포로
         # confidence 를 정규화 → 모든 도메인이 동일 공식으로 비교 가능해진다.
-        # sigma 하한: q_mu * 0.8 (점수가 몰려 있어도 z-score 폭발 방지).
         q_mu  = float(np.mean(dense_scores))
-        # sigma 하한 — AV (search_av) 와 통일. 이전 q_mu*0.8 은 Hermitian 점수
-        # 분포 (0.2~0.4) 에서 과도하게 커서 z-score 폭발 차단 외에 conf 압축 부작용.
-        # 0.05 고정 하한 — 정답 매칭 시 conf 80~99% 로 정상 분포.
+        # sigma 하한 — AV (search_av) 와 통일. 0.05 고정 하한.
         q_sig = max(float(np.std(dense_scores)), 0.05, 1e-6)
 
+        # ── abs_thr: 모든 도메인 calibration 정적값 ──
+        # [v18.5] image adaptive/완화 실험 전부 롤백.
+        # 이유: topk 의존성 + noisy 결과 + "코스모스 보이저호" 등 회귀 연속 발생.
+        # 원래 calibration abs_threshold=0.2992 로 복원.
+        # 햄버거 5건 문제는 visual_check 재캘리브레이션으로 해결 필요 (코드 범위 밖).
+        abs_thr = cal["abs_threshold"]
+
+        # ── Candidate window: fused-top-3K ∪ dense-top-2K ───────────────────
+        # Dense-강/Lexical-약 문서(예: 순수 의미 쿼리, 한↔영 크로스링구얼)는
+        # fused 정렬에서 top-3K 밖으로 밀려 threshold 검사를 아예 받지 못한다.
+        # dense_order 상위 topk*2 를 추가 후보로 포함해 누락을 방지한다.
+        _fused_window: set[int] = set(int(x) for x in combined_order[: topk * 3])
+        _extra_dense: list[int] = [
+            int(i) for i in dense_order[: topk * 2] if int(i) not in _fused_window
+        ]
+        _all_candidates: list[int] = list(combined_order[: topk * 3]) + _extra_dense
+
         out: list[TriChefResult] = []
-        for i in combined_order[: topk * 3]:
+        for i in _all_candidates:
             s = float(dense_scores[i])
             if s < abs_thr:
                 continue
@@ -585,6 +598,8 @@ class TriChefEngine:
         _expanded = query  # 기본값 — bilingual 확장 실패 시 raw query 사용
         tok_lower: list[str] = []   # 파일 루프에서도 사용 — 미리 초기화
         _orig_token_count: int = len([t for t in query.split() if len(t) >= 2])
+        # [fix] 부스트 전 raw cosine 보존 — 신뢰도 상한 캡으로 사용
+        seg_scores_raw: np.ndarray = seg_scores.copy()
         try:
             # 한↔영 크로스랭귀지 substring boost:
             # query_expand 로 bilingual 확장 → 영문 쿼리도 한국어 STT 텍스트와 매칭
@@ -604,10 +619,11 @@ class TriChefEngine:
                     fname = seg.get("file_name", "") or seg.get("file", "")
                     hay   = (text + " " + fname).lower()
                     matched = sum(1 for tok in tok_lower if tok in hay)
-                    if matched > 0:
-                        boost[i] += 0.10 * matched
-                        if matched >= _orig_token_count:
-                            boost[i] += 0.20  # 원본 쿼리 전체 토큰 매칭 보너스
+                    # [fix] 전체 쿼리 완전 매칭 시에만 부스트 — 부분 매칭(공통 단어)은
+                    # 제외. "박태웅 의장" 쿼리에서 "의장"만 포함된 무관한 세그먼트가
+                    # +0.10 부스트를 받아 랭킹 오염되는 문제 수정.
+                    if matched >= _orig_token_count:
+                        boost[i] += 0.10 * matched + 0.20  # 전체 구문 일치만
                 seg_scores = seg_scores + boost
         except Exception as _be:
             logger.debug(f"[engine:{domain}] substring boost 실패: {_be}")
@@ -696,6 +712,12 @@ class TriChefEngine:
                 key=lambda x: -x[1],
             )[:3]
             dense_agg = float(np.mean([s for _, s in d_ranked])) if d_ranked else 0.0
+            # [fix] 부스트 전 raw cosine top-3 평균 — 신뢰도 상한 캡으로 사용
+            d_raw_ranked = sorted(
+                [(i, float(seg_scores_raw[i])) for i in idxs],
+                key=lambda x: -x[1],
+            )[:3]
+            raw_dense_agg = float(np.mean([s for _, s in d_raw_ranked])) if d_raw_ranked else 0.0
 
             # ── ASF 파일 내 max ────────────────────────────────────────────
             asf_agg = 0.0
@@ -756,6 +778,10 @@ class TriChefEngine:
             weak_evidence = (z_dense < 0.3) and no_text
             if weak_evidence:
                 conf = min(conf, 0.40)
+            # [주석처리] raw_dense_agg 캡: 코스모스 보이저호 등 정상 AV 결과가
+            # doc 결과에 밀리는 부작용 발생 → 부스트 수정(전체 구문만)으로 대체.
+            # if raw_dense_agg > 0:
+            #     conf = min(conf, raw_dense_agg)
 
             best_meta  = d["segments"][d_ranked[0][0]] if d_ranked else {}
             file_name  = best_meta.get("file_name", Path(fp).name)
@@ -769,7 +795,8 @@ class TriChefEngine:
                 segments=seg_list,
                 metadata={
                     "low_confidence": weak_evidence,
-                    "dense_agg":  round(dense_agg, 4),
+                    "dense_agg":     round(dense_agg, 4),
+                    "raw_dense_agg": round(raw_dense_agg, 4),  # 부스트 전 실제 cosine
                     # [v12] raw cosine top1 — 진짜 segment-level 최고 cosine.
                     # dense_agg 는 top-3 평균이라 audio 0.98 cluster 발생.
                     # cosine_top1 은 단일 segment max cosine → 도메인 비교용.

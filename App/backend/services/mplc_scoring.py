@@ -76,7 +76,22 @@ DOMAIN_KEYWORDS: dict[str, list[str]] = {
               #                          > image boost (어린이×0.30) = ×1.30 → doc 승
               #   "어린이" 단독: image boost ×1.30 > video ×1.0 → image 승
               "아기", "얼굴", "미소", "어린이",
-              # 영어 대응
+              # [v17.8] 동물 시각명사 — 단일어 이미지 쿼리 ("고양이", "강아지" 등)
+              #   raw confidence ~17% → boost ×1.30 → ~22% → 저신뢰도 필터 통과
+              "고양이", "강아지", "개", "새", "토끼", "새끼", "강아지", "곰",
+              "사자", "호랑이", "코끼리", "원숭이", "펭귄", "물고기", "닭", "소",
+              "말", "돼지", "여우", "늑대", "사슴", "거북이", "뱀", "앵무새",
+              "햄스터", "다람쥐", "고라니", "동물",
+              # 음식/사물 시각명사
+              "음식", "케이크", "빵", "커피", "피자", "라면", "떡",
+              "자동차", "차", "건물", "집",
+              # 영어 동물 대응
+              "cat", "dog", "bird", "rabbit", "bear", "lion", "tiger",
+              "elephant", "monkey", "penguin", "fish", "chicken", "horse",
+              "fox", "wolf", "deer", "turtle", "hamster", "animal",
+              # 영어 음식/사물 대응
+              "food", "cake", "bread", "coffee", "pizza", "car", "house",
+              # 영어 일반
               "picture", "landscape", "scenery", "scene", "view", "portrait",
               "photograph", "illustration",
               "sea", "ocean", "mountain", "flower", "tree", "forest", "sky",
@@ -86,10 +101,19 @@ DOMAIN_KEYWORDS: dict[str, list[str]] = {
               "인터뷰", "다큐멘터리", "스포츠", "요리",
               # [v17.3] 구체적 스포츠 종목 추가
               "야구", "축구", "농구", "배구", "테니스", "골프",
+              # [v17.7] 우주/과학 다큐 쿼리 ("코스모스 보이저호", "달 탐사" 등)
+              # → video intent 인식, CDF inflation 보정(E13 fix v3) 우회
+              "우주", "코스모스", "은하", "태양계", "행성", "NASA", "나사",
+              "탐사", "발사", "로켓", "위성", "탐사선", "보이저", "아폴로",
+              "천문", "별", "성운", "블랙홀", "혜성", "소행성",
               # 영어 대응 (xlang 평가 쌍: news/documentary/interview/sports/cooking)
               "news", "documentary", "interview", "broadcast", "footage",
               "sports", "cooking", "film", "clip", "series",
-              "baseball", "soccer", "basketball", "football"],
+              "baseball", "soccer", "basketball", "football",
+              # 영어 우주/과학 대응
+              "space", "cosmos", "galaxy", "planet", "universe",
+              "nasa", "rocket", "satellite", "voyager", "apollo",
+              "astronomy", "nebula", "comet", "asteroid"],
     "doc":   ["문서", "pdf", "보고서", "논문", "도서", "단행본", "보도자료",
               # [v17.2] 문서 특화 명사: 보고서/분석서 작성 의도 쿼리 → doc boost
               # image가 tags_kr로 산업/정책 용어를 가져도 doc이 이기도록

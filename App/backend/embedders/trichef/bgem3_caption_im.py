@@ -67,12 +67,18 @@ def embed_query(texts, max_length: int = 256) -> np.ndarray:
         texts = [texts]
     if not texts:
         return np.zeros((0, TRICHEF_CFG["DIM_IM"]), dtype=np.float32)
-    out = _model.encode(
-        list(texts),
-        batch_size=min(32, len(texts)),
-        max_length=max_length,
-        return_dense=True,
-    )
+    # [thread-safety fix] use_fp16=True 시 encode_single_device 내부에서
+    # self.model.half() 를 매 호출마다 실행함. 병렬 도메인 검색에서
+    # 두 스레드가 동시에 encode 하면 half() 중간에 충돌 →
+    # RuntimeError: expected scalar type Float but found Half.
+    # _lock 으로 직렬화하여 해결.
+    with _lock:
+        out = _model.encode(
+            list(texts),
+            batch_size=min(32, len(texts)),
+            max_length=max_length,
+            return_dense=True,
+        )
     vecs = np.asarray(out["dense_vecs"], dtype=np.float32)
     norms = np.linalg.norm(vecs, axis=1, keepdims=True) + 1e-12
     return vecs / norms

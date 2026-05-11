@@ -76,7 +76,21 @@ def search():
         _single_topk = min(top_k, _SINGLE_DOMAIN_CAP)
 
         if file_type == "image":
+            # [v18.3] adaptive abs_thr 로 엔진 단에서 후보 확보 → topk는 기본값 유지.
+            # [v18.9] lexical ON → 0건 이면 dense-only 재시도 (캡션 부족 쿼리 대응).
             results = _search_trichef(expanded_query, ["image"], _single_topk)
+            if not results:
+                results = _search_trichef(expanded_query, ["image"], _single_topk,
+                                          _dense_only=True)
+            # [v22] 이미지 탭 단독에도 MPLC 적용 — 전체 탭과 confidence 수준 동일화.
+            # 이미지 탭은 MPLC 없이 raw CDF만 사용 → 전체 탭보다 6%p 낮아 저신뢰도 필터에 걸림.
+            # 전체 탭: apply_mplc_to_results → query_intent_boost 순서와 동일하게 적용.
+            try:
+                from services.mplc_scoring import apply_mplc_to_results, MPLC_WEIGHTS
+                if MPLC_WEIGHTS and results:
+                    apply_mplc_to_results({"image": results}, expanded_query)
+            except Exception:
+                pass
         elif file_type == "doc":
             results = _search_trichef(expanded_query, ["doc_page"], _single_topk)
         elif file_type == "video":
@@ -91,6 +105,26 @@ def search():
                 results = _search_legacy_audio(expanded_query, _single_topk)
         elif file_type == "bgm":
             results = _search_bgm(expanded_query, _single_topk)
+
+        # [v21] 도메인 탭 공통 query_intent_boost — 전체 탭과 동일한 신뢰도 수준 유지.
+        # 문제: 도메인 탭은 query_intent_boost 없이 raw CDF confidence 사용 →
+        #   "고양이"(이미지탭) ~18%, 전체탭 ~21% — 저신뢰도 필터(20%)에 걸려 숨겨짐.
+        # 해결: 단독 도메인 탭 검색 후 해당 도메인의 boost 를 즉시 적용.
+        #   boost=1.0(무관 쿼리)이면 변화 없음. boost>1.0 이면 전체탭과 동일하게 상승.
+        if file_type and file_type != "bgm":
+            try:
+                from services.mplc_scoring import query_intent_boost as _qib
+                _dom_key = file_type  # "image" | "doc" | "video" | "audio"
+                _boost = _qib(query, _dom_key)
+                if _boost > 1.0:
+                    for _r in results:
+                        _c = float(_r.get("confidence", 0) or 0)
+                        _r["_rank_score"] = _c * _boost
+                        _r["confidence"]  = round(min(1.0, _c * _boost), 4)
+                        if "similarity" in _r:
+                            _r["similarity"] = _r["confidence"]
+            except Exception:
+                pass
         else:
             # ════════════════════════════════════════════════════════════════
             # [v10 전체 검색] 5도메인 병렬 실행 + CMP 통합 ranking + cap.
@@ -143,6 +177,40 @@ def search():
                 video    = fut_vid.result() or []
                 audio    = fut_aud.result() or []
                 bgm      = fut_bgm.result() or []
+                # [DEBUG] 검색 직후 각 도메인 건수 로깅
+                try:
+                    import datetime as _dtt2
+                    _dbg2 = r"C:\yssong\KDT-FT-team3-Chainers\DB_insight\av_debug.log"
+                    with open(_dbg2, "a", encoding="utf-8") as _lf2:
+                        _vid_lines = ""
+                        for _vi, _vr in enumerate(video[:10]):
+                            _vid_lines += (
+                                f"  video[{_vi}]: conf={_vr.get('confidence')} "
+                                f"dense={_vr.get('dense')} prebst={_vr.get('prebst_cosine')} "
+                                f"name={_vr.get('file_name','?')[:50]}\n"
+                            )
+                        if not video:
+                            _vid_lines = "  video: EMPTY\n"
+                        _lf2.write(
+                            f"[{_dtt2.datetime.now()}] PARALLEL 결과: q={query[:40]!r} "
+                            f"img={len(img_only)} doc={len(doc_only)} "
+                            f"vid={len(video)} aud={len(audio)} bgm={len(bgm)}\n"
+                            + _vid_lines
+                        )
+                except Exception:
+                    pass
+
+            # [v18.9] image dense-only fallback (직렬 실행, 스레드 충돌 없음).
+            # lexical ON 이 per-query adaptive abs_thr 를 과도하게 올려 이미지
+            # 캡션 텍스트 부족 쿼리("햄버거" 등)에서 0건 반환 시 dense-only 재시도.
+            if not img_only:
+                try:
+                    img_only = _search_trichef(
+                        expanded_query, ["image"], DOMAIN_CAP_BY_DOMAIN["image"],
+                        _dense_only=True,
+                    )
+                except Exception:
+                    pass
 
             # ── 2. [v13.1 MPLC default + BSWS 환경변수 toggle] ─────────────
             # MPLC v13.1: Multi-feature logistic regression + image hand-tune.
@@ -157,12 +225,25 @@ def search():
                 "video": video,    "audio": audio,
                 "bgm":   bgm,
             }
+            # [v18.10] query_intent_boost 는 BSWS/MPLC 양쪽 경로 모두 필요 (HIGH-1 fix)
+            from services.mplc_scoring import query_intent_boost
             if _os.environ.get("OMC_USE_BSWS", "").strip() == "1":
                 from services.bsws_scoring import apply_bsws_to_results
                 apply_bsws_to_results(results_by_domain_pre, query)
+                # [HIGH-2 fix] BSWS 경로도 _rank_score 초기화 + intent boost 적용
+                for lst in results_by_domain_pre.values():
+                    for r in lst:
+                        r["_rank_score"] = float(r.get("confidence", 0) or 0)
+                for dom, lst in results_by_domain_pre.items():
+                    _boost = query_intent_boost(query, dom)
+                    if _boost > 1.0:
+                        for r in lst:
+                            c = float(r.get("confidence", 0) or 0)
+                            r["_rank_score"] = c * _boost
+                            r["confidence"] = round(min(1.0, c * _boost), 4)
             else:
                 from services.mplc_scoring import (
-                    apply_mplc_to_results, MPLC_WEIGHTS, query_intent_boost,
+                    apply_mplc_to_results, MPLC_WEIGHTS,
                 )
                 if MPLC_WEIGHTS:
                     # [v17] Cross-lingual fix: pass bilingual-expanded query so
@@ -213,6 +294,74 @@ def search():
                 "audio": query_intent_boost(query, "audio"),
                 "bgm":   query_intent_boost(query, "bgm"),
             }
+
+            # [v18.9] BGM/Audio 비음악 쿼리 보정 — z-score CDF 인플레이션 방지.
+            # 문제: BGM/Audio 의 confidence 는 domain 내 z-score CDF (상대적 순위) 라서
+            #   비음악 쿼리에서도 절대적으로 높은 값(0.70+)이 나와 cross-domain 비교 시
+            #   관련 doc/video 를 밀어냄.
+            #   예: "경주 동궁" → BGM CLAP cosine 0.31 → CDF 0.71 → doc(0.33) 보다 높아
+            #       BGM 가 guaranteed #1 점유.
+            # 수정: 음악 의도 없는 쿼리에서 BGM/Audio _rank_score = min(cdf, raw_dense).
+            #   raw_dense 는 절대 cosine 이므로 cross-domain 비교에 공정.
+            #   (음악 의도 있는 쿼리는 boost > 1.0 이므로 이 보정 미적용)
+            # [CRITICAL-2 fix] raw_dense 는 후처리(score_adjust)에서 설정되므로
+            # 이 시점엔 아직 없음 → dense 필드(각 검색함수가 설정)를 fallback으로 사용.
+            for _bgm_r in bgm:
+                if _intent_map.get("bgm", 1.0) <= 1.0:
+                    # [E13 fix v2] prebst_cosine(부스트 전 cosine) 우선 — 오디오 CDF 인플레이션 방지.
+                    # raw_dense = dense_agg(부스트 후) 이므로 AV 인플레이션 보정에 부적합.
+                    _raw = float(_bgm_r.get("prebst_cosine") or _bgm_r.get("raw_dense") or _bgm_r.get("dense") or 0)
+                    _bgm_r["_rank_score"] = min(float(_bgm_r.get("_rank_score", 0)), _raw)
+                    # [v18.11] confidence 도 함께 보정 — 프론트 confidence 정렬 시에도 BGM 과대 노출 방지
+                    for _f in ("confidence", "similarity"):
+                        if _f in _bgm_r and _bgm_r[_f] is not None:
+                            _bgm_r[_f] = round(min(float(_bgm_r[_f]), _raw), 4)
+            for _aud_r in audio:
+                if _intent_map.get("audio", 1.0) <= 1.0:
+                    # [E13 fix v2] prebst_cosine(부스트 전 cosine) 우선 — 오디오 CDF 인플레이션 방지.
+                    _raw = float(_aud_r.get("prebst_cosine") or _aud_r.get("raw_dense") or _aud_r.get("dense") or 0)
+                    _aud_r["_rank_score"] = min(float(_aud_r.get("_rank_score", 0)), _raw)
+                    # [v18.11] confidence 도 함께 보정
+                    for _f in ("confidence", "similarity"):
+                        if _f in _aud_r and _aud_r[_f] is not None:
+                            _aud_r[_f] = round(min(float(_aud_r[_f]), _raw), 4)
+
+            # [v18.10] 비음악 쿼리에서 audio/bgm 전체 결과 하드 캡 2건.
+            # 문제: audio 파일에 "햄버거" 발화가 실제로 있으면 텍스트 임베딩 코사인이
+            #   99% 까지 올라감 → raw_dense 도 동일하게 높아 min(x, raw) 보정 효과 없음.
+            #   TRI-CHEF AV 스레드 실패 시 legacy 파이프라인으로 폴백 → 0건↔18건 비결정성.
+            # 수정: 음악/음성 의도 없는 쿼리에서 audio/bgm 리스트를 상위 2건으로 하드 캡.
+            #   guaranteed(2) + extras(0) → 전체 결과에서 최대 2건만 표시.
+            #   결과 집합이 안정화되고 이미지/영상이 상위를 차지하게 됨.
+            if _intent_map.get("audio", 1.0) <= 1.0:
+                audio = audio[:2]
+            if _intent_map.get("bgm", 1.0) <= 1.0:
+                bgm = bgm[:2]
+
+            # [v18.12] Video 비영상 쿼리 raw_dense 보정 — z-score CDF 인플레이션 방지.
+            # 문제: "햄버거" 같은 비영상 쿼리에서 우주 다큐 등 무관 영상의 CDF confidence
+            #   가 76-80% 까지 올라가 burger 이미지(35%) 보다 높게 랭크됨.
+            # 수정: 영상 의도 없는 쿼리에서 video _rank_score/confidence = min(cdf, raw_dense).
+            #   raw_dense 는 절대 cosine → cross-domain 비교 공정.
+            # [E13 fix v3] 회귀 수정: raw_dense 가 0.22~0.30 구간인 경우
+            #   min(cdf, raw) 로 캡하면 confidence < 0.30(conf floor) 이 되어
+            #   _passes_floor 에서 실제 관련 영상까지 제거됨.
+            #   (예: "코스모스 보이저호" → NGC E09 raw=0.2764 → conf=0.2764 < 0.30 → 전체 0건)
+            #   수정: raw ≥ 0.22 이면 conf cap = max(raw, 0.30) 으로 floor 보장.
+            #         raw < 0.22 이면 기존대로 raw 로 캡 (노이즈 제거, _passes_floor 가 처리).
+            #   _rank_score 는 raw 로 캡 유지 (cross-domain 순위 보정).
+            for _vid_r in video:
+                if _intent_map.get("video", 1.0) <= 1.0:
+                    _raw = float(_vid_r.get("raw_dense") or _vid_r.get("dense") or 0)
+                    if _raw <= 0:
+                        continue   # dense 필드 없으면 보정 스킵 (0으로 zeroing 방지)
+                    _vid_r["_rank_score"] = min(float(_vid_r.get("_rank_score", 0)), _raw)
+                    # [E13 fix v3] conf floor 보장: raw ≥ 0.22 → cap = max(raw, 0.30)
+                    _conf_cap = max(_raw, 0.30) if _raw >= 0.22 else _raw
+                    for _f in ("confidence", "similarity"):
+                        if _f in _vid_r and _vid_r[_f] is not None:
+                            _vid_r[_f] = round(min(float(_vid_r[_f]), _conf_cap), 4)
+
             def _intent_quota(domain_key: str, lst: list) -> int:
                 base = _adj_quota(_max_conf(lst))
                 if _intent_map[domain_key] > 1.0:
@@ -244,12 +393,17 @@ def search():
                 reverse=True,
             )
 
+            # [v18.7] A안: guaranteed slot 보장 복원.
+            # 이전 버그: combined.sort() 가 guaranteed/extras 를 한꺼번에 재정렬 →
+            #   image cap=0.35 가 video 0.95 에 밀려 image quota(2슬롯)가 무력화 →
+            #   "햄버거" 전체 검색 시 image 0 건 회귀.
+            # 수정: guaranteed 는 자기들끼리만 _rank_score 정렬 (v14 doc-1위 버그 방지),
+            #       extras 는 이미 정렬됨. 둘을 그대로 이어붙여 quota 보장 유지.
+            guaranteed.sort(
+                key=lambda r: r.get("_rank_score", r.get("confidence", 0)),
+                reverse=True,
+            )
             combined = guaranteed + extras
-            # [v14 fix] guaranteed 이터레이션 순서(doc→image→...)로 doc 이
-            # 항상 results[0] 을 차지하는 버그 수정.
-            # [v17.2] _rank_score 사용: uncapped boost 값으로 정렬하여
-            # 서로 다른 도메인 boost(doc×1.2 vs audio×1.3)가 올바르게 반영되도록.
-            combined.sort(key=lambda r: r.get("_rank_score", r.get("confidence", 0)), reverse=True)
             results = combined[:TOTAL_CAP]
 
     except Exception as e:
@@ -289,18 +443,65 @@ def search():
         def _keep_after_rerank(r):
             # [v8] AV(movie/music) + BGM: passage 가 STT 일부라 reranker 점수가
             #   본질적으로 낮음 → 면제.
-            # [v9] image: caption 도 한국어 짧은 description 이라 CLIP+cross-
-            #   encoder 모두 약함. 특히 단일 토큰 한국어 쿼리('담배', '꽃' 등)에서
-            #   dense conf 가 0.5 근처로 수렴 → floor 통과 못해 0건 반환되는
-            #   부작용 발생. image 도메인도 면제.
-            if r.get("file_type") in ("video", "audio", "bgm", "image"):
+            if r.get("file_type") in ("video", "audio", "bgm"):
                 return True
-            # doc: dense conf 가 강매칭(>=0.70) 이면 floor 무시 (어린이 doc 정상화).
+            # [v9→v19] image: 정상 신뢰도(confidence > 0.35) 이미지는 면제 유지.
+            #   단, fallback 이미지(confidence ≤ 0.35, 임계값 미통과)는
+            #   rerank_score < -3.0 이면 제거 — 비관련 음식 사진 등 필터링 (전체 탭).
+            #   [v20] 이미지 탭 단독 검색(file_type=="image")은 query_intent_boost 없이
+            #   confidence 가 낮고, 사용자가 명시적으로 이미지를 선택했으므로
+            #   AV 처럼 rerank floor 완전 면제 → 이미지 탭 0건 회귀 방지.
+            if r.get("file_type") == "image":
+                # [v20] 이미지 탭 단독 검색: 완전 면제 (AV 동일).
+                #   이미지 캡션은 짧아 cross-encoder 가 모든 이미지에 -5.0 이하를 줌.
+                #   floor 적용 시 실제 관련 이미지까지 대거 제거됨 (100건→6건 회귀).
+                #   이미지 탭에서 결과 수 보존 > 비관련 이미지 필터링 우선.
+                if file_type == "image":
+                    return True
+                # 전체 탭: fallback 이미지(conf ≤ 0.35)에 엄격한 -3.0 floor 적용
+                _IMAGE_FALLBACK_CAP = 0.351
+                _IMAGE_FALLBACK_FLOOR = -3.0
+                if float(r.get("confidence") or 0.0) <= _IMAGE_FALLBACK_CAP:
+                    return r.get("rerank_score", 0.0) >= _IMAGE_FALLBACK_FLOOR
+                return True   # 정상 신뢰도 이미지 면제
+            # doc: dense conf 가 강매칭(>=0.70) 이면 rerank floor 완화 (어린이 doc 정상화).
             #   doc 은 page 단위 텍스트가 충분히 길어서 cross-encoder 신호 신뢰 가능.
+            # [v18.10 fix] 단, rerank 가 극단적으로 낮으면(-10.0 이하 = 정확도 ~6% 미만)
+            #   high confidence 여도 false positive 로 판정하여 제거.
+            #   예: "햄버거" 검색 → "자기소개서.pdf" confidence=0.95 지만 rerank≈-11 → 제거.
+            _ABSOLUTE_RERANK_FLOOR = -10.0
             if float(r.get("confidence") or 0.0) >= _STRONG_DENSE_CONF:
-                return True
+                return r.get("rerank_score", 0.0) >= _ABSOLUTE_RERANK_FLOOR
             return r.get("rerank_score", 0.0) >= _RERANK_FLOOR
         results = [r for r in results if _keep_after_rerank(r)]
+
+        # [v18.10] rerank_score 를 최종 정렬에 반영 — 필터(제거)뿐 아니라 순위에도 사용.
+        # 문제: _rank_score(MPLC)는 reranker 실행 전에 결정 → reranker가 무관하다 판정해도
+        #   순위는 변하지 않음. 프론트 "종합순위" 는 백엔드 순서를 따르므로 이 순서가 중요.
+        # 수정: reranker 활성 시 doc + image 결과에 대해 _rank_score 를 conf+rerank 혼합으로 갱신.
+        #   video/audio/bgm 은 STT passage 가 짧아 reranker 신호가 본질적으로 낮음 → 변경 없음.
+        #   혼합 비율: conf 40% + rerank_sigmoid 60% → reranker 판단이 순위에 강하게 반영.
+        # 예시:
+        #   무관한 doc(conf=0.95, rerank=-11) → sig(-11)=0.065 → new_score=0.419
+        #   관련 doc  (conf=0.85, rerank=+3)  → sig(+3) =0.88  → new_score=0.868
+        # [v18.14] image 도 rerank 블렌드 추가:
+        #   고양이 캐릭터 인형(rerank=28%) vs 박스 속 고양이(rerank=78%) →
+        #   dense(유사도)만 보면 인형이 1위이지만 rerank 반영 후 실제 고양이가 1위.
+        import math as _math
+        def _rr_sigmoid(x: float) -> float:
+            return 1.0 / (1.0 + _math.exp(-((x + 3.0) / 3.0)))
+        _rerank_updated = False
+        for r in results:
+            rr = r.get("rerank_score")
+            if rr is not None and r.get("file_type") in ("doc", "image"):
+                mplc = float(r.get("_rank_score", r.get("confidence", 0)) or 0)
+                r["_rank_score"] = 0.4 * mplc + 0.6 * _rr_sigmoid(float(rr))
+                _rerank_updated = True
+        if _rerank_updated:
+            results.sort(
+                key=lambda r: r.get("_rank_score", r.get("confidence", 0)),
+                reverse=True,
+            )
 
     # 5도메인 통합 score 조정
     # TRI-CHEF(image/doc/video/audio): 엔진이 이미 per-query z-score CDF [0,1] 출력
@@ -311,7 +512,7 @@ def search():
     # 페널티 판정은 확장된 쿼리로 수행:
     #   '꽃'(1글자) → '꽃 flower flowers blossom' → meaningful ≫ 2 → 0.55 cap 해제
     try:
-        from services.score_adjust import apply_query_penalty, _generous_curve
+        from services.score_adjust import apply_query_penalty, _generous_curve, hermitian_display_curve as _hermitian_curve
         from services.query_expand import expand_bilingual as _expand
         _penalty_q = _expand(query)   # 확장 쿼리로 n_meaningful 재계산
         for r in results:
@@ -324,11 +525,45 @@ def search():
             for f in ("confidence", "similarity"):
                 if f in r and r[f] is not None:
                     r[f] = round(apply_query_penalty(float(r[f]), _penalty_q), 4)
-            # dense: raw cosine → generous_curve
+            # dense: 표시용 커브 적용 (원본 raw Hermitian 보존)
             if "dense" in r and r["dense"] is not None:
-                r["dense"] = round(_generous_curve(r["dense"]), 4)
-    except Exception:
-        pass
+                # [E13 fix v2] AV 결과는 raw_dense 를 설정하지 않음(prebst_cosine 별도 보관).
+                # score_adjust 에서 raw_dense = dense(=dense_agg, 부스트 후) 로 설정.
+                # → _passes_floor 0.22 floor / 영상 의도보정 캡에 dense_agg 값 사용.
+                # prebst_cosine 은 _passes_floor >1.05 체크 / 오디오 인플레이션 캡에만 사용.
+                if "raw_dense" not in r or r["raw_dense"] is None:
+                    r["raw_dense"] = r["dense"]      # [v18.3] 원본 cosine 보존
+                if r.get("file_type") == "image":
+                    # [v18.11] image: Hermitian 전용 커브 적용
+                    # null_mu≈0.286 → 20%, 강한매칭 0.40 → 85%
+                    r["dense"] = round(_hermitian_curve(r["dense"]), 4)
+                else:
+                    r["dense"] = round(_generous_curve(r["dense"]), 4)
+    except Exception as _sa_err:
+        try:
+            import traceback as _tb, datetime as _dt
+            _sa_log = r"C:\Users\sjowu\AppData\Roaming\DB_insight\sa_debug.log"
+            with open(_sa_log, "a", encoding="utf-8") as _lf:
+                _lf.write(
+                    f"[{_dt.datetime.now()}] score_adjust FAIL: {_sa_err}\n"
+                    f"{_tb.format_exc()}\n---\n"
+                )
+        except Exception:
+            pass
+
+    # [v18.13] Video content-mismatch fail-safe cap.
+    # 목적: v18.12 dense_agg-기반 cap 이 식품-식품 고유사도(곰탕↔햄버거 BGE-M3 ≈0.99)
+    #       등으로 우회될 때, cross-encoder rerank 극단적 부정 신호로 확실히 차단.
+    # threshold -4.6: 실측 곰탕 영상(-4.81) 제거, 코스모스 E02~E12(-4.0 내외) 보존.
+    # _passes_floor: video conf < 0.30 → 자동 제거.
+    # 주의: rerank_score 미존재(reranker 비활성) 시 0.0 → 이 필터 미적용.
+    for _vfc_r in results:
+        if _vfc_r.get("file_type") != "video":
+            continue
+        if float(_vfc_r.get("rerank_score") or 0.0) < -4.6:
+            for _vf in ("confidence", "similarity"):
+                if _vf in _vfc_r and _vfc_r[_vf] is not None:
+                    _vfc_r[_vf] = round(min(float(_vfc_r[_vf]), 0.25), 4)
 
     # 위치 정보(location) 부착 — 페이지+라인(doc) / 타임코드+텍스트(video/audio).
     # image 는 None → location 키 자체 생략.
@@ -351,77 +586,111 @@ def search():
     #   해결: confidence + similarity + (AV/BGM 한정) raw dense cosine 모두 검사.
     #
     #   예: "코스모스 보이저호" → 무관한 doc 신뢰도 97% / 유사도 69% / raw 0.55
-    #        → similarity floor 0.72 로 cut.
-    # [v11.2] 모든 도메인에 raw dense cosine floor 적용 — 가장 강력한 differentiator.
-    # MPLC 신뢰도와 similarity (z-score CDF) 는 keyword_count + saturation 으로 부풀려짐.
-    # raw dense cosine 만이 정직한 신호 — BGE-M3/SigLIP2/CLAP 의 원본 cosine.
+    # [v18.3] _passes_floor 단순화.
+    # ─────────────────────────────────────────────────────────────────────────
+    # 이전 3중 floor (_DOMAIN_MIN_CONF + _DOMAIN_MIN_SIM + _DOMAIN_MIN_DENSE) 의 문제:
+    #   1. _DOMAIN_MIN_SIM 은 generous_curve 후 warped 값에 적용 → 실제 cosine 기준 불명확
+    #   2. 쿼리 타입별로 cosine 범위가 달라 특정 단어 검색 시 계속 수동 튜닝 필요
+    #   3. _DOMAIN_MIN_DENSE 도 cosine_top1 없으면 warped dense 로 fallback → 버그
     #
-    # 실측 (RTX 4070, BGE-M3 / SigLIP2 / CLAP):
-    #   - 적합 매칭: dense cosine ≥ 0.55 (image/doc/video/audio), CLAP ≥ 0.45 (bgm)
-    #   - 무관 매칭: dense cosine ~0.30~0.45 (random noise floor)
+    # 개선:
+    #   • image: unified_engine 에서 per-query adaptive abs_thr 적용 (v18.3).
+    #            결과가 이미 쿼리 분포 기준 상위권 → 추가 SIM floor 불필요.
+    #            노이즈 후처리: visual_check (아래).
+    #   • doc  : calibration abs_thr (static) + reranker 가 품질 게이트 담당.
+    #   • video: search_av per-query calibration + cosine_top1 floor.
+    #   • audio: search_av per-query calibration + audio_check (아래).
+    #   • bgm  : CLAP 기반 별도 경로.
+    #
+    # 남기는 것: (1) conf 최소 게이트 — 완전 무관 결과 제거
+    #            (2) raw cosine 무결성 — 임베딩 불량/0 값 차단
+    #            (3) video cosine_top1 floor — AV 노이즈 컷
     _DOMAIN_MIN_CONF = {
-        "image": 0.40,
-        "doc":   0.30,
-        "video": 0.40,
-        "audio": 0.40,
-        "bgm":   0.40,
+        "image": 0.10,   # adaptive abs_thr 이후라 낮게 유지. visual_check 후처리 담당.
+        "doc":   0.15,   # reranker 후처리 담당
+        # AV는 per-query z-score CDF → 무관 결과 conf 10~25%, 관련 결과 60~100%.
+        # 0.30 floor: 평균 미만 파일 제거. 음성/영상 쿼리는 명사가 직접 매칭되면 80%+.
+        "video": 0.30,
+        "audio": 0.30,
+        "bgm":   0.25,
     }
-    # [v12] sim 검사를 dense 필드(=UI '유사도' 표시값)로 통합 — 이전엔 sim=similarity
-    #   가 confidence alias 였어서 floor 가 사실상 conf 만 두 번 검사하던 버그.
-    # 실측:
-    #   image — 정상(real_cat) 79%, 무관(보이저호 미니인조) 64%, 무관(팝송 음식) 60%
-    #   doc   — 보이저호 무관 67% 이하, 팝송 무관 64% 이하, 정상은 70%+
-    #   video — 정상(NGC 코스모스) 95~98%, 무관 65~80%
-    #   audio — 모두 z-score CDF 부풀려 98%+, sim 으로 분리 거의 불가
-    #   bgm   — 모두 CLAP CDF 부풀려 92%+, sim 으로 분리 거의 불가
-    # [v15] image floor 완화: 0.72 → 0.60.
-    #   배경: '햄버거' 쿼리 시 raw cosine 모두 0.18~0.27 → generous_curve 후 70~80%
-    #   → 0.72 floor 가 너무 빡빡해 1건만 통과. 시각 일치성 검증(visual_check) 이
-    #   캡션 거짓말 케이스를 후처리로 차단하므로 sim floor 는 완화 가능.
-    _DOMAIN_MIN_SIM = {
-        "image": 0.50,   # 0.60 → 0.50 (cat search 회복용 — visual_check fail-safe)
-        "doc":   0.68,   # 0.58 → 0.68 (보이저호/팝송 무관 67% 이하 차단)
-        "video": 0.75,
-        "audio": 0.85,   # AV CDF 부풀림으로 실효 floor 약함
-        # [BGM 회귀 수정 2026-05-08] 0.80 → 0.55.
-        # 실측 (soft jazz/잔잔한 음악): dense 0.56~0.71 (정상 매칭).
-        # 무관 (보이저호/AI): dense 0.51~0.53 → 0.55 floor 로 차단.
-        "bgm":   0.55,
-    }
-    # raw dense cosine — 가장 정직한 신호. 모든 도메인 적용.
-    # AV: cosine_top1 (segment 최고), 그 외: dense.
-    _DOMAIN_MIN_DENSE = {
-        "image": 0.50,   # SigLIP2 cosine 무관 ~0.35, 정상 0.55+
-        "doc":   0.50,   # BGE-M3 cosine 무관 ~0.40, 정상 0.55+
-        "video": 0.55,   # AV cosine_top1 — 0.45 → 0.55 (팝송 노이즈 컷용)
-        "audio": 0.55,   # 0.45 → 0.55
-        "bgm":   0.45,   # CLAP cosine — 0.30 → 0.45 (팝송 BGM 노이즈 컷용)
+    # raw cosine 무결성 floor — image/doc/bgm 만 적용.
+    # [v18.8] video/audio raw floor 완전 제거 (v18.6 상태로 회귀):
+    #   - cosine_top1 ≥ 0.30 (v18.7) 이 정상 결과까지 컷하는 회귀 발생
+    #     ("코스모스 보이저호" all-domain video=0 — E13 voyager 결과까지 사라짐).
+    #   - dense_agg (raw_dense) 는 NGC 코스모스 전 에피소드 ≥0.50 이라 floor 효과 X.
+    #   - 결론: video/audio 는 conf floor (0.30) 만으로 게이트.
+    #     "핵융합 실크로드" 같은 일부 노이즈는 감수.
+    _DOMAIN_MIN_RAW = {
+        # [v22] 이미지 탭 단독: 0.16 → 0.13 완화.
+        #   단일어 쿼리("고양이")는 dense similarity가 구조적으로 낮아 실제 고양이 이미지도 0.14~0.16.
+        #   SigLIP2 random noise ~0.14 이므로 0.13이면 noise 제거하면서 recall 확보 가능.
+        #   전체 탭 이미지: MPLC 후 ranking으로 이미 필터링되므로 유지.
+        "image": 0.13 if file_type == "image" else 0.16,
+        "doc":   0.25,   # BGE-M3 noise ~0.20 (raw_dense)
+        "bgm":   0.30,   # CLAP cosine (raw_dense)
     }
 
     def _passes_floor(r: dict) -> bool:
         ftype = r.get("file_type", "")
         conf  = float(r.get("confidence") or 0)
-        # [v12] dense (= UI '유사도' 표시값) 우선 — similarity 는 confidence alias 라
-        #   floor 기준으로 부적합 (legacy 결과 호환을 위해 fallback 만 유지).
-        sim   = float(r.get("dense") or r.get("similarity") or 0)
-        if conf < _DOMAIN_MIN_CONF.get(ftype, 0.40):
-            return False
-        if sim < _DOMAIN_MIN_SIM.get(ftype, 0.60):
-            return False
-        # raw dense cosine — z-score CDF / MPLC 우회한 정직 신호.
-        if ftype in _DOMAIN_MIN_DENSE:
-            raw = float(r.get("cosine_top1") or r.get("dense") or 0)
-            # raw == 0 이면 데이터 미제공 (legacy 결과) — floor 통과시킴.
-            if raw > 0 and raw < _DOMAIN_MIN_DENSE[ftype]:
+        raw   = float(r.get("raw_dense") or 0)
+
+        # 0) 물리적 상한 체크 — cosine similarity 는 이론상 ≤1.0.
+        #    video/audio: prebst_cosine (부스트 전 실제 cosine ≤1.0) 로 체크.
+        #      dense_agg(부스트 후)가 1.0 초과 가능하지만 prebst_cosine 은 항상 ≤1.0.
+        #      raw_dense = dense_agg 이므로 raw>1.05 체크에서 오탐 발생 방지.
+        #    image/doc/bgm: raw_dense 는 커브 적용 전 cosine → 1.05 초과 시 버그 데이터.
+        if ftype in ("video", "audio"):
+            _prebst = float(r.get("prebst_cosine") or 0)
+            if _prebst > 1.05:
                 return False
+        else:
+            if raw > 1.05:
+                return False
+
+        # 1) 신뢰도 최소 게이트
+        if conf < _DOMAIN_MIN_CONF.get(ftype, 0.10):
+            return False
+
+        # 2) raw cosine 무결성 — image/doc/bgm 전용 (video/audio 면제)
+        if ftype not in ("video", "audio"):
+            min_raw = _DOMAIN_MIN_RAW.get(ftype, 0)
+            if min_raw > 0 and raw > 0 and raw < min_raw:
+                return False
+
+        # 3) [v18.9] video/audio mild raw floor — dense 유사도가 극히 낮은
+        #    허위 매칭 차단 (예: "핵융합 발전" 쿼리에 실크로드 다큐 raw=0.31 진입).
+        #    - 0.22 기준: NGC 코스모스 보이저호 raw=0.71 ✅ 보존
+        #                 0.22 미만 결과만 제거 (사실상 노이즈)
+        #    - video/audio 공통 적용.
+        if ftype in ("video", "audio") and 0 < raw < 0.22:
+            return False
+
         return True
 
     results = [r for r in results if _passes_floor(r)]
+    # [DEBUG] _passes_floor 이후 도메인별 건수
+    try:
+        import datetime as _dtt3
+        _dbg3 = r"C:\yssong\KDT-FT-team3-Chainers\DB_insight\av_debug.log"
+        from collections import Counter as _Ctr
+        _ftypes = _Ctr(r.get("file_type","?") for r in results)
+        with open(_dbg3, "a", encoding="utf-8") as _lf3:
+            _lf3.write(f"[{_dtt3.datetime.now()}] AFTER _passes_floor: {dict(_ftypes)}\n")
+    except Exception:
+        pass
 
     # [v15] 시각 일치성 검증 — 캡션 거짓말 케이스 차단 (image 도메인).
+    # [v18.3] visual_check 전 최대 12건으로 캡 → SigLIP2 per-image 추론 과부하 방지.
+    #   adaptive abs_thr 로 후보 품질이 충분하므로 12건이면 실제 반환 건수 커버 가능.
     try:
         from services.visual_check import filter_by_visual_match
-        results = filter_by_visual_match(results, query)
+        _vc_top   = sorted(results, key=lambda r: float(r.get("confidence") or 0), reverse=True)[:12]
+        _vc_top_ids = {id(r) for r in _vc_top}
+        _vc_rest  = [r for r in results if id(r) not in _vc_top_ids]
+        _vc_top   = filter_by_visual_match(_vc_top, query, use_bayes=False)
+        results   = _vc_top + _vc_rest
     except Exception:
         pass
 
@@ -458,6 +727,12 @@ def search():
             return 0.0
 
     def _sort_key(r):
+        # [v18.10] _rank_score 를 primary key 로 사용.
+        # 이유: _rank_score 는 MPLC + intent boost + BGM/Audio raw_dense 보정 +
+        #   doc rerank blend 를 모두 반영한 최적값.
+        #   기존 primary key 였던 dense 는 generous_curve 적용 여부가 도메인마다
+        #   달라 cross-domain 비교가 불공정함 (BGM=raw CLAP, image=curved).
+        rank = float(r.get("_rank_score", r.get("confidence", 0)) or 0)
         ds = float(r.get("dense") or 0)
         rs_raw = r.get("rerank_score")
         rs = float(rs_raw) if rs_raw is not None else -999.0
@@ -477,8 +752,8 @@ def search():
             return (0.4 * ds + 0.6 * rs_n,)
         if _variant == "H":
             return (0.7 * rs_n + 0.3 * ds,)
-        # A (default)
-        return (ds, rs, cf)
+        # A (default): _rank_score → dense → rerank
+        return (rank, ds, rs)
 
     results.sort(key=_sort_key, reverse=True)
 
@@ -506,7 +781,7 @@ def search():
 
 # ── TRI-CHEF 이미지·문서 검색 ──────────────────────────────────────
 
-def _search_trichef(query: str, domains: list[str], top_k: int) -> list[dict]:
+def _search_trichef(query: str, domains: list[str], top_k: int, _dense_only: bool = False) -> list[dict]:
     """
     TRI-CHEF 엔진으로 이미지/문서 검색.
     반환: [{file_path, file_name, file_type, confidence, similarity, snippet, preview_url, segments=[]}, ...]
@@ -543,8 +818,11 @@ def _search_trichef(query: str, domains: list[str], top_k: int) -> list[dict]:
             # [#1] admin.html(/api/admin/inspect)과 동일 채널 디폴트로 통일.
             # use_lexical/use_asf=True → BGE-M3 sparse + ASF Attention-Similarity-Filter
             # 두 채널을 dense 와 함께 fusion. LOO R@1 +20pp 가능 (벤치 결과).
+            # [v18.9] _dense_only=True: 이미지 캡션 부족 쿼리 fallback 용 dense-only.
+            _lex = not _dense_only
+            _asf = not _dense_only
             hits = engine.search(query, domain=domain, topk=top_k,
-                                 use_lexical=True, use_asf=True, pool=200)
+                                 use_lexical=_lex, use_asf=_asf, pool=200)
         except Exception:
             continue
         for hit in hits:
@@ -641,8 +919,25 @@ def _search_trichef_av(query: str, domains: list[str], top_k: int) -> list[dict]
         file_type = "video" if domain == "movie" else "audio"
         try:
             av_res = engine.search_av(query, domain=domain, topk=top_k, top_segments=5)
-        except Exception:
+        except Exception as _av_ex:
+            try:
+                import traceback as _tb, datetime as _dtt
+                _dbg = r"C:\yssong\KDT-FT-team3-Chainers\DB_insight\av_debug.log"
+                with open(_dbg, "a", encoding="utf-8") as _lf:
+                    _lf.write(f"[{_dtt.datetime.now()}] search_av EXCEPTION: domain={domain} q={query[:60]}\n{_tb.format_exc()}\n---\n")
+            except Exception:
+                pass
             continue
+
+        if not av_res:
+            # [DEBUG] AV 검색 결과 0건 — 로그 기록
+            try:
+                import datetime as _dtt
+                _dbg = r"C:\yssong\KDT-FT-team3-Chainers\DB_insight\av_debug.log"
+                with open(_dbg, "a", encoding="utf-8") as _lf:
+                    _lf.write(f"[{_dtt.datetime.now()}] search_av 0건: domain={domain} q={query[:60]}\n")
+            except Exception:
+                pass
 
         for r in av_res:
             # 대표 스니펫: 최고 점수 세그먼트 텍스트
@@ -684,11 +979,15 @@ def _search_trichef_av(query: str, domains: list[str], top_k: int) -> list[dict]
                 "segments":       r.segments,
                 "trichef_domain": av_domain,
                 # 점수 상세 (UI 메트릭 표시용)
-                "dense":          round(float(av_meta.get("dense_agg",  0.0)), 4),
-                "cosine_top1":    round(float(av_meta.get("cosine_top1", 0.0)), 4),  # raw segment max cosine
-                "z_score":        round(float(av_meta.get("z_dense",    0.0)), 4),
-                "asf":            round(float(av_meta.get("asf_agg",    0.0)), 4),
-                "lexical":        round(float(av_meta.get("sparse_agg", 0.0)), 4),
+                "dense":          round(float(av_meta.get("dense_agg",     0.0)), 4),
+                # [E13 fix v2] prebst_cosine = 부스트 전 실제 cosine (≤1.0).
+                # raw_dense 는 score_adjust 에서 dense(=dense_agg) 로 설정 — 0.22 floor/의도보정 캡에 사용.
+                # prebst_cosine 은 _passes_floor raw>1.05 오탐 방지 + 오디오 인플레이션 캡에만 사용.
+                "prebst_cosine":  round(float(av_meta.get("raw_dense_agg", 0.0)), 4),
+                "cosine_top1":    round(float(av_meta.get("cosine_top1",   0.0)), 4),  # raw segment max cosine
+                "z_score":        round(float(av_meta.get("z_dense",       0.0)), 4),
+                "asf":            round(float(av_meta.get("asf_agg",       0.0)), 4),
+                "lexical":        round(float(av_meta.get("sparse_agg",    0.0)), 4),
             })
 
     results.sort(key=lambda x: -x["confidence"])
@@ -734,6 +1033,7 @@ def _search_legacy_video(query: str, top_k: int) -> list[dict]:
             "file_type":   "video",
             "confidence":  round(h["similarity"], 4),
             "similarity":  round(h["similarity"], 4),
+            "dense":       round(h["similarity"], 4),  # [CRITICAL-1 fix] raw_dense 설정용
             "snippet":     h.get("snippet", ""),
             "preview_url": None,
             "segments":    [],
@@ -760,6 +1060,7 @@ def _search_legacy_audio(query: str, top_k: int) -> list[dict]:
             "file_type":   "audio",
             "confidence":  round(h["similarity"], 4),
             "similarity":  round(h["similarity"], 4),
+            "dense":       round(h["similarity"], 4),  # [CRITICAL-1 fix] raw_dense 설정용
             "snippet":     h.get("snippet", ""),
             "preview_url": None,
             "segments":    [],

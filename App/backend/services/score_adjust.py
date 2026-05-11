@@ -85,6 +85,38 @@ def _generous_curve(raw: float) -> float:
         return min(1.0, 0.98 + (x - 0.60) * 0.025)    # 98~99%
 
 
+def hermitian_display_curve(h: float) -> float:
+    """Hermitian 복합 점수 전용 표시 커브 (image 도메인).
+
+    배경:
+      Hermitian score = sqrt(A²+(0.4B)²). 반환된 이미지의 실제 H 범위는 [0.10, 0.50].
+      lexical(캡션 텍스트) 매칭으로 반환된 이미지는 H ≈ 0.10~0.25 (시각 임베딩 약함).
+      dense-only 시각 매칭 이미지는 H ≈ 0.28~0.50 (임계값 0.2992 이상).
+      null 분포 평균 μ = 0.2857 (trichef_calibration.json).
+
+    매핑 (전체 실제 범위 H∈[0.10, 0.50] 커버):
+      H ≤ 0.10            →  5%  (최하한)
+      H = 0.20            → 20%  (lexical 위주 약한 시각 매칭)
+      H = 0.286 (null μ)  → 38%  (무관 이미지 기준선)
+      H = 0.350           → 70%  (유의미한 시각 매칭)
+      H = 0.450           → 92%  (강한 매칭)
+      H ≥ 0.550           → 97%  (상한)
+    """
+    x = max(0.0, min(1.0, float(h)))
+    if x < 0.10:
+        return 0.05
+    elif x < 0.20:
+        return 0.05 + (x - 0.10) * (0.15 / 0.10)    #  5% → 20%
+    elif x < 0.286:
+        return 0.20 + (x - 0.20) * (0.18 / 0.086)   # 20% → 38%  (null μ → 38%)
+    elif x < 0.350:
+        return 0.38 + (x - 0.286) * (0.32 / 0.064)  # 38% → 70%
+    elif x < 0.450:
+        return 0.70 + (x - 0.350) * (0.22 / 0.10)   # 70% → 92%
+    else:
+        return min(0.97, 0.92 + (x - 0.450) * 0.10) # 92% → 97%
+
+
 def adjust_confidence(raw_conf: float, query: str = "") -> float:
     """raw_conf (0~1) → 사용자 친화 confidence (0~1).
 

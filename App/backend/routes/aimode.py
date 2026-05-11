@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 aimode_bp = Blueprint("aimode", __name__, url_prefix="/api/aimode")
 
 OLLAMA_URL  = "http://localhost:11434"
-SUPPORTED_GEMMA_MODELS = ("gemma3:12b", "gemma3:4b")
+SUPPORTED_GEMMA_MODELS = ("gemma3:12b", "gemma3:4b", "gemma3:4b-it-qat")
 SCAN_DELAY  = 0.25   # 파일 스캔 간 UI 애니메이션 딜레이 (초)
 
 
@@ -183,15 +183,31 @@ def _is_supported_gemma_model(name: str) -> bool:
 
 
 def _get_ollama_model(task: str | None = None) -> str | None:
-    """지원 Gemma 모델은 gemma3:12b, gemma:4b만 허용한다."""
+    """설치된 Ollama 모델 중 태스크에 맞는 최적 모델 반환.
+
+    task="summarize" : VRAM 절약 최우선 — qwen2.5:3b(1.9GB)는 임베더와 공존 가능 → GPU 추론.
+    task="generate"  : 품질 우선 — gemma3:4b-it-qat(QAT) → 4b → qwen2.5:3b.
+    task=None        : intent/router — 소형 모델 우선 (qwen2.5:3b 최우선).
+    """
     try:
         r = _req.get(f"{OLLAMA_URL}/api/tags", timeout=3)
         models = r.json().get("models", [])
-        if task == "generate":
-            preferred = ["gemma3:12b", "gemma3:4b", "qwen2.5:1.5b", "qwen2.5:3b",
-                         "qwen2.5", "llama3.2", "llama3", "mistral", "phi4"]
+        if task == "summarize":
+            # VRAM 여유 ~3.6 GB 기준:
+            # qwen2.5:3b (1.9 GB) → 공존 가능, GPU 추론, 빠름 ✅
+            # gemma3:4b-it-qat (4.0 GB) → 초과, CPU 강제, 느림 ✗
+            preferred = ["qwen2.5:3b", "qwen2.5:1.5b", "gemma3:4b",
+                         "gemma3:4b-it-qat", "gemma3:12b"]
+        elif task == "generate":
+            # 답변 생성: QAT 우선(품질↑) → 일반 4b → 12b(VRAM 부족 시 CPU 강제)
+            preferred = ["gemma3:4b-it-qat", "gemma3:4b", "qwen2.5:3b", "qwen2.5:1.5b",
+                         "gemma3:12b", "qwen2.5", "llama3.2", "llama3", "mistral", "phi4"]
         else:
-            preferred = ["gemma3:12b", "gemma3:4b", "qwen2.5", "llama3.2", "llama3", "mistral", "phi4"]
+            # [GPU 최적화] intent/router: 소형 모델 우선.
+            # qwen2.5:3b(1.9GB)는 임베딩 모델과 VRAM 공존 가능 → keep_alive=300으로
+            # 세션 내 재로드 없이 즉시 추론. gemma3:12b(8.1GB)는 임베딩과 공존 불가.
+            preferred = ["qwen2.5:3b", "qwen2.5:1.5b", "gemma3:4b-it-qat", "gemma3:4b",
+                         "gemma3:12b", "qwen2.5", "llama3.2", "llama3", "mistral", "phi4"]
         for pref in preferred:
             for m in models:
                 name = m.get("name", "").lower()
@@ -208,11 +224,30 @@ def _get_ollama_model(task: str | None = None) -> str | None:
         return None
 
 
-def _ollama_oneshot(prompt: str, model: str, num_predict: int = 150) -> str:
+# 모델별 예상 VRAM 사용량 (MB) — VRAM 스왑 필요 여부 판단용
+_MODEL_VRAM_MB: dict[str, int] = {
+    "qwen2.5:1.5b":    1200,
+    "qwen2.5:3b":      2000,
+    "gemma3:4b":       3500,
+    "gemma3:4b-it-qat": 4200,
+    "gemma3:12b":      8300,
+}
+
+
+def _ollama_oneshot(prompt: str, model: str, num_predict: int = 150,
+                    keep_alive: int = 300) -> str:
+    """단발 Ollama 추론.
+
+    keep_alive=300(기본): 5분간 VRAM 상주 → 세션 내 재로드 없이 즉시 추론.
+    [GPU 최적화] _get_ollama_model(None) 이 qwen2.5:3b(1.9GB)를 우선 선택하므로
+    임베딩 모델(~5GB)과 공존 가능. gemma3:12b(8.1GB) 사용 시에는 호출부에서
+    keep_alive=0 을 명시적으로 전달해 VRAM 을 즉시 반납해야 함.
+    """
     try:
         r = _req.post(
             f"{OLLAMA_URL}/api/generate",
             json={"model": model, "prompt": prompt, "stream": False,
+                  "keep_alive": keep_alive,
                   "options": {"temperature": 0.1, "num_predict": num_predict}},
             timeout=30,
         )
@@ -226,21 +261,24 @@ def _ollama_oneshot(prompt: str, model: str, num_predict: int = 150) -> str:
 def _ollama_stream(messages: list[dict], model: str,
                    num_predict: int = -1,
                    temperature: float = 0.3,
-                   chunk_size: int = 80) -> Generator[str, None, None]:
+                   chunk_size: int = 80,
+                   keep_alive: int = -1) -> Generator[str, None, None]:
     """Ollama 스트리밍 응답.
 
     chunk_size>0 이면 토큰을 buffer 에 모아 N자 이상이거나 줄바꿈을 만나면 한 번에 yield.
     한 글자씩 떠오르는 답답함을 줄이고 "줄 단위로 차라락" 나오는 UX 제공.
     chunk_size=0 이면 토큰을 받는 즉시 yield (기존 동작).
+    keep_alive: Ollama 모델 메모리 유지 시간(초). 0=즉시 해제, -1=기본값(5분).
     """
     try:
         with _req.post(
             f"{OLLAMA_URL}/api/chat",
             json={
-                "model":    model,
-                "messages": messages,
-                "stream":   True,
-                "options":  {"temperature": temperature, "num_predict": num_predict},
+                "model":      model,
+                "messages":   messages,
+                "stream":     True,
+                "options":    {"temperature": temperature, "num_predict": num_predict},
+                "keep_alive": keep_alive,
             },
             stream=True, timeout=600,
         ) as resp:
@@ -285,6 +323,14 @@ _STOPWORDS = frozenset((
     "뭐야", "뭐더라", "뭐지", "뭔가", "뭐였", "뭐였지",
     "몇개", "몇개지", "몇가지", "몇명", "몇번", "몇개야",
     "얼마나", "얼마", "얼마야",
+    # [v2] 일반 동사·부사 — 고유명사가 아니라 대부분 문서에 등장해 오탐 유발
+    # 예: "보이저호가 나오는 부분" → "나오", "부분" 이 SW중심사회PDF 에서도 매칭
+    "나오", "나온", "나와", "나오는", "나왔", "나옵",
+    "부분", "구간", "장면", "순간", "구절", "단락",
+    "모든", "전체", "각각", "일부", "여러", "다양", "특히", "또한",
+    "처음", "마지막", "이번", "다음", "이전", "현재", "최근",
+    "것을", "것은", "것도", "이것", "그것", "저것",
+    "경우", "방법", "방식", "결과", "과정", "상황", "이유",
 ))
 
 
@@ -410,6 +456,14 @@ def _scan_file_for_keywords(
 
     if file_type == "doc":
         full_text = _read_source_full_text(source, max_chars=max_chars)
+    elif file_type in ("video", "movie", "audio", "music", "bgm"):
+        # AV: snippet + 모든 STT 세그먼트 텍스트를 합쳐 검색
+        parts = [source.get("snippet") or ""]
+        for seg in (source.get("segments") or []):
+            t = (seg.get("text") or seg.get("preview") or "").strip()
+            if t:
+                parts.append(t)
+        full_text = " ".join(parts)
     else:
         full_text = source.get("snippet") or ""
 
@@ -822,11 +876,25 @@ def router_node(state: dict) -> dict:
         "어디서", "어디에", "어디 있", "어디있", "있어?", "있나?",
         "보여줘", "보여 줘", "보여주", "알려줘", "알려 줘",
         "장면", "사진", "이미지", "영상", "동영상", "비디오", "음악", "음원", "문서", "파일",
+        "자료", "정보", "내용",
     )
-    if route == "chat" and not prev_sources:
+    # chat 오분류 → rag 강제 (prev_sources 무관)
+    if route == "chat":
         if any(kw in question for kw in _SEARCH_INTENT_KW):
             logger.info(f"[router_node] LLM='chat' 이지만 검색 의도 키워드 감지 → rag 강제")
             route = "rag"
+
+    # [강제 RAG v2] followup 오분류 방지 — prev_sources 가 있어도 명확한 새 검색 의도면 rag 강제.
+    # 예) "코스모스 보이저호" 대화 후 "경주 동궁에 대한 자료를 찾아줘" → followup 오분류 방지.
+    _FORCE_RAG_KW = (
+        "찾아줘", "찾아 줘", "찾아주", "찾아봐", "찾고 싶",
+        "보여줘", "보여 줘", "알려줘", "알려 줘",
+        "에 대한", "에 관한", "에 관련",
+        "자료", "정보를", "내용을",
+    )
+    if route == "followup" and any(kw in question for kw in _FORCE_RAG_KW):
+        logger.info(f"[router_node] followup → rag 강제 (새 검색 의도 키워드 감지: {question[:30]!r})")
+        route = "rag"
 
     # Fallback: 이전 파일이 있고 질문이 짧고 새 고유명사가 없으면 followup 강제
     import re as _re_r
@@ -931,11 +999,28 @@ def scan_node(state: dict) -> dict:
                 "file_type": file_type,
             })
 
-            try:
-                found, chunks = fut.result(timeout=20)
-            except Exception as _e:
-                logger.debug(f"[scan_node] {file_name}: {_e}")
-                found, chunks = False, []
+            # [scan_node v2] video/audio 타입은 벡터 검색으로 이미 관련성 검증됨.
+            # STT 텍스트가 영어인 경우 한국어 키워드 매칭 실패 → found=False 오류 방지.
+            # → found=True 고정, chunks는 segments 텍스트 + snippet으로 구성.
+            _av_types = ("video", "movie", "audio", "music")
+            if file_type in _av_types:
+                fut.cancel()  # 불필요한 스캔 취소 (에러 무시)
+                found = True
+                _av_chunks = []
+                _snip = src.get("snippet") or ""
+                if _snip:
+                    _av_chunks.append(_snip)
+                for _seg in (src.get("segments") or [])[:5]:
+                    _st = (_seg.get("text") or _seg.get("preview") or "").strip()
+                    if _st and _st not in _av_chunks:
+                        _av_chunks.append(_st)
+                chunks = _av_chunks if _av_chunks else [file_name]
+            else:
+                try:
+                    found, chunks = fut.result(timeout=20)
+                except Exception as _e:
+                    logger.debug(f"[scan_node] {file_name}: {_e}")
+                    found, chunks = False, []
 
             # 스캔 결과 이벤트
             _emit({
@@ -961,12 +1046,25 @@ def select_node(state: dict) -> dict:
     scan_results = state.get("scan_results") or []
     candidates   = state.get("candidates")   or []
 
-    matched = [r for r in scan_results if r.get("found")]
+    # [v2] found=True 이더라도 reranker 극단 부정(< -5.0) → 오탐 제거.
+    # 문제: "나오" 같은 흔한 단어 매칭으로 SW중심사회 PDF 가 "코스모스 보이저호" 검색에서
+    #   found=True 반환 → LLM 컨텍스트에 무관한 내용 주입 → 오답 또는 혼동 발생.
+    # doc 한정 적용 (image/video/audio 는 snippet 기반 스캔이라 reranker 신뢰도 충분).
+    _RR_REJECT = -5.0
+    def _passes_rerank(r: dict) -> bool:
+        if r.get("file_type") == "doc":
+            rr = r.get("rerank_score")
+            if rr is not None and float(rr) < _RR_REJECT:
+                return False
+        return True
 
-    # 매칭 파일 없으면 → 1위 파일 강제 선택 (fallback)
+    matched = [r for r in scan_results if r.get("found") and _passes_rerank(r)]
+
+    # 매칭 파일 없으면 → rerank 통과한 후보 중 1위 강제 선택 (fallback)
     if not matched and candidates:
         logger.info("[select_node] 매칭 없음 → 1위 fallback")
-        best = candidates[0]
+        rr_ok = [c for c in candidates if _passes_rerank(c)]
+        best = (rr_ok or candidates)[0]
         matched = [{**best, "found": True,
                     "matched_chunks": [best.get("snippet") or ""]}]
 
@@ -1503,8 +1601,45 @@ def generate_node(state: dict) -> dict:
     stream_error = None
     # 하이브리드: 답변 생성은 작은 모델(4b). 검색/intent/scan 은 state["model"](12b) 유지.
     gen_model = _get_ollama_model("generate") or model
+
+    # video/audio 답변은 타임스탬프 인용 위주로 짧게 — 토큰 상한으로 타임아웃 방지
+    has_av = any(
+        s.get("file_type", "") in ("video", "movie", "audio", "music", "bgm")
+        for s in matched_sources
+    )
+    np_limit = 400 if has_av else -1  # AV: 최대 400 tok(≈200자), 문서: 무제한
+
+    # ── VRAM 스왑: 검색 임베더 해제 → LLM GPU 배치 보장 ─────────────────
+    # 검색 엔진(SigLIP2+BGE-M3+DINOv2+Reranker ≈ 6~7 GB)이 VRAM 점유 시
+    # gemma3:4b(≈3.3 GB)가 GPU에 올라가지 못해 CPU 추론(10~20× 느림) 발생.
+    # 여유 VRAM < 4000 MB 이면 임베더를 해제하여 LLM이 GPU를 사용하게 함.
+    _gen_vram_swapped = False
     try:
-        for tok in _ollama_stream(messages, gen_model, num_predict=-1):  # 토큰 제한 없음
+        import torch as _t
+        if _t.cuda.is_available():
+            _free_mb = int(_t.cuda.mem_get_info()[0] / 1024 / 1024)
+            if _free_mb < 4000:
+                logger.info(f"[generate_node] 여유 VRAM {_free_mb} MB < 4000 → 임베더 해제")
+                _emit({"type": "info", "message": "GPU 메모리 확보 중...", "free_mb": _free_mb})
+                _release_search_embedders()
+                _gen_vram_swapped = True
+                # Ollama가 이미 CPU로 로드했다면 강제 언로드 → 재로드 시 GPU 사용
+                try:
+                    _req.post(f"{OLLAMA_URL}/api/generate",
+                              json={"model": gen_model, "prompt": "",
+                                    "messages": [{"role": "user", "content": ""}],
+                                    "keep_alive": 0, "stream": False},
+                              timeout=10)
+                except Exception:
+                    pass
+                _free_after = int(_t.cuda.mem_get_info()[0] / 1024 / 1024)
+                logger.info(f"[generate_node] 임베더 해제 후 여유 VRAM: {_free_after} MB")
+    except Exception as _ve:
+        logger.warning(f"[generate_node] VRAM 확인 실패: {_ve}")
+
+    try:
+        for tok in _ollama_stream(messages, gen_model, num_predict=np_limit,
+                                  keep_alive=0 if _gen_vram_swapped else -1):
             full_answer += tok
             _emit({"type": "token", "text": tok})
     except Exception as e:
@@ -1985,13 +2120,40 @@ def _do_search(query: str, topk: int = 5) -> list[dict]:
             try: audio = _search_legacy_audio(eq, topk) or []
             except Exception: pass
 
+        # [E13 fix v2] audio/bgm z-score CDF 인플레이션 방지.
+        # prebst_cosine = 부스트 전 실제 cosine (≤1.0) 으로 상한 설정.
+        # raw_dense = dense_agg(부스트 후) 이므로 인플레이션 보정에 부적합.
+        # video 는 도메인 선택 정확도를 위해 보정하지 않음.
+        for _av_lst in (audio, bgm):
+            for _av_r in _av_lst:
+                _raw_dv = float(_av_r.get("prebst_cosine") or _av_r.get("raw_dense") or _av_r.get("dense") or 0)
+                if _raw_dv > 0:
+                    for _f in ("confidence", "similarity"):
+                        if _f in _av_r and _av_r[_f] is not None:
+                            _av_r[_f] = round(min(float(_av_r[_f]), _raw_dv), 4)
+
         for lst in (img_only, doc_only, video, audio, bgm):
             lst.sort(key=lambda r: r.get("confidence", 0), reverse=True)
-        quota = max(1, topk // 4)
+
+        # [aimode DEBUG] video 상위 결과 로깅
+        try:
+            import datetime as _dtt_ai
+            _dbg_ai = r"C:\yssong\KDT-FT-team3-Chainers\DB_insight\av_debug.log"
+            with open(_dbg_ai, "a", encoding="utf-8") as _lf_ai:
+                _lf_ai.write(f"\n[{_dtt_ai.datetime.now()}] [AIMODE] _do_search q={query[:40]!r} topk={topk}\n")
+                _lf_ai.write(f"  video 결과 {len(video)}건:\n")
+                for _vi, _vr in enumerate(video[:10]):
+                    _lf_ai.write(f"    [{_vi}] conf={_vr.get('confidence')} dense={_vr.get('dense')} name={_vr.get('file_name','?')[:60]}\n")
+        except Exception:
+            pass
+
+        # [aimode v2] video quota 확대: topk//3 최소 2 → video 결과 더 많이 guaranteed
+        quota = max(2, topk // 3)
         guaranteed: list[dict] = []
         for lst in (doc_only, img_only, video, audio, bgm):
             guaranteed.extend(lst[:quota])
-        _DW = {"image": 1.0, "doc": 1.0, "video": 0.75, "audio": 0.75, "bgm": 0.75}
+        # [aimode v2] video/audio 가중치를 1.0으로 동등하게 → extras 정렬에서 불이익 제거
+        _DW = {"image": 1.0, "doc": 1.0, "video": 1.0, "audio": 0.75, "bgm": 0.75}
         extras: list[dict] = []
         for lst in (img_only, doc_only, video, audio, bgm):
             extras.extend(lst[quota:])
@@ -2001,7 +2163,46 @@ def _do_search(query: str, topk: int = 5) -> list[dict]:
         )
         results = (guaranteed + extras)[:topk * 2]
 
+        # [aimode v2] rerank 전 video top-1 보존 (rerank 후 복원용)
+        _top_video = video[0] if video else None
+        _top_video_id = _top_video.get("trichef_id") if _top_video else None
+
+        # [aimode DEBUG] rerank 전 상위 결과 로깅
+        try:
+            import datetime as _dtt_rk
+            _dbg_rk = r"C:\yssong\KDT-FT-team3-Chainers\DB_insight\av_debug.log"
+            with open(_dbg_rk, "a", encoding="utf-8") as _lf_rk:
+                _lf_rk.write(f"  [BEFORE rerank] results {len(results)}건:\n")
+                for _ri, _rr in enumerate(results[:topk]):
+                    _lf_rk.write(f"    [{_ri}] conf={_rr.get('confidence')} type={_rr.get('file_type')} name={_rr.get('file_name','?')[:50]}\n")
+        except Exception:
+            pass
+
         results = maybe_rerank(query, results)
+
+        # [aimode DEBUG] rerank 후 상위 결과 로깅
+        try:
+            import datetime as _dtt_rk2
+            _dbg_rk2 = r"C:\yssong\KDT-FT-team3-Chainers\DB_insight\av_debug.log"
+            with open(_dbg_rk2, "a", encoding="utf-8") as _lf_rk2:
+                _lf_rk2.write(f"  [AFTER rerank] results {len(results)}건:\n")
+                for _ri2, _rr2 in enumerate(results[:topk]):
+                    _lf_rk2.write(f"    [{_ri2}] conf={_rr2.get('confidence')} type={_rr2.get('file_type')} name={_rr2.get('file_name','?')[:50]}\n")
+        except Exception:
+            pass
+
+        # [aimode v2] rerank 후 video top-1이 topk 밖으로 밀린 경우 강제 복원
+        if _top_video_id is not None:
+            _vid_in_topk = any(
+                r.get("trichef_id") == _top_video_id
+                for r in results[:topk]
+            )
+            if not _vid_in_topk:
+                # 이미 results 어딘가에 있으면 제거 후 맨앞에 삽입
+                results = [_top_video] + [
+                    r for r in results if r.get("trichef_id") != _top_video_id
+                ]
+                logger.debug(f"[aimode v2] video top-1 복원: {_top_video.get('file_name')} id={_top_video_id}")
 
         from services.score_adjust import apply_query_penalty
         for r in results:
@@ -2384,7 +2585,10 @@ def _load_file_content_for_summary(file_type: str, trichef_id: str,
                                     ) -> tuple[str, str]:
     """요약용 파일 본문 로드."""
     if file_type in ("doc", "doc_page") and trichef_id:
-        text, _stem = _load_full_doc_text(trichef_id, max_chars=18000)
+        # [v18.3] 입력 길이 12000→6000자로 재축소:
+        #   12000자 ≈ 6,000~9,000 tok → prefill 30~60초 + 생성 25초 = 90초 초과 빈발.
+        #   6000자 (≈ 3,000~4,500 tok) 로도 핵심 내용 충분히 포함되고 전체 30초 이내 가능.
+        text, _stem = _load_full_doc_text(trichef_id, max_chars=6000)
         return text, "pdf_pages"
 
     if file_type == "image" and trichef_id:
@@ -2460,8 +2664,88 @@ def _build_summary_prompt(file_type: str, fname: str, content: str) -> str:
 - 핵심 키워드는 **굵게** (`**용어**`) 강조.
 - 단순 불릿 나열 지양 — **문단 위주**, 4번 섹션만 예외적으로 불릿 허용.
 - 본문에 없는 정보는 추측 금지.
-- 충실하게 작성 — 전체 합산 약 4,000~8,000자.
+- 간결하게 작성 — 전체 합산 약 800~1,200자 (6개 섹션 각 100~200자 목표).
 - 한국어, Markdown (제목 `##`/`###`, 강조 `**`, 인용 `>` 사용)."""
+
+
+def _release_search_embedders() -> int:
+    """검색 임베더(SigLIP2·BGE-M3·DINOv2·Reranker)를 VRAM에서 해제.
+
+    AI 요약처럼 LLM이 대용량 VRAM을 필요로 할 때 검색 모델을 내려 공간을 확보.
+    각 임베더는 다음 검색 요청 시 _load() 를 통해 자동 재로드됨.
+    반환값: 해제 후 여유 VRAM (MB). GPU 없으면 0.
+    """
+    import gc
+    released: list[str] = []
+
+    # 1) SigLIP2 (Re 축, ~1.0 GB)
+    try:
+        import embedders.trichef.siglip2_re as _s
+        with _s._lock:
+            if _s._model is not None:
+                try: _s._model.cpu()
+                except Exception: pass
+                _s._model = None
+                _s._proc  = None
+                released.append("siglip2")
+    except Exception as e:
+        logger.warning(f"[vram_swap] siglip2 해제 실패: {e}")
+
+    # 2) BGE-M3 (Im 축, ~2.0 GB)
+    try:
+        import embedders.trichef.bgem3_caption_im as _b
+        with _b._lock:
+            if _b._model is not None:
+                try:
+                    inner = getattr(_b._model, 'model', None)
+                    if inner is not None and hasattr(inner, 'cpu'):
+                        inner.cpu()
+                except Exception: pass
+                _b._model = None
+                released.append("bgem3")
+    except Exception as e:
+        logger.warning(f"[vram_swap] bgem3 해제 실패: {e}")
+
+    # 3) DINOv2 (Z 축, ~1.3 GB)
+    try:
+        import embedders.trichef.dinov2_z as _d
+        with _d._lock:
+            if _d._model is not None:
+                try: _d._model.cpu()
+                except Exception: pass
+                _d._model = None
+                _d._proc  = None
+                released.append("dinov2")
+    except Exception as e:
+        logger.warning(f"[vram_swap] dinov2 해제 실패: {e}")
+
+    # 4) Reranker — shared/reranker.py 싱글턴 탐색
+    try:
+        import sys
+        for mod_name in list(sys.modules.keys()):
+            if 'reranker' in mod_name.lower():
+                mod = sys.modules[mod_name]
+                for attr in ('_model', '_reranker', 'model', '_cross_encoder'):
+                    m = getattr(mod, attr, None)
+                    if m is not None and hasattr(m, 'cpu'):
+                        try: m.cpu()
+                        except Exception: pass
+                        setattr(mod, attr, None)
+                        released.append(f"reranker.{attr}")
+    except Exception as e:
+        logger.warning(f"[vram_swap] reranker 해제 실패: {e}")
+
+    gc.collect()
+    try:
+        import torch
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            free_mb = int(torch.cuda.mem_get_info()[0] / 1024 / 1024)
+            logger.info(f"[vram_swap] 해제 완료: {released}, 여유 VRAM: {free_mb} MB")
+            return free_mb
+    except Exception:
+        pass
+    return 0
 
 
 def _summarize_sse(file_type: str, trichef_id: str, file_path: str,
@@ -2479,14 +2763,15 @@ def _summarize_sse(file_type: str, trichef_id: str, file_path: str,
     def emit(obj: dict) -> str:
         return f"data: {json.dumps(obj, ensure_ascii=False)}\n\n"
 
-    # 하이브리드: 요약은 답변 생성과 동일하게 작은 모델(4b) 사용
-    model = _get_ollama_model("generate")
+    # 요약: VRAM 절약 최우선 — qwen2.5:3b(1.9GB)가 임베더와 공존 가능하면 GPU 추론
+    model = _get_ollama_model("summarize")
     if not model:
         yield emit({"type": "error", "message": "Ollama 미연결 또는 지원 Gemma 모델이 없습니다. gemma3:12b 또는 gemma:4b를 설치해 주세요."})
         return
 
     fname = file_name or (file_path or "").rsplit("/", 1)[-1].rsplit("\\", 1)[-1] or "?"
     yield emit({"type": "info", "model": model, "file_type": file_type, "file_name": fname})
+    yield emit({"type": "status", "message": "본문 추출 중..."})
 
     content, kind = _load_file_content_for_summary(file_type, trichef_id, file_path, segments)
     if not content or len(content.strip()) < 20:
@@ -2502,12 +2787,58 @@ def _summarize_sse(file_type: str, trichef_id: str, file_path: str,
         {"role": "user",   "content": "이 파일을 위 원칙에 따라 요약해줘."},
     ]
 
-    # 본문 길이 기반 동적 num_predict — 짧은 파일은 빨리 끝내고, 긴 파일만 길게 허용
+    # 본문 길이 기반 동적 num_predict
+    # qwen2.5:3b GPU(RTX 4070 Laptop) 기준 ~40 tok/s → num_predict 600 ≈ 15초.
+    # UX 목표: 모델로드(~10s) + prefill(~3s) + 생성(~15s) = 30초 이내.
     clen = len(content)
-    if   clen < 2000:   dynamic_np = 800
-    elif clen < 10000:  dynamic_np = 2000
-    elif clen < 30000:  dynamic_np = 4500
-    else:               dynamic_np = 7500
+    if   clen < 2000:   dynamic_np = 400
+    elif clen < 4000:   dynamic_np = 500
+    else:               dynamic_np = 600
+
+    # [VRAM 스왑] LLM 호출 전 여유 VRAM 확인.
+    # VRAM 스왑 정책 (모델별 동적 임계값):
+    # 모델이 GPU에 올라가야 빠른 추론 가능 (GPU ~40 tok/s vs CPU ~3 tok/s).
+    # 여유 VRAM < 모델 필요량+300MB 이면 임베더 해제 후 force-unload → GPU 재로드.
+    # qwen2.5:3b(1.9GB): 여유 3.6GB → 스왑 불필요 ✅
+    # gemma3:4b-it-qat(4.0GB): 여유 3.6GB → 스왑 필요 (임베더 해제 후 GPU 가능)
+    _vram_swapped = False
+    _model_need_mb = next(
+        (v for k, v in _MODEL_VRAM_MB.items() if k in model), 4200
+    )
+    try:
+        import torch as _torch
+        if _torch.cuda.is_available():
+            _free_mb = int(_torch.cuda.mem_get_info()[0] / 1024 / 1024)
+            _threshold = _model_need_mb + 300   # 300 MB 여유분
+            if _free_mb < _threshold:
+                logger.info(
+                    f"[vram_swap] {model}: 여유 {_free_mb} MB < 필요 {_threshold} MB "
+                    f"→ 임베더 해제 후 GPU 재로드"
+                )
+                yield emit({"type": "vram_swap", "message": "GPU 메모리 확보 중...", "free_mb": _free_mb})
+                _after_mb = _release_search_embedders()
+                _vram_swapped = True
+                logger.info(f"[vram_swap] 해제 후 여유 VRAM: {_after_mb} MB")
+                # Ollama는 CPU RAM에 로드된 모델을 VRAM이 해제돼도 자동으로 GPU로 이동하지 않음.
+                # force-unload → CPU RAM 제거 → 다음 요청 시 디스크→GPU 단 1회 로드.
+                try:
+                    _req.post(
+                        f"{OLLAMA_URL}/api/chat",
+                        json={"model": model,
+                              "messages": [{"role": "user", "content": "hi"}],
+                              "keep_alive": 0, "stream": False},
+                        timeout=20,
+                    )
+                    logger.info("[vram_swap] force-unload 완료 → 다음 요청 시 디스크→GPU 로드")
+                except Exception as _ue:
+                    logger.warning(f"[vram_swap] force-unload 실패 (무시): {_ue}")
+            else:
+                logger.info(
+                    f"[vram_swap] {model}: 여유 {_free_mb} MB ≥ 필요 {_threshold} MB "
+                    f"→ 스왑 불필요, GPU 직접 로드"
+                )
+    except Exception as _ve:
+        logger.warning(f"[vram_swap] VRAM 확인 실패: {_ve}")
 
     full = ""
     t0 = time.time()
@@ -2516,7 +2847,8 @@ def _summarize_sse(file_type: str, trichef_id: str, file_path: str,
     last_scan_len = 0
     SCAN_INTERVAL = 200
     try:
-        for tok in _ollama_stream(messages, model, num_predict=dynamic_np, temperature=0.25):
+        for tok in _ollama_stream(messages, model, num_predict=dynamic_np, temperature=0.25,
+                                   keep_alive=0 if _vram_swapped else -1):
             full += tok
             if secure:
                 if len(full) - last_scan_len >= SCAN_INTERVAL:

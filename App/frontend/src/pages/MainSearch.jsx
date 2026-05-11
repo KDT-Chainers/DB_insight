@@ -543,8 +543,9 @@ async function searchFiles(query, topK = 30, type = "") {
   });
 
   // BGM은 /api/search 백엔드에서 이미 통합됨 — 직접 호출 제거 (이중 집계 방지)
+  // [fix v18.11] 프론트 confidence 재정렬 제거 — 백엔드 _rank_score 순서 보존.
+  // sortResultsByMetric("server") 가 이미 백엔드 순서를 그대로 반환하므로 여기서 정렬 불필요.
   const results = await generalP;
-  results.sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0));
   return results;
 }
 
@@ -717,6 +718,7 @@ function trichefDomainDisplayLabel(raw) {
 
 /** 결과 목록 정렬 — ResultCard 의 유사도/정확도/신뢰도 해석과 동일 (클라이언트만) */
 const RESULT_SORT_METRICS = [
+  { id: "server", label: "종합순위" },
   { id: "dense", label: "유사도" },
   { id: "rerank", label: "정확도" },
   { id: "confidence", label: "신뢰도" },
@@ -747,6 +749,7 @@ function resultMetricSortValue(r, metric) {
 }
 
 function sortResultsByMetric(results, metric) {
+  if (metric === "server") return [...results]; // 백엔드 순서 그대로 유지
   return [...results].sort(
     (a, b) =>
       resultMetricSortValue(b, metric) - resultMetricSortValue(a, metric),
@@ -839,10 +842,11 @@ function ResultCard({
   // 신뢰도/정확도/유사도 모두 0~100% 형식으로 통일 표시
   const sim =
     clamp01(dense) != null ? `${(clamp01(dense) * 100).toFixed(1)}%` : "—";
+  // 정확도: rerank_score 있을 때만 표시. 없으면 "—" (신뢰도와 중복 방지)
   const acc =
     rerank != null
       ? `${(sigmCalibrated(rerank) * 100).toFixed(1)}%`
-      : `${(Math.max(0, Math.min(1, conf)) * 100).toFixed(1)}%`;
+      : "—";
 
   const streamUrl = isAV ? avStreamUrl(result) : null;
   const domainLabel = result.trichef_domain ?? result.file_type ?? "unknown";
@@ -1059,7 +1063,10 @@ function ResultCard({
                         <span className="text-[#7dd3fc] font-mono font-semibold whitespace-nowrap min-w-[112px]">
                           {fmtTime(t0)} ~ {fmtTime(t1)}
                         </span>
-                        <ScoreStars score={sc} className="whitespace-nowrap" />
+                        <span className="whitespace-nowrap text-[10px]">
+                          <span className="text-[#94a3b8]">유사도 </span>
+                          <span className="text-[#9e8fd4] font-mono font-semibold">{(sc * 100).toFixed(1)}%</span>
+                        </span>
                         <span className="text-[#94a3b8] flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
                           <HighlightedText text={preview} query={query} />
                         </span>
@@ -1430,7 +1437,7 @@ export default function MainSearch() {
   // [노이즈 제거] 저신뢰도 결과 숨김 (기본 ON). 사용자가 토글로 모두 표시 가능.
   const [hideLowConf, setHideLowConf] = useState(true);
   /** 검색 결과 카드 정렬 기준 (API 재호출 없음) */
-  const [resultSortMetric, setResultSortMetric] = useState("confidence");
+  const [resultSortMetric, setResultSortMetric] = useState("server");
   const [resultSortMenuOpen, setResultSortMenuOpen] = useState(false);
   const resultSortMenuRef = useRef(null);
   // 보안 모드 — 활성 시 결과 미리보기에 PII 마스킹 (주민번호/여권/계좌 등)
@@ -1766,6 +1773,12 @@ export default function MainSearch() {
       if (summaryAbortRef.current) summaryAbortRef.current.abort();
       const ctrl = new AbortController();
       summaryAbortRef.current = ctrl;
+      // 90초 타임아웃 — 본문 추출 + LLM 생성 합계 기준
+      const _summaryTimer = setTimeout(() => {
+        ctrl.abort();
+        setSummaryError("요약 시간이 초과됐습니다 (90초). 잠시 후 다시 시도해 주세요.");
+        setSummarizing(false);
+      }, 90000);
       setSummarizing(true);
       setSummaryText("");
       setSummaryDone(false);
@@ -1834,6 +1847,7 @@ export default function MainSearch() {
       } catch (e) {
         if (e.name !== "AbortError") setSummaryError(e.message || "요약 실패");
       } finally {
+        clearTimeout(_summaryTimer);
         setSummarizing(false);
       }
     },
@@ -2130,12 +2144,12 @@ export default function MainSearch() {
                 : "main-search-entrance-off"
             }`}
           >
-            <div className="z-10 flex w-full max-w-xl flex-col items-center">
+            <div className="z-10 flex w-full max-w-3xl flex-col items-center">
               {/* Hero (v0) */}
               <div
                 className={`mse-hero-down mb-6 w-full px-2 text-center transition-all duration-300 ${homeExiting ? "opacity-0 -translate-y-6" : ""}`}
               >
-                <h1 className="mx-auto mb-3 w-full whitespace-nowrap text-center text-[clamp(1.8rem,5.2vw,4.2rem)] font-light leading-[1.08] tracking-tight text-on-surface">
+                <h1 className="mx-auto mb-3 w-full text-center text-[clamp(1.8rem,5.2vw,4.2rem)] font-light leading-[1.08] tracking-tight text-on-surface">
                   나만의 데이터 인사이트
                 </h1>
                 <p className="mt-5 text-lg text-on-surface-variant md:text-xl">
@@ -2854,12 +2868,13 @@ export default function MainSearch() {
                 />
               </div>
 
-              {/* [노이즈 제거] 저신뢰도 결과 숨김 토글 — 신뢰도 < 20% 인 결과 자동 hide.
+              {/* [노이즈 제거] 저신뢰도 결과 숨김 토글 — 신뢰도 < 임계값 인 결과 자동 hide.
                 Reranker 가 부적합 판정한 결과(예: '박태웅 의장' 검색에 신발 사진)를
                 기본 숨김 처리하여 노이즈 제거. 사용자는 토글로 전체 보기 가능.
-                [v10] 5% → 20% 상향: backend floor와 동일 기준으로 통일. */}
+                [v10] 5% → 20% 상향: backend floor와 동일 기준으로 통일.
+                [v22] 이미지 탭 단독: 15%로 완화 — 단일어 쿼리("고양이")의 구조적 CDF 저하 보정. */}
               {(() => {
-                const LOW = 0.2;
+                const LOW = domainFilter === "image" ? 0.15 : 0.2;
                 const lowCount = results.filter(
                   (r) => (r.confidence ?? 0) < LOW,
                 ).length;
@@ -2919,7 +2934,7 @@ export default function MainSearch() {
               {!searching &&
                 results.length > 0 &&
                 (() => {
-                  const LOW = 0.2;
+                  const LOW = domainFilter === "image" ? 0.15 : 0.2;
                   const visible = hideLowConf
                     ? resultsSortedForDisplay.filter(
                         (r) => (r.confidence ?? 0) >= LOW,

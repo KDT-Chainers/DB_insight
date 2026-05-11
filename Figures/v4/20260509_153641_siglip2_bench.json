@@ -1,0 +1,64 @@
+{
+  "experiment": "siglip2_model_comparison",
+  "timestamp": "2026-05-09T15:36:41",
+  "domain": "image",
+  "n_samples": 100,
+  "seed": 2026,
+  "models": {
+    "SO400M": {
+      "model_id": "google/siglip2-so400m-patch16-naflex",
+      "dim": 1152,
+      "cross_modal": {
+        "r1": 0.51,
+        "r5": 0.81,
+        "mrr": 0.6367
+      },
+      "full_corpus": {
+        "r1": 1.0,
+        "r5": 1.0,
+        "mrr": 1.0,
+        "missing": 0
+      },
+      "pairwise": {
+        "mean": 0.496285,
+        "std": 0.089941,
+        "min": 0.250377,
+        "max": 0.936556,
+        "median": 0.488766
+      },
+      "effective_dim": {
+        "total_dim": 1152,
+        "eff_dim_95": 75,
+        "eff_dim_99": 92,
+        "top10_var_pct": 40.67,
+        "top50_var_pct": 84.01
+      },
+      "orthogonalizable": false
+    },
+    "Large": {
+      "model_id": "google/siglip2-large-patch16-256",
+      "dim": 1024,
+      "cross_modal": {
+        "r1": 0.56,
+        "r5": 0.75,
+        "mrr": 0.64
+      },
+      "full_corpus": "N/A (전체 코퍼스 Large 캐시 없음)",
+      "pairwise": {
+        "mean": 0.53453,
+        "std": 0.086642,
+        "min": 0.277247,
+        "max": 0.94397,
+        "median": 0.528281
+      },
+      "effective_dim": {
+        "total_dim": 1024,
+        "eff_dim_95": 74,
+        "eff_dim_99": 92,
+        "top10_var_pct": 41.81,
+        "top50_var_pct": 84.78
+      },
+      "orthogonalizable": true
+    }
+  }
+}

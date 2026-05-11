@@ -275,6 +275,7 @@ def filter_by_visual_match(
     query: str,
     floor: Optional[float] = None,
     penalty: float = _PENALTY_FACTOR,
+    use_bayes: bool = True,
 ) -> list[dict]:
     """검색 결과의 image 도메인 항목에 시각 일치성 검증 적용.
 
@@ -304,7 +305,7 @@ def filter_by_visual_match(
     # [v3 A/B] OMC_VISUAL_USE_BAYES=0 으로 floor 모드 강제 가능 (default "1" 호환).
     import os as _os_bayes
     _bayes_env = _os_bayes.environ.get("OMC_VISUAL_USE_BAYES", "1").strip()
-    use_bayes = (_bayes_env != "0") and _ensure_bayes_loaded()
+    use_bayes = use_bayes and (_bayes_env != "0") and _ensure_bayes_loaded()
 
     txt_vec = _embed_query_text(query)
     if txt_vec is None:

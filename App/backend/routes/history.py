@@ -18,16 +18,33 @@ def get_history():
     if limit is None or limit <= 0:
         limit = 50
 
+    # mode=ai  → AI 모드 기록만 (method='aimode')
+    # mode=search → 일반 검색 기록만 (method != 'aimode')
+    # mode 미지정 → 전체
+    mode = request.args.get("mode", default=None)
+
+    if mode == "ai":
+        where_clause = "WHERE h.method = 'aimode'"
+        inner_where  = "WHERE method = 'aimode'"
+    elif mode == "search":
+        where_clause = "WHERE h.method != 'aimode'"
+        inner_where  = "WHERE method != 'aimode'"
+    else:
+        where_clause = ""
+        inner_where  = ""
+
     with get_connection() as conn:
         rows = conn.execute(
-            """
+            f"""
             SELECT h.id, h.query, h.method, h.result_count, h.searched_at
             FROM search_history h
             INNER JOIN (
                 SELECT query, MAX(searched_at) AS max_at
                 FROM search_history
+                {inner_where}
                 GROUP BY query
             ) latest ON h.query = latest.query AND h.searched_at = latest.max_at
+            {where_clause}
             ORDER BY h.searched_at DESC
             LIMIT ?
             """,

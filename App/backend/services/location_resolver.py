@@ -33,23 +33,31 @@ logger = logging.getLogger(__name__)
 def _clean_caption_text(text: str) -> str:
     """CJK 중국어 또는 인코딩 깨진 텍스트를 걸러낸다.
 
-    - CJK 통합 한자(U+4E00–U+9FFF) 비율이 5% 초과 → 빈 문자열 반환
-    - 제어 문자(U+FFFD replacement, \x00–\x08 등) 다수 포함 → 빈 문자열 반환
+    [v2] 줄 단위 검사 — 한국어/영어 줄은 보존, 중국어 위주 줄만 제거.
+      Qwen 캡셔닝이 일부 이미지에 한국어 prompt 무시하고 중국어로 응답하는
+      케이스(약 45%)에서 한국어 부분만이라도 살려서 표시되도록 개선.
+
+    - 줄별 CJK 한자 비율 5% 초과 → 해당 줄만 제거
+    - 제어 문자/U+FFFD 5% 초과 → 해당 줄만 제거
+    - 살아남은 줄 합치고 빈 줄·중복 공백 정리
     한글(U+AC00–U+D7A3) 및 영어는 항상 허용.
     """
     if not text:
         return ""
-    total = len(text)
-    if total == 0:
-        return ""
-    cjk_count = sum(1 for c in text if "一" <= c <= "鿿")
-    if cjk_count / total > 0.05:
-        return ""
-    # 인코딩 깨짐 감지: U+FFFD(replacement char) 또는 제어문자 다수
-    bad_count = sum(1 for c in text if c == "�" or (ord(c) < 0x20 and c not in "\n\r\t"))
-    if bad_count / total > 0.05:
-        return ""
-    return text
+    kept: list[str] = []
+    for line in text.splitlines():
+        s = line.strip()
+        if not s:
+            continue
+        total = len(s)
+        cjk_count = sum(1 for c in s if "一" <= c <= "鿿")
+        if cjk_count / total > 0.05:
+            continue
+        bad_count = sum(1 for c in s if c == "�" or (ord(c) < 0x20 and c not in "\n\r\t"))
+        if bad_count / total > 0.05:
+            continue
+        kept.append(s)
+    return "\n".join(kept)
 
 
 # 한국어 조사·어미 — 매칭 시 제거하여 어간 매칭 강화

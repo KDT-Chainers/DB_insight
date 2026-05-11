@@ -31,7 +31,12 @@ SUPPORTED_GEMMA_MODELS = ("gemma3:12b", "gemma3:4b")
 _DOMAIN_HINTS: dict[str, list[str]] = {
     "image":    ["사진", "이미지", "그림", "포토", "스크린샷", "photo", "image", "pic", "jpg", "png", "gif"],
     "doc_page": ["문서", "pdf", "자료", "보고서", "슬라이드", "워드", "엑셀", "ppt", "doc", "report"],
-    "movie":    ["영상", "동영상", "비디오", "영화", "클립", "video", "movie", "mp4"],
+    "movie":    ["영상", "동영상", "비디오", "영화", "클립", "video", "movie", "mp4",
+                 # [v1.1] 우주/과학 다큐 쿼리 → movie 도메인 힌트
+                 # "코스모스 보이저호가 나오는 부분", "달 탐사 영상" 등 LLM 없이도 movie 선택
+                 "다큐", "다큐멘터리", "방송", "뉴스", "시리즈", "episode", "ep",
+                 "우주", "코스모스", "보이저", "탐사", "나사", "nasa", "space", "cosmos",
+                 "장면", "부분", "구간", "씬", "scene", "나오는", "나온"],
     "music":    ["음악", "음성", "노래", "소리", "음원", "audio", "music", "mp3", "song"],
 }
 
@@ -62,12 +67,26 @@ def _trichef_search(
     for d in search_domains:
         try:
             if d in ("movie", "music"):
-                av_res = engine.search_av(query, domain=d, topk=topk)
+                # [fix] search.py 와 동일하게 쿼리 확장 후 검색.
+                # expand_bilingual: "코스모스 보이저호" → "cosmos space universe Voyager Voyager spacecraft ..."
+                # 확장 없이는 E13 보이저 세그먼트(0.889) 대신 E10 일반 코스모스(0.268) 가 나옴.
+                try:
+                    from services.query_expand import expand_bilingual as _qexp
+                    _q_av = _qexp(query)
+                except Exception:
+                    _q_av = query
+                av_res = engine.search_av(_q_av, domain=d, topk=topk, top_segments=5)
                 for rank, r in enumerate(av_res, 1):
+                    # [E13 fix] z-score CDF 인플레이션 방지:
+                    # AV confidence 는 domain 내 상대 순위(CDF) 라서 비음악 쿼리에서도
+                    # 80%+ 가 나와 도메인 선택 시 music 이 movie 를 눌러버림.
+                    # raw_dense_agg (부스트 전 실제 cosine ≤1.0) 로 상한 설정.
+                    _raw_dv = float(r.metadata.get("raw_dense_agg", 0.0))
+                    _conf   = min(r.confidence, _raw_dv) if _raw_dv > 0 else r.confidence
                     all_items.append({
                         "rank": rank, "domain": d,
                         "id": r.file_path, "file_name": r.file_name,
-                        "score": r.score, "confidence": r.confidence,
+                        "score": r.score, "confidence": round(_conf, 4),
                         "dense": r.score, "lexical": 0.0, "asf": 0.0,
                         "segments": r.segments,
                         "low_confidence": r.metadata.get("low_confidence", False),
@@ -170,6 +189,7 @@ def _call_ollama(prompt: str, model: str) -> Optional[dict]:
         resp = _req.post(
             "http://localhost:11434/api/generate",
             json={"model": model, "prompt": prompt, "stream": False,
+                  "keep_alive": 300,
                   "options": {"temperature": 0.1, "num_predict": 300}},
             timeout=45,
         )
@@ -441,7 +461,10 @@ def ai_search():
         return jsonify({"error": "query 필수"}), 400
 
     topk     = int(body.get("topk", 20))
-    max_iter = max(1, min(int(body.get("max_iterations", 5)), 5))
+    # [로딩 시간 단축] 최대 반복 횟수 5→3 으로 하향.
+    # LLM 추론 1회 ≈ 10~15초 × (도메인 선택 + 반복 평가) → 30초+ 원인.
+    # 3회로 줄여 최악 시나리오 ~30초 → ~20초.
+    max_iter = max(1, min(int(body.get("max_iterations", 3)), 3))
 
     def generate():
         try:
