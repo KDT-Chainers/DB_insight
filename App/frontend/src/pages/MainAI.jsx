@@ -298,9 +298,7 @@ function FileCard({ source, index, scanState, selected, onClick }) {
   );
 }
 
-// AI 답변 안전장치 — 시스템 프롬프트로 마크다운 금지했지만,
-// LLM 이 이를 어길 경우를 대비한 프론트엔드 폴리필.
-// 별표/헤딩/백틱/인용/하이픈 불릿 → 평문 변환
+// [legacy] aimodeAnswer 카드(turns.length===0 폴백)에서만 사용되는 평문화 폴리필.
 function stripMarkdown(text) {
   if (!text) return text;
   return text
@@ -312,31 +310,252 @@ function stripMarkdown(text) {
     .replace(/^[-*_]{3,}\s*$/gm, "")
     .replace(/^(\s*)[-*]\s+/gm, "$1• ");
 }
-function renderAnswer(text) {
+
+// [v3.2] 마크다운 → React 노드 렌더러 (## 헤딩, - 불릿, **굵게**, [출처N] 칩).
+// 백엔드가 간결한 마크다운으로 답변하도록 프롬프팅됨.
+function renderInlineMd(text, baseKey = "i") {
   if (!text) return null;
-  return text.split(/(\[출처\d+\])/g).map((part, i) =>
-    /^\[출처\d+\]$/.test(part) ? (
-      <span
-        key={i}
-        style={{
-          background: "rgba(139,92,246,0.2)",
-          color: "#a78bfa",
-          border: "1px solid rgba(139,92,246,0.3)",
-          fontWeight: 700,
-          fontSize: 11,
-          padding: "1px 6px",
-          borderRadius: 5,
-          margin: "0 2px",
-          verticalAlign: "middle",
-          display: "inline-block",
-        }}
-      >
-        {part}
-      </span>
-    ) : (
-      <span key={i}>{part}</span>
-    ),
-  );
+  // 1단계: [출처N] 토큰 분리
+  const segments = text.split(/(\[출처\d+\])/g);
+  const out = [];
+  segments.forEach((seg, segIdx) => {
+    if (/^\[출처\d+\]$/.test(seg)) {
+      out.push(
+        <span
+          key={`${baseKey}-src-${segIdx}`}
+          style={{
+            background: "rgba(139,92,246,0.2)",
+            color: "#a78bfa",
+            border: "1px solid rgba(139,92,246,0.3)",
+            fontWeight: 700,
+            fontSize: 11,
+            padding: "1px 6px",
+            borderRadius: 5,
+            margin: "0 2px",
+            verticalAlign: "middle",
+            display: "inline-block",
+          }}
+        >
+          {seg}
+        </span>,
+      );
+      return;
+    }
+    // 2단계: **bold** / `code` / *italic*
+    const re = /(\*\*[^*\n]+\*\*)|(`[^`\n]+`)|(\*[^*\n]+\*)/g;
+    let last = 0;
+    let m;
+    let tokIdx = 0;
+    while ((m = re.exec(seg)) !== null) {
+      if (m.index > last)
+        out.push(
+          <span key={`${baseKey}-${segIdx}-t${tokIdx++}`}>{seg.slice(last, m.index)}</span>,
+        );
+      const tok = m[0];
+      if (tok.startsWith("**"))
+        out.push(
+          <strong
+            key={`${baseKey}-${segIdx}-t${tokIdx++}`}
+            style={{ color: "#f5f3ff", fontWeight: 700 }}
+          >
+            {tok.slice(2, -2)}
+          </strong>,
+        );
+      else if (tok.startsWith("`"))
+        out.push(
+          <code
+            key={`${baseKey}-${segIdx}-t${tokIdx++}`}
+            style={{
+              padding: "1px 6px",
+              borderRadius: 4,
+              background: "rgba(139,92,246,0.15)",
+              border: "1px solid rgba(139,92,246,0.25)",
+              color: "#e9d5ff",
+              fontFamily: "ui-monospace, monospace",
+              fontSize: "0.92em",
+            }}
+          >
+            {tok.slice(1, -1)}
+          </code>,
+        );
+      else
+        out.push(
+          <em
+            key={`${baseKey}-${segIdx}-t${tokIdx++}`}
+            style={{ color: "#e9d5ff", fontStyle: "italic" }}
+          >
+            {tok.slice(1, -1)}
+          </em>,
+        );
+      last = m.index + tok.length;
+    }
+    if (last < seg.length)
+      out.push(<span key={`${baseKey}-${segIdx}-t${tokIdx++}`}>{seg.slice(last)}</span>);
+  });
+  return out;
+}
+
+function MarkdownAnswer({ text }) {
+  if (!text) return null;
+  const lines = text.split("\n");
+  const blocks = [];
+  let para = [];
+  let list = null;
+
+  const flushPara = () => {
+    if (para.length) {
+      blocks.push(
+        <p
+          key={`p${blocks.length}`}
+          style={{
+            margin: "0 0 8px 0",
+            lineHeight: 1.7,
+          }}
+        >
+          {renderInlineMd(para.join(" "), `p${blocks.length}`)}
+        </p>,
+      );
+      para = [];
+    }
+  };
+  const flushList = () => {
+    if (list && list.items.length) {
+      const Tag = list.type === "ol" ? "ol" : "ul";
+      blocks.push(
+        <Tag
+          key={`l${blocks.length}`}
+          style={{
+            margin: "4px 0 10px 0",
+            paddingLeft: 22,
+            lineHeight: 1.7,
+          }}
+        >
+          {list.items.map((it, i) => (
+            <li
+              key={i}
+              style={{
+                marginBottom: 4,
+                color: "#f1f5f9",
+                paddingLeft: 4,
+              }}
+            >
+              {renderInlineMd(it, `li${blocks.length}-${i}`)}
+            </li>
+          ))}
+        </Tag>,
+      );
+      list = null;
+    }
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trimEnd();
+    if (!line.trim()) {
+      flushPara();
+      flushList();
+      continue;
+    }
+    let m;
+    // 헤딩
+    if ((m = /^###\s+(.+)$/.exec(line))) {
+      flushPara();
+      flushList();
+      blocks.push(
+        <h4
+          key={`h${blocks.length}`}
+          style={{
+            margin: "10px 0 6px 0",
+            fontSize: 14,
+            fontWeight: 700,
+            color: "#c4b5fd",
+          }}
+        >
+          {renderInlineMd(m[1], `h${blocks.length}`)}
+        </h4>,
+      );
+      continue;
+    }
+    if ((m = /^##\s+(.+)$/.exec(line))) {
+      flushPara();
+      flushList();
+      blocks.push(
+        <h3
+          key={`h${blocks.length}`}
+          style={{
+            margin: "12px 0 8px 0",
+            fontSize: 15,
+            fontWeight: 700,
+            color: "#f5f3ff",
+            paddingLeft: 8,
+            borderLeft: "3px solid #a78bfa",
+          }}
+        >
+          {renderInlineMd(m[1], `h${blocks.length}`)}
+        </h3>,
+      );
+      continue;
+    }
+    if ((m = /^#\s+(.+)$/.exec(line))) {
+      flushPara();
+      flushList();
+      blocks.push(
+        <h3
+          key={`h${blocks.length}`}
+          style={{
+            margin: "12px 0 8px 0",
+            fontSize: 16,
+            fontWeight: 700,
+            color: "#f5f3ff",
+          }}
+        >
+          {renderInlineMd(m[1], `h${blocks.length}`)}
+        </h3>,
+      );
+      continue;
+    }
+    // 수평선
+    if (/^[-*_]{3,}\s*$/.test(line)) {
+      flushPara();
+      flushList();
+      blocks.push(
+        <hr
+          key={`hr${blocks.length}`}
+          style={{
+            margin: "10px 0",
+            border: "none",
+            borderTop: "1px solid rgba(139,92,246,0.2)",
+          }}
+        />,
+      );
+      continue;
+    }
+    // 순서 있는 리스트
+    if ((m = /^\d+\.\s+(.+)$/.exec(line))) {
+      flushPara();
+      if (!list || list.type !== "ol") {
+        flushList();
+        list = { type: "ol", items: [] };
+      }
+      list.items.push(m[1]);
+      continue;
+    }
+    // 순서 없는 리스트
+    if ((m = /^[-*]\s+(.+)$/.exec(line))) {
+      flushPara();
+      if (!list || list.type !== "ul") {
+        flushList();
+        list = { type: "ul", items: [] };
+      }
+      list.items.push(m[1]);
+      continue;
+    }
+    // 일반 문단
+    flushList();
+    para.push(line.trim());
+  }
+  flushPara();
+  flushList();
+  return <div>{blocks}</div>;
 }
 
 function isNoInfoCenterAlert(text) {
@@ -1456,13 +1675,12 @@ function TurnView({ turn, isLatest, onClickSource, onClickFile }) {
                   fontSize: 15,
                   color: "#f1f5f9",
                   lineHeight: 1.85,
-                  whiteSpace: "pre-wrap",
                   letterSpacing: "-0.01em",
                   backdropFilter: "blur(8px) saturate(1.05)",
                   boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08)",
                 }}
               >
-                {renderAnswer(stripMarkdown(answer))}
+                <MarkdownAnswer text={answer} />
                 {streaming && (
                   <span
                     style={{
@@ -1773,6 +1991,7 @@ export default function MainAI() {
   const [chatThreadId, setChatThreadId] = useState(null); // [v3 chat] 현재 채팅방 thread_id (사이드바 active 표시용)
   const [chatRefreshTrigger, setChatRefreshTrigger] = useState(0); // [v3 chat] 사이드바 채팅방 목록 새로고침 트리거 (done 시 ++)
   const [zoomImage, setZoomImage] = useState(null); // [v3.1] 페이지 이미지 확대 modal {src, title}
+  const [pdfExporting, setPdfExporting] = useState(false); // [v3.2] 대화 → PDF 정리 export 진행 중 여부
 
   // [v3.1] ESC 로 zoom modal 닫기
   useEffect(() => {
@@ -2510,6 +2729,59 @@ export default function MainAI() {
     // 홈으로 (입력 박스 큰 화면)
     setView("home");
   }, []);
+
+  // [v3.2] 대화 → AI 정리·요약 → PDF 다운로드
+  const handleExportPdf = useCallback(async () => {
+    const tid = window.__aimodeThreadId || chatThreadId;
+    if (!tid) {
+      alert("저장할 대화가 없습니다.");
+      return;
+    }
+    if (pdfExporting) return;
+    setPdfExporting(true);
+    try {
+      const r = await fetch(`${API_BASE}/api/aimode/export-pdf`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ thread_id: tid }),
+      });
+      if (!r.ok) {
+        let msg = `HTTP ${r.status}`;
+        try {
+          const j = await r.json();
+          msg = j.error || j.hint || msg;
+          if (j.hint) msg += `\n${j.hint}`;
+        } catch {}
+        alert(`PDF 생성 실패:\n${msg}`);
+        return;
+      }
+      // 헤더에서 파일명 추출
+      const cd = r.headers.get("Content-Disposition") || "";
+      let fname = "chat.pdf";
+      // RFC5987 filename*=UTF-8''...
+      const mStar = cd.match(/filename\*\s*=\s*UTF-8''([^;]+)/i);
+      if (mStar) {
+        try { fname = decodeURIComponent(mStar[1]); } catch {}
+      } else {
+        const m = cd.match(/filename\s*=\s*"?([^";]+)"?/i);
+        if (m) fname = m[1];
+      }
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fname;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (e) {
+      console.warn("[export-pdf]", e);
+      alert(`PDF 생성 실패: ${e.message || e}`);
+    } finally {
+      setPdfExporting(false);
+    }
+  }, [chatThreadId, pdfExporting]);
 
   // [v3 chat] 사이드바에서 채팅방 선택 — history 복원 + thread_id 전환
   const selectThread = useCallback(async (targetTid) => {
@@ -3795,6 +4067,51 @@ export default function MainAI() {
                         }}
                       >
                         shield
+                      </span>
+                    </button>
+                    {/* [v3.2] 대화 → PDF 정리·저장 (입력창 내부 아이콘) */}
+                    <button
+                      type="button"
+                      onClick={handleExportPdf}
+                      disabled={pdfExporting || turns.length === 0 || isAnyStreaming}
+                      title={
+                        turns.length === 0
+                          ? "대화가 시작되면 PDF로 저장할 수 있어요"
+                          : pdfExporting
+                          ? "PDF 생성 중…"
+                          : "대화를 AI가 정리해서 PDF로 저장"
+                      }
+                      style={{
+                        background: "none",
+                        border: "none",
+                        cursor:
+                          pdfExporting || turns.length === 0 || isAnyStreaming
+                            ? "default"
+                            : "pointer",
+                        padding: 0,
+                        flexShrink: 0,
+                        color:
+                          turns.length === 0 || isAnyStreaming
+                            ? "rgba(139,92,246,0.25)"
+                            : AI.accentLight,
+                        transition: "color 0.2s",
+                        opacity: pdfExporting ? 0.6 : 1,
+                      }}
+                    >
+                      <span
+                        className="material-symbols-outlined"
+                        style={{
+                          fontSize: 16,
+                          fontVariationSettings:
+                            turns.length > 0 && !isAnyStreaming
+                              ? '"FILL" 1'
+                              : '"FILL" 0',
+                          animation: pdfExporting
+                            ? "spin 0.9s linear infinite"
+                            : "none",
+                        }}
+                      >
+                        {pdfExporting ? "progress_activity" : "picture_as_pdf"}
                       </span>
                     </button>
                   </div>

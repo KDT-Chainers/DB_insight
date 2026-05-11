@@ -1078,28 +1078,25 @@ def _build_rag_messages(
 6. **답변의 모든 사실 진술 뒤에 반드시 (XX페이지) 또는 [MM:SS] 태그를 붙이세요.** 태그는 위 [원본 위치 정보] 에 나열된 것만 사용 가능.
 7. [핵심 인용]·[문서 발췌] 모두 비어있는 경우에만 "제공 문서에 해당 정보가 없습니다"라고 쓰세요.
 
-[답변 분량 — 반드시 준수, 짧으면 답변 무효]
-- **최소 12문장 이상, 권장 15~20문장**으로 매우 상세하게 답하세요.
-- 5문장 미만 또는 단답 답변 절대 금지. 충분히 풀어 설명할 것.
-- 단순 수치 나열로 끝내지 말고, **배경·맥락·세부 항목·시사점·관련 흐름·산업적 의미**를 같이 풀어 설명하세요.
-- 반드시 항목별 번호(1./2./3./4./...) 로 **3개 이상의 항목**으로 정리하고 각 항목 **4~5문장** 으로 충분히 부연.
-- 답변 시작에 도입(2~3문장), 본문(항목별 정리 — 항목당 4~5문장), 마지막에 종합 정리(2~3문장).
-- 답변 분량이 부족하면 같은 [핵심 인용]·[문서 발췌] 안의 관련 정보·맥락을 추가로 끌어와서 길이를 충분히 채울 것.
-- 같은 사실이라도 "수치 → 의미 → 시사점" 식으로 다양한 각도로 풀어 쓸 것.
+[답변 형식 — 반드시 준수]
+- **간결한 마크다운(Markdown)** 으로 답변. 총 분량은 짧게 (도입 1줄 + 핵심 3~4 bullet + 마무리 1줄).
+- 답변 길이는 **최대 8~10줄 / 약 3~4문장 분량**. 장황한 부연·반복 금지.
+- 마크다운 규칙:
+  · 핵심 키워드는 **굵게** (`**텍스트**`).
+  · 항목 나열은 `- ` 불릿 (3~4개).
+  · 필요하면 작은 소제목 `## 제목` 한 개까지 허용.
+  · 표는 사용하지 말 것.
+- 첫 줄은 핵심 한 줄 요약, 그 다음 빈 줄 후 `- ` 불릿으로 핵심 사실 3~4개, 마지막에 한 줄 마무리.
+- 각 불릿은 **1~2문장 이내**로 짧고 단정하게.
 
-[답변 형식 예시 — 이 정도 분량으로 답할 것]
-2016년 세계 DBMS 시장은 빅데이터 시대의 도래와 함께 의미 있는 성장 국면에 진입하고 있습니다 (40페이지). 이전 정체기를 지나 본격적인 성장 궤도에 올랐다는 점에서 산업계의 주목을 받고 있는 분야입니다.
+[답변 형식 예시 — 이 정도 분량/구조로만]
+2016년 세계 **DBMS 시장**은 빅데이터 수요 확대로 성장세에 진입했습니다 (40페이지).
 
-1. 시장 규모와 성장률
-   2016년 세계 DBMS 시장 규모는 317억 달러로 전년 대비 6.4% 성장이 예상됩니다 (40페이지). 이는 2015년 0.1% 성장에 그쳤던 정체기를 빠르게 벗어나는 회복세로, 데이터 산업 전반의 활성화를 보여주는 지표입니다 (40페이지). 2014년부터 2019년까지 연평균 5.2%씩 꾸준히 성장할 것으로 전망되며, 2019년에는 시장 규모가 384억 달러에 도달할 것으로 추산됩니다 (40페이지).
+- **시장 규모**: 2016년 317억 달러, 전년 대비 **6.4% 성장** 예상 (40페이지).
+- **성장률 전망**: 2014~2019년 연평균 **5.2%**, 2019년 384억 달러 도달 (40페이지).
+- **주요 동인**: 빅데이터·인메모리 DB·DB 어플라이언스 수요 확대 (40페이지).
 
-2. 주요 성장 동인
-   첫째, 빅데이터에 대한 기업 수요가 급증하면서 데이터 저장·처리 인프라로서 DBMS 의 중요성이 커지고 있습니다 (40페이지). 둘째, DB 어플라이언스 같은 통합 솔루션과 인메모리 DB 등 신기술이 시장 확대를 견인하고 있습니다 (40페이지). 셋째, 클라우드 기반 데이터베이스 서비스가 빠르게 확산되면서 기존 온프레미스 시장 외에 새로운 수요층을 만들어내고 있습니다 (40페이지).
-
-3. 산업적 시사점
-   DBMS 시장의 6%대 안정 성장은 데이터 중심 산업 패러다임이 자리 잡고 있음을 시사합니다. 특히 인메모리·클라우드 같은 신기술 수요가 안정 성장을 뒷받침할 가능성이 큽니다.
-
-종합하면 2016년 DBMS 시장은 빅데이터 확산을 동력으로 본격적인 성장 국면에 진입하고 있으며, 향후 5년간 안정적인 6%대 성장세를 유지할 것으로 전망됩니다. 이는 데이터 산업 전체의 견조한 발전을 시사하는 중요한 지표입니다.
+빅데이터 확산이 안정적인 6%대 성장세를 이끌 전망입니다.
 
 [참고 파일]
 {source_list if source_list else '  (매칭 파일 없음)'}
@@ -1115,11 +1112,10 @@ def _build_rag_messages(
     answer_length_req = (
         "\n\n[답변 요구사항 — 반드시 준수]\n"
         "- 한국어로만 답변 (외국어 단어 절대 금지)\n"
-        "- **최소 12문장 이상**, 권장 15~20문장으로 매우 상세히 답변\n"
-        "- 도입(2~3문장) → 항목별 정리 3개 이상(각 항목 4~5문장 부연) → 종합 정리(2~3문장)\n"
-        "- 단답 또는 5문장 미만 답변은 무효\n"
-        "- 핵심 수치 외에 배경·맥락·동인·시사점·관련 흐름까지 충실히 풀어 설명할 것\n"
-        "- 같은 정보라도 다양한 각도로 다시 풀어 쓰며 길이를 채울 것"
+        "- **간결한 마크다운**: 도입 1줄 + 핵심 불릿 3~4개 + 마무리 1줄. 총 8~10줄 / 3~4문장 분량.\n"
+        "- 핵심은 `**굵게**`, 항목은 `- ` 불릿. 표·코드블록·긴 문단 금지.\n"
+        "- 각 불릿은 1~2문장 이내로 짧고 단정하게. 같은 내용 반복 금지.\n"
+        "- 배경·맥락 부연은 최소화하고 **핵심 사실 위주**로 간결하게."
     )
     if key_facts:
         quotes = "\n".join(f'- "{f}"' for f in key_facts if f.strip())
@@ -2275,9 +2271,11 @@ def direct_generate_node(state: dict) -> dict:
     sys_msg = (
         "당신은 친절하고 유능한 AI 어시스턴트입니다. "
         "반드시 한국어로만 답변하세요. 영어 사용 절대 금지.\n"
-        "자연스럽고 대화체로 답변하세요. 마크다운 문법(**, #, `)은 사용하지 마세요.\n"
-        "파일이나 문서 없이 일반 지식으로 답변합니다.\n"
-        "모르는 것은 솔직하게 모른다고 말하세요."
+        "[답변 형식]\n"
+        "- 간결한 마크다운으로 답변. 도입 1줄 + 핵심 불릿 2~4개 + 마무리 1줄. 총 8줄 이내.\n"
+        "- 핵심 키워드는 `**굵게**`. 항목은 `- ` 불릿.\n"
+        "- 표·코드블록·긴 문단 금지. 각 불릿은 1~2문장 이내.\n"
+        "- 모르는 것은 솔직하게 모른다고 말하세요."
     )
 
     messages: list[dict] = [{"role": "system", "content": sys_msg}]
@@ -2291,7 +2289,8 @@ def direct_generate_node(state: dict) -> dict:
     gen_model = _get_ollama_model("generate") or model
     try:
         # [v3.1] chunk_size=0 → 토큰 받는 즉시 yield (타이핑 효과)
-        for tok in _ollama_stream(messages, gen_model, num_predict=-1, chunk_size=0):
+        # [v3.2] direct chat 도 간결 마크다운 — 300 tok 캡
+        for tok in _ollama_stream(messages, gen_model, num_predict=300, chunk_size=0):
             full_answer += tok
             _emit({"type": "token", "text": tok})
     except Exception as e:
@@ -2604,7 +2603,8 @@ def generate_node(state: dict) -> dict:
         s.get("file_type", "") in ("video", "movie", "audio", "music", "bgm")
         for s in matched_sources
     )
-    np_limit = 400 if has_av else -1  # AV: 최대 400 tok(≈200자), 문서: 무제한
+    # [v3.2] 간결 마크다운 답변 — 문서는 ~350 tok, AV 는 ~250 tok 으로 캡
+    np_limit = 250 if has_av else 350
 
     # ── VRAM 스왑: 검색 임베더 해제 → LLM GPU 배치 보장 ─────────────────
     # 검색 엔진(SigLIP2+BGE-M3+DINOv2+Reranker ≈ 6~7 GB)이 VRAM 점유 시
@@ -3043,6 +3043,438 @@ def patch_thread_title(thread_id: str):
     if not ok:
         return jsonify({"error": "thread not found"}), 404
     return jsonify({"ok": True, "thread_id": thread_id, "title": new_title[:60]})
+
+
+# ══════════════════════════════════════════════════════════════════════
+# [v3] 대화 → PDF 정리·요약 export
+# ══════════════════════════════════════════════════════════════════════
+
+def _summarize_chat_for_pdf(messages: list[dict], model: str) -> dict:
+    """대화 messages 를 LLM 으로 정리·요약.
+
+    반환: {title, overview, key_points: [...], qa_summaries: [{q, a}, ...], conclusion}
+    LLM 호출 실패 시 fallback (제목+원본 turn 그대로).
+    """
+    # 너무 길면 자름
+    convo_lines = []
+    for m in messages:
+        role = "사용자" if m.get("role") == "user" else "AI"
+        content = (m.get("content") or "").strip()
+        if not content:
+            continue
+        convo_lines.append(f"[{role}] {content}")
+    convo_text = "\n\n".join(convo_lines)
+    if len(convo_text) > 12000:
+        convo_text = convo_text[:12000] + "\n…(이하 생략)"
+
+    prompt = (
+        "다음은 사용자와 AI 의 대화 기록입니다. 이 대화를 바탕으로 "
+        "정리 보고서를 작성하세요.\n\n"
+        "[필수 출력 형식 — JSON 한 개만, 다른 텍스트 금지]\n"
+        "{\n"
+        '  "title": "대화 전체를 대표하는 한 줄 제목 (30자 이내, 한국어)",\n'
+        '  "overview": "대화의 주제와 맥락을 2~3문장으로 한국어 요약",\n'
+        '  "key_points": ["핵심 포인트 1", "핵심 포인트 2", "핵심 포인트 3", "..."],\n'
+        '  "qa_summaries": [\n'
+        '    {"q": "사용자 질문 요지 (한 줄)", "a": "AI 답변 요지 (2~4문장)"},\n'
+        '    ...\n'
+        "  ],\n"
+        '  "conclusion": "전체 대화의 결론 또는 시사점 (2~3문장)"\n'
+        "}\n\n"
+        "[작성 규칙]\n"
+        "- 반드시 한국어로만 작성 (외국어 단어 금지)\n"
+        "- 사실은 대화 안의 내용만 사용 (없는 정보 추가 금지)\n"
+        "- 출처/페이지/숫자가 있으면 보존\n"
+        "- key_points 는 3~6개, qa_summaries 는 각 turn 별로 1개 생성\n\n"
+        f"[대화 기록]\n{convo_text}\n\n"
+        "[JSON 출력]"
+    )
+
+    raw = _ollama_oneshot(prompt, model=model, num_predict=2048, keep_alive=60)
+    raw = (raw or "").strip()
+    # JSON 파싱
+    try:
+        # ```json 펜스 제거
+        if raw.startswith("```"):
+            raw = raw.strip("`")
+            if raw.lower().startswith("json"):
+                raw = raw[4:]
+        s, e = raw.find("{"), raw.rfind("}")
+        if s >= 0 and e > s:
+            obj = json.loads(raw[s:e + 1])
+            if isinstance(obj, dict):
+                return {
+                    "title": str(obj.get("title") or "대화 정리").strip()[:80],
+                    "overview": str(obj.get("overview") or "").strip(),
+                    "key_points": [str(x).strip() for x in (obj.get("key_points") or []) if str(x).strip()][:8],
+                    "qa_summaries": [
+                        {"q": str(p.get("q") or "").strip(), "a": str(p.get("a") or "").strip()}
+                        for p in (obj.get("qa_summaries") or []) if isinstance(p, dict)
+                    ][:20],
+                    "conclusion": str(obj.get("conclusion") or "").strip(),
+                }
+    except Exception as e:
+        logger.warning(f"[export-pdf] summary parse 실패: {e}")
+
+    # fallback: 그냥 turn 그대로
+    qa_fallback = []
+    pending_q = None
+    for m in messages:
+        role, content = m.get("role"), (m.get("content") or "").strip()
+        if not content:
+            continue
+        if role == "user":
+            pending_q = content
+        elif role == "assistant" and pending_q:
+            qa_fallback.append({"q": pending_q[:200], "a": content[:1500]})
+            pending_q = None
+    return {
+        "title": "대화 정리",
+        "overview": "AI 요약 생성에 실패하여 원본 대화를 그대로 정리합니다.",
+        "key_points": [],
+        "qa_summaries": qa_fallback,
+        "conclusion": "",
+    }
+
+
+# reportlab 한글 폰트 등록 — 모듈 전역 1회만
+_PDF_KO_FONT_REGISTERED = False
+_PDF_KO_FONT_NAME = "KOFont"
+_PDF_KO_FONT_BOLD = "KOFontBold"
+
+
+def _ensure_korean_font() -> tuple[str, str]:
+    """Windows Malgun Gothic 등록. 반환=(regular, bold) 폰트 이름."""
+    global _PDF_KO_FONT_REGISTERED
+    if _PDF_KO_FONT_REGISTERED:
+        return _PDF_KO_FONT_NAME, _PDF_KO_FONT_BOLD
+
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    import os as _os
+
+    win_fonts = _os.path.join(_os.environ.get("WINDIR", r"C:\Windows"), "Fonts")
+    candidates_regular = ["malgun.ttf", "NanumGothic.ttf", "gulim.ttc", "batang.ttc"]
+    candidates_bold = ["malgunbd.ttf", "NanumGothicBold.ttf"]
+
+    reg_path = next((p for p in (_os.path.join(win_fonts, f) for f in candidates_regular) if _os.path.exists(p)), None)
+    if not reg_path:
+        raise RuntimeError("한글 PDF 폰트를 찾을 수 없습니다 (malgun.ttf 등).")
+    bold_path = next((p for p in (_os.path.join(win_fonts, f) for f in candidates_bold) if _os.path.exists(p)), None) or reg_path
+
+    pdfmetrics.registerFont(TTFont(_PDF_KO_FONT_NAME, reg_path))
+    pdfmetrics.registerFont(TTFont(_PDF_KO_FONT_BOLD, bold_path))
+    _PDF_KO_FONT_REGISTERED = True
+    return _PDF_KO_FONT_NAME, _PDF_KO_FONT_BOLD
+
+
+def _build_chat_pdf(thread_meta: dict, summary: dict) -> bytes:
+    """[v3.2] Editorial-magazine 스타일 PDF.
+
+    레이아웃:
+      - Cover: 작은 섹션 라벨 + 파란 짧은 바 + 큰 번호 타이틀 + 파란 서브타이틀 + 메타 그리드
+      - Key Points: 다이아몬드 마커 + 번호 + 본문
+      - Q&A: 굵은 진남색 Q + 들여쓰기 A, 항목 사이 얇은 라인
+      - Conclusion: 진남색 풀쿼트 카드 (왼쪽에 큰 따옴표) + 흰 본문
+    """
+    from io import BytesIO
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.lib.colors import HexColor, white
+    from reportlab.platypus import (
+        SimpleDocTemplate, Paragraph, Spacer, PageBreak, Table, TableStyle,
+    )
+    from reportlab.lib.enums import TA_LEFT, TA_CENTER
+    import datetime as _dt
+    import html as _html
+
+    ko, ko_bold = _ensure_korean_font()
+
+    # ── editorial 색상 팔레트 ──
+    C_DARK = HexColor("#0a2a52")        # 진한 남색 — 큰 타이틀
+    C_BLUE = HexColor("#2563a8")        # 중간 파랑 — 액센트 바·서브타이틀
+    C_ACCENT = HexColor("#3b82c4")      # 마커·번호
+    C_LIGHT_BLUE = HexColor("#93c5fd")  # quote 마크·attribution
+    C_TEXT = HexColor("#1f2937")        # 본문
+    C_MUTED = HexColor("#6b7280")       # 메타·푸터
+    C_LINE = HexColor("#e5e7eb")        # 얇은 구분선
+
+    def _mk(name, **kw):
+        base = dict(fontName=ko, fontSize=10.5, leading=17, textColor=C_TEXT, alignment=TA_LEFT)
+        base.update(kw)
+        return ParagraphStyle(name=name, **base)
+
+    s_label = _mk("Label", fontName=ko_bold, fontSize=10.5, textColor=C_DARK)
+    s_big = _mk("Big", fontName=ko_bold, fontSize=26, leading=34, textColor=C_DARK)
+    s_sub = _mk("Sub", fontName=ko_bold, fontSize=13.5, leading=22, textColor=C_BLUE)
+    s_body = _mk("Body", fontSize=10.5, leading=18)
+    s_meta = _mk("Meta", fontSize=9.5, leading=14, textColor=C_MUTED)
+    s_qa_q = _mk("QAQ", fontName=ko_bold, fontSize=12, leading=18, textColor=C_DARK)
+    s_qa_a = _mk("QAA", fontSize=10.5, leading=17, leftIndent=14)
+    s_kp_mark = _mk("KPMark", fontName=ko_bold, fontSize=11, textColor=C_ACCENT)
+    s_quote_mark = _mk("QMark", fontName=ko_bold, fontSize=44, leading=46, textColor=C_LIGHT_BLUE, alignment=TA_CENTER)
+    s_quote = _mk("Quote", fontSize=11.5, leading=20, textColor=white)
+    s_quote_attr = _mk("QAttr", fontName=ko_bold, fontSize=9.5, textColor=C_LIGHT_BLUE)
+
+    def esc(t):
+        return _html.escape((t or "").strip()).replace("\n", "<br/>")
+
+    # ── 셋업 ──
+    buf = BytesIO()
+    doc = SimpleDocTemplate(
+        buf, pagesize=A4,
+        leftMargin=22 * mm, rightMargin=22 * mm,
+        topMargin=22 * mm, bottomMargin=20 * mm,
+        title=summary.get("title") or "대화 정리",
+        author="DB_insight AIMODE",
+    )
+    W = doc.width  # 본문 영역 폭
+
+    # ── 헬퍼: 파란 짧은 바 ──
+    def blue_bar(width_mm=18, thickness_pt=2.4, color=C_BLUE):
+        t = Table([[""]], colWidths=[width_mm * mm], rowHeights=[thickness_pt])
+        t.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), color),
+            ("LEFTPADDING", (0, 0), (-1, -1), 0),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+            ("TOPPADDING", (0, 0), (-1, -1), 0),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+        ]))
+        return t
+
+    # ── 헬퍼: 섹션 헤더 (라벨 → 바 → 번호+타이틀 → 서브타이틀) ──
+    def section_header(label, number, title, subtitle=""):
+        out = [
+            Paragraph(esc(label) + ".", s_label),
+            Spacer(1, 10),
+            blue_bar(),
+            Spacer(1, 24),
+            Paragraph(f"{number}. {esc(title)}", s_big),
+            Spacer(1, 14),
+        ]
+        if subtitle:
+            out.append(Paragraph(esc(subtitle), s_sub))
+            out.append(Spacer(1, 18))
+        else:
+            out.append(Spacer(1, 8))
+        return out
+
+    story = []
+
+    # ══ Cover ══════════════════════════════════════════
+    title = summary.get("title") or thread_meta.get("title") or "대화 정리"
+    overview = summary.get("overview") or ""
+    story.extend(section_header("AIMODE 대화 정리", "01", title, overview))
+
+    # 큰 여백 → 하단에 메타 그리드
+    story.append(Spacer(1, 130))
+    now = _dt.datetime.now().strftime("%Y-%m-%d %H:%M")
+    created = (thread_meta.get("created_at") or "")[:19].replace("T", " ")
+    updated = (thread_meta.get("updated_at") or "")[:19].replace("T", " ")
+    msg_count = int(thread_meta.get("msg_count") or 0)
+    turns_count = max(0, msg_count // 2)
+
+    meta_cells = [
+        Paragraph(f"<font color='#0a2a52'><b>대화방</b></font><br/><br/>{esc(thread_meta.get('title') or '-')}", s_meta),
+        Paragraph(f"<font color='#0a2a52'><b>대화 수</b></font><br/><br/>{turns_count}회", s_meta),
+        Paragraph(f"<font color='#0a2a52'><b>생성</b></font><br/><br/>{esc(created or '-')}", s_meta),
+        Paragraph(f"<font color='#0a2a52'><b>출력 일시</b></font><br/><br/>{esc(now)}", s_meta),
+    ]
+    meta_tbl = Table([meta_cells], colWidths=[W / 4.0] * 4)
+    meta_tbl.setStyle(TableStyle([
+        ("LINEABOVE", (0, 0), (-1, 0), 0.5, C_LINE),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("TOPPADDING", (0, 0), (-1, -1), 12),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+    ]))
+    story.append(meta_tbl)
+
+    # ══ Key Points ═══════════════════════════════════
+    key_points = summary.get("key_points") or []
+    if key_points:
+        story.append(PageBreak())
+        story.extend(section_header(
+            "핵심 포인트", "02", "Key points",
+            "이번 대화에서 도출된 주요 결론과 인사이트를 한눈에 정리합니다."
+        ))
+        for i, kp in enumerate(key_points, 1):
+            row = Table(
+                [[
+                    Paragraph("<font color='#3b82c4'><b>&#9670;</b></font>", s_kp_mark),
+                    Paragraph(f"<font color='#0a2a52'><b>{i:02d}</b></font> &nbsp;&nbsp;{esc(kp)}", s_body),
+                ]],
+                colWidths=[16, W - 16],
+            )
+            row.setStyle(TableStyle([
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 9),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 9),
+                ("LINEBELOW", (0, 0), (-1, -1), 0.3, C_LINE),
+            ]))
+            story.append(row)
+
+    # ══ Q&A ═════════════════════════════════════════
+    qas = summary.get("qa_summaries") or []
+    if qas:
+        story.append(PageBreak())
+        story.extend(section_header(
+            "질문과 답변", "03", "Q&A summary",
+            "사용자 질문과 AI 답변의 핵심을 항목별로 정리합니다."
+        ))
+        for i, qa in enumerate(qas, 1):
+            q = (qa.get("q") or "").strip()
+            a = (qa.get("a") or "").strip()
+            if not q and not a:
+                continue
+            story.append(Paragraph(
+                f"<font color='#3b82c4'><b>Q{i:02d}.</b></font> &nbsp;{esc(q)}",
+                s_qa_q,
+            ))
+            story.append(Spacer(1, 6))
+            story.append(Paragraph(esc(a), s_qa_a))
+            story.append(Spacer(1, 16))
+            # 항목 사이 얇은 라인
+            line_tbl = Table([[""]], colWidths=[W], rowHeights=[0.3])
+            line_tbl.setStyle(TableStyle([
+                ("LINEABOVE", (0, 0), (-1, -1), 0.3, C_LINE),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+            ]))
+            story.append(line_tbl)
+            story.append(Spacer(1, 14))
+
+    # ══ Conclusion (pull quote) ════════════════════
+    conclusion = summary.get("conclusion") or ""
+    if conclusion:
+        story.append(PageBreak())
+        story.extend(section_header(
+            "종합 결론", "04", "Conclusion",
+            "전체 대화에서 얻은 종합적인 결론과 시사점입니다."
+        ))
+        quote_tbl = Table(
+            [
+                [
+                    Paragraph("&ldquo;", s_quote_mark),
+                    Paragraph(esc(conclusion), s_quote),
+                ],
+                [
+                    "",
+                    Paragraph("— DB_insight · AIMODE", s_quote_attr),
+                ],
+            ],
+            colWidths=[46, W - 46],
+        )
+        quote_tbl.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), C_DARK),
+            ("SPAN", (0, 0), (0, 1)),
+            ("VALIGN", (0, 0), (0, 0), "TOP"),
+            ("VALIGN", (1, 0), (1, 0), "TOP"),
+            ("VALIGN", (1, 1), (1, 1), "BOTTOM"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 16),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 22),
+            ("TOPPADDING", (0, 0), (-1, -1), 18),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 14),
+        ]))
+        story.append(quote_tbl)
+
+    # ── 헤더/푸터: 매 페이지 작은 라벨 + 페이지 번호 ──
+    def _decorate(canvas, _doc):
+        canvas.saveState()
+        # 푸터 좌측 라벨, 우측 페이지 번호
+        canvas.setFont(ko, 8.5)
+        canvas.setFillColor(C_MUTED)
+        canvas.drawString(22 * mm, 12 * mm, "DB_insight · AIMODE 대화 자동 정리")
+        canvas.drawRightString(_doc.pagesize[0] - 22 * mm, 12 * mm, f"{_doc.page:02d}")
+        canvas.restoreState()
+
+    doc.build(story, onFirstPage=_decorate, onLaterPages=_decorate)
+    return buf.getvalue()
+
+
+@aimode_bp.post("/export-pdf")
+def export_pdf():
+    """[v3] 대화 → AI 요약 → PDF 다운로드.
+
+    Body: { thread_id: "..." }
+    응답: application/pdf 바이너리.
+    """
+    body = request.get_json(silent=True) or {}
+    thread_id = (body.get("thread_id") or "").strip()
+    if not thread_id or not _THREAD_ID_RE.match(thread_id):
+        return jsonify({"error": "thread_id 필수"}), 400
+
+    # 메시지 로드
+    messages = _load_chat_history_from_db(thread_id)
+    if not messages:
+        return jsonify({"error": "대화 기록이 없습니다."}), 404
+
+    # 스레드 메타
+    from db.init_db import get_connection
+    thread_meta = {"thread_id": thread_id, "title": "대화"}
+    try:
+        with get_connection() as conn:
+            row = conn.execute(
+                "SELECT thread_id, title, created_at, updated_at, msg_count "
+                "FROM aimode_threads WHERE thread_id = ?",
+                (thread_id,),
+            ).fetchone()
+            if row:
+                thread_meta = dict(row)
+    except Exception as e:
+        logger.debug(f"[export-pdf] thread meta {e}")
+
+    # LLM 요약 — 가능하면 답변 모델, 없으면 도구 모델 fallback
+    model = _get_ollama_model("answer") or _get_ollama_model(None) or _get_ollama_model("tool")
+    if not model:
+        return jsonify({"error": "Ollama 모델을 찾을 수 없습니다."}), 503
+
+    try:
+        summary = _summarize_chat_for_pdf(messages, model=model)
+    except Exception as e:
+        logger.exception("[export-pdf] summary 실패")
+        return jsonify({"error": f"요약 실패: {e}"}), 500
+
+    # PDF 생성
+    try:
+        pdf_bytes = _build_chat_pdf(thread_meta, summary)
+    except ModuleNotFoundError:
+        return jsonify({
+            "error": "reportlab 미설치",
+            "hint": "백엔드 가상환경에서 'pip install reportlab' 을 실행해주세요.",
+        }), 500
+    except Exception as e:
+        logger.exception("[export-pdf] PDF 생성 실패")
+        return jsonify({"error": f"PDF 생성 실패: {e}"}), 500
+
+    # 파일명 — 제목 + 날짜
+    import datetime as _dt2
+    import re as _re_fname
+    from urllib.parse import quote as _url_quote
+    safe_title = _re_fname.sub(r"[\\/:*?\"<>|]+", "_", (summary.get("title") or thread_meta.get("title") or "chat"))[:40]
+    fname = f"{safe_title}_{_dt2.datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
+    # ASCII 안전 fallback
+    try:
+        fname.encode("latin-1")
+        cd = f'attachment; filename="{fname}"'
+    except UnicodeEncodeError:
+        cd = f"attachment; filename*=UTF-8''{_url_quote(fname)}"
+
+    return Response(
+        pdf_bytes,
+        mimetype="application/pdf",
+        headers={
+            "Content-Disposition": cd,
+            "Content-Length": str(len(pdf_bytes)),
+            "X-Suggested-Filename": _url_quote(fname),
+        },
+    )
 
 
 # ══════════════════════════════════════════════════════════════════════

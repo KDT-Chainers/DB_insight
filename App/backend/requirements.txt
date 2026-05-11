@@ -22,3 +22,4 @@ python-pptx==1.0.2
 pdfminer.six==20260107
 scenedetect==0.6.7.1
 yake==0.7.3
+reportlab==4.2.5
