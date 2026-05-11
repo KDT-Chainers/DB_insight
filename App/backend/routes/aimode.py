@@ -141,18 +141,29 @@ def _load_history(thread_id: str) -> list[dict]:
                     return out
         except Exception as e:
             logger.debug(f"[aimode] history load 실패: {e}")
-    # LangGraph 가 비어있거나 실패 → fallback dict
+    # LangGraph 가 비어있거나 실패 → fallback dict (in-memory)
     with _fallback_lock:
-        return list(_fallback_history.get(thread_id, []))
+        h = list(_fallback_history.get(thread_id, []))
+    if h:
+        return h
+    # [v3 sidebar] in-memory 도 비어있으면 SQLite 에서 복원 (백엔드 재시작 후 사이드바 클릭 시)
+    db_h = _load_chat_history_from_db(thread_id)
+    if db_h:
+        # in-memory 캐시도 복원 (다음 호출 시 SQLite 안 거치게)
+        with _fallback_lock:
+            _fallback_history[thread_id] = [
+                {"role": m["role"], "content": m["content"]} for m in db_h
+            ]
+        return [{"role": m["role"], "content": m["content"]} for m in db_h]
+    return []
 
 
 def _save_history(thread_id: str, question: str, answer: str):
-    """[v3] LangGraph store + fallback dict 양쪽 저장 (이중 보장).
+    """[v3] LangGraph store + fallback dict + SQLite 3중 저장.
 
-    이전 버전: LangGraph update_state 성공 시 fallback 안 거치고 return.
-    문제: RAGState TypedDict 에 messages 필드 없어서 silent drop 가능성 →
-    update_state 가 성공해도 messages 가 저장 안 됨 → 후속 _load_history 빈 결과.
-    수정: 양쪽 모두 저장. _load_history 가 어느 쪽에서든 읽을 수 있음.
+    - LangGraph: thread state (검증된 path 지만 messages silent drop 가능)
+    - fallback dict: in-memory 보강 (즉시 읽기용)
+    - SQLite: 영속 (백엔드 재시작 후에도 사이드바 채팅방 목록·history 복원)
     """
     # 1) LangGraph store 시도 (실패해도 무시)
     g = _get_history_graph()
@@ -168,13 +179,188 @@ def _save_history(thread_id: str, question: str, answer: str):
         except Exception as e:
             logger.debug(f"[aimode] LangGraph history save 실패 (fallback 사용): {e}")
 
-    # 2) 항상 fallback dict 에도 저장 (이중 보장 — LangGraph silent drop 대비)
+    # 2) fallback dict (in-memory)
     with _fallback_lock:
         h = _fallback_history.setdefault(thread_id, [])
         h.append({"role": "user",      "content": question})
         h.append({"role": "assistant", "content": answer})
         if len(h) > 40:
             _fallback_history[thread_id] = h[-40:]
+
+    # 3) SQLite 영속 저장 — 사이드바 채팅방 목록 / 재시작 후 복원
+    try:
+        _persist_chat_turn(thread_id, question, answer)
+    except Exception as e:
+        logger.warning(f"[aimode] SQLite 저장 실패: {e}")
+
+
+# ══════════════════════════════════════════════════════════════════════
+# [v3 sidebar] SQLite 채팅방·메시지 영속화
+# ══════════════════════════════════════════════════════════════════════
+
+def _generate_thread_title(first_question: str, model: str) -> str:
+    """[v3] 첫 질문 → 짧은 한국어 채팅방 제목 (LLM 1회 호출).
+
+    [v3.1] 길이 무관 항상 LLM 호출 — "산업 동향 알려줘" 같은 짧은 질문도 의미 정제.
+    LLM 실패 시 truncate fallback.
+    """
+    q = (first_question or "").strip()
+    if not q:
+        return "새 대화"
+    try:
+        prompt = (
+            "사용자의 질문을 보고 짧은 채팅방 제목(한국어, 12자 이내)을 만들어.\n"
+            "규칙:\n"
+            "- 물음표·따옴표 금지\n"
+            "- 핵심 주제 명사만 (동사 '알려줘'·'찾아줘' 제거)\n"
+            "- 질문이 짧아도 정제해서 명사구로\n\n"
+            "예시:\n"
+            "질문: SW산업 보고서에서 취업유발효과 찾아줘 → SW산업 취업유발효과\n"
+            "질문: DBMS 시장 세계 전망 알려줘 → DBMS 시장 전망\n"
+            "질문: 삼성전자 ESG 보고서의 탄소중립 목표는? → 삼성전자 탄소중립\n"
+            "질문: 산업 동향 알려줘 → 산업 동향\n"
+            "질문: 보이저호가 나오는 부분 알려줘 → 보이저호 등장 부분\n"
+            "질문: SW산업 수출액은 얼마야? → SW산업 수출액\n\n"
+            f"질문: {q}\n"
+            "제목:"
+        )
+        raw = _ollama_oneshot(prompt, model, num_predict=20).strip()
+        # 정리: 첫 줄만, 특수문자 제거
+        title = raw.split("\n")[0].strip().strip('"').strip("'").strip(".").strip(":")
+        # 최소/최대 길이 체크
+        if 2 <= len(title) <= 30:
+            logger.info(f"[thread_title] LLM 제목 생성: {q[:30]!r} → {title!r}")
+            return title
+        logger.debug(f"[thread_title] LLM 결과 길이 이상 ({len(title)}자): {title!r}")
+    except Exception as e:
+        logger.debug(f"[thread_title] LLM 실패, truncate fallback: {e}")
+    # 폴백: 질문에서 검색 동사 제거 후 truncate
+    import re as _re_tt
+    cleaned = _re_tt.sub(r"(알려줘|찾아줘|보여줘|어디|있어|있나|뭐야|얼마야|어떻게|왜)", "", q).strip()
+    cleaned = _re_tt.sub(r"\s+", " ", cleaned).strip()
+    if not cleaned:
+        cleaned = q
+    return (cleaned[:28] + "…") if len(cleaned) > 28 else cleaned
+
+
+def _persist_chat_turn(thread_id: str, question: str, answer: str) -> None:
+    """[v3] aimode_threads + aimode_messages 에 한 turn 영속화.
+
+    - thread 가 없으면 INSERT (제목 자동 생성)
+    - 있으면 updated_at + msg_count UPDATE
+    - aimode_messages 에 user/assistant 2개 INSERT
+    """
+    from db.init_db import get_connection
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc).isoformat()
+
+    with get_connection() as conn:
+        # thread 존재 여부 확인
+        row = conn.execute(
+            "SELECT thread_id, msg_count FROM aimode_threads WHERE thread_id = ?",
+            (thread_id,),
+        ).fetchone()
+
+        if row is None:
+            # 새 thread → 제목 자동 생성
+            model = _get_ollama_model() or "gemma3:4b"
+            title = _generate_thread_title(question, model)
+            conn.execute(
+                """INSERT INTO aimode_threads
+                       (thread_id, title, created_at, updated_at, msg_count, first_query)
+                   VALUES (?, ?, ?, ?, 2, ?)""",
+                (thread_id, title, now, now, question),
+            )
+            logger.info(f"[chat_turn] 새 thread 생성: {thread_id[:16]}... title={title!r}")
+        else:
+            conn.execute(
+                """UPDATE aimode_threads
+                       SET updated_at = ?, msg_count = msg_count + 2
+                       WHERE thread_id = ?""",
+                (now, thread_id),
+            )
+
+        # messages 누적
+        conn.execute(
+            """INSERT INTO aimode_messages (thread_id, role, content, created_at)
+               VALUES (?, 'user', ?, ?)""",
+            (thread_id, question, now),
+        )
+        conn.execute(
+            """INSERT INTO aimode_messages (thread_id, role, content, created_at)
+               VALUES (?, 'assistant', ?, ?)""",
+            (thread_id, answer, now),
+        )
+        conn.commit()
+
+
+def _load_chat_history_from_db(thread_id: str) -> list[dict]:
+    """[v3] SQLite 에서 thread 메시지 복원 (사이드바 클릭 시 turn 복원용)."""
+    from db.init_db import get_connection
+    try:
+        with get_connection() as conn:
+            rows = conn.execute(
+                """SELECT role, content, created_at
+                   FROM aimode_messages
+                   WHERE thread_id = ?
+                   ORDER BY id ASC""",
+                (thread_id,),
+            ).fetchall()
+        return [{"role": r["role"], "content": r["content"], "created_at": r["created_at"]}
+                for r in rows]
+    except Exception as e:
+        logger.debug(f"[load_chat_history] {e}")
+        return []
+
+
+def _list_threads(limit: int = 50) -> list[dict]:
+    """[v3] 사이드바 채팅방 목록 (updated_at 내림차순)."""
+    from db.init_db import get_connection
+    try:
+        with get_connection() as conn:
+            rows = conn.execute(
+                """SELECT thread_id, title, created_at, updated_at, msg_count, first_query
+                   FROM aimode_threads
+                   ORDER BY updated_at DESC
+                   LIMIT ?""",
+                (limit,),
+            ).fetchall()
+        return [dict(r) for r in rows]
+    except Exception as e:
+        logger.warning(f"[list_threads] {e}")
+        return []
+
+
+def _update_thread_title(thread_id: str, new_title: str) -> bool:
+    from db.init_db import get_connection
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).isoformat()
+    new_title = (new_title or "").strip()[:60]
+    if not new_title:
+        return False
+    try:
+        with get_connection() as conn:
+            r = conn.execute(
+                "UPDATE aimode_threads SET title = ?, updated_at = ? WHERE thread_id = ?",
+                (new_title, now, thread_id),
+            )
+            conn.commit()
+            return r.rowcount > 0
+    except Exception as e:
+        logger.warning(f"[update_thread_title] {e}")
+        return False
+
+
+def _delete_thread_from_db(thread_id: str) -> None:
+    from db.init_db import get_connection
+    try:
+        with get_connection() as conn:
+            conn.execute("DELETE FROM aimode_messages WHERE thread_id = ?", (thread_id,))
+            conn.execute("DELETE FROM aimode_threads WHERE thread_id = ?", (thread_id,))
+            conn.commit()
+    except Exception as e:
+        logger.warning(f"[delete_thread_db] {e}")
 
 
 def _clear_history(thread_id: str):
@@ -188,6 +374,8 @@ def _clear_history(thread_id: str):
     with _fallback_lock:
         _fallback_history.pop(thread_id, None)
     _prev_sources_store.pop(thread_id, None)
+    # [v3 sidebar] SQLite 영속 데이터도 삭제
+    _delete_thread_from_db(thread_id)
 
 
 # ── 이전 턴 파일 소스 저장소 (followup 용) ────────────────────────────
@@ -398,10 +586,18 @@ def _classify_query_mode(question: str, model: str) -> str:
 
 
 def _extract_open_keywords(question: str) -> list[str]:
-    """[v3] open mode 키워드 추출 — 동사·조사 제거 후 명사구 1~3개.
+    """[v3] open mode 키워드 추출 — 동사·조사 제거 후 명사구.
 
-    예: "취업유발효과 찾아줘" → ["취업유발효과"]
-    예: "SW산업 연간보고서" → ["SW산업", "연간보고서"] 또는 ["SW산업 연간보고서"]
+    [v3.1] phrase + 단어 둘 다 반환:
+    - 동사 제거 후 남은 cleaned 가 다단어면 phrase("산업 동향") 를 1순위
+    - 그리고 개별 토큰("산업", "동향") 도 추가
+    - fulltext_search 가 distinct 매칭 단어 수로 점수 → phrase + 단어 둘 다 매칭 시 점수 ↑
+
+    예:
+      "산업 동향 알려줘"   → ["산업 동향", "산업", "동향"]
+      "취업유발효과 찾아줘" → ["취업유발효과"]
+      "SW산업 연간보고서"  → ["SW산업 연간보고서", "SW산업", "연간보고서"]
+      "DBMS 시장 세계 전망" → ["DBMS 시장 세계 전망", "DBMS", "시장", "세계", "전망"]
     """
     import re as _re_ok
     # 검색 동사 제거
@@ -417,9 +613,8 @@ def _extract_open_keywords(question: str) -> list[str]:
         cleaned = cleaned.replace(v, " ")
     # 의문 부호 제거
     cleaned = _re_ok.sub(r"[?？!]", "", cleaned)
-    # 2자 이상 단어 추출 (한글/영문/숫자)
-    tokens = _re_ok.findall(r"[가-힣A-Za-z0-9]{2,}", cleaned)
-    # 조사 제거 (간단)
+
+    # 조사 제거 헬퍼
     _JOSA = ("에서의", "에서", "에는", "에게", "한테", "부터", "까지",
              "이랑", "과의", "와의", "으로", "로서", "으로서",
              "의", "에", "과", "와", "이", "가", "을", "를", "은", "는",
@@ -429,14 +624,34 @@ def _extract_open_keywords(question: str) -> list[str]:
             if w.endswith(j) and len(w) > len(j) + 1:
                 return w[:-len(j)]
         return w
-    kws: list[str] = []
+
+    # 1) 단어 단위 토큰 추출
+    tokens = _re_ok.findall(r"[가-힣A-Za-z0-9]{2,}", cleaned)
+    words: list[str] = []
     seen: set = set()
     for t in tokens:
         s = _strip(t)
         if len(s) >= 2 and s not in _STOPWORDS and s.lower() not in seen:
             seen.add(s.lower())
-            kws.append(s)
-    return kws[:3]
+            words.append(s)
+
+    # 2) [v3.1] phrase 만들기 — 공백 포함 + 공백 제거 두 형태 모두
+    #    한국어 PDF 는 "산업 동향" / "산업동향" 양쪽 표기가 흔함 → 둘 다 매칭.
+    #    예: ["산업", "동향"] → ["산업동향", "산업 동향"]
+    kws: list[str] = []
+    if len(words) >= 2:
+        phrase_spaced = " ".join(words[:4])      # "산업 동향"
+        phrase_joined = "".join(words[:4])       # "산업동향"
+        # 공백 제거 형태를 1순위로 (더 구체적인 매칭)
+        if phrase_joined != phrase_spaced and phrase_joined not in kws:
+            kws.append(phrase_joined)
+        if phrase_spaced not in kws:
+            kws.append(phrase_spaced)
+    # 개별 단어도 추가 — phrase 매칭 안 되는 페이지에서 fallback
+    for w in words:
+        if w not in kws:
+            kws.append(w)
+    return kws[:6]
 
 
 def _extract_rag_intent(question: str, model: str) -> tuple[str, list[str], list[str]]:
@@ -847,19 +1062,44 @@ def _build_rag_messages(
         citation_rules.append("- 위 [원본 위치 정보] 에 나열된 페이지/타임스탬프 외에 새 페이지·시각을 만들면 안 됩니다.")
     citation_block = "[인용 형식 — 반드시 준수]\n" + "\n".join(citation_rules) + "\n" if citation_rules else ""
 
-    sys_msg = f"""당신은 아래 [문서 발췌]를 보고 [질문]에 답하는 AI입니다. 반드시 한국어로만 답변하세요.
+    sys_msg = f"""[CRITICAL — 언어 규칙]
+반드시 한국어(한글)로만 답변하세요. **영어·스페인어·일본어·중국어·한자·기타 외국어 절대 금지**.
+숫자와 단위 외 모든 단어는 한글로만 쓸 것. 예: "달러" OK, "dólares" 절대 금지.
+답변 첫 글자부터 마지막 글자까지 한글이어야 합니다.
+
+당신은 아래 [문서 발췌]를 보고 [질문]에 답하는 AI입니다.
 {forced_block}{refs_block}{citation_block}
 [절대 규칙]
-1. [핵심 인용] 또는 [문서 발췌]에 관련 내용이 있으면 **반드시 그 내용을 사용해 답변** 하세요.
-2. 숫자·비율·날짜는 반드시 [핵심 인용] 또는 [문서 발췌]에 있는 것만 쓰세요.
-3. 학습 데이터에서 알고 있는 수치/사실을 쓰면 안 됩니다. 문서 내용만 사용.
-4. 발췌에 없는 내용 추가 금지. 외국어 출력 금지.
-5. **답변의 모든 사실 진술 뒤에 반드시 (XX페이지) 또는 [MM:SS] 태그를 붙이세요.** 태그는 위 [원본 위치 정보] 에 나열된 것만 사용 가능.
-6. [핵심 인용]·[문서 발췌] 모두 비어있는 경우에만 "제공 문서에 해당 정보가 없습니다"라고 쓰세요.
+1. **한국어만 사용**. 외국어 단어 한 개라도 섞이면 답변 무효.
+2. [핵심 인용] 또는 [문서 발췌]에 관련 내용이 있으면 **반드시 그 내용을 사용해 답변** 하세요.
+3. 숫자·비율·날짜는 반드시 [핵심 인용] 또는 [문서 발췌]에 있는 것만 쓰세요.
+4. 학습 데이터에서 알고 있는 수치/사실을 쓰면 안 됩니다. 문서 내용만 사용.
+5. 발췌에 없는 내용 추가 금지.
+6. **답변의 모든 사실 진술 뒤에 반드시 (XX페이지) 또는 [MM:SS] 태그를 붙이세요.** 태그는 위 [원본 위치 정보] 에 나열된 것만 사용 가능.
+7. [핵심 인용]·[문서 발췌] 모두 비어있는 경우에만 "제공 문서에 해당 정보가 없습니다"라고 쓰세요.
 
-[답변 형식 예시]
-1. DBMS 시장은 2016년 317억 달러로 6.4% 성장 (40페이지)
-2. 2019년 384억 달러 규모 전망 (40페이지)
+[답변 분량 — 반드시 준수, 짧으면 답변 무효]
+- **최소 12문장 이상, 권장 15~20문장**으로 매우 상세하게 답하세요.
+- 5문장 미만 또는 단답 답변 절대 금지. 충분히 풀어 설명할 것.
+- 단순 수치 나열로 끝내지 말고, **배경·맥락·세부 항목·시사점·관련 흐름·산업적 의미**를 같이 풀어 설명하세요.
+- 반드시 항목별 번호(1./2./3./4./...) 로 **3개 이상의 항목**으로 정리하고 각 항목 **4~5문장** 으로 충분히 부연.
+- 답변 시작에 도입(2~3문장), 본문(항목별 정리 — 항목당 4~5문장), 마지막에 종합 정리(2~3문장).
+- 답변 분량이 부족하면 같은 [핵심 인용]·[문서 발췌] 안의 관련 정보·맥락을 추가로 끌어와서 길이를 충분히 채울 것.
+- 같은 사실이라도 "수치 → 의미 → 시사점" 식으로 다양한 각도로 풀어 쓸 것.
+
+[답변 형식 예시 — 이 정도 분량으로 답할 것]
+2016년 세계 DBMS 시장은 빅데이터 시대의 도래와 함께 의미 있는 성장 국면에 진입하고 있습니다 (40페이지). 이전 정체기를 지나 본격적인 성장 궤도에 올랐다는 점에서 산업계의 주목을 받고 있는 분야입니다.
+
+1. 시장 규모와 성장률
+   2016년 세계 DBMS 시장 규모는 317억 달러로 전년 대비 6.4% 성장이 예상됩니다 (40페이지). 이는 2015년 0.1% 성장에 그쳤던 정체기를 빠르게 벗어나는 회복세로, 데이터 산업 전반의 활성화를 보여주는 지표입니다 (40페이지). 2014년부터 2019년까지 연평균 5.2%씩 꾸준히 성장할 것으로 전망되며, 2019년에는 시장 규모가 384억 달러에 도달할 것으로 추산됩니다 (40페이지).
+
+2. 주요 성장 동인
+   첫째, 빅데이터에 대한 기업 수요가 급증하면서 데이터 저장·처리 인프라로서 DBMS 의 중요성이 커지고 있습니다 (40페이지). 둘째, DB 어플라이언스 같은 통합 솔루션과 인메모리 DB 등 신기술이 시장 확대를 견인하고 있습니다 (40페이지). 셋째, 클라우드 기반 데이터베이스 서비스가 빠르게 확산되면서 기존 온프레미스 시장 외에 새로운 수요층을 만들어내고 있습니다 (40페이지).
+
+3. 산업적 시사점
+   DBMS 시장의 6%대 안정 성장은 데이터 중심 산업 패러다임이 자리 잡고 있음을 시사합니다. 특히 인메모리·클라우드 같은 신기술 수요가 안정 성장을 뒷받침할 가능성이 큽니다.
+
+종합하면 2016년 DBMS 시장은 빅데이터 확산을 동력으로 본격적인 성장 국면에 진입하고 있으며, 향후 5년간 안정적인 6%대 성장세를 유지할 것으로 전망됩니다. 이는 데이터 산업 전체의 견조한 발전을 시사하는 중요한 지표입니다.
 
 [참고 파일]
 {source_list if source_list else '  (매칭 파일 없음)'}
@@ -872,14 +1112,24 @@ def _build_rag_messages(
         messages.extend(prior_history[-6:])
 
     # 유저 메시지에도 핵심 인용을 앞에 박음 (이중 노출)
+    answer_length_req = (
+        "\n\n[답변 요구사항 — 반드시 준수]\n"
+        "- 한국어로만 답변 (외국어 단어 절대 금지)\n"
+        "- **최소 12문장 이상**, 권장 15~20문장으로 매우 상세히 답변\n"
+        "- 도입(2~3문장) → 항목별 정리 3개 이상(각 항목 4~5문장 부연) → 종합 정리(2~3문장)\n"
+        "- 단답 또는 5문장 미만 답변은 무효\n"
+        "- 핵심 수치 외에 배경·맥락·동인·시사점·관련 흐름까지 충실히 풀어 설명할 것\n"
+        "- 같은 정보라도 다양한 각도로 다시 풀어 쓰며 길이를 채울 것"
+    )
     if key_facts:
         quotes = "\n".join(f'- "{f}"' for f in key_facts if f.strip())
         user_content = (
             f"[문서 핵심 인용]\n{quotes}\n\n"
             f"위 인용문의 수치를 그대로 사용해서 다음 질문에 답하세요:\n{question}"
+            f"{answer_length_req}"
         )
     else:
-        user_content = question
+        user_content = f"{question}{answer_length_req}"
 
     messages.append({"role": "user", "content": user_content})
     return messages
@@ -1069,6 +1319,10 @@ def router_node(state: dict) -> dict:
         "이전 파일: SW산업.pdf / 질문: 쉽게 설명해줘 → followup\n"
         "이전 파일: SW산업.pdf / 질문: 취업유발계수가 뭐야? → followup\n"
         "이전 파일: SW산업.pdf / 질문: 거기서 DBMS 시장은? → followup\n"
+        "이전 파일: SW산업.pdf / 질문: 전년대비 얼마나 상승했어? → followup\n"
+        "이전 파일: SW산업.pdf / 질문: 전년대비 얼마야? → followup\n"
+        "이전 파일: SW산업.pdf / 질문: 그 수치 근거는? → followup\n"
+        "이전 파일: SW산업.pdf / 질문: 어떻게 변했어? → followup\n"
         "이전 파일: SW산업.pdf / 질문: 양자컴퓨터 동향은? → rag\n"
         "이전 파일: SW산업.pdf / 질문: 삼성전자 ESG 보고서 찾아줘 → rag\n\n"
         f"이전 대화:\n{history_text}\n"
@@ -1097,6 +1351,11 @@ def router_node(state: dict) -> dict:
         _FOLLOWUP_TRIGGERS = [
             "쉽게", "다시", "요약", "정리", "자세히", "설명해", "풀어줘",
             "더 알려줘", "그게", "거기서", "방금", "한국어로", "예시", "예를",
+            # [v3.1] 후속 의문문 패턴
+            "얼마", "얼마야", "어떻게", "어떤", "왜", "근거",
+            "전년", "전년대비", "올해", "작년", "이전",
+            "성장률", "증가율", "비율", "비교",
+            "그 수치", "그게 어떤",
         ]
         q_len = len(question.strip())
         has_trigger = any(t in question for t in _FOLLOWUP_TRIGGERS)
@@ -1104,6 +1363,20 @@ def router_node(state: dict) -> dict:
         if q_len <= 30 and has_trigger and len(new_nouns) == 0:
             route = "followup"
             logger.info(f"[router_node] fallback followup (short+trigger)")
+
+    # [v3.1] **마지막 보강** — history+prev_sources 있는 상태에서 짧은 의문문이고
+    # 명시적 새 검색 의도(찾아줘/자료 등) 없으면 followup default.
+    # "전년대비 얼마야?" 같은 일반 의문문이 LLM 에서 rag 로 잘못 분류되는 케이스 차단.
+    if route == "rag" and history and prev_sources:
+        q_stripped = question.strip()
+        q_len = len(q_stripped)
+        has_force_rag = any(kw in question for kw in _FORCE_RAG_KW)
+        # 짧은 의문문 (≤25자) + 새 검색 의도 없음 → followup
+        is_question_form = q_stripped.endswith(("?", "야?", "어?", "지?", "까?", "나?",
+                                                 "?", "야", "어", "지", "까", "나"))
+        if q_len <= 25 and not has_force_rag:
+            route = "followup"
+            logger.info(f"[router_node] 짧은 후속 질문 → followup 강제 (q_len={q_len})")
 
     logger.info(f"[router_node] raw={raw!r} → route={route}")
     _emit({"type": "route", "mode": route})
@@ -1584,12 +1857,21 @@ def fulltext_search_node(state: dict) -> dict:
             # 목차 의심 강도 (0~1) — 페이지 참조가 많거나 점선 비율 높으면 강한 페널티
             is_toc_strong = (toc_page_refs >= 5) or (toc_dots >= 30)
 
+            # [v3.1] phrase 매칭 보너스 — "산업 동향" 같은 공백 포함 phrase 가
+            # 본문에 그대로 substring 매칭되면 큰 가산점. 단어 산발 매칭보다 우대.
+            phrase_kws = [k for k in kws_lower if " " in k]
+            phrase_hits = sum(tl.count(p) for p in phrase_kws)
+
             if is_toc_strong:
                 # 목차로 확정 → 강한 페널티 (점수 1/4 + 추가 차감)
                 score = (hits + distinct + min(unit_nums, 5)) // 2 - toc_page_refs
+                # phrase 매칭은 목차 페이지에서도 의미 있음
+                score += phrase_hits * 3
             else:
                 # 본문 우대: 단위 숫자 가중치 ↑, 점선 가벼운 페널티
-                score = hits * 2 + distinct * 5 + min(unit_nums, 5) * 3 - toc_dots // 3
+                # [v3.1] phrase 매칭 시 +10 (산발 단어 매칭보다 본문 우선)
+                score = hits * 2 + distinct * 5 + min(unit_nums, 5) * 3 \
+                        + phrase_hits * 10 - toc_dots // 3
 
             if score <= 0:
                 continue
@@ -1750,6 +2032,9 @@ def extract_node(state: dict) -> dict:
     for src in matched:
         ftype = src.get("file_type", "")
         fname = src.get("file_name", "?")
+        # [v3.1] 페이지 이미지 URL 구성용 식별자 — frontend 가 사용
+        trichef_id = src.get("trichef_id") or ""
+        file_path  = src.get("file_path") or ""
         for cm in (src.get("chunks_meta") or []):
             text = (cm.get("text") or "").strip()
             if not text:
@@ -1759,10 +2044,12 @@ def extract_node(state: dict) -> dict:
                 skipped_toc += 1
                 continue
             ref = {
-                "src":      fname,
-                "type":     ftype,
-                "snippet":  text[:200],
-                "score":    cm.get("score", 0),
+                "src":        fname,
+                "type":       ftype,
+                "snippet":    text[:200],
+                "score":      cm.get("score", 0),
+                "trichef_id": trichef_id,  # [v3.1] 페이지 이미지 fetch 용 stem
+                "file_path":  file_path,    # [v3.1] PDF 절대 경로 (옵션)
             }
             if ftype == "doc":
                 ref["page"] = cm.get("page")
@@ -2003,7 +2290,8 @@ def direct_generate_node(state: dict) -> dict:
     # 하이브리드: 답변 생성은 작은 모델(4b) 사용. fallback 으로 state model 유지.
     gen_model = _get_ollama_model("generate") or model
     try:
-        for tok in _ollama_stream(messages, gen_model, num_predict=-1):
+        # [v3.1] chunk_size=0 → 토큰 받는 즉시 yield (타이핑 효과)
+        for tok in _ollama_stream(messages, gen_model, num_predict=-1, chunk_size=0):
             full_answer += tok
             _emit({"type": "token", "text": tok})
     except Exception as e:
@@ -2347,7 +2635,9 @@ def generate_node(state: dict) -> dict:
         logger.warning(f"[generate_node] VRAM 확인 실패: {_ve}")
 
     try:
+        # [v3.1] chunk_size=0 → 토큰 받는 즉시 yield (타이핑 효과)
         for tok in _ollama_stream(messages, gen_model, num_predict=np_limit,
+                                  chunk_size=0,
                                   keep_alive=0 if _gen_vram_swapped else -1):
             full_answer += tok
             _emit({"type": "token", "text": tok})
@@ -2706,12 +2996,53 @@ def status():
     model     = _get_ollama_model()              # 검색/intent/router (12b 우선)
     gen_model = _get_ollama_model("generate")    # 답변 생성 (4b 우선)
     return jsonify({
+        "version":          "v3",
         "ollama_model":     model,
         "ollama_gen_model": gen_model,
         "ollama_available": model is not None,
         "scan_delay_sec":   SCAN_DELAY,
         "langgraph_ok":     _LANGGRAPH_OK,
     })
+
+
+# ══════════════════════════════════════════════════════════════════════
+# [v3 sidebar] 채팅방 목록 / 제목 수정 API
+# ══════════════════════════════════════════════════════════════════════
+
+@aimode_bp.get("/threads")
+def list_threads():
+    """[v3] 사이드바용 채팅방 목록 (updated_at 내림차순).
+
+    Query params:
+      limit: int (default 50, max 200)
+    Response:
+      { threads: [{thread_id, title, created_at, updated_at, msg_count, first_query}] }
+    """
+    try:
+        limit = int(request.args.get("limit", 50))
+    except (TypeError, ValueError):
+        limit = 50
+    limit = max(1, min(limit, 200))
+    threads = _list_threads(limit=limit)
+    return jsonify({"threads": threads, "count": len(threads)})
+
+
+@aimode_bp.patch("/threads/<thread_id>/title")
+def patch_thread_title(thread_id: str):
+    """[v3] 사이드바에서 채팅방 이름 변경.
+
+    Body: { title: "새 제목" }
+    """
+    if not _THREAD_ID_RE.match(thread_id):
+        return jsonify({"error": "invalid thread_id"}), 400
+    body = request.get_json(silent=True) or {}
+    new_title = (body.get("title") or "").strip()
+    if not new_title:
+        return jsonify({"error": "title 필수"}), 400
+    ok = _update_thread_title(thread_id, new_title)
+    if not ok:
+        return jsonify({"error": "thread not found"}), 404
+    return jsonify({"ok": True, "thread_id": thread_id, "title": new_title[:60]})
 
 
 # ══════════════════════════════════════════════════════════════════════

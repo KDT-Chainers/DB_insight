@@ -769,35 +769,38 @@ function QACard({
 
 // ── TurnView (하나의 대화 턴) ──────────────────────────────────────
 function TurnView({ turn, isLatest, onClickSource, onClickFile }) {
+  // [v3 chat] turn 객체가 누락 필드를 가질 수 있어 default 값 안전 가드.
+  // 채팅방 복원 시 또는 v3 done 핸들러가 push 한 turn 은 일부 필드만 채움.
   const {
-    query,
-    route,
-    intentMessage,
-    fileKeywords,
-    detailKeywords,
-    candidates,
-    scanStates,
-    scanChunks,
-    scannedCount,
-    foundCount,
-    sources,
-    answer,
-    streaming,
-    done,
-    error,
-    keyFacts,
-    generating,
-    qaGenerating,
-    qaAttempt,
-    qaMax,
-    qaQuestion,
-    qaAnswer,
-    qaValid,
-    qaIssues,
-    qaSources,
-    blocked,
-    security,
-  } = turn;
+    query           = "",
+    route           = "",
+    intentMessage   = "",
+    fileKeywords    = [],
+    detailKeywords  = [],
+    candidates      = [],
+    scanStates      = {},
+    scanChunks      = {},
+    scannedCount    = 0,
+    foundCount      = 0,
+    sources         = [],
+    answer          = "",
+    streaming       = false,
+    done            = true,
+    error           = null,
+    keyFacts        = [],
+    generating      = false,
+    qaGenerating    = false,
+    qaAttempt       = 0,
+    qaMax           = 0,
+    qaQuestion      = "",
+    qaAnswer        = "",
+    qaValid         = false,
+    qaIssues        = [],
+    qaSources       = [],
+    blocked         = null,
+    security        = null,
+    references      = [],   // [v3 chat] turn 의 원본 위치 references (extract 노드)
+  } = turn || {};
   const isChatMode = route === "chat";
   const isQaMode = route === "qa_gen";
   const showCenterNotice = done && !streaming && isNoInfoCenterAlert(answer);
@@ -1312,6 +1315,130 @@ function TurnView({ turn, isLatest, onClickSource, onClickFile }) {
                 </span>
               </div>
             )}
+            {/* [v3 chat] 원본 위치 references — **답변 위에 먼저 표시** (출처가 답변 근거).
+                streaming 중에도 references 채워지면 표시 (extract 이벤트가 generate 이전). */}
+            {references.length > 0 && (
+              <div
+                style={{
+                  marginBottom: 10,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 6,
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    color: "#6ee7b7",
+                    fontSize: 10.5,
+                    fontWeight: 700,
+                    letterSpacing: "0.14em",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  <span
+                    className="material-symbols-outlined"
+                    style={{ fontSize: 14, fontVariationSettings: '"FILL" 1' }}
+                  >
+                    bookmark
+                  </span>
+                  출처 ({references.length})
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 6,
+                  }}
+                >
+                  {references.slice(0, 10).map((ref, i) => {
+                    const tag =
+                      ref.page != null
+                        ? `${ref.page}페이지`
+                        : ref.timestamp
+                          ? ref.timestamp
+                          : "";
+                    return (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => {
+                          // [v3.1] sources 중 file_name 일치하는 source 찾아서 보강 → handleSelectFile 가 detail fetch 가능
+                          const matched = sources.find(
+                            (s) =>
+                              s.file_name === ref.src ||
+                              s.file_name?.includes(ref.src),
+                          );
+                          onClickSource?.({
+                            ...(matched || {}),
+                            file_name:    ref.src,
+                            page_num:     ref.page,
+                            timestamp:    ref.timestamp,
+                            snippet:      ref.snippet,
+                            trichef_id:   ref.trichef_id || matched?.trichef_id,
+                            file_path:    ref.file_path  || matched?.file_path,
+                            selected_page: ref.page,
+                            _from_ref:    true,
+                          });
+                        }}
+                        title={ref.snippet || ""}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 6,
+                          padding: "4px 10px",
+                          borderRadius: 9,
+                          fontSize: 11,
+                          fontWeight: 600,
+                          color: "#bbf7d0",
+                          background: "rgba(16,185,129,0.12)",
+                          border: "1px solid rgba(16,185,129,0.30)",
+                          cursor: "pointer",
+                          transition: "all 0.15s",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = "rgba(16,185,129,0.25)";
+                          e.currentTarget.style.borderColor = "rgba(16,185,129,0.55)";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = "rgba(16,185,129,0.12)";
+                          e.currentTarget.style.borderColor = "rgba(16,185,129,0.30)";
+                        }}
+                      >
+                        {/* [v3.1] 순서 변경: 파일 → 페이지 */}
+                        <span
+                          style={{
+                            opacity: 0.92,
+                            maxWidth: 180,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {ref.src}
+                        </span>
+                        {tag && (
+                          <span
+                            style={{
+                              fontWeight: 700,
+                              padding: "1px 6px",
+                              borderRadius: 4,
+                              background: "rgba(16,185,129,0.25)",
+                              color: "#86efac",
+                            }}
+                          >
+                            {tag}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* 답변 (qa_gen이 아닌 경우만 표시) */}
             {shouldRenderInlineAnswer && (
               <div
@@ -1352,54 +1479,7 @@ function TurnView({ turn, isLatest, onClickSource, onClickFile }) {
               </div>
             )}
 
-            {/* 출처 */}
-            {done && sources.length > 0 && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                {sources.map((src, i) => (
-                  <button
-                    key={i}
-                    onClick={() => onClickSource?.(src)}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                      padding: "3px 6px",
-                      borderRadius: 6,
-                      fontSize: 11,
-                      background: "transparent",
-                      border: "none",
-                      cursor: "pointer",
-                      color: "#4b5563",
-                      textAlign: "left",
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: 11,
-                        fontWeight: 700,
-                        flexShrink: 0,
-                        background: "rgba(139,92,246,0.15)",
-                        color: AI.accentLight,
-                        padding: "2px 7px",
-                        borderRadius: 4,
-                      }}
-                    >
-                      출처{i + 1}
-                    </span>
-                    <span
-                      style={{
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                        fontSize: 12.5,
-                      }}
-                    >
-                      {src.file_name || "?"}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
+            {/* [v3.1] sources list (출처1, 출처2, ...) 는 위의 references chip 으로 대체됨 — 중복 표시 제거 */}
 
             {/* 에러 */}
             {error && (
@@ -1690,6 +1770,17 @@ export default function MainAI() {
   const [aimodeDetailKws, setAimodeDetailKws] = useState([]);
   const [aimodeMode, setAimodeMode] = useState(""); // [v3] "structured" | "open" | "followup" | ""
   const [aimodeReferences, setAimodeReferences] = useState([]); // [v3] extract 노드 references
+  const [chatThreadId, setChatThreadId] = useState(null); // [v3 chat] 현재 채팅방 thread_id (사이드바 active 표시용)
+  const [chatRefreshTrigger, setChatRefreshTrigger] = useState(0); // [v3 chat] 사이드바 채팅방 목록 새로고침 트리거 (done 시 ++)
+  const [zoomImage, setZoomImage] = useState(null); // [v3.1] 페이지 이미지 확대 modal {src, title}
+
+  // [v3.1] ESC 로 zoom modal 닫기
+  useEffect(() => {
+    if (!zoomImage) return;
+    const onKey = (e) => { if (e.key === "Escape") setZoomImage(null); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [zoomImage]);
   const [aimodeSources, setAimodeSources] = useState([]);
   const [aimodeSelected, setAimodeSelected] = useState(null);
   const [aimodeAnswer, setAimodeAnswer] = useState("");
@@ -1861,7 +1952,8 @@ export default function MainAI() {
 
       setStreaming(true);
       setResults([]);
-      setTurns([]);
+      // [v3 chat] turns 는 검색 시작 시 초기화 X — 같은 thread 안에서 누적.
+      // 새 채팅(새 thread_id)일 때만 사이드바의 "새 채팅" 버튼에서 명시적으로 초기화.
       setIterationData([]);
       setDomainSelection(null);
       setAiError("");
@@ -1869,7 +1961,7 @@ export default function MainAI() {
       activeQueryRef.current = q;
       setHasLLM(undefined);
 
-      // AIMODE 시각화 상태 초기화
+      // [v3 chat] 진행 중 turn 의 시각화 상태만 초기화 — 이전 turn 들은 turns 배열에 보존.
       setAimodeSteps([]);
       setAimodeQuery("");
       setAimodeContentKws([]);
@@ -1911,6 +2003,8 @@ export default function MainAI() {
         } catch {}
       }
       window.__aimodeThreadId = tid;
+      // [v3 chat] 사이드바 active 상태 동기화
+      setChatThreadId(tid);
       const body = useAimode
         ? { query: q, topk: topK, thread_id: tid, secure: securityMode }
         : {
@@ -2046,6 +2140,16 @@ export default function MainAI() {
         const items = ev.items || [];
         const mapped = items.map(mapItem);
         setAimodeSources(mapped);
+        // [v3 chat] 마지막 streaming turn 의 sources 도 즉시 동기화 (stale state 방지)
+        setTurns((prev) => {
+          if (prev.length === 0) return prev;
+          const last = prev[prev.length - 1];
+          if (!last.streaming) return prev;
+          return [
+            ...prev.slice(0, -1),
+            { ...last, sources: [...mapped] },
+          ];
+        });
         // ★ 동일 데이터를 큰 카드 그리드로도 렌더 (MainSearch 와 동일한 UX)
         setResults(mapped);
         const histQ = activeQueryRef.current || ev.query || finalQuery || "";
@@ -2076,7 +2180,21 @@ export default function MainAI() {
 
       case "extract":
         // [v3] extract 노드 references — UI 패널 + 답변 인용 chip 매핑
-        if (Array.isArray(ev.references)) setAimodeReferences(ev.references);
+        if (Array.isArray(ev.references)) {
+          setAimodeReferences(ev.references);
+          // [v3 chat] 마지막 streaming turn 의 references 도 즉시 update.
+          // (done 이벤트가 setAimodeReferences 비동기 setState 보다 먼저 처리되면
+          //  stale 값으로 turn 채워서 references 누락. 여기서 직접 update.)
+          setTurns((prev) => {
+            if (prev.length === 0) return prev;
+            const last = prev[prev.length - 1];
+            if (!last.streaming) return prev;
+            return [
+              ...prev.slice(0, -1),
+              { ...last, references: [...ev.references] },
+            ];
+          });
+        }
         break;
 
       case "scanning":
@@ -2120,18 +2238,67 @@ export default function MainAI() {
         setAimodeStage("generating");
         break;
 
-      case "token":
-        setAimodeAnswer((prev) => prev + (ev.text || ""));
+      case "token": {
+        const piece = ev.text || "";
+        setAimodeAnswer((prev) => prev + piece);
+        // [v3 chat] 마지막 streaming turn 의 answer 도 실시간 누적 (말풍선 안에 표시)
+        setTurns((prev) => {
+          if (prev.length === 0) return prev;
+          const last = prev[prev.length - 1];
+          if (!last.streaming) return prev;
+          return [
+            ...prev.slice(0, -1),
+            { ...last, answer: (last.answer || "") + piece },
+          ];
+        });
         break;
+      }
 
-      case "done":
+      case "done": {
         setAimodeDone(true);
         setAimodeStage("idle");
+        const finalAnswer = ev.answer || aimodeAnswer;
         if (ev.answer) setAimodeAnswer(ev.answer);
         if (ev.security) setAimodeSecurity(ev.security);
         if (typeof ev.selected_idx === "number")
           setAimodeSelected(ev.selected_idx);
+        // [v3 chat] 사이드바 채팅방 목록 새로고침 트리거 — done 후 백엔드에 새 thread 저장됨
+        setChatRefreshTrigger((t) => t + 1);
+        // [v3 chat] submitQuery 가 만든 streaming turn 의 완료 처리.
+        // 새 turn push 가 아니라 마지막 streaming turn 을 update.
+        // 주의: references / sources 는 extract / selected 핸들러가 이미 직접 채웠을 수 있음.
+        //       last.X 가 비어있을 때만 state fallback 사용 (stale state 덮어쓰기 방지).
+        setTurns((prev) => {
+          if (prev.length === 0) return prev;
+          const last = prev[prev.length - 1];
+          if (!last.streaming) return prev;
+          const lastRefs = (last.references && last.references.length > 0)
+            ? last.references
+            : [...(aimodeReferences || [])];
+          const lastSrcs = (last.sources && last.sources.length > 0)
+            ? last.sources
+            : [...(aimodeSources || [])];
+          return [
+            ...prev.slice(0, -1),
+            {
+              ...last,
+              answer:         finalAnswer || last.answer,
+              route:          "rag",
+              intentMessage:  aimodeQuery || last.intentMessage,
+              fileKeywords:   [...(aimodeContentKws || [])],
+              detailKeywords: [...(aimodeDetailKws || [])],
+              sources:        lastSrcs,
+              references:     lastRefs,
+              mode:           aimodeMode,
+              streaming:      false,
+              done:           true,
+              generating:     false,
+              security:       ev.security || null,
+            },
+          ];
+        });
         break;
+      }
 
       case "blocked":
         setAimodeDone(true);
@@ -2229,7 +2396,8 @@ export default function MainAI() {
     const searchQ = String(q ?? "").trim();
     if (!searchQ || searchTransitioning || homeExiting) return;
     setQuery(searchQ);
-    setInputValue(searchQ);
+    // [v3 chat] 입력창은 submitQuery 가 이미 비웠음. doSearch 가 다시 채우면 안 됨
+    // (예전엔 results view 의 검색창에 query 표시 목적이었으나, 채팅 UX 에선 비우는 게 우선).
 
     if (view === "home") {
       setHomeExiting(true);
@@ -2264,8 +2432,163 @@ export default function MainAI() {
     if (prev.q === q && now - prev.ts < 450) return;
     submitGuardRef.current = { q, ts: now };
     setHomeInputExpandedLocked(false);
+    // [v3 chat] 전송 후 입력창 비우기 — 사용자 의도 확실
+    setInputValue("");
+    // [v3 chat] **즉시** turn push — 사용자 말풍선 입력 직후 화면 위로 올라가게.
+    // token 이벤트마다 마지막 turn 의 answer 누적, done 에서 완료 처리.
+    setTurns((t) => [
+      ...t,
+      {
+        id:             `turn_pending_${now}`,
+        query:          q,
+        answer:         "",
+        route:          "",
+        intentMessage:  "",
+        fileKeywords:   [],
+        detailKeywords: [],
+        candidates:     [],
+        scanStates:     {},
+        scanChunks:     {},
+        scannedCount:   0,
+        foundCount:     0,
+        sources:        [],
+        streaming:      true,
+        done:           false,
+        error:          null,
+        keyFacts:       [],
+        generating:     true,
+        blocked:        null,
+        security:       null,
+        references:     [],
+        mode:           "",
+        ts:             now,
+      },
+    ]);
     doSearch(q);
   };
+
+  // [v3 chat] 새 채팅 시작 — turns 초기화 + 새 thread_id 발급
+  const startNewChat = useCallback(() => {
+    // 현재 turn 진행 중이면 abort
+    if (abortRef.current) {
+      try { abortRef.current.abort(); } catch {}
+    }
+    // 새 thread_id 발급
+    const newTid = `t_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    try {
+      localStorage.setItem("aimode_thread_id", JSON.stringify({
+        id: newTid,
+        expires: Date.now() + 24 * 3600 * 1000,
+      }));
+    } catch {}
+    window.__aimodeThreadId = newTid;
+    setChatThreadId(newTid);
+    // turns + 진행 중 시각화 상태 초기화
+    setTurns([]);
+    setAimodeSteps([]);
+    setAimodeQuery("");
+    setAimodeContentKws([]);
+    setAimodeDetailKws([]);
+    setAimodeMode("");
+    setAimodeReferences([]);
+    setAimodeSources([]);
+    setAimodeSelected(null);
+    setAimodeAnswer("");
+    setAimodeDone(false);
+    setAimodeBlocked(null);
+    setAimodeSecurity(null);
+    setAimodeScanStates({});
+    setAimodeStage("idle");
+    setStreaming(false);
+    setResults([]);
+    setIterationData([]);
+    setDomainSelection(null);
+    setAiError("");
+    setFinalQuery("");
+    setInputValue("");
+    activeQueryRef.current = "";
+    // 홈으로 (입력 박스 큰 화면)
+    setView("home");
+  }, []);
+
+  // [v3 chat] 사이드바에서 채팅방 선택 — history 복원 + thread_id 전환
+  const selectThread = useCallback(async (targetTid) => {
+    if (!targetTid) return;
+    if (abortRef.current) {
+      try { abortRef.current.abort(); } catch {}
+    }
+    // thread_id 전환
+    try {
+      localStorage.setItem("aimode_thread_id", JSON.stringify({
+        id: targetTid,
+        expires: Date.now() + 24 * 3600 * 1000,
+      }));
+    } catch {}
+    window.__aimodeThreadId = targetTid;
+    setChatThreadId(targetTid);
+    // 진행 중 시각화 초기화
+    setAimodeSteps([]);
+    setAimodeQuery("");
+    setAimodeContentKws([]);
+    setAimodeDetailKws([]);
+    setAimodeMode("");
+    setAimodeReferences([]);
+    setAimodeSources([]);
+    setAimodeAnswer("");
+    setAimodeDone(false);
+    setAimodeBlocked(null);
+    setAimodeStage("idle");
+    setStreaming(false);
+    setInputValue("");
+    // history fetch → turns 복원
+    try {
+      const r = await fetch(`${API_BASE}/api/aimode/history/${targetTid}`);
+      if (r.ok) {
+        const d = await r.json();
+        const h = d.history || [];
+        // user/assistant 페어를 turn 으로 묶기
+        const restored = [];
+        for (let i = 0; i < h.length - 1; i += 2) {
+          if (h[i].role === "user" && h[i + 1].role === "assistant") {
+            restored.push({
+              id:             `restored_${i}_${targetTid.slice(-6)}`,
+              query:          h[i].content,
+              answer:         h[i + 1].content,
+              route:          "rag",
+              intentMessage:  "",
+              fileKeywords:   [],
+              detailKeywords: [],
+              candidates:     [],
+              scanStates:     {},
+              scanChunks:     {},
+              scannedCount:   0,
+              foundCount:     0,
+              sources:        [],
+              streaming:      false,
+              done:           true,
+              error:          null,
+              keyFacts:       [],
+              generating:     false,
+              blocked:        null,
+              security:       null,
+              references:     [],
+              mode:           "",
+              ts:             Date.parse(h[i + 1].created_at) || Date.now(),
+              restored:       true,
+            });
+          }
+        }
+        setTurns(restored);
+      } else {
+        setTurns([]);
+      }
+    } catch (e) {
+      console.warn("[selectThread] history fetch 실패", e);
+      setTurns([]);
+    }
+    // 채팅방 진입 = results view (turn 들 표시)
+    setView("results");
+  }, []);
 
   const handleSearch = (e) => {
     e?.preventDefault();
@@ -2443,10 +2766,17 @@ export default function MainAI() {
         </div>
       )}
 
-      {/* 사이드바 */}
+      {/* 사이드바 — 기존 SearchSidebar 유지 (디자인·닫기 버튼 그대로) */}
       <SearchSidebar
         entranceOn={view === "home" ? aiHomeEntranceOn : undefined}
         onAiQuery={onAiQuery}
+        onAiNewChat={startNewChat}
+        currentChatThreadId={chatThreadId}
+        onSelectAiThread={(tid) => {
+          setChatThreadId(tid);
+          selectThread(tid);
+        }}
+        aiChatRefreshTrigger={chatRefreshTrigger}
       />
 
       {/* ════ HOME VIEW ════ */}
@@ -2799,33 +3129,6 @@ export default function MainAI() {
             )}
 
             <div style={{ flex: 1 }} />
-
-            <button
-              onClick={handleNewConversation}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 5,
-                padding: "5px 12px",
-                background: AI.card,
-                border: `1px solid ${AI.border}`,
-                borderRadius: 999,
-                fontSize: 11,
-                fontWeight: 700,
-                color: "#64748b",
-                cursor: "pointer",
-                flexShrink: 0,
-                transition: "color 0.2s, border-color 0.2s",
-              }}
-            >
-              <span
-                className="material-symbols-outlined"
-                style={{ fontSize: 14 }}
-              >
-                restart_alt
-              </span>
-              새 대화
-            </button>
           </header>
 
           {/* Two-panel */}
@@ -2861,7 +3164,7 @@ export default function MainAI() {
                 ))}
 
                 {/* ════ AIMODE: 인텐트 헤더 (질문 의도 + 키워드 칩 + [v3] mode 배지) ════ */}
-                {useAimode && aimodeQuery && (
+                {useAimode && aimodeQuery && turns.length === 0 && (
                   <div className="mb-4 rounded-2xl border border-violet-400/20 bg-gradient-to-br from-violet-500/[0.06] via-transparent to-fuchsia-500/[0.06] px-4 py-3">
                     <div className="flex items-center gap-2 mb-2">
                       <span
@@ -2935,7 +3238,7 @@ export default function MainAI() {
                 {/* [v3.1] References 패널은 답변 카드 아래로 이동 (옵션 A) */}
 
                 {/* ════ AIMODE: 처리중 인디케이터 (눈에 띄게) ════ */}
-                {useAimode && streaming && !aimodeAnswer && !aimodeBlocked && (
+                {useAimode && streaming && !aimodeAnswer && !aimodeBlocked && turns.length === 0 && (
                   <div className="relative mb-4 overflow-hidden rounded-2xl border border-violet-400/30 bg-gradient-to-br from-violet-600/15 via-fuchsia-600/10 to-violet-600/15 px-5 py-6">
                     {/* 백그라운드 펄스 */}
                     <div className="pointer-events-none absolute inset-0 opacity-60">
@@ -3087,8 +3390,9 @@ export default function MainAI() {
                   </div>
                 )}
 
-                {/* ════ AIMODE: 답변 카드 (좌측으로 이동) ════ */}
-                {useAimode && aimodeAnswer && !aimodeBlocked && (
+                {/* ════ AIMODE: 답변 카드 (좌측으로 이동) ════
+                    [v3 chat] turn 안의 답변과 중복 방지 — TurnView 가 답변을 렌더하면 이 카드 숨김 */}
+                {useAimode && aimodeAnswer && !aimodeBlocked && turns.length === 0 && (
                   <div className="mb-4 relative overflow-hidden rounded-2xl border border-violet-400/25 bg-gradient-to-br from-white/[0.04] via-violet-500/[0.03] to-fuchsia-500/[0.04] shadow-[0_8px_32px_rgba(139,92,246,0.12)]">
                     <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-fuchsia-500/[0.06] via-transparent to-violet-500/[0.08]" />
                     <div className="relative flex items-center gap-3 border-b border-violet-400/15 px-4 py-3">
@@ -3276,7 +3580,8 @@ export default function MainAI() {
                 {useAimode &&
                   aimodeReferences.length > 0 &&
                   aimodeAnswer &&
-                  !aimodeBlocked && (
+                  !aimodeBlocked &&
+                  turns.length === 0 && (
                     <div className="mb-4 rounded-2xl border border-emerald-400/20 bg-emerald-500/[0.04] px-4 py-3">
                       <div className="flex items-center gap-2 mb-2">
                         <span
@@ -3837,10 +4142,136 @@ export default function MainAI() {
                                 maxHeight: 220,
                                 objectFit: "contain",
                                 borderRadius: 7,
+                                cursor: "zoom-in",
                               }}
+                              onClick={() => setZoomImage({
+                                src: `${API_BASE}${selectedFile.preview_url}`,
+                                title: selectedFile.file_name,
+                              })}
                             />
                           </div>
                         )}
+
+                      {/* [v3.1] doc 페이지 이미지 (references chip 클릭 시 표시).
+                          trichef_id 가 page_images/<stem>/p<N>.jpg 형태이거나 단순 stem 일 수 있음. */}
+                      {selectedFile.file_type === "doc" &&
+                        (selectedFile.selected_page != null || selectedFile.page_num != null) &&
+                        selectedFile.trichef_id && (() => {
+                          const stem = selectedFile.trichef_id.replace(/^page_images\//, "").split("/")[0];
+                          const pageNum = (selectedFile.selected_page ?? selectedFile.page_num) - 1; // UI 는 1-indexed, 파일은 0-indexed
+                          const pad = String(Math.max(0, pageNum)).padStart(4, "0");
+                          const path = `page_images/${stem}/p${pad}.jpg`;
+                          const url = `${API_BASE}/api/trichef/file?domain=doc_page&path=${encodeURIComponent(path)}`;
+                          const displayPage = selectedFile.selected_page ?? selectedFile.page_num;
+                          return (
+                            <div
+                              style={{
+                                marginBottom: 13,
+                                borderRadius: 10,
+                                background: "#06030f",
+                                padding: 10,
+                                display: "flex",
+                                flexDirection: "column",
+                                alignItems: "center",
+                                gap: 8,
+                              }}
+                            >
+                              <div
+                                style={{
+                                  alignSelf: "stretch",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "space-between",
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  color: "#86efac",
+                                  letterSpacing: "0.08em",
+                                  textTransform: "uppercase",
+                                }}
+                              >
+                                <span>📄 {displayPage}페이지 미리보기</span>
+                                <span style={{ fontSize: 10, color: "#94a3b8", textTransform: "none" }}>
+                                  클릭하여 확대
+                                </span>
+                              </div>
+                              <img
+                                src={url}
+                                alt={`${selectedFile.file_name} ${displayPage}p`}
+                                style={{
+                                  maxWidth: "100%",
+                                  maxHeight: 380,
+                                  objectFit: "contain",
+                                  borderRadius: 7,
+                                  cursor: "zoom-in",
+                                  border: "1px solid rgba(139,92,246,0.18)",
+                                }}
+                                onClick={() => setZoomImage({ src: url, title: `${selectedFile.file_name} - ${displayPage}페이지` })}
+                                onError={(e) => {
+                                  e.currentTarget.style.display = "none";
+                                  const sibling = e.currentTarget.nextElementSibling;
+                                  if (sibling) sibling.style.display = "block";
+                                }}
+                              />
+                              <div
+                                style={{
+                                  display: "none",
+                                  fontSize: 11,
+                                  color: "#fbbf24",
+                                  padding: "8px 12px",
+                                }}
+                              >
+                                ⚠️ 페이지 이미지 로드 실패 (캐시에 없음)
+                              </div>
+                              {/* [v3.1] 인용 부분 (chip 클릭 시 전달된 snippet) */}
+                              {selectedFile.snippet && (
+                                <div
+                                  style={{
+                                    alignSelf: "stretch",
+                                    marginTop: 4,
+                                    padding: "10px 12px",
+                                    borderRadius: 8,
+                                    background: "rgba(16,185,129,0.08)",
+                                    border: "1px solid rgba(16,185,129,0.22)",
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      fontSize: 10,
+                                      fontWeight: 700,
+                                      color: "#6ee7b7",
+                                      letterSpacing: "0.12em",
+                                      textTransform: "uppercase",
+                                      marginBottom: 6,
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: 4,
+                                    }}
+                                  >
+                                    <span
+                                      className="material-symbols-outlined"
+                                      style={{ fontSize: 13, fontVariationSettings: '"FILL" 1' }}
+                                    >
+                                      format_quote
+                                    </span>
+                                    인용한 부분
+                                  </div>
+                                  <div
+                                    style={{
+                                      fontSize: 12,
+                                      lineHeight: 1.6,
+                                      color: "#dcfce7",
+                                      whiteSpace: "pre-wrap",
+                                      maxHeight: 200,
+                                      overflowY: "auto",
+                                    }}
+                                  >
+                                    {selectedFile.snippet}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
 
                       {(() => {
                         const fid =
@@ -3991,6 +4422,76 @@ export default function MainAI() {
           animation:ai-scan-line 1.2s ease-in-out infinite;
         }
       `}</style>
+
+      {/* [v3.1] 페이지 이미지 확대 modal — chip 또는 미리보기 클릭 시 표시 */}
+      {zoomImage && (
+        <div
+          onClick={() => setZoomImage(null)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 9999,
+            background: "rgba(0,0,0,0.88)",
+            backdropFilter: "blur(8px)",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: "zoom-out",
+            padding: 40,
+          }}
+        >
+          <div
+            style={{
+              maxWidth: "90vw",
+              maxHeight: "85vh",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 12,
+            }}
+          >
+            {zoomImage.title && (
+              <div
+                style={{
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: "#e2e8f0",
+                  letterSpacing: "-0.01em",
+                  padding: "8px 14px",
+                  background: "rgba(139,92,246,0.15)",
+                  border: "1px solid rgba(139,92,246,0.3)",
+                  borderRadius: 8,
+                }}
+              >
+                {zoomImage.title}
+              </div>
+            )}
+            <img
+              src={zoomImage.src}
+              alt={zoomImage.title || "preview"}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                maxWidth: "90vw",
+                maxHeight: "78vh",
+                objectFit: "contain",
+                borderRadius: 8,
+                boxShadow: "0 20px 60px rgba(0,0,0,0.5)",
+                cursor: "default",
+              }}
+            />
+            <div
+              style={{
+                fontSize: 11,
+                color: "#94a3b8",
+                opacity: 0.7,
+              }}
+            >
+              어두운 영역 클릭 또는 ESC 로 닫기
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

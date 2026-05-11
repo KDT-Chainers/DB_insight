@@ -41,7 +41,15 @@ const SIDEBAR_MAX_WIDTH_PX = 420
  * entranceOn: 메인과 동일 타이밍(~180ms 후 true)으로 패널 **전체**가 배경에 묻인 듯했다가 선명해지며 등장. 미전달 시 애니 없음.
  * onAiQuery: AI 모드에서 사이드바 기록 클릭 시 직접 호출 (CustomEvent 폴백 포함)
  */
-export default function SearchSidebar({ entranceOn, onAiQuery } = {}) {
+export default function SearchSidebar({
+  entranceOn,
+  onAiQuery,
+  // [v3 chat] AIMODE 채팅방 통합 props
+  onAiNewChat,            // 새 대화 버튼 클릭
+  currentChatThreadId,    // 현재 활성 채팅방
+  onSelectAiThread,       // 채팅방 클릭 → thread 복원
+  aiChatRefreshTrigger,   // 새 turn 저장 후 목록 새로고침 트리거
+} = {}) {
   const navigate = useNavigate()
   const location = useLocation()
   const { open, toggle } = useSidebar()
@@ -106,19 +114,42 @@ export default function SearchSidebar({ entranceOn, onAiQuery } = {}) {
   }, [])
 
   // 사이드바 열릴 때마다 기록 갱신
+  // [v3 chat] AI 모드면 채팅방 목록 (aimode_threads), 일반 모드면 search_history
   const loadHistory = useCallback(async () => {
     try {
-      // AI 모드에서는 AI 검색 기록만, 일반 검색 모드에서는 일반 기록만 표시
-      const modeParam = aiPath ? 'ai' : 'search'
-      const res  = await fetch(`${API_BASE}/api/history?limit=30&mode=${modeParam}`)
-      const data = await res.json()
-      setHistoryList(data.history ?? [])
+      if (aiPath) {
+        // AI 모드: thread 단위 채팅방 목록
+        const res  = await fetch(`${API_BASE}/api/aimode/threads?limit=100`)
+        const data = await res.json()
+        // SearchSidebar 가 기대하는 형태 (id, query) 로 변환
+        // — id 는 thread_id, query 는 title 로 매핑
+        const mapped = (data.threads || []).map(t => ({
+          id:        t.thread_id,
+          query:     t.title || '(제목 없음)',
+          isThread:  true,
+          msg_count: t.msg_count,
+          updated_at: t.updated_at,
+        }))
+        setHistoryList(mapped)
+      } else {
+        // 일반 검색 모드: 기존 search_history
+        const res  = await fetch(`${API_BASE}/api/history?limit=30&mode=search`)
+        const data = await res.json()
+        setHistoryList(data.history ?? [])
+      }
     } catch (_) {}
   }, [aiPath])
 
   useEffect(() => {
     if (open) loadHistory()
   }, [open, loadHistory])
+
+  // [v3 chat] 새 turn 저장 후 부모가 trigger ++ 하면 채팅방 목록 새로고침
+  useEffect(() => {
+    if (aiPath && aiChatRefreshTrigger != null) {
+      loadHistory()
+    }
+  }, [aiChatRefreshTrigger, aiPath, loadHistory])
 
   useEffect(() => {
     if (!ai) setAiHistoryOpen(false)
@@ -144,28 +175,46 @@ export default function SearchSidebar({ entranceOn, onAiQuery } = {}) {
   const deleteItem = async (id, e) => {
     e.stopPropagation()
     try {
-      await fetch(`${API_BASE}/api/history/${id}`, { method: 'DELETE' })
+      if (aiPath) {
+        // [v3 chat] thread 삭제 — aimode_threads + aimode_messages 같이 정리
+        await fetch(`${API_BASE}/api/aimode/chat/${id}`, { method: 'DELETE' })
+      } else {
+        await fetch(`${API_BASE}/api/history/${id}`, { method: 'DELETE' })
+      }
       setHistoryList(prev => prev.filter(h => h.id !== id))
     } catch (_) {}
   }
 
   const deleteAll = async () => {
     try {
-      await fetch(`${API_BASE}/api/history`, { method: 'DELETE' })
+      if (aiPath) {
+        // AI 모드: 모든 thread 개별 삭제
+        const ids = historyList.map(h => h.id)
+        await Promise.all(ids.map(id =>
+          fetch(`${API_BASE}/api/aimode/chat/${id}`, { method: 'DELETE' }).catch(() => {})
+        ))
+      } else {
+        await fetch(`${API_BASE}/api/history`, { method: 'DELETE' })
+      }
       setHistoryList([])
     } catch (_) {}
   }
 
-  const runQuery = (query) => {
+  const runQuery = (queryOrId, item) => {
     if (aiPath) {
-      // AI 모드: prop 콜백 우선, 없으면 CustomEvent 폴백
+      // [v3 chat] AI 모드: item.isThread 면 thread 복원, 아니면 fallback 으로 query 재실행
+      if (item?.isThread && typeof onSelectAiThread === 'function') {
+        onSelectAiThread(item.id)
+        return
+      }
+      // 옛 검색 기록 (isThread 없음) — fallback
       if (typeof onAiQuery === 'function') {
-        onAiQuery(query)
+        onAiQuery(queryOrId)
       } else {
-        window.dispatchEvent(new CustomEvent('ai-sidebar-query', { detail: { query } }))
+        window.dispatchEvent(new CustomEvent('ai-sidebar-query', { detail: { query: queryOrId } }))
       }
     } else {
-      navigate('/search', { state: { query, historyNonce: Date.now() } })
+      navigate('/search', { state: { query: queryOrId, historyNonce: Date.now() } })
     }
   }
 
@@ -285,6 +334,16 @@ export default function SearchSidebar({ entranceOn, onAiQuery } = {}) {
 
               {aiHistoryOpen && (
                 <div className="absolute left-[92px] top-24 bottom-16 w-[230px] rounded-2xl border border-white/10 bg-[#050507] p-3 shadow-none">
+                  {/* [v3 chat] AIMODE 새 대화 버튼 — 패널 최상단 */}
+                  {onAiNewChat && (
+                    <button
+                      onClick={onAiNewChat}
+                      className="mb-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-violet-400/35 bg-gradient-to-r from-violet-500/20 to-fuchsia-500/15 px-3 py-2 text-[11px] font-bold text-violet-100 hover:from-violet-500/35 hover:to-fuchsia-500/30 hover:border-violet-300/55 transition-all"
+                    >
+                      <span className="material-symbols-outlined text-[14px]">add</span>
+                      새 대화
+                    </button>
+                  )}
                   <div className="mb-2 flex items-center justify-between">
                     <p className="text-[11px] font-bold uppercase tracking-widest text-violet-200/85">검색 기록</p>
                     {historyList.length > 0 && (
@@ -307,7 +366,7 @@ export default function SearchSidebar({ entranceOn, onAiQuery } = {}) {
                         {historyList.map((h) => (
                           <li
                             key={h.id}
-                            onClick={() => runQuery(h.query)}
+                            onClick={() => runQuery(h.query, h)}
                             className="group flex items-center gap-2 rounded-lg px-2 py-1.5 cursor-pointer hover:bg-violet-500/10 transition-all"
                           >
                             <span className="material-symbols-outlined text-neutral-500 text-sm shrink-0">history</span>
@@ -351,7 +410,7 @@ export default function SearchSidebar({ entranceOn, onAiQuery } = {}) {
               </div>
 
               {/* Data button + Settings button (same row) */}
-              <div className="mb-8 flex items-center gap-2">
+              <div className="mb-3 flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => navigate('/settings')}
@@ -373,6 +432,19 @@ export default function SearchSidebar({ entranceOn, onAiQuery } = {}) {
                   <span className="font-manrope uppercase tracking-[0.03em] text-sm whitespace-nowrap">데이터</span>
                 </button>
               </div>
+
+              {/* [v3 chat] AIMODE 새 대화 버튼 — AI 페이지일 때만 노출 */}
+              {aiPath && onAiNewChat && (
+                <button
+                  type="button"
+                  onClick={onAiNewChat}
+                  className="mb-5 flex w-full items-center justify-center gap-2 rounded-xl border border-violet-400/40 bg-gradient-to-r from-violet-500/25 to-fuchsia-500/20 px-3 py-2.5 text-violet-50 font-semibold hover:from-violet-500/40 hover:to-fuchsia-500/35 hover:border-violet-300/60 transition-all"
+                  title="새 대화 시작"
+                >
+                  <span className="material-symbols-outlined text-base">edit_square</span>
+                  <span className="font-manrope tracking-[0.02em] text-sm">새 대화</span>
+                </button>
+              )}
 
               {/* 검색 기록 섹션 */}
               <div className="flex-1 overflow-y-auto min-h-0">
@@ -401,7 +473,7 @@ export default function SearchSidebar({ entranceOn, onAiQuery } = {}) {
                     {historyList.map((h) => (
                       <li
                         key={h.id}
-                        onClick={() => runQuery(h.query)}
+                        onClick={() => runQuery(h.query, h)}
                         className="group flex items-center gap-2 px-2 py-2 rounded-xl cursor-pointer hover:bg-primary/8 transition-all"
                       >
                         <span className="material-symbols-outlined text-on-surface-variant/30 text-base shrink-0">history</span>
