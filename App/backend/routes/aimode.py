@@ -185,29 +185,22 @@ def _is_supported_gemma_model(name: str) -> bool:
 def _get_ollama_model(task: str | None = None) -> str | None:
     """설치된 Ollama 모델 중 태스크에 맞는 최적 모델 반환.
 
-    task="summarize" : VRAM 절약 최우선 — qwen2.5:3b(1.9GB)는 임베더와 공존 가능 → GPU 추론.
-    task="generate"  : 품질 우선 — gemma3:4b-it-qat(QAT) → 4b → qwen2.5:3b.
-    task=None        : intent/router — 소형 모델 우선 (qwen2.5:3b 최우선).
+    허용 모델: qwen2.5:1.5b / qwen2.5:3b / gemma3:4b / gemma3:4b-it-qat / gemma3:12b
+    한국어 품질·VRAM 미검증 모델(llama3, mistral, phi4 등)은 fallback 에서 제외.
+
+    모든 태스크에서 gemma3:4b-it-qat(QAT) 최우선 — 품질 일관성 유지.
+    task="summarize" : gemma3:4b-it-qat → gemma3:4b → qwen2.5:3b → qwen2.5:1.5b → gemma3:12b
+    task="generate"  : gemma3:4b-it-qat → gemma3:4b → qwen2.5:3b → qwen2.5:1.5b → gemma3:12b
+    task=None        : gemma3:4b-it-qat → gemma3:4b → qwen2.5:3b → qwen2.5:1.5b → gemma3:12b
     """
     try:
         r = _req.get(f"{OLLAMA_URL}/api/tags", timeout=3)
         models = r.json().get("models", [])
-        if task == "summarize":
-            # VRAM 여유 ~3.6 GB 기준:
-            # qwen2.5:3b (1.9 GB) → 공존 가능, GPU 추론, 빠름 ✅
-            # gemma3:4b-it-qat (4.0 GB) → 초과, CPU 강제, 느림 ✗
-            preferred = ["qwen2.5:3b", "qwen2.5:1.5b", "gemma3:4b",
-                         "gemma3:4b-it-qat", "gemma3:12b"]
-        elif task == "generate":
-            # 답변 생성: QAT 우선(품질↑) → 일반 4b → 12b(VRAM 부족 시 CPU 강제)
-            preferred = ["gemma3:4b-it-qat", "gemma3:4b", "qwen2.5:3b", "qwen2.5:1.5b",
-                         "gemma3:12b", "qwen2.5", "llama3.2", "llama3", "mistral", "phi4"]
-        else:
-            # [GPU 최적화] intent/router: 소형 모델 우선.
-            # qwen2.5:3b(1.9GB)는 임베딩 모델과 VRAM 공존 가능 → keep_alive=300으로
-            # 세션 내 재로드 없이 즉시 추론. gemma3:12b(8.1GB)는 임베딩과 공존 불가.
-            preferred = ["qwen2.5:3b", "qwen2.5:1.5b", "gemma3:4b-it-qat", "gemma3:4b",
-                         "gemma3:12b", "qwen2.5", "llama3.2", "llama3", "mistral", "phi4"]
+        # 모든 태스크: gemma3:4b-it-qat(QAT, 4.2GB) 최우선.
+        # VRAM 부족 시 gemma3:4b(3.5GB) → qwen2.5:3b(2.0GB) 순으로 강등.
+        # 미검증 모델(llama3, mistral, phi4 등) 제외 — 한국어 품질·VRAM 보장 불가.
+        preferred = ["gemma3:4b-it-qat", "gemma3:4b", "qwen2.5:3b", "qwen2.5:1.5b",
+                     "gemma3:12b"]
         for pref in preferred:
             for m in models:
                 name = m.get("name", "").lower()

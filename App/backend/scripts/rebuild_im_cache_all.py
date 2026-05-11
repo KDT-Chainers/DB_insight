@@ -36,17 +36,19 @@ JSONL_PATH  = IMG_CACHE / "captions_triple.jsonl"
 DOC_IDS     = DOC_CACHE / "doc_page_ids.json"
 IMG_IDS     = IMG_CACHE / "img_ids.json"
 
-BATCH_SIZE  = 64   # BGE-M3 RTX 4070 8GB 최적
+BATCH_SIZE  = 128  # BGE-M3 RTX 4070 Laptop 8GB FP16 최적 (GPU 포화)
 
 
 def _load_bgem3():
-    """BGE-M3 로드 (FlagEmbedding)."""
+    """BGE-M3 로드 (FlagEmbedding) — GPU(CUDA) 우선."""
     from FlagEmbedding import BGEM3FlagModel
-    print("[bgem3] 모델 로드 중 (BAAI/bge-m3)...", flush=True)
+    import torch
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"[bgem3] 모델 로드 중 (BAAI/bge-m3) device={device}...", flush=True)
     model = BGEM3FlagModel(
         "BAAI/bge-m3",
         use_fp16=True,
-        devices=["cuda"],
+        devices=[device],
     )
     print("[bgem3] 로드 완료", flush=True)
     return model
@@ -54,7 +56,7 @@ def _load_bgem3():
 
 def _encode(model, texts: list[str], desc: str = "") -> np.ndarray:
     """BGE-M3 dense encode → (N, 1024) float32."""
-    print(f"  [{desc}] {len(texts)}건 인코딩...", flush=True)
+    print(f"  [{desc}] {len(texts)}건 인코딩 (batch={BATCH_SIZE})...", flush=True)
     t0 = time.time()
     out = model.encode(
         texts,

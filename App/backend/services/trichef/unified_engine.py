@@ -323,7 +323,8 @@ class TriChefEngine:
         # doc_page: Im alpha=0.8 — crossmodal 재캘리브레이션(2026-05-10) 기준.
         # threshold=0.3724 (alpha=0.8, Im_body fusion DOC_IM_ALPHA=0.20 반영).
         _im_alpha = float(TRICHEF_CFG.get("SEARCH_IM_ALPHA_DOC", 0.8)) \
-            if domain == "doc_page" else 0.4
+            if domain == "doc_page" \
+            else float(TRICHEF_CFG.get("SEARCH_IM_ALPHA_IMG", 0.45))  # [v22.1] 0.4→0.45: BGE-M3 L1/L2/L3 Im 기여 확대
         dense_scores = tri_gs.hermitian_score(
             q_Re[None, :], q_Im[None, :], q_Z[None, :],
             d["Re"], d["Im"], d["Z"],
