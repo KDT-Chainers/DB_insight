@@ -42,5 +42,35 @@ CREATE TABLE IF NOT EXISTS search_history (
     result_count INTEGER,
     searched_at  TEXT NOT NULL
 );
+
+-- [v3 aimode] 채팅방 메타데이터.
+-- thread_id = LangGraph thread + AIMODE 채팅방 식별자.
+CREATE TABLE IF NOT EXISTS aimode_threads (
+    thread_id   TEXT PRIMARY KEY,
+    title       TEXT NOT NULL DEFAULT '새 대화',
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL,
+    msg_count   INTEGER NOT NULL DEFAULT 0,
+    first_query TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_aimode_threads_updated
+    ON aimode_threads(updated_at DESC);
+
+-- [v3 aimode] 채팅 메시지 누적 저장 — sidebar 클릭 시 history 복원에 사용.
+-- _fallback_history 는 in-memory 라 백엔드 재시작 시 휘발 → SQLite 영속.
+CREATE TABLE IF NOT EXISTS aimode_messages (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    thread_id  TEXT NOT NULL,
+    role       TEXT NOT NULL,         -- 'user' | 'assistant'
+    content    TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    -- 답변 메타 (옵션) — turn 복원 시 references / sources 도 같이 표시 가능
+    extra      TEXT,                  -- JSON: {sources, references, ...}
+    FOREIGN KEY (thread_id) REFERENCES aimode_threads(thread_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_aimode_messages_thread
+    ON aimode_messages(thread_id, id);
 """
         )

@@ -1,806 +1,1186 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>AIMODE LangGraph 파이프라인 설명</title>
+<meta charset="UTF-8">
+<title>AIMODE · LangGraph Pipeline</title>
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
-    --bg:       #08050f;
-    --card:     #110c1f;
-    --border:   rgba(139,92,246,0.22);
-    --purple:   #8b5cf6;
-    --purple-l: #a78bfa;
-    --purple-d: #6d28d9;
-    --green:    #10b981;
-    --teal:     #06b6d4;
-    --yellow:   #eab308;
-    --red:      #ef4444;
-    --text:     #e2e8f0;
-    --muted:    #94a3b8;
-    --dim:      #475569;
+    --bg-0:#05050a; --bg-1:#0a0814; --bg-2:#120a26;
+    --card:rgba(10,6,24,0.78);
+    --border:rgba(139,92,246,0.22);
+    --border-strong:rgba(167,139,250,0.45);
+    --text:#f1f5f9; --text-soft:#e5e7eb; --muted:rgba(196,181,253,0.65);
+    --accent:#a78bfa; --accent-light:#c4b5fd; --accent-deep:#7c3aed;
+    --fuchsia:#d946ef; --emerald:#10b981; --rose:#f87171; --amber:#fbbf24;
+    --code-bg:rgba(0,0,0,0.45);
+    --code-border:rgba(139,92,246,0.18);
   }
-  body {
-    background: var(--bg);
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100vh; width: 100vw; overflow: hidden;
+    background: radial-gradient(ellipse at 20% 10%, #1a0f3a 0%, var(--bg-0) 55%, #03020a 100%);
     color: var(--text);
-    font-family: 'Pretendard', 'Noto Sans KR', system-ui, sans-serif;
-    font-size: 15px;
-    line-height: 1.7;
-    padding: 40px 24px 80px;
-    max-width: 960px;
-    margin: 0 auto;
+    font-family: "Pretendard", "Segoe UI", "Malgun Gothic", -apple-system, BlinkMacSystemFont, sans-serif;
+    letter-spacing: -0.01em;
+  }
+  .deck { position: relative; width: 100vw; height: 100vh; }
+  .slide {
+    position: absolute; inset: 0;
+    padding: 56px 72px 80px;
+    display: none;
+    flex-direction: column;
+    animation: fadein 0.32s ease-out;
+    overflow-y: auto;
+  }
+  .slide.active { display: flex; }
+  @keyframes fadein { from { opacity: 0; transform: translateY(8px);} to { opacity: 1; transform: none;} }
+
+  .kicker {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--accent-light);
+    padding: 5px 11px; border-radius: 999px;
+    background: rgba(139,92,246,0.10); border: 1px solid var(--border);
+    align-self: flex-start;
+    margin-bottom: 16px;
+  }
+  .kicker .dot { width:5px; height:5px; border-radius:50%; background: var(--accent); }
+
+  h1.title {
+    font-size: 44px; font-weight: 800; margin: 0 0 6px;
+    background: linear-gradient(135deg, #f5f3ff 0%, var(--accent-light) 60%, var(--fuchsia) 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    line-height: 1.18; letter-spacing: -0.025em;
+  }
+  h1.title.big { font-size: 80px; line-height: 1.05; }
+  p.lead {
+    font-size: 18px; line-height: 1.65; color: var(--text-soft); margin: 10px 0 28px; max-width: 1080px;
   }
 
-  /* ── 타이틀 ── */
-  .hero {
-    text-align: center;
-    padding: 48px 0 40px;
-    border-bottom: 1px solid var(--border);
-    margin-bottom: 48px;
-  }
-  .hero-badge {
-    display: inline-block;
-    background: rgba(139,92,246,0.15);
-    border: 1px solid var(--border);
-    color: var(--purple-l);
-    font-size: 11px;
-    font-weight: 800;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    padding: 4px 14px;
-    border-radius: 999px;
-    margin-bottom: 18px;
-  }
-  .hero h1 {
-    font-size: 34px;
-    font-weight: 800;
-    background: linear-gradient(135deg, #c4b5fd, #8b5cf6, #4f46e5);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    margin-bottom: 12px;
-  }
-  .hero p { color: var(--muted); font-size: 15px; max-width: 600px; margin: 0 auto; }
-
-  /* ── 섹션 ── */
-  h2 {
-    font-size: 21px;
-    font-weight: 800;
-    color: var(--purple-l);
-    margin-bottom: 20px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-  h2 .num {
-    width: 28px; height: 28px;
-    background: linear-gradient(135deg, var(--purple-d), var(--purple));
-    border-radius: 8px;
-    display: inline-flex; align-items: center; justify-content: center;
-    font-size: 13px; font-weight: 900; color: #fff; flex-shrink: 0;
-  }
-  h3 { font-size: 16px; font-weight: 700; color: #c4b5fd; margin-bottom: 10px; }
-
-  section { margin-bottom: 56px; }
-
-  /* ── 카드 ── */
+  .grid { display: grid; gap: 18px; margin-top: 8px; }
+  .grid.cols-2 { grid-template-columns: 1fr 1fr; }
+  .grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+  .grid.cols-4 { grid-template-columns: repeat(4, 1fr); }
   .card {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    padding: 22px 24px;
-    margin-bottom: 14px;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 14px; padding: 20px 22px;
+    backdrop-filter: blur(10px) saturate(1.04);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 14px 36px rgba(6,3,15,0.4);
   }
-  .card-row { display: flex; gap: 14px; flex-wrap: wrap; }
-  .card-half { flex: 1; min-width: 240px; }
+  .card.accent { border-color: var(--border-strong); background: linear-gradient(135deg, rgba(139,92,246,0.10), rgba(217,70,239,0.06)); }
+  .card.danger { border-color: rgba(248,113,113,0.35); background: rgba(248,113,113,0.06); }
+  .card.success { border-color: rgba(16,185,129,0.35); background: rgba(16,185,129,0.05); }
+  .card h3 {
+    margin: 0 0 10px; font-size: 16px; font-weight: 700; color: var(--accent-light);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .card h3 .num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 24px; height: 24px; border-radius: 7px;
+    background: linear-gradient(135deg, var(--accent-deep), var(--fuchsia));
+    color: white; font-size: 12px; font-weight: 800;
+  }
+  .card p { margin: 0; font-size: 14px; line-height: 1.7; color: var(--text-soft); }
+  .card ul { margin: 4px 0 0; padding-left: 20px; }
+  .card li { font-size: 14px; line-height: 1.85; color: var(--text-soft); margin-bottom: 3px; }
+  .card li strong { color: #f5f3ff; }
 
-  /* ── 파이프라인 플로우 ── */
-  .pipeline {
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-    position: relative;
-  }
-  .node {
-    display: flex;
-    align-items: flex-start;
-    gap: 18px;
-    position: relative;
-    padding-bottom: 0;
-  }
-  .node-left {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    flex-shrink: 0;
-    width: 52px;
-  }
-  .node-icon {
-    width: 52px; height: 52px;
-    border-radius: 14px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 22px;
-    position: relative;
-    z-index: 1;
-    border: 2px solid transparent;
-    flex-shrink: 0;
-  }
-  .node-line {
-    width: 2px;
-    flex: 1;
-    min-height: 28px;
-    background: linear-gradient(to bottom, rgba(139,92,246,0.4), rgba(139,92,246,0.1));
-    margin-top: 0;
-  }
-  .node-body {
-    flex: 1;
-    padding-bottom: 28px;
-  }
-  .node-title {
-    font-size: 17px;
-    font-weight: 800;
-    margin-bottom: 4px;
-  }
-  .node-sub {
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    margin-bottom: 10px;
-    opacity: 0.7;
-  }
-  .node-desc { color: var(--muted); font-size: 14px; line-height: 1.75; }
-  .node-desc strong { color: var(--text); font-weight: 700; }
+  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 10px; }
 
-  /* ── SSE 뱃지 ── */
-  .sse-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-  .sse { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; }
-  .sse-purple { background: rgba(139,92,246,0.15); color: var(--purple-l); border: 1px solid rgba(139,92,246,0.3); }
-  .sse-green  { background: rgba(16,185,129,0.12); color: #34d399; border: 1px solid rgba(16,185,129,0.25); }
-  .sse-teal   { background: rgba(6,182,212,0.12); color: #67e8f9; border: 1px solid rgba(6,182,212,0.25); }
-  .sse-yellow { background: rgba(234,179,8,0.12); color: #fde68a; border: 1px solid rgba(234,179,8,0.25); }
-  .sse-red    { background: rgba(239,68,68,0.1); color: #fca5a5; border: 1px solid rgba(239,68,68,0.2); }
-
-  /* ── 노드 색상 테마 ── */
-  .n-router  .node-icon { background: rgba(99,102,241,0.15); border-color: rgba(99,102,241,0.35); }
-  .n-intent  .node-icon { background: rgba(139,92,246,0.15); border-color: rgba(139,92,246,0.35); }
-  .n-search  .node-icon { background: rgba(6,182,212,0.12); border-color: rgba(6,182,212,0.3); }
-  .n-scan    .node-icon { background: rgba(16,185,129,0.12); border-color: rgba(16,185,129,0.3); }
-  .n-select  .node-icon { background: rgba(234,179,8,0.12); border-color: rgba(234,179,8,0.3); }
-  .n-generate .node-icon { background: rgba(168,85,247,0.15); border-color: rgba(168,85,247,0.4); }
-
-  /* ── 코드 블록 ── */
-  pre {
-    background: rgba(0,0,0,0.4);
-    border: 1px solid rgba(139,92,246,0.15);
-    border-radius: 10px;
-    padding: 16px 18px;
-    font-size: 12.5px;
-    color: #c4b5fd;
-    overflow-x: auto;
-    font-family: 'Fira Code', 'Cascadia Code', monospace;
-    margin: 12px 0;
-    line-height: 1.7;
+  pre.code {
+    background: var(--code-bg); border: 1px solid var(--code-border);
+    border-radius: 10px; padding: 13px 16px; margin: 8px 0 0;
+    font-family: "Consolas", "Cascadia Code", "Menlo", monospace;
+    font-size: 12.5px; line-height: 1.7; color: #e5d4ff;
+    overflow: auto;
   }
-  code { color: #a5f3fc; font-family: inherit; }
+  pre.code .kw { color: #c084fc; font-weight: 700; }
+  pre.code .str { color: #fcd34d; }
+  pre.code .com { color: #6b7280; font-style: italic; }
+  pre.code .fn { color: #93c5fd; }
+  pre.code .num { color: #fda4af; }
 
-  /* ── 인포 박스 ── */
-  .info-box {
-    padding: 14px 18px;
-    border-radius: 10px;
-    font-size: 14px;
-    line-height: 1.75;
-    margin-bottom: 12px;
+  .state {
+    margin-top: 10px;
+    font-family: "Consolas", monospace; font-size: 13px;
+    background: var(--code-bg); border: 1px solid var(--code-border);
+    border-radius: 10px; padding: 14px 18px;
   }
-  .info-purple { background: rgba(139,92,246,0.08); border: 1px solid rgba(139,92,246,0.2); color: #c4b5fd; }
-  .info-green  { background: rgba(16,185,129,0.07); border: 1px solid rgba(16,185,129,0.2); color: #a7f3d0; }
-  .info-yellow { background: rgba(234,179,8,0.07); border: 1px solid rgba(234,179,8,0.2); color: #fde68a; }
-  .info-red    { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2); color: #fca5a5; }
+  .state .k { color: var(--accent-light); font-weight: 700; }
+  .state .v { color: #fef9c3; }
+  .state .v.str { color: #fcd34d; }
+  .state .row { display: flex; gap: 10px; align-items: baseline; padding: 2px 0; }
+  .state .row .k { min-width: 130px; }
 
-  /* ── 테이블 ── */
-  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
-  th {
-    text-align: left; padding: 9px 12px;
-    background: rgba(139,92,246,0.1);
-    color: var(--purple-l); font-weight: 700; font-size: 11px;
-    letter-spacing: 0.07em; text-transform: uppercase;
-    border-bottom: 1px solid var(--border);
+  .sse {
+    margin-top: 12px; padding: 9px 14px;
+    border-left: 3px solid var(--emerald);
+    background: rgba(16,185,129,0.06);
+    font-family: monospace; font-size: 12.5px; color: #a7f3d0;
+    border-radius: 0 8px 8px 0;
   }
-  td { padding: 10px 12px; border-bottom: 1px solid rgba(139,92,246,0.08); color: var(--muted); }
-  tr:last-child td { border-bottom: none; }
-  td:first-child { color: var(--text); font-weight: 600; }
-  .ok   { color: #10b981; font-weight: 700; }
-  .warn { color: #eab308; font-weight: 700; }
-  .bad  { color: #f87171; font-weight: 700; }
-
-  /* ── 라우터 분기 다이어그램 ── */
-  .branches { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
-  .branch {
-    flex: 1; min-width: 180px;
-    border-radius: 10px; padding: 14px 16px;
-    font-size: 13px;
+  .sse-label {
+    color: var(--emerald); font-weight: 800; letter-spacing: 0.12em;
+    text-transform: uppercase; font-size: 10px; display: block; margin-bottom: 4px;
   }
-  .branch-title { font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 6px; }
-  .branch-rag    { background: rgba(139,92,246,0.1); border: 1px solid rgba(139,92,246,0.25); }
-  .branch-chat   { background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.22); }
-  .branch-follow { background: rgba(6,182,212,0.08); border: 1px solid rgba(6,182,212,0.22); }
-  .branch-qa     { background: rgba(234,179,8,0.08); border: 1px solid rgba(234,179,8,0.22); }
-  .branch-rag    .branch-title { color: var(--purple-l); }
-  .branch-chat   .branch-title { color: #34d399; }
-  .branch-follow .branch-title { color: #67e8f9; }
-  .branch-qa     .branch-title { color: #fde68a; }
 
-  /* ── 키팩트 흐름 ── */
-  .kf-flow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
-  .kf-box {
-    padding: 8px 14px; border-radius: 8px; font-size: 13px; font-weight: 600;
-    border: 1px solid; text-align: center;
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px; border-radius: 999px;
+    background: rgba(139,92,246,0.15); border: 1px solid var(--border);
+    font-size: 12px; font-weight: 700; color: var(--accent-light);
+    margin-right: 6px;
   }
-  .kf-arrow { color: var(--dim); font-size: 18px; flex-shrink: 0; }
 
-  /* ── 왜? 박스 ── */
-  .why-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  @media (max-width: 600px) { .why-grid { grid-template-columns: 1fr; } }
-  .why-item {
-    background: rgba(0,0,0,0.3);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 16px;
+  .footer {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    padding: 18px 72px;
+    display: flex; align-items: center; gap: 18px;
+    color: var(--muted); font-size: 12px;
+    pointer-events: none;
   }
-  .why-icon { font-size: 22px; margin-bottom: 8px; }
-  .why-title { font-size: 14px; font-weight: 700; color: var(--purple-l); margin-bottom: 6px; }
-  .why-desc { font-size: 13px; color: var(--muted); line-height: 1.7; }
+  .progress { flex: 1; height: 3px; background: rgba(139,92,246,0.10); border-radius: 999px; overflow: hidden; }
+  .progress .bar { height: 100%; background: linear-gradient(90deg, var(--accent-deep), var(--fuchsia)); transition: width 0.3s; }
+  .counter { font-family: monospace; font-weight: 700; color: var(--accent-light); }
 
-  /* ── UI 이벤트 타임라인 ── */
-  .timeline { position: relative; padding-left: 24px; }
-  .timeline::before { content:''; position:absolute; left:8px; top:0; bottom:0; width:2px; background: linear-gradient(to bottom, var(--purple), rgba(139,92,246,0.1)); }
-  .tl-item { position: relative; margin-bottom: 18px; }
-  .tl-dot {
-    position: absolute; left: -20px; top: 6px;
-    width: 10px; height: 10px; border-radius: 50%;
-    background: var(--purple); border: 2px solid var(--bg);
+  .nav-zone {
+    position: absolute; top: 0; bottom: 0; width: 16%;
+    cursor: pointer; z-index: 5;
   }
-  .tl-label { font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--purple-l); margin-bottom: 3px; }
-  .tl-desc { font-size: 13.5px; color: var(--muted); line-height: 1.65; }
-  .tl-desc strong { color: var(--text); }
+  .nav-zone.prev { left: 0; }
+  .nav-zone.next { right: 0; }
 
-  hr { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
-  .tag {
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 14px; font-size: 12px; color: var(--muted); }
+  .legend .item { display: inline-flex; align-items: center; gap: 6px; }
+  .legend .item .sw { width: 14px; height: 4px; border-radius: 2px; }
+
+  .userq {
     display: inline-block;
-    background: rgba(139,92,246,0.12); color: var(--purple-l);
-    border: 1px solid rgba(139,92,246,0.2);
-    font-size: 11px; font-weight: 700;
-    padding: 2px 8px; border-radius: 5px; margin: 0 2px;
+    background: linear-gradient(135deg, rgba(91,33,182,0.58), rgba(109,40,217,0.50), rgba(124,58,237,0.56));
+    border: 1px solid rgba(196,181,253,0.32);
+    border-radius: 18px 18px 6px 18px;
+    padding: 14px 22px; font-size: 17px; font-weight: 600; color: #f5f3ff;
+    box-shadow: 0 10px 28px rgba(76,29,149,0.3), inset 0 1px 0 rgba(255,255,255,0.18);
+    margin-bottom: 16px;
+  }
+  .userq small { display: block; font-size: 10px; font-weight: 800; letter-spacing: 0.16em; color: var(--accent-light); margin-bottom: 4px; text-transform: uppercase; }
+
+  .node-banner {
+    display: flex; align-items: center; gap: 16px;
+    padding: 14px 20px;
+    background: linear-gradient(135deg, rgba(139,92,246,0.16), rgba(217,70,239,0.10));
+    border: 1px solid var(--border-strong);
+    border-radius: 14px; margin-bottom: 14px;
+  }
+  .node-banner .badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 44px; height: 44px; border-radius: 12px;
+    background: linear-gradient(135deg, var(--accent-deep), var(--fuchsia));
+    font-weight: 800; color: white; font-size: 18px;
+  }
+  .node-banner .name { font-size: 22px; font-weight: 800; color: #f5f3ff; }
+  .node-banner .desc { font-size: 13px; color: var(--muted); margin-top: 2px; }
+
+  .center {
+    flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;
+  }
+  .center .badge-big {
+    width: 76px; height: 76px; border-radius: 22px;
+    background: linear-gradient(135deg, var(--accent-deep), var(--fuchsia));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 32px; margin-bottom: 18px;
+    box-shadow: 0 18px 50px rgba(124,58,237,0.45);
+  }
+  .center .sub { font-size: 16px; color: var(--muted); margin-top: 4px; }
+
+  .gnode { fill: rgba(15,9,32,0.92); stroke: var(--accent); stroke-width: 1.4; }
+  .gnode.rag { stroke: var(--accent-light); }
+  .gnode.followup { stroke: var(--fuchsia); }
+  .gnode.terminal { stroke: var(--emerald); fill: rgba(16,185,129,0.10); }
+  .glabel { fill: #f5f3ff; font-family: monospace; font-size: 12px; font-weight: 700; text-anchor: middle; }
+  .gsub { fill: rgba(196,181,253,0.65); font-size: 10px; text-anchor: middle; }
+  .gedge { stroke: rgba(167,139,250,0.55); stroke-width: 1.4; fill: none; marker-end: url(#arrow); }
+  .gedge.struct { stroke: rgba(96,165,250,0.7); }
+  .gedge.open   { stroke: rgba(251,191,36,0.7); }
+  .gedge.flow   { stroke: rgba(196,181,253,0.45); }
+  .gedge.fallback { stroke: rgba(248,113,113,0.7); stroke-dasharray: 5 4; }
+  .gedge.followup { stroke: rgba(217,70,239,0.7); }
+  .gedgelabel { fill: var(--accent-light); font-size: 10.5px; font-weight: 700; text-anchor: middle; font-family: monospace; }
+
+  .flowbox {
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 10px 16px; border-radius: 10px; font-weight: 700; font-size: 13px;
+    background: rgba(15,9,32,0.85); border: 1px solid var(--border); color: var(--accent-light);
+    min-width: 110px; text-align: center;
+  }
+  .flow-arrow { color: var(--accent); font-size: 18px; padding: 0 4px; }
+  .flow-row { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; justify-content: center; }
+
+  .xmark .x { color: var(--rose); font-weight: 800; font-size: 16px; margin-right: 4px; }
+
+  .hint {
+    position: absolute; right: 24px; bottom: 56px;
+    padding: 7px 13px; border-radius: 999px;
+    background: rgba(15,9,32,0.7); border: 1px solid var(--border);
+    color: var(--muted); font-size: 11px; font-family: monospace;
+    z-index: 100;
+  }
+  .hint kbd {
+    display: inline-block; padding: 1px 6px;
+    background: rgba(139,92,246,0.15); border: 1px solid var(--border);
+    border-radius: 4px; font-size: 10.5px; color: var(--accent-light); margin: 0 2px;
   }
 </style>
 </head>
 <body>
+<div class="deck" id="deck">
 
-<!-- ══════════ HERO ══════════ -->
-<div class="hero">
-  <div class="hero-badge">AIMODE · LangGraph RAG Pipeline</div>
-  <h1>AIMODE 파이프라인 완전 해설</h1>
-  <p>질문 하나가 들어왔을 때, 내부에서 어떤 일이 일어나는지 단계별로 설명합니다.</p>
+<!-- 01 COVER -->
+<section class="slide active">
+  <div class="center">
+    <div class="badge-big">🌀</div>
+    <h1 class="title big">AIMODE</h1>
+    <p class="lead" style="font-size:20px; max-width:720px;">
+      <strong>LangGraph</strong> 기반 RAG 파이프라인 — DB_insight v3
+    </p>
+    <div class="sub">
+      <span class="pill">router</span>
+      <span class="pill">intent</span>
+      <span class="pill">search · scan · select</span>
+      <span class="pill">extract</span>
+      <span class="pill">generate</span>
+    </div>
+    <p class="sub" style="margin-top:32px; font-size:13px; opacity:0.7;">
+      ← / → 또는 Space 키로 슬라이드 이동
+    </p>
+  </div>
+</section>
+
+<!-- 02 문제정의 -->
+<section class="slide">
+  <div class="kicker"><span class="dot"></span> 01 · 문제정의</div>
+  <h1 class="title">우리가 풀려고 하는 문제</h1>
+  <p class="lead">
+    일반모드와 AIMODE 는 사용자가 시스템에 기대하는 것 자체가 다릅니다.
+    AIMODE 는 단순 검색이 아니라 <strong>로컬 DB 위에서 사용자의 질문에 답을 만들어내는 일</strong> 입니다.
+  </p>
+
+  <div class="compare">
+    <div class="card">
+      <h3 style="color:#93c5fd"><span class="num" style="background:linear-gradient(135deg,#1e40af,#3b82f6)">M</span> 일반모드 (MainSearch)</h3>
+      <p style="margin-bottom:10px;"><strong>"이 파일 어디 있어?"</strong></p>
+      <ul>
+        <li><strong>파일·이미지·동영상</strong> 위치 찾기</li>
+        <li>쿼리 ↔ 메타데이터 매칭 (BGE-M3 / SigLIP2 / CLAP)</li>
+        <li>검색 결과 = <strong>파일 카드 리스트</strong></li>
+        <li>최종 산출물: 사용자가 직접 파일 열어봄</li>
+      </ul>
+    </div>
+    <div class="card accent">
+      <h3><span class="num">A</span> AIMODE</h3>
+      <p style="margin-bottom:10px;"><strong>"그래서 결론이 뭐야?"</strong></p>
+      <ul>
+        <li>로컬 DB 의 <strong>문서 내용 자체</strong>를 읽음</li>
+        <li>여러 페이지를 모아 <strong>답변을 합성</strong></li>
+        <li>검색 결과 = <strong>완성된 한국어 답변 + 인용</strong></li>
+        <li>최종 산출물: 답 자체. 사용자는 출처만 검증</li>
+      </ul>
+    </div>
+  </div>
+
+  <p class="lead" style="margin-top:24px; font-size:15px; color:var(--muted);">
+    → AIMODE 는 검색이 아니라 <strong style="color:var(--accent-light)">합성(synthesis)</strong> 의 영역. 단순 함수 한 줄로 풀리지 않습니다.
+  </p>
+</section>
+
+<!-- 03 NAIVE RAG 한계 -->
+<section class="slide">
+  <div class="kicker"><span class="dot"></span> 02 · 비교군</div>
+  <h1 class="title">Naive RAG 로는 안 되는 이유</h1>
+  <p class="lead">교과서적 RAG 는 단방향 직선 흐름입니다. 사용자가 실제로 던지는 다양한 질문 패턴을 받아낼 수 없습니다.</p>
+
+  <div class="card" style="text-align:center; padding:24px;">
+    <h3 style="justify-content:center; color:var(--rose); margin-bottom:18px;">교과서적 Naive RAG</h3>
+    <div class="flow-row">
+      <div class="flowbox">사용자 질문</div>
+      <span class="flow-arrow">→</span>
+      <div class="flowbox">벡터 검색<br><small style="opacity:0.65; font-weight:400;">top-K</small></div>
+      <span class="flow-arrow">→</span>
+      <div class="flowbox">컨텍스트<br>concat</div>
+      <span class="flow-arrow">→</span>
+      <div class="flowbox">LLM<br><small style="opacity:0.65; font-weight:400;">한 방 prompt</small></div>
+      <span class="flow-arrow">→</span>
+      <div class="flowbox">답변</div>
+    </div>
+  </div>
+
+  <div class="grid cols-3" style="margin-top:24px;">
+    <div class="card danger">
+      <h3 style="color:var(--rose);"><span class="xmark"><span class="x">✕</span></span>분기 없음</h3>
+      <p>잡담이든 문서 인용이든 후속 질문이든 <strong>모든 입력이 같은 경로</strong>. "안녕"에도 PDF 를 뒤짐.</p>
+    </div>
+    <div class="card danger">
+      <h3 style="color:var(--rose);"><span class="xmark"><span class="x">✕</span></span>후속 질문 불가</h3>
+      <p>"전년 대비는?" 같은 후속에서도 <strong>처음부터 다시 검색</strong>. 직전 turn 의 문서 컨텍스트는 버려짐.</p>
+    </div>
+    <div class="card danger">
+      <h3 style="color:var(--rose);"><span class="xmark"><span class="x">✕</span></span>페이지 단위 인용 불가</h3>
+      <p>문서 전체를 한 덩어리로만 매칭. <strong>"40페이지에 있다"</strong> 식 정확한 인용 위치를 줄 수 없음.</p>
+    </div>
+    <div class="card danger">
+      <h3 style="color:var(--rose);"><span class="xmark"><span class="x">✕</span></span>진행 표시 없음</h3>
+      <p>사용자는 그저 <strong>스피너 보고 기다림</strong>. 어디까지 진행됐는지, 어떤 파일을 보는지 알 수 없음.</p>
+    </div>
+    <div class="card danger">
+      <h3 style="color:var(--rose);"><span class="xmark"><span class="x">✕</span></span>폴백 없음</h3>
+      <p>매칭 실패해도 <strong>1순위 문서를 강제로 답하는</strong> 환각. "그건 모릅니다" 도 못 함.</p>
+    </div>
+    <div class="card danger">
+      <h3 style="color:var(--rose);"><span class="xmark"><span class="x">✕</span></span>상태 보관 어려움</h3>
+      <p>thread 단위 history, 직전 sources, references — <strong>매 호출마다 인자로 들고 다님</strong>. 함수 시그니처 폭발.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 04 왜 LangGraph -->
+<section class="slide">
+  <div class="kicker"><span class="dot"></span> 03 · 해결책</div>
+  <h1 class="title">그래서 LangGraph</h1>
+  <p class="lead">Naive RAG 가 못 풀던 문제는 결국 모두 <strong>"그래프 자료구조"</strong>의 부재. LangGraph 는 정확히 그 4가지 도구를 줍니다.</p>
+
+  <div class="grid cols-2">
+    <div class="card success">
+      <h3 style="color:var(--emerald);">① StateGraph — 노드 간 상태 자동 공유</h3>
+      <p>모든 노드가 <code style="color:#fcd34d">RAGState</code> 라는 dict 를 입력받고 일부 필드만 update 한 dict 를 반환. 함수 인자로 history·sources·references 를 들고 다닐 필요 없음.</p>
+<pre class="code"><span class="kw">class</span> <span class="fn">RAGState</span>(TypedDict):
+  question: <span class="kw">str</span>
+  history: <span class="kw">list</span>[<span class="kw">dict</span>]
+  candidates: <span class="kw">list</span>[<span class="kw">dict</span>]
+  matched_sources: <span class="kw">list</span>[<span class="kw">dict</span>]
+  references: <span class="kw">list</span>[<span class="kw">dict</span>]
+  answer: <span class="kw">str</span></pre>
+    </div>
+
+    <div class="card success">
+      <h3 style="color:var(--emerald);">② 조건부 엣지 — 질문 종류별 다른 경로</h3>
+      <p>한 줄로 <strong>분기 정의</strong>. 라우터·intent·followup 모두 다음 노드를 동적으로 선택.</p>
+<pre class="code">builder.add_conditional_edges(
+  <span class="str">"router"</span>, _route_edge,
+  {<span class="str">"rag"</span>: <span class="str">"intent"</span>,
+   <span class="str">"followup"</span>: <span class="str">"followup_intent"</span>})</pre>
+    </div>
+
+    <div class="card success">
+      <h3 style="color:var(--emerald);">③ MemorySaver — 후속 대화 자연 연결</h3>
+      <p><code style="color:#fcd34d">thread_id</code> 만 같으면 LangGraph 가 자동으로 직전 state 를 불러옴. 후속 질문에서 직전 sources / history 가 그대로 살아 있음.</p>
+<pre class="code">checkpointer = <span class="fn">MemorySaver</span>()
+graph.<span class="fn">compile</span>(checkpointer=checkpointer)
+<span class="com"># 이후 thread_id="t_abc" 로 재호출 시 state 복원</span></pre>
+    </div>
+
+    <div class="card success">
+      <h3 style="color:var(--emerald);">④ 노드 단위 SSE — 실시간 진행 표시</h3>
+      <p>각 노드가 진입 / 진행 / 완료 시점에 <strong>SSE 이벤트를 push</strong>. 프론트엔드는 단계별로 카드를 그려줌. 사용자가 "지금 뭐가 일어나는지" 알 수 있음.</p>
+<pre class="code">_emit({<span class="str">"type"</span>: <span class="str">"scanning"</span>,
+       <span class="str">"file_name"</span>: src.name,
+       <span class="str">"index"</span>: i})</pre>
+    </div>
+  </div>
+</section>
+
+<!-- 05 전체 그래프 -->
+<section class="slide">
+  <div class="kicker"><span class="dot"></span> 04 · 전체 그래프</div>
+  <h1 class="title">파이프라인 한눈에</h1>
+  <p class="lead">10 노드 + 1 폴백 마커. <span class="pill">RAG</span> <span class="pill" style="background:rgba(217,70,239,0.12); border-color:rgba(217,70,239,0.35); color:#f0abfc">FOLLOWUP</span> 2-route. 각 분기는 결국 <strong>extract → generate → END</strong> 로 수렴.</p>
+
+  <svg viewBox="0 0 1180 560" style="width:100%; max-height:60vh;">
+    <defs>
+      <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="rgba(167,139,250,0.85)"/>
+      </marker>
+    </defs>
+
+    <rect class="gnode terminal" x="520" y="14" width="140" height="38" rx="19"/>
+    <text class="glabel" x="590" y="38">START</text>
+
+    <rect class="gnode" x="510" y="90" width="160" height="48" rx="10"/>
+    <text class="glabel" x="590" y="112">router</text>
+    <text class="gsub" x="590" y="128">rag / followup 분류</text>
+
+    <rect class="gnode rag" x="310" y="190" width="160" height="48" rx="10"/>
+    <text class="glabel" x="390" y="212">intent</text>
+    <text class="gsub" x="390" y="228">structured / open + kw</text>
+
+    <rect class="gnode followup" x="730" y="190" width="180" height="48" rx="10"/>
+    <text class="glabel" x="820" y="212">followup_intent</text>
+    <text class="gsub" x="820" y="228">이전 sources 회수</text>
+
+    <rect class="gnode" x="110" y="290" width="140" height="42" rx="9"/>
+    <text class="glabel" x="180" y="316">search</text>
+
+    <rect class="gnode" x="430" y="290" width="160" height="42" rx="9"/>
+    <text class="glabel" x="510" y="312">fulltext_search</text>
+    <text class="gsub" x="510" y="326">open 모드</text>
+
+    <rect class="gnode followup" x="720" y="290" width="200" height="42" rx="9"/>
+    <text class="glabel" x="820" y="316">followup_search</text>
+
+    <rect class="gnode" x="110" y="358" width="140" height="38" rx="9"/>
+    <text class="glabel" x="180" y="382">scan</text>
+
+    <rect class="gnode" x="110" y="412" width="140" height="38" rx="9"/>
+    <text class="glabel" x="180" y="436">select</text>
+
+    <rect class="gnode" x="950" y="358" width="180" height="40" rx="9" style="stroke:rgba(248,113,113,0.6); fill:rgba(248,113,113,0.07);"/>
+    <text class="glabel" x="1040" y="383" style="fill:#fecaca">_fallback_marker</text>
+
+    <rect class="gnode" x="445" y="412" width="160" height="42" rx="9"/>
+    <text class="glabel" x="525" y="436">extract</text>
+
+    <rect class="gnode" x="640" y="412" width="160" height="42" rx="9"/>
+    <text class="glabel" x="720" y="436">generate</text>
+    <text class="gsub" x="720" y="450">streaming · save</text>
+
+    <rect class="gnode terminal" x="840" y="416" width="120" height="34" rx="17"/>
+    <text class="glabel" x="900" y="437">END</text>
+
+    <path class="gedge flow" d="M590,52 L590,90"/>
+    <path class="gedge" d="M540,138 Q420,165 390,190"/>
+    <path class="gedge followup" d="M640,138 Q780,165 820,190"/>
+    <text class="gedgelabel" x="450" y="165">rag</text>
+    <text class="gedgelabel" x="760" y="165">followup</text>
+
+    <path class="gedge struct" d="M340,238 Q220,265 180,290"/>
+    <path class="gedge open"   d="M450,238 Q490,260 510,290"/>
+    <text class="gedgelabel" x="240" y="270" style="fill:#93c5fd">structured</text>
+    <text class="gedgelabel" x="530" y="278" style="fill:#fcd34d">open</text>
+
+    <path class="gedge struct" d="M180,332 L180,358"/>
+    <path class="gedge struct" d="M180,396 L180,412"/>
+    <path class="gedge struct" d="M250,431 L445,431"/>
+
+    <path class="gedge open" d="M510,332 Q510,390 510,412"/>
+
+    <path class="gedge followup" d="M820,238 L820,290"/>
+
+    <path class="gedge followup" d="M780,332 Q700,400 605,425"/>
+    <path class="gedge fallback" d="M870,332 Q930,345 990,358"/>
+    <text class="gedgelabel" x="715" y="395" style="fill:#f0abfc">exist</text>
+    <text class="gedgelabel" x="945" y="350" style="fill:#fecaca">none</text>
+
+    <path class="gedge fallback" d="M950,378 C700,200 500,90 470,200" />
+    <text class="gedgelabel" x="700" y="100" style="fill:#fecaca">fallback → intent (RAG 사이클)</text>
+
+    <path class="gedge" d="M605,433 L640,433"/>
+    <path class="gedge" d="M800,433 L840,433"/>
+  </svg>
+
+  <div class="legend">
+    <div class="item"><span class="sw" style="background:rgba(96,165,250,0.7)"></span> structured 경로</div>
+    <div class="item"><span class="sw" style="background:rgba(251,191,36,0.7)"></span> open 경로</div>
+    <div class="item"><span class="sw" style="background:rgba(217,70,239,0.7)"></span> followup 경로</div>
+    <div class="item"><span class="sw" style="background:rgba(248,113,113,0.8)"></span> 폴백 사이클</div>
+  </div>
+</section>
+
+<!-- 06 시나리오 1턴 시작 -->
+<section class="slide">
+  <div class="kicker"><span class="dot"></span> 05 · 시나리오 — 1턴</div>
+  <h1 class="title">첫 질문이 들어왔다</h1>
+  <p class="lead">실제 1턴 질문으로 노드 흐름을 따라갑니다. 이 질문이 어떻게 변환·라우팅·매칭되는지 한 노드씩 추적.</p>
+
+  <div style="display:flex; justify-content:center; margin: 18px 0 24px;">
+    <div class="userq">
+      <small>USER · 1턴</small>
+      DBMS 시장 규모 얼마야?
+    </div>
+  </div>
+
+  <div class="card accent" style="max-width:780px; margin: 0 auto;">
+    <h3>📋 RAGState 초기값</h3>
+    <div class="state">
+      <div class="row"><span class="k">question</span><span class="v str">"DBMS 시장 규모 얼마야?"</span></div>
+      <div class="row"><span class="k">thread_id</span><span class="v str">"t_1715501800_a3b"</span></div>
+      <div class="row"><span class="k">history</span><span class="v">[]&nbsp;&nbsp;<span style="color:var(--muted)"># 비어있음 → followup 불가</span></span></div>
+      <div class="row"><span class="k">model</span><span class="v str">"gemma3:4b-it-qat"</span></div>
+      <div class="row"><span class="k">candidates</span><span class="v">[]</span></div>
+      <div class="row"><span class="k">matched_sources</span><span class="v">[]</span></div>
+      <div class="row"><span class="k">references</span><span class="v">[]</span></div>
+    </div>
+  </div>
+
+  <p class="lead" style="margin-top:22px; font-size:14px; color:var(--muted); text-align:center;">
+    이 state 가 그래프의 첫 노드 <code style="color:var(--accent-light)">router</code> 로 진입합니다 →
+  </p>
+</section>
+
+<!-- 07 router 1턴 -->
+<section class="slide">
+  <div class="kicker"><span class="dot"></span> 06 · 노드 1/7 (1턴)</div>
+  <div class="node-banner">
+    <div class="badge">R</div>
+    <div>
+      <div class="name">router_node</div>
+      <div class="desc">이 질문은 RAG (문서 검색·합성) 인가, FOLLOWUP (직전 turn 후속) 인가?</div>
+    </div>
+  </div>
+
+  <div class="grid cols-2">
+    <div class="card">
+      <h3>판단 로직</h3>
+      <ul>
+        <li><strong>history 가 비어있으면</strong> followup 불가 → 무조건 <code style="color:#fcd34d">"rag"</code></li>
+        <li>history 가 있으면 LLM(2~3B 작은 모델)에 한 줄 분류 요청</li>
+        <li>분류 결과에 따라 <strong>add_conditional_edges</strong> 로 다음 노드 선택</li>
+      </ul>
+<pre class="code"><span class="kw">def</span> <span class="fn">router_node</span>(state):
+  history = _load_history(state[<span class="str">"thread_id"</span>])
+  <span class="kw">if not</span> history:
+    <span class="kw">return</span> {<span class="str">"route"</span>: <span class="str">"rag"</span>}
+  <span class="com"># 그 외엔 LLM 분류 (rag / followup)</span></pre>
+    </div>
+
+    <div class="card success">
+      <h3>1턴 결과</h3>
+      <div class="state">
+        <div class="row"><span class="k">history</span><span class="v">[]&nbsp;&nbsp;<span style="color:var(--muted)"># 비어있음</span></span></div>
+        <div class="row"><span class="k">route</span><span class="v str">"rag"</span></div>
+      </div>
+      <p style="margin-top:14px;">
+        history 가 비어있으므로 LLM 호출 없이 즉시 <strong>rag</strong> 결정.
+        다음 노드: <code style="color:var(--accent-light)">intent</code>.
+      </p>
+      <div class="sse">
+        <span class="sse-label">SSE EMIT</span>
+        {"type": "route", "mode": "rag"}
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 08 intent -->
+<section class="slide">
+  <div class="kicker"><span class="dot"></span> 07 · 노드 2/7 (1턴)</div>
+  <div class="node-banner">
+    <div class="badge">I</div>
+    <div>
+      <div class="name">intent_node</div>
+      <div class="desc">질문을 두 가지 mode 로 나누고 검색 키워드를 추출합니다.</div>
+    </div>
+  </div>
+
+  <div class="grid cols-2">
+    <div class="card">
+      <h3>① _classify_query_mode</h3>
+      <ul>
+        <li><strong style="color:#93c5fd">structured</strong>: "X 의 Y는 얼마야?" "Z 산업 동향은?" — 좁고 깊은 검색</li>
+        <li><strong style="color:#fcd34d">open</strong>: "최근 트렌드 알려줘" — 페이지 전수 매칭</li>
+      </ul>
+
+      <h3 style="margin-top:18px;">② 키워드 추출</h3>
+      <ul>
+        <li>structured → <code>_extract_rag_intent</code>: <strong>file_kws</strong> + <strong>detail_kws</strong></li>
+        <li>open → <code>_extract_open_keywords</code>: 단일 리스트</li>
+        <li>한국어 phrase 보존: <strong>"산업 동향"</strong> 을 <strong>"산업", "동향"</strong> 으로 쪼개지 않음</li>
+      </ul>
+    </div>
+
+    <div class="card success">
+      <h3>1턴 결과</h3>
+      <div class="state">
+        <div class="row"><span class="k">mode</span><span class="v str">"structured"</span></div>
+        <div class="row"><span class="k">file_keywords</span><span class="v">["DBMS", "데이터베이스"]</span></div>
+        <div class="row"><span class="k">detail_keywords</span><span class="v">["DBMS 시장 규모", "DBMS", "시장 규모"]</span></div>
+        <div class="row"><span class="k">intent_msg</span><span class="v str">"DBMS 시장 규모를 찾아드리겠습니다."</span></div>
+      </div>
+
+      <div class="sse">
+        <span class="sse-label">SSE EMIT</span>
+        {"type": "intent",<br>
+        &nbsp;"message": "DBMS 시장 규모를 ...",<br>
+        &nbsp;"file_keywords": [...],<br>
+        &nbsp;"detail_keywords": [...]}
+      </div>
+
+      <p style="margin-top:12px;">
+        다음 노드: <strong style="color:#93c5fd">search</strong> (structured 분기).
+        <br>open 이었다면 → <strong style="color:#fcd34d">fulltext_search</strong>.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- 09 search -->
+<section class="slide">
+  <div class="kicker"><span class="dot"></span> 08 · 노드 3/7 (1턴)</div>
+  <div class="node-banner">
+    <div class="badge">S</div>
+    <div>
+      <div class="name">search_node</div>
+      <div class="desc">벡터 임베딩으로 후보 파일을 추리는 1차 필터.</div>
+    </div>
+  </div>
+
+  <div class="grid cols-2">
+    <div class="card">
+      <h3>로직</h3>
+      <ul>
+        <li><strong>file_keywords</strong> 를 BGE-M3 로 임베딩</li>
+        <li>ChromaDB 에서 코사인 유사도 top-K 검색</li>
+        <li>각 문서의 메타(title·tagline·synopsis·tags) 와 매칭</li>
+        <li>점수·파일경로·trichef_id 가 붙은 <strong>candidates</strong> 리스트 반환</li>
+      </ul>
+
+<pre class="code"><span class="kw">def</span> <span class="fn">search_node</span>(state):
+  hits = _do_search(state[<span class="str">"file_keywords"</span>],
+                    topk=<span class="num">5</span>)
+  <span class="kw">return</span> {<span class="str">"candidates"</span>: hits}</pre>
+
+      <p style="margin-top:14px; color:var(--muted); font-size:13px;">
+        ⚠️ 이 단계는 <strong>1차 필터</strong> — 점수만 보고 답하지 않음. 다음 scan 에서 페이지 단위로 재확인.
+      </p>
+    </div>
+
+    <div class="card success">
+      <h3>1턴 결과</h3>
+      <div class="state">
+        <div class="row" style="flex-direction:column; align-items:flex-start; gap:2px;">
+          <span class="k">candidates</span>
+          <div style="padding-left:14px; color:#e5d4ff;">
+            ▸ {file_name: <span style="color:#fcd34d">"2016 IT 산업 백서.pdf"</span>, score: <span style="color:#fda4af">0.847</span>}<br>
+            ▸ {file_name: <span style="color:#fcd34d">"빅데이터 시장 전망.pdf"</span>, score: <span style="color:#fda4af">0.812</span>}<br>
+            ▸ {file_name: <span style="color:#fcd34d">"SW 산업 보고서.pdf"</span>, score: <span style="color:#fda4af">0.733</span>}<br>
+            ▸ ... (top 5)
+          </div>
+        </div>
+      </div>
+
+      <div class="sse">
+        <span class="sse-label">SSE EMIT</span>
+        {"type": "candidates",<br>
+        &nbsp;"items": [...5개 카드 정보]}
+      </div>
+
+      <p style="margin-top:12px;">
+        다음 노드: <strong>scan</strong> — 후보들을 페이지 단위로 정밀 확인.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- 10 scan -->
+<section class="slide">
+  <div class="kicker"><span class="dot"></span> 09 · 노드 4/7 (1턴)</div>
+  <div class="node-banner">
+    <div class="badge">N</div>
+    <div>
+      <div class="name">scan_node</div>
+      <div class="desc">후보 PDF 의 페이지를 한 장씩 열어 <strong>detail_keywords</strong> 매칭. Naive RAG 와 결정적으로 다른 곳.</div>
+    </div>
+  </div>
+
+  <div class="grid cols-2">
+    <div class="card">
+      <h3>왜 페이지 단위?</h3>
+      <ul>
+        <li>벡터 점수만으로는 <strong>어느 페이지에 정답이 있는지</strong> 모름</li>
+        <li>PDF 페이지 캐시 (<code>fitz</code> 추출) 에서 <strong>substring + phrase 보너스</strong></li>
+        <li>"DBMS 시장 규모" 가 한 줄에 같이 있는 페이지에 가산점</li>
+        <li>각 페이지에 page_num · score · snippet 부여</li>
+      </ul>
+
+      <h3 style="margin-top:18px;">목차 페널티</h3>
+      <ul>
+        <li><code>is_toc_strong</code>: 점선·페이지번호 빈출 → 목차로 판단</li>
+        <li>목차 페이지는 강한 감점 → 본문이 위로</li>
+      </ul>
+    </div>
+
+    <div class="card success">
+      <h3>1턴 결과</h3>
+      <div class="state">
+        <div class="row" style="flex-direction:column; align-items:flex-start; gap:2px;">
+          <span class="k">scanned_sources</span>
+          <div style="padding-left:14px; color:#e5d4ff; font-size:12px;">
+            ▸ <span style="color:#fcd34d">"2016 IT 산업 백서.pdf"</span><br>
+            &nbsp;&nbsp;matched_pages: [<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;{page: <span style="color:#fda4af">40</span>, score: <span style="color:#fda4af">8.4</span>,<br>
+            &nbsp;&nbsp;&nbsp;&nbsp; snippet: <span style="color:#a7f3d0">"2016년 세계 DBMS 시장은 317억..."</span>},<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;{page: <span style="color:#fda4af">41</span>, score: <span style="color:#fda4af">5.1</span>, ...}<br>
+            &nbsp;&nbsp;]<br>
+            ▸ <span style="color:#fcd34d">"빅데이터 시장 전망.pdf"</span> → matched_pages: []
+          </div>
+        </div>
+      </div>
+
+      <div class="sse">
+        <span class="sse-label">SSE EMIT (per file)</span>
+        {"type": "scanning", "index": 1, "file_name": ...}<br>
+        {"type": "scan_result", "found": true, "chunks": [...]}
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 11 select -->
+<section class="slide">
+  <div class="kicker"><span class="dot"></span> 10 · 노드 5/7 (1턴)</div>
+  <div class="node-banner">
+    <div class="badge">L</div>
+    <div>
+      <div class="name">select_node</div>
+      <div class="desc"><strong>Confidence gate</strong> — 1순위 강제 fallback 폐지. 매칭 점수가 컷오프 이하면 "답할 수 없음" 도 인정.</div>
+    </div>
+  </div>
+
+  <div class="grid cols-2">
+    <div class="card">
+      <h3>왜 confidence gate?</h3>
+      <p>Naive RAG 의 가장 큰 문제: 매칭이 약해도 top-1 을 답해버려서 <strong>엉뚱한 환각 답변</strong>이 나옴.</p>
+
+      <h3 style="margin-top:18px;">로직</h3>
+      <ul>
+        <li><strong>최소 score 컷</strong>: 일정 점수 미만은 버림</li>
+        <li><strong>목차 강하면 제외</strong>: <code>is_toc_strong</code> 판정 시 본문에 못 가도 답 안 함</li>
+        <li><strong>전부 컷 통과 못 하면</strong>: matched_sources = []<br>→ generate 에서 <em>"제공 문서에 해당 정보가 없습니다"</em> 출력</li>
+      </ul>
+    </div>
+
+    <div class="card success">
+      <h3>1턴 결과</h3>
+      <div class="state">
+        <div class="row" style="flex-direction:column; align-items:flex-start; gap:2px;">
+          <span class="k">matched_sources</span>
+          <div style="padding-left:14px; color:#e5d4ff; font-size:12.5px;">
+            ▸ <span style="color:#fcd34d">"2016 IT 산업 백서.pdf"</span><br>
+            &nbsp;&nbsp;page: <span style="color:#fda4af">40</span>, score: <span style="color:#fda4af">8.4</span>, file_type: <span style="color:#fcd34d">"doc"</span>
+          </div>
+          <span class="k" style="margin-top:8px;">context_len</span><span class="v">3,247자</span>
+        </div>
+      </div>
+
+      <div class="sse">
+        <span class="sse-label">SSE EMIT</span>
+        {"type": "selected",<br>
+        &nbsp;"sources": [...],<br>
+        &nbsp;"context_len": 3247}
+      </div>
+
+      <p style="margin-top:12px;">
+        다음 노드: <strong>extract</strong> — 페이지 본문에서 인용할 부분을 잘라냄.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- 12 extract -->
+<section class="slide">
+  <div class="kicker"><span class="dot"></span> 11 · 노드 6/7 (1턴)</div>
+  <div class="node-banner">
+    <div class="badge">E</div>
+    <div>
+      <div class="name">extract_node</div>
+      <div class="desc">matched_sources 의 chunks_meta 를 풀어 <strong>references</strong> (trichef_id · file_path · page · snippet) 로 정규화.</div>
+    </div>
+  </div>
+
+  <div class="grid cols-2">
+    <div class="card">
+      <h3>왜 별도 노드?</h3>
+      <ul>
+        <li>generate 가 모든 페이지 텍스트를 다 처리하면 컨텍스트 한도 초과</li>
+        <li>여기서 <strong>인용에 쓸 정확한 문장만</strong> 골라냄</li>
+        <li>프론트엔드는 이 references 로 <strong>chip · 페이지 이미지 · 인용 부분</strong> 박스를 렌더</li>
+      </ul>
+
+      <h3 style="margin-top:18px;">로직</h3>
+      <ul>
+        <li>각 matched source 의 page_text 에서 keyword 주변 슬라이딩 윈도우</li>
+        <li><code>_looks_like_toc_snippet</code> → 목차스러우면 자동 제외</li>
+        <li>snippet 길이 정규화 (보통 200~400자)</li>
+      </ul>
+    </div>
+
+    <div class="card success">
+      <h3>1턴 결과</h3>
+      <div class="state">
+        <div class="row" style="flex-direction:column; align-items:flex-start; gap:2px;">
+          <span class="k">references</span>
+          <div style="padding-left:14px; color:#e5d4ff; font-size:12px;">
+            ▸ {<br>
+            &nbsp;&nbsp;trichef_id: <span style="color:#fcd34d">"doc_2016_it_p40"</span>,<br>
+            &nbsp;&nbsp;file_path: <span style="color:#fcd34d">"...2016 IT 산업 백서.pdf"</span>,<br>
+            &nbsp;&nbsp;page: <span style="color:#fda4af">40</span>,<br>
+            &nbsp;&nbsp;snippet: <span style="color:#a7f3d0">"2016년 세계 DBMS 시장은<br>
+            &nbsp;&nbsp;&nbsp;317억 달러로 전년 대비 6.4%<br>
+            &nbsp;&nbsp;&nbsp;성장이 예상된다…"</span><br>
+            }
+          </div>
+        </div>
+      </div>
+
+      <div class="sse">
+        <span class="sse-label">SSE EMIT</span>
+        {"type": "extract", "references": [...]}
+      </div>
+
+      <p style="margin-top:12px;">
+        프론트가 받자마자 <strong>출처 chip</strong> 을 답변 위쪽에 즉시 표시.
+        다음 노드: <strong>generate</strong>.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- 13 generate -->
+<section class="slide">
+  <div class="kicker"><span class="dot"></span> 12 · 노드 7/7 (1턴)</div>
+  <div class="node-banner">
+    <div class="badge">G</div>
+    <div>
+      <div class="name">generate_node</div>
+      <div class="desc">Ollama 스트리밍으로 한국어 마크다운 답변 생성. 끝나면 SQLite 에 turn 영속.</div>
+    </div>
+  </div>
+
+  <div class="grid cols-2">
+    <div class="card">
+      <h3>프롬프트 조립 (<code>_build_rag_messages</code>)</h3>
+      <ul>
+        <li><strong>system</strong>: 한국어 강제 · 답변 형식(간결 마크다운) · 인용 규칙</li>
+        <li><strong>history</strong>: 직전 turn 최대 6개</li>
+        <li><strong>user</strong>: [핵심 인용] + 질문 + 답변 요구사항</li>
+      </ul>
+
+      <h3 style="margin-top:18px;">스트리밍</h3>
+<pre class="code"><span class="kw">for</span> tok <span class="kw">in</span> _ollama_stream(messages, model,
+                       num_predict=<span class="num">350</span>,
+                       chunk_size=<span class="num">0</span>):
+  full_answer += tok
+  _emit({<span class="str">"type"</span>: <span class="str">"token"</span>,
+         <span class="str">"text"</span>: tok})</pre>
+
+      <h3 style="margin-top:18px;">완료 후</h3>
+      <ul>
+        <li><code>_save_history</code>: LangGraph state + fallback dict + SQLite (3중 저장)</li>
+        <li>followup 을 위해 이번 turn 의 sources 도 저장</li>
+      </ul>
+    </div>
+
+    <div class="card success">
+      <h3>1턴 답변</h3>
+      <div style="background:rgba(6,3,15,0.5); border:1px solid rgba(139,92,246,0.15); border-radius:10px; padding:14px; font-size:13.5px; line-height:1.75; color:#f1f5f9;">
+        2016년 세계 <strong style="color:#f5f3ff">DBMS 시장</strong> 은 빅데이터 수요 확대로 성장세에 진입했습니다 <span class="pill" style="font-size:10px; padding:1px 6px;">40페이지</span>.<br><br>
+        - <strong style="color:#f5f3ff">시장 규모</strong>: 2016년 317억 달러, 전년 대비 <strong>6.4% 성장</strong> 예상.<br>
+        - <strong style="color:#f5f3ff">성장률 전망</strong>: 2014~2019 연평균 5.2%, 2019년 384억 달러.<br>
+        - <strong style="color:#f5f3ff">주요 동인</strong>: 빅데이터·인메모리·DB 어플라이언스 수요.<br><br>
+        빅데이터 확산이 안정적인 6%대 성장세를 이끌 전망입니다.
+      </div>
+
+      <div class="sse">
+        <span class="sse-label">SSE EMIT</span>
+        {"type": "token", "text": "2016"} × N (스트리밍)<br>
+        {"type": "done", "answer": "...", "model": "..."}
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 14 시나리오 2턴 -->
+<section class="slide">
+  <div class="kicker"><span class="dot"></span> 13 · 시나리오 — 2턴 후속</div>
+  <h1 class="title">후속 질문이 들어왔다</h1>
+  <p class="lead">이제 같은 thread 에 새 질문. <strong>history 가 채워져 있고</strong>, 직전 sources 도 살아있는 상태에서 들어옵니다.</p>
+
+  <div style="display:flex; justify-content:center; margin: 14px 0 24px;">
+    <div class="userq">
+      <small>USER · 2턴</small>
+      전년 대비는?
+    </div>
+  </div>
+
+  <div class="card accent" style="max-width:880px; margin: 0 auto;">
+    <h3>📋 RAGState (2턴 시작)</h3>
+    <div class="state">
+      <div class="row"><span class="k">question</span><span class="v str">"전년 대비는?"</span></div>
+      <div class="row"><span class="k">thread_id</span><span class="v str">"t_1715501800_a3b"</span><span class="v" style="color:var(--muted)"># 같은 thread</span></div>
+      <div class="row" style="flex-direction:column; align-items:flex-start; gap:2px;">
+        <span class="k">history</span>
+        <div style="padding-left:14px; font-size:12px; color:#e5d4ff;">
+          [<br>
+          &nbsp;&nbsp;{role: <span style="color:#fcd34d">"user"</span>, content: <span style="color:#fcd34d">"DBMS 시장 규모 얼마야?"</span>},<br>
+          &nbsp;&nbsp;{role: <span style="color:#fcd34d">"assistant"</span>, content: <span style="color:#fcd34d">"2016년 세계 DBMS 시장은..."</span>}<br>
+          ]
+        </div>
+      </div>
+      <div class="row"><span class="k">last_sources</span><span class="v">[1개 — 2016 IT 산업 백서 p.40]</span></div>
+    </div>
+  </div>
+
+  <p class="lead" style="margin-top:22px; font-size:14px; color:var(--muted); text-align:center;">
+    같은 그래프, 다른 경로 — 첫 노드 <code style="color:var(--accent-light)">router</code> 가 어떻게 다르게 판단할까요? →
+  </p>
+</section>
+
+<!-- 15 router 2턴 -->
+<section class="slide">
+  <div class="kicker"><span class="dot"></span> 14 · router_node (2턴)</div>
+  <div class="node-banner">
+    <div class="badge" style="background:linear-gradient(135deg,#a21caf,#d946ef)">R</div>
+    <div>
+      <div class="name">router_node — 2턴 판단</div>
+      <div class="desc">history 가 비어있지 않으므로 LLM 분류기가 작동. "전년 대비는?" 은 직전 turn 의 수치를 가리키는 명백한 후속.</div>
+    </div>
+  </div>
+
+  <div class="grid cols-2">
+    <div class="card">
+      <h3>판단 시그널</h3>
+      <ul>
+        <li>"전년 대비" 는 <strong>수치 비교</strong> — 직전 turn 의 수치가 있어야 의미 있음</li>
+        <li>지시대명사 / 비교어 / 짧은 길이 → followup 가능성 ↑</li>
+        <li>LLM (2~3B 소형) 에 단답 분류 요청 (num_predict=10)</li>
+        <li>출력 단어 한 개로 분기 결정</li>
+      </ul>
+
+<pre class="code">prompt = <span class="str">"이전: ... \n새 질문: 전년 대비는?\n"</span>
+         <span class="str">"이 질문은 rag / followup 중?"</span>
+raw = _ollama_oneshot(prompt, model,
+                      num_predict=<span class="num">10</span>)
+<span class="com"># raw == "followup"</span></pre>
+    </div>
+
+    <div class="card" style="border-color:rgba(217,70,239,0.5); background:linear-gradient(135deg,rgba(217,70,239,0.10),rgba(139,92,246,0.06));">
+      <h3 style="color:#f0abfc">2턴 결과</h3>
+      <div class="state">
+        <div class="row"><span class="k">route</span><span class="v str" style="color:#f0abfc">"followup"</span></div>
+      </div>
+
+      <div class="sse">
+        <span class="sse-label">SSE EMIT</span>
+        {"type": "route", "mode": "followup"}
+      </div>
+
+      <p style="margin-top:14px;">
+        조건부 엣지가 다음 노드로 <strong style="color:#f0abfc">followup_intent</strong> 를 선택.<br>
+        ⟹ 새로 검색하지 않고 <strong>직전 sources 를 재활용</strong>합니다.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- 16 followup_intent + search -->
+<section class="slide">
+  <div class="kicker"><span class="dot"></span> 15 · followup 노드 2개</div>
+  <h1 class="title" style="font-size:32px;">followup_intent &nbsp;+&nbsp; followup_search</h1>
+  <p class="lead">직전 sources 의 페이지 캐시 안에서만 매칭 — 새 벡터검색을 돌리지 않아 빠르고 맥락 보존.</p>
+
+  <div class="grid cols-2">
+    <div class="card" style="border-color:rgba(217,70,239,0.4);">
+      <h3 style="color:#f0abfc;">① followup_intent_node</h3>
+      <ul>
+        <li>직전 turn 의 <strong>last_sources</strong> 회수 (state 에 저장돼 있음)</li>
+        <li>후속 질문에서 새 키워드 추출 (예: "전년 대비")</li>
+        <li>키워드 분해: <strong>"SW산업 수출액 전년대비"</strong> → phrase + 토큰<br>
+          → <code style="font-size:11px;">["SW산업 수출액 전년대비", "SW산업", "수출액", "전년대비"]</code></li>
+      </ul>
+      <div class="sse">
+        <span class="sse-label">SSE EMIT</span>
+        {"type": "followup_intent",<br>
+        &nbsp;"reused_sources": [...],<br>
+        &nbsp;"keywords": [...]}
+      </div>
+    </div>
+
+    <div class="card" style="border-color:rgba(217,70,239,0.4);">
+      <h3 style="color:#f0abfc;">② followup_search_node</h3>
+      <ul>
+        <li>last_sources 의 PDF <strong>페이지 캐시만 다시 스캔</strong></li>
+        <li>벡터검색 X — 이미 매칭된 문서 안에서 새 키워드만 매칭</li>
+        <li>matched_pages ≥ 1 → <strong>exist</strong> → extract 로 진행</li>
+        <li>매칭 0 → <strong>none</strong> → 폴백 사이클</li>
+      </ul>
+
+<pre class="code">matched = []
+<span class="kw">for</span> src <span class="kw">in</span> last_sources:
+  pages = _scan_pdf_pages(src.path,
+                          keywords)
+  <span class="kw">if</span> pages:
+    matched.append({**src,
+                    <span class="str">"matched_pages"</span>: pages})
+<span class="kw">return</span> {<span class="str">"matched_sources"</span>: matched}</pre>
+    </div>
+  </div>
+
+  <div class="card success" style="margin-top:18px;">
+    <h3>2턴 결과 (exist 분기)</h3>
+    <div class="state">
+      <div class="row" style="flex-direction:column; align-items:flex-start; gap:2px;">
+        <span class="k">matched_sources</span>
+        <div style="padding-left:14px; color:#e5d4ff; font-size:12.5px;">
+          ▸ <span style="color:#fcd34d">"2016 IT 산업 백서.pdf"</span> page 40 — <span style="color:#a7f3d0">"전년 0.1% → 6.4% 성장"</span>
+        </div>
+      </div>
+    </div>
+    <p style="margin-top:10px;">이후 흐름은 <strong>1턴과 동일</strong> — extract → generate. 그러나 sources 가 이미 좁혀져 있어 훨씬 빠릅니다.</p>
+  </div>
+</section>
+
+<!-- 17 폴백 -->
+<section class="slide">
+  <div class="kicker"><span class="dot"></span> 16 · 분기 & 폴백</div>
+  <h1 class="title">followup_search 의 두 갈래</h1>
+  <p class="lead">후속 질문이 직전 sources 에서 답을 못 찾으면 — 그래프는 <strong>처음 RAG 사이클로 복귀</strong>합니다. 무한루프는 state flag 로 차단.</p>
+
+  <div class="grid cols-2">
+    <div class="card success">
+      <h3>① exist 경로 (정상)</h3>
+      <p>매칭 페이지 ≥ 1 → 그대로 extract → generate.</p>
+      <div class="flow-row" style="margin-top:12px;">
+        <div class="flowbox" style="border-color:rgba(217,70,239,0.5)">followup_search</div>
+        <span class="flow-arrow">→</span>
+        <div class="flowbox">extract</div>
+        <span class="flow-arrow">→</span>
+        <div class="flowbox">generate</div>
+      </div>
+      <p style="margin-top:14px; font-size:13px; color:var(--muted);">
+        직전 sources 안에서 답이 풀린 경우. 가장 흔한 후속 시나리오.
+      </p>
+    </div>
+
+    <div class="card danger">
+      <h3 style="color:#fecaca;">② none 경로 (폴백)</h3>
+      <p>매칭 0 → <strong>_followup_fallback_marker</strong> 를 거쳐 <code>intent</code> 로 점프.</p>
+      <div class="flow-row" style="margin-top:12px;">
+        <div class="flowbox" style="border-color:rgba(248,113,113,0.5)">followup_search</div>
+        <span class="flow-arrow" style="color:#fca5a5;">→</span>
+        <div class="flowbox" style="border-color:rgba(248,113,113,0.5)">_fallback_marker</div>
+        <span class="flow-arrow" style="color:#fca5a5;">↺</span>
+        <div class="flowbox">intent (RAG 처음부터)</div>
+      </div>
+      <p style="margin-top:14px; font-size:13px; color:var(--muted);">
+        후속이라 생각했는데 사실 새 주제였던 경우. 직전 sources 를 버리고 처음부터 검색.
+      </p>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:18px; border-color:rgba(251,191,36,0.4); background:rgba(251,191,36,0.05);">
+    <h3 style="color:var(--amber);">⚠️ 무한루프 차단</h3>
+    <p>
+      _fallback_marker 가 <code>fallback_from_followup = True</code> 를 state 에 설정.
+      RAG 사이클을 한 번 더 돌고 또 followup 으로 분류돼도, router 가 이 flag 를 보고 <strong>강제로 rag 직행</strong>.
+      LangGraph 에서 <strong>state 가 노드 간 명시적으로 흐른다</strong> 는 점이 이런 정교한 제어를 가능하게 합니다.
+    </p>
+  </div>
+
+  <div class="sse">
+    <span class="sse-label">SSE EMIT (none 분기 진입 시)</span>
+    {"type": "followup_fallback", "reason": "이전 파일에서 못 찾음 → 전체 검색 시작"}
+  </div>
+</section>
+
+<!-- 18 PDF 부록 -->
+<section class="slide">
+  <div class="kicker"><span class="dot"></span> 17 · 부록</div>
+  <h1 class="title">📄 PDF 정리 버튼</h1>
+  <p class="lead">대화가 일단락되면 <strong>입력창 안의 PDF 버튼</strong> 한 번. LLM 이 대화 전체를 매거진 스타일로 요약한 PDF 가 다운로드됩니다.</p>
+
+  <div class="grid cols-2">
+    <div class="card">
+      <h3>흐름 (LangGraph 와 독립)</h3>
+      <ul>
+        <li>① 프론트가 <code>POST /api/aimode/export-pdf {thread_id}</code></li>
+        <li>② 백엔드가 SQLite <code>aimode_messages</code> 에서 모든 turn 로드</li>
+        <li>③ LLM (Ollama gemma3) 으로 정리 JSON 생성<br>
+          <code style="font-size:11px;">{title, overview, key_points, qa_summaries, conclusion}</code></li>
+        <li>④ <code>reportlab</code> 으로 PDF 합성 — Cover · Key Points · Q&amp;A · Conclusion 4섹션</li>
+        <li>⑤ 한글 폰트 자동 등록 (Malgun Gothic)</li>
+        <li>⑥ 파일명: <code style="font-size:11px;">{제목}_{날짜}.pdf</code> 자동 다운로드</li>
+      </ul>
+    </div>
+
+    <div class="card accent">
+      <h3>PDF 디자인 (editorial 매거진)</h3>
+      <ul>
+        <li>섹션 라벨 + 파란 짧은 바 + 큰 번호 타이틀</li>
+        <li><strong>Cover</strong>: 제목 + 메타 그리드 (대화방·대화 수·생성·출력)</li>
+        <li><strong>Key Points</strong>: ◆ 다이아몬드 마커 + 번호</li>
+        <li><strong>Q&amp;A summary</strong>: 굵은 진남색 Q + 들여쓰기 A</li>
+        <li><strong>Conclusion</strong>: 진남색 풀쿼트 카드 + 흰 본문</li>
+        <li>매 페이지 푸터에 페이지 번호 (01, 02, …)</li>
+      </ul>
+
+      <p style="margin-top:14px; font-size:13px; color:var(--muted);">
+        이 기능은 LangGraph 그래프와는 별도 — 그래프가 만든 영속 데이터(SQLite)를 재활용하는 <strong>downstream 기능</strong>입니다.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- END -->
+<section class="slide">
+  <div class="center">
+    <div class="badge-big" style="background: linear-gradient(135deg, #10b981, #059669);">✓</div>
+    <h1 class="title big" style="font-size:64px;">정리</h1>
+    <p class="lead" style="font-size:18px; max-width:840px;">
+      AIMODE 의 본질은 <strong>합성</strong>입니다. 단순 검색 한 줄이 아닌, <strong>분기 · 상태 · 진행 표시 · 폴백</strong> 이 필요한 워크플로우.<br>
+      LangGraph 의 StateGraph · 조건부 엣지 · MemorySaver · 노드 단위 SSE 가 이 4가지 요구를 정확히 풀어줍니다.
+    </p>
+    <div style="margin-top:24px;">
+      <span class="pill">router</span>
+      <span class="pill">intent</span>
+      <span class="pill">search · scan · select</span>
+      <span class="pill" style="background:rgba(251,191,36,0.10); border-color:rgba(251,191,36,0.30); color:var(--amber);">fulltext_search</span>
+      <span class="pill" style="background:rgba(217,70,239,0.10); border-color:rgba(217,70,239,0.35); color:#f0abfc;">followup_intent</span>
+      <span class="pill" style="background:rgba(217,70,239,0.10); border-color:rgba(217,70,239,0.35); color:#f0abfc;">followup_search</span>
+      <span class="pill">extract</span>
+      <span class="pill">generate</span>
+    </div>
+  </div>
+</section>
+
 </div>
 
-<!-- ══════════ 0. 전체 흐름 한눈에 ══════════ -->
-<section>
-  <h2><span class="num">0</span>전체 흐름 한눈에</h2>
-  <div class="card">
-    <p style="color:var(--muted); font-size:14px; margin-bottom:16px;">
-      사용자가 질문을 입력하면 아래 6개 노드를 순서대로 거쳐 최종 답변이 생성됩니다.<br>
-      각 노드는 결과를 <strong style="color:var(--text)">SSE(Server-Sent Events)</strong>로 실시간 전송해 UI가 즉시 업데이트됩니다.
-    </p>
-    <pre>사용자 질문
-    │
-    ▼
-┌─────────────┐    "이게 파일 검색이야? 아니면 그냥 대화야?"
-│ router_node │ ──────────────────────────────────────────────────┐
-└─────────────┘                                                    │
-    │ (rag / followup)               (chat)      (qa_gen)          │
-    ▼                                  │              │             │
-┌─────────────┐                        │              │             │
-│ intent_node │  "어떤 파일? 무슨 내용?"  │              │             │
-└─────────────┘                        │              │             │
-    │                                  │              │             │
-    ▼                                  │              │             │
-┌─────────────┐                        │              │             │
-│ search_node │  벡터 DB에서 후보 파일 검색  │              │             │
-└─────────────┘                        │              │             │
-    │                                  │              │             │
-    ▼                                  │              │             │
-┌─────────────┐                        │              │             │
-│  scan_node  │  각 파일 본문 키워드 스캔   │              │             │
-└─────────────┘                        │              │             │
-    │                                  │              │             │
-    ▼                                  │              │             │
-┌─────────────┐                        │              │             │
-│ select_node │  실제로 찾은 파일만 추려냄  │              │             │
-└─────────────┘                        │              │             │
-    │                                  │              │             │
-    ▼                                  ▼              ▼             │
-┌───────────────┐  ┌───────────────┐  ┌────────────────────┐       │
-│ generate_node │  │  chat_node    │  │ qa_generate_node   │       │
-│  (RAG 답변)   │  │  (일반 대화)  │  │  (문제 자동 생성)  │       │
-└───────────────┘  └───────────────┘  └────────────────────┘       │
-    │                    │                      │                    │
-    └────────────────────┴──────────────────────┘────────────────────┘
-                                 ▼
-                          최종 답변 스트리밍</pre>
-  </div>
-</section>
+<div class="footer">
+  <span class="counter"><span id="cur">01</span> / <span id="total">19</span></span>
+  <div class="progress"><div class="bar" id="bar"></div></div>
+  <span style="font-family:monospace; opacity:0.7;">AIMODE · LangGraph Pipeline · DB_insight v3</span>
+</div>
 
-<!-- ══════════ 1. router_node ══════════ -->
-<section>
-  <h2><span class="num">1</span>router_node — 질문 유형 분류</h2>
+<div class="nav-zone prev" onclick="go(-1)"></div>
+<div class="nav-zone next" onclick="go(1)"></div>
 
-  <div class="pipeline">
-    <div class="node n-router">
-      <div class="node-left">
-        <div class="node-icon">🧭</div>
-        <div class="node-line"></div>
-      </div>
-      <div class="node-body">
-        <div class="node-sub" style="color:#818cf8">Step 1 · Router</div>
-        <div class="node-title" style="color:#a5b4fc">질문 유형 판별</div>
-        <div class="node-desc">
-          LLM에게 질문을 보여주고 <strong>4가지 중 하나</strong>로 분류합니다.<br>
-          분류 결과에 따라 이후 파이프라인이 완전히 달라집니다.
-        </div>
-        <div class="sse-list">
-          <span class="sse sse-purple">📡 SSE: route</span>
-        </div>
-      </div>
-    </div>
-  </div>
+<div class="hint">
+  <kbd>←</kbd> <kbd>→</kbd> <kbd>Space</kbd> <kbd>Home</kbd> <kbd>End</kbd>
+</div>
 
-  <div class="branches">
-    <div class="branch branch-rag">
-      <div class="branch-title">🔍 rag</div>
-      <div style="color:#c4b5fd; font-size:13px;">파일에서 정보를 찾아야 할 때<br>
-      <span style="color:var(--dim); font-size:12px;">예) "삼성 재생에너지 전환율이 몇 %야?"</span></div>
-    </div>
-    <div class="branch branch-chat">
-      <div class="branch-title">💬 chat</div>
-      <div style="color:#a7f3d0; font-size:13px;">파일 없이 일반 대화할 때<br>
-      <span style="color:var(--dim); font-size:12px;">예) "파이썬 리스트 정렬 방법 알려줘"</span></div>
-    </div>
-    <div class="branch branch-follow">
-      <div class="branch-title">↩️ followup</div>
-      <div style="color:#a5f3fc; font-size:13px;">이전 턴 파일을 그대로 쓸 때<br>
-      <span style="color:var(--dim); font-size:12px;">예) "그러면 그 파일에서 3장도 알려줘"</span></div>
-    </div>
-    <div class="branch branch-qa">
-      <div class="branch-title">📝 qa_gen</div>
-      <div style="color:#fde68a; font-size:13px;">퀴즈·문제 생성 요청할 때<br>
-      <span style="color:var(--dim); font-size:12px;">예) "이 문서로 퀴즈 만들어줘"</span></div>
-    </div>
-  </div>
+<script>
+  const slides = document.querySelectorAll(".slide");
+  const total = slides.length;
+  let idx = 0;
+  const $cur = document.getElementById("cur");
+  const $bar = document.getElementById("bar");
+  document.getElementById("total").textContent = String(total).padStart(2, "0");
 
-  <div class="info-box info-yellow" style="margin-top:14px;">
-    ⚠️ <strong>주의</strong>: "FAO 가격지수가 얼마야?"처럼 질문 형태인데도 <span class="tag">qa_gen</span>으로 오분류되는 버그가 있었음.<br>
-    → 프롬프트에 <strong>"명시적 생성 요청이 없으면 무조건 rag"</strong> 규칙 추가 + 테스트마다 고유한 thread_id 사용으로 해결.
-  </div>
-</section>
+  function show(n) {
+    n = Math.max(0, Math.min(total - 1, n));
+    slides[idx].classList.remove("active");
+    slides[n].classList.add("active");
+    idx = n;
+    $cur.textContent = String(idx + 1).padStart(2, "0");
+    $bar.style.width = ((idx + 1) / total * 100) + "%";
+  }
+  function go(d) { show(idx + d); }
 
-<!-- ══════════ 2. intent_node ══════════ -->
-<section>
-  <h2><span class="num">2</span>intent_node — 의도 파악 + 키워드 추출</h2>
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowRight" || e.key === " " || e.key === "PageDown") { e.preventDefault(); go(1); }
+    else if (e.key === "ArrowLeft" || e.key === "PageUp") { e.preventDefault(); go(-1); }
+    else if (e.key === "Home") { e.preventDefault(); show(0); }
+    else if (e.key === "End") { e.preventDefault(); show(total - 1); }
+  });
 
-  <div class="pipeline">
-    <div class="node n-intent">
-      <div class="node-left">
-        <div class="node-icon">🎯</div>
-        <div class="node-line"></div>
-      </div>
-      <div class="node-body">
-        <div class="node-sub" style="color:#a78bfa">Step 2 · Intent</div>
-        <div class="node-title" style="color:#c4b5fd">의도 요약 + 검색 키워드 생성</div>
-        <div class="node-desc">
-          LLM이 질문을 분석해 <strong>3가지 정보</strong>를 추출합니다.
-        </div>
-        <div class="sse-list">
-          <span class="sse sse-purple">📡 SSE: intent</span>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="card-row">
-      <div class="card-half">
-        <h3>출력 3가지</h3>
-        <table>
-          <tr><th>항목</th><th>예시</th><th>용도</th></tr>
-          <tr>
-            <td>의도메시지</td>
-            <td style="color:#c4b5fd">"삼성전자 탄소중립 목표와 재생에너지 전환율을 문서에서 찾아드릴게요."</td>
-            <td>UI에 표시</td>
-          </tr>
-          <tr>
-            <td>파일검색 키워드</td>
-            <td style="color:#c4b5fd">["삼성전자", "탄소중립", "재생에너지"]</td>
-            <td>벡터 DB 검색</td>
-          </tr>
-          <tr>
-            <td>내용검색 키워드</td>
-            <td style="color:#c4b5fd">["재생에너지", "탄소중립"]</td>
-            <td>파일 내 본문 스캔</td>
-          </tr>
-        </table>
-      </div>
-      <div class="card-half">
-        <h3>LLM 프롬프트 형식</h3>
-        <pre>질문: 삼성전자 재생에너지 전환율은?
-의도메시지: 삼성전자 재생에너지 전환율을 찾아드릴게요.
-파일검색: 삼성전자 재생에너지
-내용검색: 재생에너지 전환율</pre>
-        <div style="color:var(--muted); font-size:12px; margin-top:8px;">
-          ※ 형식을 벗어난 출력이 오면 질문에서 직접 명사 추출 (Fallback)
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ══════════ 3. search_node ══════════ -->
-<section>
-  <h2><span class="num">3</span>search_node — 벡터 DB 후보 검색</h2>
-
-  <div class="pipeline">
-    <div class="node n-search">
-      <div class="node-left">
-        <div class="node-icon">🔍</div>
-        <div class="node-line"></div>
-      </div>
-      <div class="node-body">
-        <div class="node-sub" style="color:#67e8f9">Step 3 · Search</div>
-        <div class="node-title" style="color:#a5f3fc">벡터 유사도 검색</div>
-        <div class="node-desc">
-          파일검색 키워드를 임베딩 벡터로 변환 후, DB에 저장된 파일 벡터들과 <strong>코사인 유사도</strong>를 계산해<br>
-          상위 <strong>topK개</strong> 파일을 후보로 선정합니다. UI에는 파일 카드로 즉시 표시됩니다.
-        </div>
-        <div class="sse-list">
-          <span class="sse sse-teal">📡 SSE: candidates</span>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="info-box info-purple">
-    <strong>왜 원본 파일 전체를 검색하지 않고 벡터를 쓰나?</strong><br>
-    179,328자짜리 PDF를 통째로 하나의 벡터로 만들면 세부 수치(93.4%, 3,035.5만 톤)가
-    평균화되어 희석됩니다. 청크로 나눠 각각 임베딩하면 <strong>관련 단락의 벡터가 질문 벡터에 더 가까워져</strong>
-    정확한 파일을 찾을 수 있습니다.
-  </div>
-</section>
-
-<!-- ══════════ 4. scan_node ══════════ -->
-<section>
-  <h2><span class="num">4</span>scan_node — 파일 본문 정밀 스캔</h2>
-
-  <div class="pipeline">
-    <div class="node n-scan">
-      <div class="node-left">
-        <div class="node-icon">📡</div>
-        <div class="node-line"></div>
-      </div>
-      <div class="node-body">
-        <div class="node-sub" style="color:#34d399">Step 4 · Scan</div>
-        <div class="node-title" style="color:#6ee7b7">키워드 슬라이딩 윈도우 스캔</div>
-        <div class="node-desc">
-          후보 파일 각각을 <strong>fitz(PyMuPDF)</strong>로 직접 읽어 전문 텍스트를 추출한 뒤,<br>
-          내용검색 키워드가 나타나는 위치를 찾고 <strong>앞뒤 ±400자를 window로 추출</strong>합니다.<br>
-          키워드가 하나라도 발견되면 <span class="tag" style="color:#34d399;border-color:#34d399;background:rgba(16,185,129,0.1)">found</span>, 없으면 <span class="tag" style="color:#f87171;border-color:#ef4444;background:rgba(239,68,68,0.08)">not_found</span>.
-        </div>
-        <div class="sse-list">
-          <span class="sse sse-green">📡 SSE: scanning (파일마다)</span>
-          <span class="sse sse-green">📡 SSE: scan_result (found/not_found)</span>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="card">
-    <h3>왜 청크에서 검색하나? (원본 전체 vs 청크)</h3>
-    <div class="why-grid">
-      <div class="why-item">
-        <div class="why-icon">📏</div>
-        <div class="why-title">컨텍스트 한계</div>
-        <div class="why-desc">LLM에 179K자 전체를 넣으면 중요한 수치를 긴 문서 속에서 놓치는 "바늘 찾기(Needle in Haystack)" 문제 발생. 핵심 단락만 추려야 정확도가 올라간다.</div>
-      </div>
-      <div class="why-item">
-        <div class="why-icon">🎯</div>
-        <div class="why-title">노이즈 제거</div>
-        <div class="why-desc">scan_node의 ±400자 윈도우는 이미 관련 단락으로 정제된 덩어리. 전체를 통째로 넘기는 것보다 정확한 수치 포함 확률이 높다.</div>
-      </div>
-      <div class="why-item">
-        <div class="why-icon">🔤</div>
-        <div class="why-title">fitz 줄바꿈 문제</div>
-        <div class="why-desc">PDF를 읽으면 단어 중간에 \n이 들어감. 예: "재생에너지\n전환율은 93.4%". _join_pdf_lines()로 소프트 줄바꿈을 제거해야 키워드 매칭이 성공한다.</div>
-      </div>
-      <div class="why-item">
-        <div class="why-icon">🌏</div>
-        <div class="why-title">중국어 필터</div>
-        <div class="why-desc">삼성 ESG 보고서에 중국어 섹션 혼입 → CJK 문자 비율 25% 이상인 줄은 자동 제거. 답변에 중국어가 섞이는 문제 해결.</div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ══════════ 5. select_node ══════════ -->
-<section>
-  <h2><span class="num">5</span>select_node — 최종 소스 확정</h2>
-
-  <div class="pipeline">
-    <div class="node n-select">
-      <div class="node-left">
-        <div class="node-icon">✅</div>
-        <div class="node-line"></div>
-      </div>
-      <div class="node-body">
-        <div class="node-sub" style="color:#fde68a">Step 5 · Select</div>
-        <div class="node-title" style="color:#fef08a">발견된 파일만 추려냄</div>
-        <div class="node-desc">
-          scan_node에서 <span class="tag" style="color:#34d399;border-color:#34d399;background:rgba(16,185,129,0.1)">found</span> 판정을 받은 파일만 <strong>matched_sources</strong>로 확정합니다.<br>
-          이 파일들이 generate_node의 컨텍스트 소스가 됩니다.
-        </div>
-        <div class="sse-list">
-          <span class="sse sse-yellow">📡 SSE: selected</span>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ══════════ 6. generate_node ══════════ -->
-<section>
-  <h2><span class="num">6</span>generate_node — 답변 생성 (핵심)</h2>
-
-  <div class="pipeline">
-    <div class="node n-generate">
-      <div class="node-left">
-        <div class="node-icon">✨</div>
-      </div>
-      <div class="node-body">
-        <div class="node-sub" style="color:#d8b4fe">Step 6 · Generate</div>
-        <div class="node-title" style="color:#e9d5ff">컨텍스트 조립 → key_facts 추출 → LLM 답변</div>
-        <div class="node-desc">
-          가장 복잡한 단계입니다. 크게 3단계로 나뉩니다.
-        </div>
-        <div class="sse-list">
-          <span class="sse sse-purple">📡 SSE: key_facts</span>
-          <span class="sse sse-purple">📡 SSE: generating</span>
-          <span class="sse sse-purple">📡 SSE: token (스트리밍)</span>
-          <span class="sse sse-purple">📡 SSE: done</span>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="card">
-    <h3 style="margin-bottom:14px;">6-1. 컨텍스트 조립</h3>
-    <pre>matched_sources 각각에 대해:
-
-① scan_chunks        ← scan_node가 찾아준 ±400자 윈도우 (이미 정제됨)
-② fitz head[:5000]  ← 문서 앞 5000자 (메타, 총괄 수치 포함)
-③ keyword_target     ← 나머지 구간에서 키워드 슬라이딩 검색
-
-combined = ①  +  ②  +  ③  (최대 15,000자)</pre>
-  </div>
-
-  <div class="card" style="border-color: rgba(16,185,129,0.3);">
-    <h3 style="color:#34d399; margin-bottom:14px;">6-2. key_facts 추출 (핵심 수치 강제 고정)</h3>
-    <p style="color:var(--muted); font-size:14px; margin-bottom:12px;">
-      LLM이 학습 데이터 기억으로 환각하는 것을 막기 위해, <strong style="color:var(--text)">Python regex로 문서에서 직접 수치 포함 문장을 추출</strong>합니다.
-    </p>
-
-    <div class="kf-flow">
-      <div class="kf-box" style="background:rgba(16,185,129,0.1); border-color:rgba(16,185,129,0.3); color:#a7f3d0;">
-        scan_chunks<br><span style="font-size:11px; color:var(--dim)">min_score=1 (관대)</span>
-      </div>
-      <div class="kf-arrow">+</div>
-      <div class="kf-box" style="background:rgba(139,92,246,0.1); border-color:rgba(139,92,246,0.3); color:#c4b5fd;">
-        fitz_head[:3000]<br><span style="font-size:11px; color:var(--dim)">min_score=4 (엄격)</span>
-      </div>
-      <div class="kf-arrow">→</div>
-      <div class="kf-box" style="background:rgba(234,179,8,0.1); border-color:rgba(234,179,8,0.3); color:#fde68a;">
-        중복 제거<br><span style="font-size:11px; color:var(--dim)">최대 6개</span>
-      </div>
-      <div class="kf-arrow">→</div>
-      <div class="kf-box" style="background:rgba(168,85,247,0.15); border-color:rgba(168,85,247,0.4); color:#e9d5ff;">
-        key_facts 확정<br><span style="font-size:11px; color:var(--dim)">UI + 프롬프트 이중 노출</span>
-      </div>
-    </div>
-
-    <pre style="margin-top:14px;">def _python_extract_key_facts(full_text, question, max_facts=6, min_score=1):
-    # 1. 문장 분리 (줄바꿈 + 문장 종결 어미 기준)
-    # 2. score = 숫자 패턴 수 × 3 + 질문 키워드 매칭 수
-    # 3. score ≥ min_score AND 키워드 1개 이상 포함한 문장만
-    # 4. 점수 내림차순 정렬 → 상위 max_facts개 반환</pre>
-
-    <div class="info-box info-red" style="margin-top:12px; margin-bottom:0;">
-      <strong>왜 fitz_head에 min_score=4를 쓰나?</strong><br>
-      FAO PDF 앞부분(식량가격지수 섹션)에는 <code>107.3</code> 같은 숫자가 많은데, Q2(곡물 생산량) 질문과 키워드가 겹쳐
-      잘못된 수치가 key_facts에 들어가는 오염이 발생했었음. min_score=4로 엄격히 필터하면 관련도 낮은 수치는 걸러진다.
-    </div>
-  </div>
-
-  <div class="card" style="border-color: rgba(168,85,247,0.35);">
-    <h3 style="color:#d8b4fe; margin-bottom:14px;">6-3. 이중 노출(Forced-Quote) 프롬프트</h3>
-    <p style="color:var(--muted); font-size:14px; margin-bottom:12px;">
-      key_facts를 <strong style="color:var(--text)">시스템 프롬프트 + 유저 메시지 양쪽에 모두</strong> 삽입합니다.<br>
-      Gemma3:12b처럼 IFEval 점수가 높은 모델은 이 규칙을 따라 학습 기억을 무시하고 문서 수치를 그대로 씁니다.
-    </p>
-    <pre>--- 시스템 프롬프트 ---
-[문서에서 직접 추출한 핵심 인용 — 아래 수치만 사용할 것]
-  "DX부문은 2030년 탄소중립 달성을 목표로 2024년 말 기준 전체 에너지의 93.4%가..."
-
-[절대 규칙]
-1. 숫자·비율·날짜는 반드시 [핵심 인용] 또는 [문서 발췌]에 있는 것만 쓰세요.
-2. 학습 데이터에서 알고 있는 수치를 쓰면 안 됩니다.
-...
-
---- 유저 메시지 ---
-[문서 핵심 인용]
-- "DX부문은 2030년 탄소중립 달성을 목표로 2024년 말 기준 전체 에너지의 93.4%가..."
-
-위 인용문의 수치를 그대로 사용해서 다음 질문에 답하세요:
-삼성전자의 2030년 탄소중립 목표와 2024년 재생에너지 전환율은?</pre>
-  </div>
-</section>
-
-<!-- ══════════ 7. 모델 선택 이유 ══════════ -->
-<section>
-  <h2><span class="num">7</span>모델 선택 — 왜 Gemma3:12b인가?</h2>
-
-  <div class="card">
-    <h3 style="margin-bottom:12px;">RAG에서 환각이 발생하는 이유</h3>
-    <div class="info-box info-red" style="margin-bottom:14px;">
-      RAG는 "이 문서만 봐"라고 지시하는 방식인데, <strong>작은 모델은 유명한 정보에 대한 학습 prior가 너무 강해서</strong>
-      문서를 눈앞에 줘도 학습 기억을 꺼냅니다.<br><br>
-      삼성 ESG는 공개된 유명 보고서 → Qwen7b 학습 데이터에 이미 포함
-      → "내가 아는 게 50%/100%인데 문서가 93.4%라고?" → 문서 무시 → 환각
-    </div>
-
-    <table>
-      <tr>
-        <th>모델</th>
-        <th>디스크</th>
-        <th>VRAM</th>
-        <th>IFEval↑</th>
-        <th>Q4 (93.4%)</th>
-        <th>RTX 4060</th>
-      </tr>
-      <tr>
-        <td>Qwen2.5:7b</td>
-        <td>4.7GB</td>
-        <td>5.5GB</td>
-        <td>71.2</td>
-        <td class="bad">❌ 100% 환각</td>
-        <td class="ok">✅</td>
-      </tr>
-      <tr>
-        <td>Qwen2.5:14b</td>
-        <td>9GB</td>
-        <td>10GB</td>
-        <td>81.0</td>
-        <td>—</td>
-        <td class="bad">❌ VRAM 초과</td>
-      </tr>
-      <tr>
-        <td><strong>Gemma3:12b ✓</strong></td>
-        <td>8.1GB</td>
-        <td>~8.5GB</td>
-        <td class="ok"><strong>88.9</strong></td>
-        <td class="ok"><strong>✅ 93.4% 정답</strong></td>
-        <td class="warn">⚠️ CPU offload</td>
-      </tr>
-      <tr>
-        <td>Gemma3:27b</td>
-        <td>17GB</td>
-        <td>17GB</td>
-        <td>90.4</td>
-        <td>—</td>
-        <td class="bad">❌ 불가</td>
-      </tr>
-    </table>
-    <p style="color:var(--muted); font-size:12px; margin-top:10px;">
-      IFEval = "지시 준수 능력" 벤치마크. 높을수록 시스템 프롬프트 규칙을 잘 따름 → RAG 정확도의 핵심 지표.
-    </p>
-  </div>
-</section>
-
-<!-- ══════════ 8. UI 실시간 업데이트 ══════════ -->
-<section>
-  <h2><span class="num">8</span>UI 실시간 업데이트 흐름</h2>
-
-  <div class="card">
-    <p style="color:var(--muted); font-size:14px; margin-bottom:18px;">
-      백엔드 각 노드가 완료될 때마다 SSE 이벤트를 보내고, 프론트엔드가 즉시 UI를 업데이트합니다.
-    </p>
-    <div class="timeline">
-      <div class="tl-item">
-        <div class="tl-dot"></div>
-        <div class="tl-label">📡 route</div>
-        <div class="tl-desc">라우팅 결과 수신 → <strong>RAG · 파일 검색</strong> 뱃지 표시</div>
-      </div>
-      <div class="tl-item">
-        <div class="tl-dot"></div>
-        <div class="tl-label">📡 intent</div>
-        <div class="tl-desc">의도메시지 + 키워드 수신 → <strong>"삼성전자 탄소중립 목표와 재생에너지 전환율을 문서에서 찾아드릴게요."</strong> + 키워드 태그 표시</div>
-      </div>
-      <div class="tl-item">
-        <div class="tl-dot"></div>
-        <div class="tl-label">📡 candidates</div>
-        <div class="tl-desc">후보 파일 목록 수신 → 오른쪽 패널에 <strong>파일 카드</strong> 즉시 표시</div>
-      </div>
-      <div class="tl-item">
-        <div class="tl-dot"></div>
-        <div class="tl-label">📡 scanning / scan_result</div>
-        <div class="tl-desc">파일별로 스캔 진행 → 왼쪽 스캔 로그에 <strong>스캔 중 / 발견됨 / 없음</strong> 애니메이션. 파일 카드에도 상태 오버레이 표시</div>
-      </div>
-      <div class="tl-item">
-        <div class="tl-dot"></div>
-        <div class="tl-label">📡 selected</div>
-        <div class="tl-desc">최종 소스 확정 → 출처 목록 업데이트</div>
-      </div>
-      <div class="tl-item">
-        <div class="tl-dot" style="background:#10b981"></div>
-        <div class="tl-label" style="color:#34d399">📡 key_facts (신규)</div>
-        <div class="tl-desc">Python이 추출한 핵심 인용문 → <strong>📌 핵심 인용</strong> 섹션으로 초록 카드에 표시</div>
-      </div>
-      <div class="tl-item">
-        <div class="tl-dot" style="background:#8b5cf6"></div>
-        <div class="tl-label">📡 generating (신규)</div>
-        <div class="tl-desc">LLM 생성 시작 → <strong>"답변 생성 중…"</strong> 스피너 표시</div>
-      </div>
-      <div class="tl-item">
-        <div class="tl-dot" style="background:#a78bfa"></div>
-        <div class="tl-label">📡 token × N</div>
-        <div class="tl-desc">답변 토큰 스트리밍 → 글자가 실시간으로 하나씩 추가됨. 생성 중 스피너 사라짐</div>
-      </div>
-      <div class="tl-item">
-        <div class="tl-dot" style="background:#34d399"></div>
-        <div class="tl-label">📡 done</div>
-        <div class="tl-desc">생성 완료 → 커서 블링크 사라짐, 출처 링크 클릭 가능</div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ══════════ 9. 알려진 한계 ══════════ -->
-<section>
-  <h2><span class="num">9</span>알려진 한계 & 개선 방향</h2>
-  <div class="card-row">
-    <div class="card card-half" style="border-color:rgba(239,68,68,0.25);">
-      <h3 style="color:#fca5a5;">Q1 원인 파악 미흡</h3>
-      <p style="color:var(--muted); font-size:13.5px; margin-bottom:8px;">
-        FAO 가격지수 <strong>128.5</strong>는 맞추지만, 유지류/설탕 상승 원인을 못 찾음.
-      </p>
-      <p style="font-size:12.5px; color:var(--dim);">
-        원인: 질문에 "팜유", "말레이시아", "해바라기유", "에탄올", "브라질" 키워드가 없어 scan_node가 해당 단락을 아예 찾지 못함.<br>
-        → 개선: 질문 키워드 → 관련 키워드 자동 확장(Query Expansion) 로직 필요
-      </p>
-    </div>
-    <div class="card card-half" style="border-color:rgba(239,68,68,0.25);">
-      <h3 style="color:#fca5a5;">Q3 이해관계자 채널 환각</h3>
-      <p style="color:var(--muted); font-size:13.5px; margin-bottom:8px;">
-        "Slack", "월례 보고회" 등 문서에 없는 내용 출력.
-      </p>
-      <p style="font-size:12.5px; color:var(--dim);">
-        원인: Samsung ESG 이해관계자 소통 채널이 표(Table) 형태로 PDF에 있어 fitz가 평탄화하면서 맥락 손실.<br>
-        → 개선: PDF 표 구조 파싱(pdfplumber 등) + 표 행·열 재구성
-      </p>
-    </div>
-  </div>
-</section>
-
-<hr>
-<p style="text-align:center; color:var(--dim); font-size:12px; padding-top:8px;">
-  AIMODE RAG Pipeline v8.3 · Gemma3:12b · LangGraph · 2026-05-06
-</p>
-
+  show(0);
+</script>
 </body>
 </html>

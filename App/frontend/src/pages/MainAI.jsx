@@ -298,9 +298,7 @@ function FileCard({ source, index, scanState, selected, onClick }) {
   );
 }
 
-// AI 답변 안전장치 — 시스템 프롬프트로 마크다운 금지했지만,
-// LLM 이 이를 어길 경우를 대비한 프론트엔드 폴리필.
-// 별표/헤딩/백틱/인용/하이픈 불릿 → 평문 변환
+// [legacy] aimodeAnswer 카드(turns.length===0 폴백)에서만 사용되는 평문화 폴리필.
 function stripMarkdown(text) {
   if (!text) return text;
   return text
@@ -312,31 +310,252 @@ function stripMarkdown(text) {
     .replace(/^[-*_]{3,}\s*$/gm, "")
     .replace(/^(\s*)[-*]\s+/gm, "$1• ");
 }
-function renderAnswer(text) {
+
+// [v3.2] 마크다운 → React 노드 렌더러 (## 헤딩, - 불릿, **굵게**, [출처N] 칩).
+// 백엔드가 간결한 마크다운으로 답변하도록 프롬프팅됨.
+function renderInlineMd(text, baseKey = "i") {
   if (!text) return null;
-  return text.split(/(\[출처\d+\])/g).map((part, i) =>
-    /^\[출처\d+\]$/.test(part) ? (
-      <span
-        key={i}
-        style={{
-          background: "rgba(139,92,246,0.2)",
-          color: "#a78bfa",
-          border: "1px solid rgba(139,92,246,0.3)",
-          fontWeight: 700,
-          fontSize: 11,
-          padding: "1px 6px",
-          borderRadius: 5,
-          margin: "0 2px",
-          verticalAlign: "middle",
-          display: "inline-block",
-        }}
-      >
-        {part}
-      </span>
-    ) : (
-      <span key={i}>{part}</span>
-    ),
-  );
+  // 1단계: [출처N] 토큰 분리
+  const segments = text.split(/(\[출처\d+\])/g);
+  const out = [];
+  segments.forEach((seg, segIdx) => {
+    if (/^\[출처\d+\]$/.test(seg)) {
+      out.push(
+        <span
+          key={`${baseKey}-src-${segIdx}`}
+          style={{
+            background: "rgba(139,92,246,0.2)",
+            color: "#a78bfa",
+            border: "1px solid rgba(139,92,246,0.3)",
+            fontWeight: 700,
+            fontSize: 11,
+            padding: "1px 6px",
+            borderRadius: 5,
+            margin: "0 2px",
+            verticalAlign: "middle",
+            display: "inline-block",
+          }}
+        >
+          {seg}
+        </span>,
+      );
+      return;
+    }
+    // 2단계: **bold** / `code` / *italic*
+    const re = /(\*\*[^*\n]+\*\*)|(`[^`\n]+`)|(\*[^*\n]+\*)/g;
+    let last = 0;
+    let m;
+    let tokIdx = 0;
+    while ((m = re.exec(seg)) !== null) {
+      if (m.index > last)
+        out.push(
+          <span key={`${baseKey}-${segIdx}-t${tokIdx++}`}>{seg.slice(last, m.index)}</span>,
+        );
+      const tok = m[0];
+      if (tok.startsWith("**"))
+        out.push(
+          <strong
+            key={`${baseKey}-${segIdx}-t${tokIdx++}`}
+            style={{ color: "#f5f3ff", fontWeight: 700 }}
+          >
+            {tok.slice(2, -2)}
+          </strong>,
+        );
+      else if (tok.startsWith("`"))
+        out.push(
+          <code
+            key={`${baseKey}-${segIdx}-t${tokIdx++}`}
+            style={{
+              padding: "1px 6px",
+              borderRadius: 4,
+              background: "rgba(139,92,246,0.15)",
+              border: "1px solid rgba(139,92,246,0.25)",
+              color: "#e9d5ff",
+              fontFamily: "ui-monospace, monospace",
+              fontSize: "0.92em",
+            }}
+          >
+            {tok.slice(1, -1)}
+          </code>,
+        );
+      else
+        out.push(
+          <em
+            key={`${baseKey}-${segIdx}-t${tokIdx++}`}
+            style={{ color: "#e9d5ff", fontStyle: "italic" }}
+          >
+            {tok.slice(1, -1)}
+          </em>,
+        );
+      last = m.index + tok.length;
+    }
+    if (last < seg.length)
+      out.push(<span key={`${baseKey}-${segIdx}-t${tokIdx++}`}>{seg.slice(last)}</span>);
+  });
+  return out;
+}
+
+function MarkdownAnswer({ text }) {
+  if (!text) return null;
+  const lines = text.split("\n");
+  const blocks = [];
+  let para = [];
+  let list = null;
+
+  const flushPara = () => {
+    if (para.length) {
+      blocks.push(
+        <p
+          key={`p${blocks.length}`}
+          style={{
+            margin: "0 0 8px 0",
+            lineHeight: 1.7,
+          }}
+        >
+          {renderInlineMd(para.join(" "), `p${blocks.length}`)}
+        </p>,
+      );
+      para = [];
+    }
+  };
+  const flushList = () => {
+    if (list && list.items.length) {
+      const Tag = list.type === "ol" ? "ol" : "ul";
+      blocks.push(
+        <Tag
+          key={`l${blocks.length}`}
+          style={{
+            margin: "4px 0 10px 0",
+            paddingLeft: 22,
+            lineHeight: 1.7,
+          }}
+        >
+          {list.items.map((it, i) => (
+            <li
+              key={i}
+              style={{
+                marginBottom: 4,
+                color: "#f1f5f9",
+                paddingLeft: 4,
+              }}
+            >
+              {renderInlineMd(it, `li${blocks.length}-${i}`)}
+            </li>
+          ))}
+        </Tag>,
+      );
+      list = null;
+    }
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trimEnd();
+    if (!line.trim()) {
+      flushPara();
+      flushList();
+      continue;
+    }
+    let m;
+    // 헤딩
+    if ((m = /^###\s+(.+)$/.exec(line))) {
+      flushPara();
+      flushList();
+      blocks.push(
+        <h4
+          key={`h${blocks.length}`}
+          style={{
+            margin: "10px 0 6px 0",
+            fontSize: 14,
+            fontWeight: 700,
+            color: "#c4b5fd",
+          }}
+        >
+          {renderInlineMd(m[1], `h${blocks.length}`)}
+        </h4>,
+      );
+      continue;
+    }
+    if ((m = /^##\s+(.+)$/.exec(line))) {
+      flushPara();
+      flushList();
+      blocks.push(
+        <h3
+          key={`h${blocks.length}`}
+          style={{
+            margin: "12px 0 8px 0",
+            fontSize: 15,
+            fontWeight: 700,
+            color: "#f5f3ff",
+            paddingLeft: 8,
+            borderLeft: "3px solid #a78bfa",
+          }}
+        >
+          {renderInlineMd(m[1], `h${blocks.length}`)}
+        </h3>,
+      );
+      continue;
+    }
+    if ((m = /^#\s+(.+)$/.exec(line))) {
+      flushPara();
+      flushList();
+      blocks.push(
+        <h3
+          key={`h${blocks.length}`}
+          style={{
+            margin: "12px 0 8px 0",
+            fontSize: 16,
+            fontWeight: 700,
+            color: "#f5f3ff",
+          }}
+        >
+          {renderInlineMd(m[1], `h${blocks.length}`)}
+        </h3>,
+      );
+      continue;
+    }
+    // 수평선
+    if (/^[-*_]{3,}\s*$/.test(line)) {
+      flushPara();
+      flushList();
+      blocks.push(
+        <hr
+          key={`hr${blocks.length}`}
+          style={{
+            margin: "10px 0",
+            border: "none",
+            borderTop: "1px solid rgba(139,92,246,0.2)",
+          }}
+        />,
+      );
+      continue;
+    }
+    // 순서 있는 리스트
+    if ((m = /^\d+\.\s+(.+)$/.exec(line))) {
+      flushPara();
+      if (!list || list.type !== "ol") {
+        flushList();
+        list = { type: "ol", items: [] };
+      }
+      list.items.push(m[1]);
+      continue;
+    }
+    // 순서 없는 리스트
+    if ((m = /^[-*]\s+(.+)$/.exec(line))) {
+      flushPara();
+      if (!list || list.type !== "ul") {
+        flushList();
+        list = { type: "ul", items: [] };
+      }
+      list.items.push(m[1]);
+      continue;
+    }
+    // 일반 문단
+    flushList();
+    para.push(line.trim());
+  }
+  flushPara();
+  flushList();
+  return <div>{blocks}</div>;
 }
 
 function isNoInfoCenterAlert(text) {
@@ -769,35 +988,38 @@ function QACard({
 
 // ── TurnView (하나의 대화 턴) ──────────────────────────────────────
 function TurnView({ turn, isLatest, onClickSource, onClickFile }) {
+  // [v3 chat] turn 객체가 누락 필드를 가질 수 있어 default 값 안전 가드.
+  // 채팅방 복원 시 또는 v3 done 핸들러가 push 한 turn 은 일부 필드만 채움.
   const {
-    query,
-    route,
-    intentMessage,
-    fileKeywords,
-    detailKeywords,
-    candidates,
-    scanStates,
-    scanChunks,
-    scannedCount,
-    foundCount,
-    sources,
-    answer,
-    streaming,
-    done,
-    error,
-    keyFacts,
-    generating,
-    qaGenerating,
-    qaAttempt,
-    qaMax,
-    qaQuestion,
-    qaAnswer,
-    qaValid,
-    qaIssues,
-    qaSources,
-    blocked,
-    security,
-  } = turn;
+    query           = "",
+    route           = "",
+    intentMessage   = "",
+    fileKeywords    = [],
+    detailKeywords  = [],
+    candidates      = [],
+    scanStates      = {},
+    scanChunks      = {},
+    scannedCount    = 0,
+    foundCount      = 0,
+    sources         = [],
+    answer          = "",
+    streaming       = false,
+    done            = true,
+    error           = null,
+    keyFacts        = [],
+    generating      = false,
+    qaGenerating    = false,
+    qaAttempt       = 0,
+    qaMax           = 0,
+    qaQuestion      = "",
+    qaAnswer        = "",
+    qaValid         = false,
+    qaIssues        = [],
+    qaSources       = [],
+    blocked         = null,
+    security        = null,
+    references      = [],   // [v3 chat] turn 의 원본 위치 references (extract 노드)
+  } = turn || {};
   const isChatMode = route === "chat";
   const isQaMode = route === "qa_gen";
   const showCenterNotice = done && !streaming && isNoInfoCenterAlert(answer);
@@ -1312,6 +1534,130 @@ function TurnView({ turn, isLatest, onClickSource, onClickFile }) {
                 </span>
               </div>
             )}
+            {/* [v3 chat] 원본 위치 references — **답변 위에 먼저 표시** (출처가 답변 근거).
+                streaming 중에도 references 채워지면 표시 (extract 이벤트가 generate 이전). */}
+            {references.length > 0 && (
+              <div
+                style={{
+                  marginBottom: 10,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 6,
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    color: "#6ee7b7",
+                    fontSize: 10.5,
+                    fontWeight: 700,
+                    letterSpacing: "0.14em",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  <span
+                    className="material-symbols-outlined"
+                    style={{ fontSize: 14, fontVariationSettings: '"FILL" 1' }}
+                  >
+                    bookmark
+                  </span>
+                  출처 ({references.length})
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 6,
+                  }}
+                >
+                  {references.slice(0, 10).map((ref, i) => {
+                    const tag =
+                      ref.page != null
+                        ? `${ref.page}페이지`
+                        : ref.timestamp
+                          ? ref.timestamp
+                          : "";
+                    return (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => {
+                          // [v3.1] sources 중 file_name 일치하는 source 찾아서 보강 → handleSelectFile 가 detail fetch 가능
+                          const matched = sources.find(
+                            (s) =>
+                              s.file_name === ref.src ||
+                              s.file_name?.includes(ref.src),
+                          );
+                          onClickSource?.({
+                            ...(matched || {}),
+                            file_name:    ref.src,
+                            page_num:     ref.page,
+                            timestamp:    ref.timestamp,
+                            snippet:      ref.snippet,
+                            trichef_id:   ref.trichef_id || matched?.trichef_id,
+                            file_path:    ref.file_path  || matched?.file_path,
+                            selected_page: ref.page,
+                            _from_ref:    true,
+                          });
+                        }}
+                        title={ref.snippet || ""}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 6,
+                          padding: "4px 10px",
+                          borderRadius: 9,
+                          fontSize: 11,
+                          fontWeight: 600,
+                          color: "#bbf7d0",
+                          background: "rgba(16,185,129,0.12)",
+                          border: "1px solid rgba(16,185,129,0.30)",
+                          cursor: "pointer",
+                          transition: "all 0.15s",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = "rgba(16,185,129,0.25)";
+                          e.currentTarget.style.borderColor = "rgba(16,185,129,0.55)";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = "rgba(16,185,129,0.12)";
+                          e.currentTarget.style.borderColor = "rgba(16,185,129,0.30)";
+                        }}
+                      >
+                        {/* [v3.1] 순서 변경: 파일 → 페이지 */}
+                        <span
+                          style={{
+                            opacity: 0.92,
+                            maxWidth: 180,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {ref.src}
+                        </span>
+                        {tag && (
+                          <span
+                            style={{
+                              fontWeight: 700,
+                              padding: "1px 6px",
+                              borderRadius: 4,
+                              background: "rgba(16,185,129,0.25)",
+                              color: "#86efac",
+                            }}
+                          >
+                            {tag}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* 답변 (qa_gen이 아닌 경우만 표시) */}
             {shouldRenderInlineAnswer && (
               <div
@@ -1329,13 +1675,12 @@ function TurnView({ turn, isLatest, onClickSource, onClickFile }) {
                   fontSize: 15,
                   color: "#f1f5f9",
                   lineHeight: 1.85,
-                  whiteSpace: "pre-wrap",
                   letterSpacing: "-0.01em",
                   backdropFilter: "blur(8px) saturate(1.05)",
                   boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08)",
                 }}
               >
-                {renderAnswer(stripMarkdown(answer))}
+                <MarkdownAnswer text={answer} />
                 {streaming && (
                   <span
                     style={{
@@ -1352,54 +1697,7 @@ function TurnView({ turn, isLatest, onClickSource, onClickFile }) {
               </div>
             )}
 
-            {/* 출처 */}
-            {done && sources.length > 0 && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                {sources.map((src, i) => (
-                  <button
-                    key={i}
-                    onClick={() => onClickSource?.(src)}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                      padding: "3px 6px",
-                      borderRadius: 6,
-                      fontSize: 11,
-                      background: "transparent",
-                      border: "none",
-                      cursor: "pointer",
-                      color: "#4b5563",
-                      textAlign: "left",
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: 11,
-                        fontWeight: 700,
-                        flexShrink: 0,
-                        background: "rgba(139,92,246,0.15)",
-                        color: AI.accentLight,
-                        padding: "2px 7px",
-                        borderRadius: 4,
-                      }}
-                    >
-                      출처{i + 1}
-                    </span>
-                    <span
-                      style={{
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                        fontSize: 12.5,
-                      }}
-                    >
-                      {src.file_name || "?"}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
+            {/* [v3.1] sources list (출처1, 출처2, ...) 는 위의 references chip 으로 대체됨 — 중복 표시 제거 */}
 
             {/* 에러 */}
             {error && (
@@ -1688,6 +1986,20 @@ export default function MainAI() {
   const [aimodeQuery, setAimodeQuery] = useState("");
   const [aimodeContentKws, setAimodeContentKws] = useState([]);
   const [aimodeDetailKws, setAimodeDetailKws] = useState([]);
+  const [aimodeMode, setAimodeMode] = useState(""); // [v3] "structured" | "open" | "followup" | ""
+  const [aimodeReferences, setAimodeReferences] = useState([]); // [v3] extract 노드 references
+  const [chatThreadId, setChatThreadId] = useState(null); // [v3 chat] 현재 채팅방 thread_id (사이드바 active 표시용)
+  const [chatRefreshTrigger, setChatRefreshTrigger] = useState(0); // [v3 chat] 사이드바 채팅방 목록 새로고침 트리거 (done 시 ++)
+  const [zoomImage, setZoomImage] = useState(null); // [v3.1] 페이지 이미지 확대 modal {src, title}
+  const [pdfExporting, setPdfExporting] = useState(false); // [v3.2] 대화 → PDF 정리 export 진행 중 여부
+
+  // [v3.1] ESC 로 zoom modal 닫기
+  useEffect(() => {
+    if (!zoomImage) return;
+    const onKey = (e) => { if (e.key === "Escape") setZoomImage(null); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [zoomImage]);
   const [aimodeSources, setAimodeSources] = useState([]);
   const [aimodeSelected, setAimodeSelected] = useState(null);
   const [aimodeAnswer, setAimodeAnswer] = useState("");
@@ -1859,7 +2171,8 @@ export default function MainAI() {
 
       setStreaming(true);
       setResults([]);
-      setTurns([]);
+      // [v3 chat] turns 는 검색 시작 시 초기화 X — 같은 thread 안에서 누적.
+      // 새 채팅(새 thread_id)일 때만 사이드바의 "새 채팅" 버튼에서 명시적으로 초기화.
       setIterationData([]);
       setDomainSelection(null);
       setAiError("");
@@ -1867,11 +2180,13 @@ export default function MainAI() {
       activeQueryRef.current = q;
       setHasLLM(undefined);
 
-      // AIMODE 시각화 상태 초기화
+      // [v3 chat] 진행 중 turn 의 시각화 상태만 초기화 — 이전 turn 들은 turns 배열에 보존.
       setAimodeSteps([]);
       setAimodeQuery("");
       setAimodeContentKws([]);
       setAimodeDetailKws([]);
+      setAimodeMode("");
+      setAimodeReferences([]);
       setAimodeSources([]);
       setAimodeSelected(null);
       setAimodeAnswer("");
@@ -1907,6 +2222,8 @@ export default function MainAI() {
         } catch {}
       }
       window.__aimodeThreadId = tid;
+      // [v3 chat] 사이드바 active 상태 동기화
+      setChatThreadId(tid);
       const body = useAimode
         ? { query: q, topk: topK, thread_id: tid, secure: securityMode }
         : {
@@ -2042,6 +2359,16 @@ export default function MainAI() {
         const items = ev.items || [];
         const mapped = items.map(mapItem);
         setAimodeSources(mapped);
+        // [v3 chat] 마지막 streaming turn 의 sources 도 즉시 동기화 (stale state 방지)
+        setTurns((prev) => {
+          if (prev.length === 0) return prev;
+          const last = prev[prev.length - 1];
+          if (!last.streaming) return prev;
+          return [
+            ...prev.slice(0, -1),
+            { ...last, sources: [...mapped] },
+          ];
+        });
         // ★ 동일 데이터를 큰 카드 그리드로도 렌더 (MainSearch 와 동일한 UX)
         setResults(mapped);
         const histQ = activeQueryRef.current || ev.query || finalQuery || "";
@@ -2066,7 +2393,27 @@ export default function MainAI() {
         if (ev.message) setAimodeQuery(ev.message);
         if (ev.file_keywords) setAimodeContentKws(ev.file_keywords);
         if (ev.detail_keywords) setAimodeDetailKws(ev.detail_keywords);
+        if (ev.mode) setAimodeMode(ev.mode); // [v3] structured | open | followup
         setAimodeStage("searching");
+        break;
+
+      case "extract":
+        // [v3] extract 노드 references — UI 패널 + 답변 인용 chip 매핑
+        if (Array.isArray(ev.references)) {
+          setAimodeReferences(ev.references);
+          // [v3 chat] 마지막 streaming turn 의 references 도 즉시 update.
+          // (done 이벤트가 setAimodeReferences 비동기 setState 보다 먼저 처리되면
+          //  stale 값으로 turn 채워서 references 누락. 여기서 직접 update.)
+          setTurns((prev) => {
+            if (prev.length === 0) return prev;
+            const last = prev[prev.length - 1];
+            if (!last.streaming) return prev;
+            return [
+              ...prev.slice(0, -1),
+              { ...last, references: [...ev.references] },
+            ];
+          });
+        }
         break;
 
       case "scanning":
@@ -2110,18 +2457,67 @@ export default function MainAI() {
         setAimodeStage("generating");
         break;
 
-      case "token":
-        setAimodeAnswer((prev) => prev + (ev.text || ""));
+      case "token": {
+        const piece = ev.text || "";
+        setAimodeAnswer((prev) => prev + piece);
+        // [v3 chat] 마지막 streaming turn 의 answer 도 실시간 누적 (말풍선 안에 표시)
+        setTurns((prev) => {
+          if (prev.length === 0) return prev;
+          const last = prev[prev.length - 1];
+          if (!last.streaming) return prev;
+          return [
+            ...prev.slice(0, -1),
+            { ...last, answer: (last.answer || "") + piece },
+          ];
+        });
         break;
+      }
 
-      case "done":
+      case "done": {
         setAimodeDone(true);
         setAimodeStage("idle");
+        const finalAnswer = ev.answer || aimodeAnswer;
         if (ev.answer) setAimodeAnswer(ev.answer);
         if (ev.security) setAimodeSecurity(ev.security);
         if (typeof ev.selected_idx === "number")
           setAimodeSelected(ev.selected_idx);
+        // [v3 chat] 사이드바 채팅방 목록 새로고침 트리거 — done 후 백엔드에 새 thread 저장됨
+        setChatRefreshTrigger((t) => t + 1);
+        // [v3 chat] submitQuery 가 만든 streaming turn 의 완료 처리.
+        // 새 turn push 가 아니라 마지막 streaming turn 을 update.
+        // 주의: references / sources 는 extract / selected 핸들러가 이미 직접 채웠을 수 있음.
+        //       last.X 가 비어있을 때만 state fallback 사용 (stale state 덮어쓰기 방지).
+        setTurns((prev) => {
+          if (prev.length === 0) return prev;
+          const last = prev[prev.length - 1];
+          if (!last.streaming) return prev;
+          const lastRefs = (last.references && last.references.length > 0)
+            ? last.references
+            : [...(aimodeReferences || [])];
+          const lastSrcs = (last.sources && last.sources.length > 0)
+            ? last.sources
+            : [...(aimodeSources || [])];
+          return [
+            ...prev.slice(0, -1),
+            {
+              ...last,
+              answer:         finalAnswer || last.answer,
+              route:          "rag",
+              intentMessage:  aimodeQuery || last.intentMessage,
+              fileKeywords:   [...(aimodeContentKws || [])],
+              detailKeywords: [...(aimodeDetailKws || [])],
+              sources:        lastSrcs,
+              references:     lastRefs,
+              mode:           aimodeMode,
+              streaming:      false,
+              done:           true,
+              generating:     false,
+              security:       ev.security || null,
+            },
+          ];
+        });
         break;
+      }
 
       case "blocked":
         setAimodeDone(true);
@@ -2219,7 +2615,8 @@ export default function MainAI() {
     const searchQ = String(q ?? "").trim();
     if (!searchQ || searchTransitioning || homeExiting) return;
     setQuery(searchQ);
-    setInputValue(searchQ);
+    // [v3 chat] 입력창은 submitQuery 가 이미 비웠음. doSearch 가 다시 채우면 안 됨
+    // (예전엔 results view 의 검색창에 query 표시 목적이었으나, 채팅 UX 에선 비우는 게 우선).
 
     if (view === "home") {
       setHomeExiting(true);
@@ -2254,8 +2651,216 @@ export default function MainAI() {
     if (prev.q === q && now - prev.ts < 450) return;
     submitGuardRef.current = { q, ts: now };
     setHomeInputExpandedLocked(false);
+    // [v3 chat] 전송 후 입력창 비우기 — 사용자 의도 확실
+    setInputValue("");
+    // [v3 chat] **즉시** turn push — 사용자 말풍선 입력 직후 화면 위로 올라가게.
+    // token 이벤트마다 마지막 turn 의 answer 누적, done 에서 완료 처리.
+    setTurns((t) => [
+      ...t,
+      {
+        id:             `turn_pending_${now}`,
+        query:          q,
+        answer:         "",
+        route:          "",
+        intentMessage:  "",
+        fileKeywords:   [],
+        detailKeywords: [],
+        candidates:     [],
+        scanStates:     {},
+        scanChunks:     {},
+        scannedCount:   0,
+        foundCount:     0,
+        sources:        [],
+        streaming:      true,
+        done:           false,
+        error:          null,
+        keyFacts:       [],
+        generating:     true,
+        blocked:        null,
+        security:       null,
+        references:     [],
+        mode:           "",
+        ts:             now,
+      },
+    ]);
     doSearch(q);
   };
+
+  // [v3 chat] 새 채팅 시작 — turns 초기화 + 새 thread_id 발급
+  const startNewChat = useCallback(() => {
+    // 현재 turn 진행 중이면 abort
+    if (abortRef.current) {
+      try { abortRef.current.abort(); } catch {}
+    }
+    // 새 thread_id 발급
+    const newTid = `t_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    try {
+      localStorage.setItem("aimode_thread_id", JSON.stringify({
+        id: newTid,
+        expires: Date.now() + 24 * 3600 * 1000,
+      }));
+    } catch {}
+    window.__aimodeThreadId = newTid;
+    setChatThreadId(newTid);
+    // turns + 진행 중 시각화 상태 초기화
+    setTurns([]);
+    setAimodeSteps([]);
+    setAimodeQuery("");
+    setAimodeContentKws([]);
+    setAimodeDetailKws([]);
+    setAimodeMode("");
+    setAimodeReferences([]);
+    setAimodeSources([]);
+    setAimodeSelected(null);
+    setAimodeAnswer("");
+    setAimodeDone(false);
+    setAimodeBlocked(null);
+    setAimodeSecurity(null);
+    setAimodeScanStates({});
+    setAimodeStage("idle");
+    setStreaming(false);
+    setResults([]);
+    setIterationData([]);
+    setDomainSelection(null);
+    setAiError("");
+    setFinalQuery("");
+    setInputValue("");
+    activeQueryRef.current = "";
+    // 홈으로 (입력 박스 큰 화면)
+    setView("home");
+  }, []);
+
+  // [v3.2] 대화 → AI 정리·요약 → PDF 다운로드
+  const handleExportPdf = useCallback(async () => {
+    const tid = window.__aimodeThreadId || chatThreadId;
+    if (!tid) {
+      alert("저장할 대화가 없습니다.");
+      return;
+    }
+    if (pdfExporting) return;
+    setPdfExporting(true);
+    try {
+      const r = await fetch(`${API_BASE}/api/aimode/export-pdf`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ thread_id: tid }),
+      });
+      if (!r.ok) {
+        let msg = `HTTP ${r.status}`;
+        try {
+          const j = await r.json();
+          msg = j.error || j.hint || msg;
+          if (j.hint) msg += `\n${j.hint}`;
+        } catch {}
+        alert(`PDF 생성 실패:\n${msg}`);
+        return;
+      }
+      // 헤더에서 파일명 추출
+      const cd = r.headers.get("Content-Disposition") || "";
+      let fname = "chat.pdf";
+      // RFC5987 filename*=UTF-8''...
+      const mStar = cd.match(/filename\*\s*=\s*UTF-8''([^;]+)/i);
+      if (mStar) {
+        try { fname = decodeURIComponent(mStar[1]); } catch {}
+      } else {
+        const m = cd.match(/filename\s*=\s*"?([^";]+)"?/i);
+        if (m) fname = m[1];
+      }
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fname;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (e) {
+      console.warn("[export-pdf]", e);
+      alert(`PDF 생성 실패: ${e.message || e}`);
+    } finally {
+      setPdfExporting(false);
+    }
+  }, [chatThreadId, pdfExporting]);
+
+  // [v3 chat] 사이드바에서 채팅방 선택 — history 복원 + thread_id 전환
+  const selectThread = useCallback(async (targetTid) => {
+    if (!targetTid) return;
+    if (abortRef.current) {
+      try { abortRef.current.abort(); } catch {}
+    }
+    // thread_id 전환
+    try {
+      localStorage.setItem("aimode_thread_id", JSON.stringify({
+        id: targetTid,
+        expires: Date.now() + 24 * 3600 * 1000,
+      }));
+    } catch {}
+    window.__aimodeThreadId = targetTid;
+    setChatThreadId(targetTid);
+    // 진행 중 시각화 초기화
+    setAimodeSteps([]);
+    setAimodeQuery("");
+    setAimodeContentKws([]);
+    setAimodeDetailKws([]);
+    setAimodeMode("");
+    setAimodeReferences([]);
+    setAimodeSources([]);
+    setAimodeAnswer("");
+    setAimodeDone(false);
+    setAimodeBlocked(null);
+    setAimodeStage("idle");
+    setStreaming(false);
+    setInputValue("");
+    // history fetch → turns 복원
+    try {
+      const r = await fetch(`${API_BASE}/api/aimode/history/${targetTid}`);
+      if (r.ok) {
+        const d = await r.json();
+        const h = d.history || [];
+        // user/assistant 페어를 turn 으로 묶기
+        const restored = [];
+        for (let i = 0; i < h.length - 1; i += 2) {
+          if (h[i].role === "user" && h[i + 1].role === "assistant") {
+            restored.push({
+              id:             `restored_${i}_${targetTid.slice(-6)}`,
+              query:          h[i].content,
+              answer:         h[i + 1].content,
+              route:          "rag",
+              intentMessage:  "",
+              fileKeywords:   [],
+              detailKeywords: [],
+              candidates:     [],
+              scanStates:     {},
+              scanChunks:     {},
+              scannedCount:   0,
+              foundCount:     0,
+              sources:        [],
+              streaming:      false,
+              done:           true,
+              error:          null,
+              keyFacts:       [],
+              generating:     false,
+              blocked:        null,
+              security:       null,
+              references:     [],
+              mode:           "",
+              ts:             Date.parse(h[i + 1].created_at) || Date.now(),
+              restored:       true,
+            });
+          }
+        }
+        setTurns(restored);
+      } else {
+        setTurns([]);
+      }
+    } catch (e) {
+      console.warn("[selectThread] history fetch 실패", e);
+      setTurns([]);
+    }
+    // 채팅방 진입 = results view (turn 들 표시)
+    setView("results");
+  }, []);
 
   const handleSearch = (e) => {
     e?.preventDefault();
@@ -2323,6 +2928,8 @@ export default function MainAI() {
     setAimodeQuery("");
     setAimodeContentKws([]);
     setAimodeDetailKws([]);
+    setAimodeMode("");
+    setAimodeReferences([]);
     setAimodeSources([]);
     setAimodeSelected(null);
     setAimodeAnswer("");
@@ -2431,10 +3038,17 @@ export default function MainAI() {
         </div>
       )}
 
-      {/* 사이드바 */}
+      {/* 사이드바 — 기존 SearchSidebar 유지 (디자인·닫기 버튼 그대로) */}
       <SearchSidebar
         entranceOn={view === "home" ? aiHomeEntranceOn : undefined}
         onAiQuery={onAiQuery}
+        onAiNewChat={startNewChat}
+        currentChatThreadId={chatThreadId}
+        onSelectAiThread={(tid) => {
+          setChatThreadId(tid);
+          selectThread(tid);
+        }}
+        aiChatRefreshTrigger={chatRefreshTrigger}
       />
 
       {/* ════ HOME VIEW ════ */}
@@ -2787,33 +3401,6 @@ export default function MainAI() {
             )}
 
             <div style={{ flex: 1 }} />
-
-            <button
-              onClick={handleNewConversation}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 5,
-                padding: "5px 12px",
-                background: AI.card,
-                border: `1px solid ${AI.border}`,
-                borderRadius: 999,
-                fontSize: 11,
-                fontWeight: 700,
-                color: "#64748b",
-                cursor: "pointer",
-                flexShrink: 0,
-                transition: "color 0.2s, border-color 0.2s",
-              }}
-            >
-              <span
-                className="material-symbols-outlined"
-                style={{ fontSize: 14 }}
-              >
-                restart_alt
-              </span>
-              새 대화
-            </button>
           </header>
 
           {/* Two-panel */}
@@ -2848,8 +3435,8 @@ export default function MainAI() {
                   />
                 ))}
 
-                {/* ════ AIMODE: 인텐트 헤더 (질문 의도 + 키워드 칩) ════ */}
-                {useAimode && aimodeQuery && (
+                {/* ════ AIMODE: 인텐트 헤더 (질문 의도 + 키워드 칩 + [v3] mode 배지) ════ */}
+                {useAimode && aimodeQuery && turns.length === 0 && (
                   <div className="mb-4 rounded-2xl border border-violet-400/20 bg-gradient-to-br from-violet-500/[0.06] via-transparent to-fuchsia-500/[0.06] px-4 py-3">
                     <div className="flex items-center gap-2 mb-2">
                       <span
@@ -2867,6 +3454,31 @@ export default function MainAI() {
                       >
                         질문 의도 분석
                       </span>
+                      {/* [v3] mode 배지 — structured / open / followup */}
+                      {aimodeMode && (
+                        <span
+                          className={`ml-auto rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] border ${
+                            aimodeMode === "open"
+                              ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-200"
+                              : aimodeMode === "followup"
+                                ? "border-amber-400/40 bg-amber-500/15 text-amber-200"
+                                : "border-sky-400/40 bg-sky-500/15 text-sky-200"
+                          }`}
+                          title={
+                            aimodeMode === "open"
+                              ? "키워드로 모든 자료에서 검색"
+                              : aimodeMode === "followup"
+                                ? "이전 대화 파일에서 후속 검색"
+                                : "구조형 검색 (파일 한정 + 내용)"
+                          }
+                        >
+                          {aimodeMode === "open"
+                            ? "🔍 키워드 검색"
+                            : aimodeMode === "followup"
+                              ? "↩ 후속 질문"
+                              : "📂 구조 검색"}
+                        </span>
+                      )}
                     </div>
                     <p className="text-[13px] text-violet-50/95 leading-relaxed mb-2">
                       {aimodeQuery}
@@ -2895,8 +3507,10 @@ export default function MainAI() {
                   </div>
                 )}
 
+                {/* [v3.1] References 패널은 답변 카드 아래로 이동 (옵션 A) */}
+
                 {/* ════ AIMODE: 처리중 인디케이터 (눈에 띄게) ════ */}
-                {useAimode && streaming && !aimodeAnswer && !aimodeBlocked && (
+                {useAimode && streaming && !aimodeAnswer && !aimodeBlocked && turns.length === 0 && (
                   <div className="relative mb-4 overflow-hidden rounded-2xl border border-violet-400/30 bg-gradient-to-br from-violet-600/15 via-fuchsia-600/10 to-violet-600/15 px-5 py-6">
                     {/* 백그라운드 펄스 */}
                     <div className="pointer-events-none absolute inset-0 opacity-60">
@@ -3048,8 +3662,9 @@ export default function MainAI() {
                   </div>
                 )}
 
-                {/* ════ AIMODE: 답변 카드 (좌측으로 이동) ════ */}
-                {useAimode && aimodeAnswer && !aimodeBlocked && (
+                {/* ════ AIMODE: 답변 카드 (좌측으로 이동) ════
+                    [v3 chat] turn 안의 답변과 중복 방지 — TurnView 가 답변을 렌더하면 이 카드 숨김 */}
+                {useAimode && aimodeAnswer && !aimodeBlocked && turns.length === 0 && (
                   <div className="mb-4 relative overflow-hidden rounded-2xl border border-violet-400/25 bg-gradient-to-br from-white/[0.04] via-violet-500/[0.03] to-fuchsia-500/[0.04] shadow-[0_8px_32px_rgba(139,92,246,0.12)]">
                     <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-fuchsia-500/[0.06] via-transparent to-violet-500/[0.08]" />
                     <div className="relative flex items-center gap-3 border-b border-violet-400/15 px-4 py-3">
@@ -3091,7 +3706,66 @@ export default function MainAI() {
                       )}
                     </div>
                     <div className="relative px-5 py-4 text-[14px] leading-[1.7] text-violet-50/95 whitespace-pre-wrap">
-                      {stripMarkdown(aimodeAnswer)}
+                      {(() => {
+                        // [v3] 답변 본문의 (XX페이지) / [MM:SS] 자동 감지 → 클릭 chip 렌더.
+                        const text = stripMarkdown(aimodeAnswer);
+                        const CITE_RE = /(\((\d{1,4})\s*페이지\))|(\[(\d{1,2}:\d{2}(?::\d{2})?)\])/g;
+                        const parts = [];
+                        let lastIdx = 0;
+                        let match;
+                        let key = 0;
+                        while ((match = CITE_RE.exec(text)) !== null) {
+                          if (match.index > lastIdx) {
+                            parts.push(
+                              <span key={`t-${key++}`}>
+                                {text.slice(lastIdx, match.index)}
+                              </span>,
+                            );
+                          }
+                          const isPage = !!match[1];
+                          const tagLabel = match[0];
+                          const value = isPage ? parseInt(match[2], 10) : match[4];
+                          const ref = aimodeReferences.find((r) =>
+                            isPage ? r.page === value : r.timestamp === value,
+                          );
+                          const targetSrc = ref
+                            ? aimodeSources.find(
+                                (s) =>
+                                  s.file_name === ref.src ||
+                                  s.file_name?.includes(ref.src),
+                              )
+                            : null;
+                          parts.push(
+                            <button
+                              key={`c-${key++}`}
+                              type="button"
+                              onClick={() => {
+                                if (targetSrc) handleSelectFile(targetSrc);
+                              }}
+                              disabled={!targetSrc}
+                              title={ref?.snippet || ""}
+                              className={`inline-flex items-center mx-0.5 px-1.5 py-[1px] rounded-md border text-[11px] font-bold align-baseline transition-colors ${
+                                isPage
+                                  ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-200"
+                                  : "border-amber-400/40 bg-amber-500/15 text-amber-200"
+                              } ${
+                                targetSrc
+                                  ? "cursor-pointer hover:bg-emerald-500/25"
+                                  : "cursor-default opacity-70"
+                              }`}
+                            >
+                              {tagLabel}
+                            </button>,
+                          );
+                          lastIdx = match.index + match[0].length;
+                        }
+                        if (lastIdx < text.length) {
+                          parts.push(
+                            <span key={`t-${key++}`}>{text.slice(lastIdx)}</span>,
+                          );
+                        }
+                        return parts;
+                      })()}
                       {!aimodeDone && (
                         <span className="inline-block w-2 h-5 bg-violet-300 ml-1 animate-pulse align-middle rounded-sm" />
                       )}
@@ -3171,6 +3845,75 @@ export default function MainAI() {
                     })()}
                   </div>
                 )}
+
+                {/* ════ [v3.1] AIMODE: References 패널 (답변 카드 아래) ════
+                    extract 노드가 만든 references — 페이지/타임스탬프 클릭 시 detail 열기.
+                    옵션 A: 답변 위에서 답변 아래로 이동 (답변 → 출처 흐름이 자연스러움). */}
+                {useAimode &&
+                  aimodeReferences.length > 0 &&
+                  aimodeAnswer &&
+                  !aimodeBlocked &&
+                  turns.length === 0 && (
+                    <div className="mb-4 rounded-2xl border border-emerald-400/20 bg-emerald-500/[0.04] px-4 py-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span
+                          className="material-symbols-outlined text-base text-emerald-300"
+                          style={{ fontVariationSettings: '"FILL" 1' }}
+                        >
+                          bookmark
+                        </span>
+                        <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-200">
+                          원본 위치 ({aimodeReferences.length})
+                        </span>
+                      </div>
+                      <div className="flex flex-col gap-1.5 max-h-[220px] overflow-y-auto pr-1">
+                        {aimodeReferences.slice(0, 12).map((ref, i) => {
+                          const tag =
+                            ref.page != null
+                              ? `${ref.page}페이지`
+                              : ref.timestamp
+                                ? ref.timestamp
+                                : "";
+                          const src = aimodeSources.find(
+                            (s) =>
+                              s.file_name === ref.src ||
+                              s.file_name?.includes(ref.src),
+                          );
+                          const clickable = !!src;
+                          return (
+                            <button
+                              key={i}
+                              type="button"
+                              onClick={() => {
+                                if (clickable) handleSelectFile(src);
+                              }}
+                              disabled={!clickable}
+                              className={`flex items-start gap-2 rounded-lg px-2.5 py-1.5 text-left transition-colors ${
+                                clickable
+                                  ? "border border-emerald-400/20 bg-emerald-500/[0.06] hover:bg-emerald-500/15 cursor-pointer"
+                                  : "border border-emerald-400/10 bg-emerald-500/[0.02] cursor-default opacity-70"
+                              }`}
+                              title={ref.snippet || ""}
+                            >
+                              {tag && (
+                                <span className="shrink-0 rounded-md border border-emerald-400/40 bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold text-emerald-100">
+                                  {tag}
+                                </span>
+                              )}
+                              <span className="flex-1 min-w-0">
+                                <span className="block text-[11px] font-semibold text-emerald-100 truncate">
+                                  {ref.src}
+                                </span>
+                                <span className="block text-[10px] text-emerald-200/70 line-clamp-2 mt-0.5">
+                                  {(ref.snippet || "").slice(0, 100)}
+                                </span>
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
 
                 <div ref={conversationEndRef} />
               </div>
@@ -3324,6 +4067,51 @@ export default function MainAI() {
                         }}
                       >
                         shield
+                      </span>
+                    </button>
+                    {/* [v3.2] 대화 → PDF 정리·저장 (입력창 내부 아이콘) */}
+                    <button
+                      type="button"
+                      onClick={handleExportPdf}
+                      disabled={pdfExporting || turns.length === 0 || isAnyStreaming}
+                      title={
+                        turns.length === 0
+                          ? "대화가 시작되면 PDF로 저장할 수 있어요"
+                          : pdfExporting
+                          ? "PDF 생성 중…"
+                          : "대화를 AI가 정리해서 PDF로 저장"
+                      }
+                      style={{
+                        background: "none",
+                        border: "none",
+                        cursor:
+                          pdfExporting || turns.length === 0 || isAnyStreaming
+                            ? "default"
+                            : "pointer",
+                        padding: 0,
+                        flexShrink: 0,
+                        color:
+                          turns.length === 0 || isAnyStreaming
+                            ? "rgba(139,92,246,0.25)"
+                            : AI.accentLight,
+                        transition: "color 0.2s",
+                        opacity: pdfExporting ? 0.6 : 1,
+                      }}
+                    >
+                      <span
+                        className="material-symbols-outlined"
+                        style={{
+                          fontSize: 16,
+                          fontVariationSettings:
+                            turns.length > 0 && !isAnyStreaming
+                              ? '"FILL" 1'
+                              : '"FILL" 0',
+                          animation: pdfExporting
+                            ? "spin 0.9s linear infinite"
+                            : "none",
+                        }}
+                      >
+                        {pdfExporting ? "progress_activity" : "picture_as_pdf"}
                       </span>
                     </button>
                   </div>
@@ -3671,10 +4459,136 @@ export default function MainAI() {
                                 maxHeight: 220,
                                 objectFit: "contain",
                                 borderRadius: 7,
+                                cursor: "zoom-in",
                               }}
+                              onClick={() => setZoomImage({
+                                src: `${API_BASE}${selectedFile.preview_url}`,
+                                title: selectedFile.file_name,
+                              })}
                             />
                           </div>
                         )}
+
+                      {/* [v3.1] doc 페이지 이미지 (references chip 클릭 시 표시).
+                          trichef_id 가 page_images/<stem>/p<N>.jpg 형태이거나 단순 stem 일 수 있음. */}
+                      {selectedFile.file_type === "doc" &&
+                        (selectedFile.selected_page != null || selectedFile.page_num != null) &&
+                        selectedFile.trichef_id && (() => {
+                          const stem = selectedFile.trichef_id.replace(/^page_images\//, "").split("/")[0];
+                          const pageNum = (selectedFile.selected_page ?? selectedFile.page_num) - 1; // UI 는 1-indexed, 파일은 0-indexed
+                          const pad = String(Math.max(0, pageNum)).padStart(4, "0");
+                          const path = `page_images/${stem}/p${pad}.jpg`;
+                          const url = `${API_BASE}/api/trichef/file?domain=doc_page&path=${encodeURIComponent(path)}`;
+                          const displayPage = selectedFile.selected_page ?? selectedFile.page_num;
+                          return (
+                            <div
+                              style={{
+                                marginBottom: 13,
+                                borderRadius: 10,
+                                background: "#06030f",
+                                padding: 10,
+                                display: "flex",
+                                flexDirection: "column",
+                                alignItems: "center",
+                                gap: 8,
+                              }}
+                            >
+                              <div
+                                style={{
+                                  alignSelf: "stretch",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "space-between",
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  color: "#86efac",
+                                  letterSpacing: "0.08em",
+                                  textTransform: "uppercase",
+                                }}
+                              >
+                                <span>📄 {displayPage}페이지 미리보기</span>
+                                <span style={{ fontSize: 10, color: "#94a3b8", textTransform: "none" }}>
+                                  클릭하여 확대
+                                </span>
+                              </div>
+                              <img
+                                src={url}
+                                alt={`${selectedFile.file_name} ${displayPage}p`}
+                                style={{
+                                  maxWidth: "100%",
+                                  maxHeight: 380,
+                                  objectFit: "contain",
+                                  borderRadius: 7,
+                                  cursor: "zoom-in",
+                                  border: "1px solid rgba(139,92,246,0.18)",
+                                }}
+                                onClick={() => setZoomImage({ src: url, title: `${selectedFile.file_name} - ${displayPage}페이지` })}
+                                onError={(e) => {
+                                  e.currentTarget.style.display = "none";
+                                  const sibling = e.currentTarget.nextElementSibling;
+                                  if (sibling) sibling.style.display = "block";
+                                }}
+                              />
+                              <div
+                                style={{
+                                  display: "none",
+                                  fontSize: 11,
+                                  color: "#fbbf24",
+                                  padding: "8px 12px",
+                                }}
+                              >
+                                ⚠️ 페이지 이미지 로드 실패 (캐시에 없음)
+                              </div>
+                              {/* [v3.1] 인용 부분 (chip 클릭 시 전달된 snippet) */}
+                              {selectedFile.snippet && (
+                                <div
+                                  style={{
+                                    alignSelf: "stretch",
+                                    marginTop: 4,
+                                    padding: "10px 12px",
+                                    borderRadius: 8,
+                                    background: "rgba(16,185,129,0.08)",
+                                    border: "1px solid rgba(16,185,129,0.22)",
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      fontSize: 10,
+                                      fontWeight: 700,
+                                      color: "#6ee7b7",
+                                      letterSpacing: "0.12em",
+                                      textTransform: "uppercase",
+                                      marginBottom: 6,
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: 4,
+                                    }}
+                                  >
+                                    <span
+                                      className="material-symbols-outlined"
+                                      style={{ fontSize: 13, fontVariationSettings: '"FILL" 1' }}
+                                    >
+                                      format_quote
+                                    </span>
+                                    인용한 부분
+                                  </div>
+                                  <div
+                                    style={{
+                                      fontSize: 12,
+                                      lineHeight: 1.6,
+                                      color: "#dcfce7",
+                                      whiteSpace: "pre-wrap",
+                                      maxHeight: 200,
+                                      overflowY: "auto",
+                                    }}
+                                  >
+                                    {selectedFile.snippet}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
 
                       {(() => {
                         const fid =
@@ -3825,6 +4739,76 @@ export default function MainAI() {
           animation:ai-scan-line 1.2s ease-in-out infinite;
         }
       `}</style>
+
+      {/* [v3.1] 페이지 이미지 확대 modal — chip 또는 미리보기 클릭 시 표시 */}
+      {zoomImage && (
+        <div
+          onClick={() => setZoomImage(null)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 9999,
+            background: "rgba(0,0,0,0.88)",
+            backdropFilter: "blur(8px)",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: "zoom-out",
+            padding: 40,
+          }}
+        >
+          <div
+            style={{
+              maxWidth: "90vw",
+              maxHeight: "85vh",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 12,
+            }}
+          >
+            {zoomImage.title && (
+              <div
+                style={{
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: "#e2e8f0",
+                  letterSpacing: "-0.01em",
+                  padding: "8px 14px",
+                  background: "rgba(139,92,246,0.15)",
+                  border: "1px solid rgba(139,92,246,0.3)",
+                  borderRadius: 8,
+                }}
+              >
+                {zoomImage.title}
+              </div>
+            )}
+            <img
+              src={zoomImage.src}
+              alt={zoomImage.title || "preview"}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                maxWidth: "90vw",
+                maxHeight: "78vh",
+                objectFit: "contain",
+                borderRadius: 8,
+                boxShadow: "0 20px 60px rgba(0,0,0,0.5)",
+                cursor: "default",
+              }}
+            />
+            <div
+              style={{
+                fontSize: 11,
+                color: "#94a3b8",
+                opacity: 0.7,
+              }}
+            >
+              어두운 영역 클릭 또는 ESC 로 닫기
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
