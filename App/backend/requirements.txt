@@ -23,3 +23,4 @@ pdfminer.six==20260107
 scenedetect==0.6.7.1
 yake==0.7.3
 reportlab==4.2.5
+fpdf2==2.7.9
