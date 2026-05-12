@@ -591,6 +591,73 @@ def _ollama_stream(messages: list[dict], model: str,
         logger.warning(f"[aimode] Ollama stream 실패: {e}")
 
 
+# ══════════════════════════════════════════════════════════════════════
+# [v3.3] 노드 종료 시 자원 해제 + 안정화 대기 헬퍼
+# ══════════════════════════════════════════════════════════════════════
+
+def _release_and_wait(
+    node_name: str,
+    seconds: float = 2.0,
+    release_embedders: bool = False,
+    release_ollama_model: str | None = None,
+    empty_cache: bool = True,
+) -> None:
+    """노드 작업 끝나면 GPU 자원 해제하고 N초 대기.
+
+    8GB VRAM 환경에서 임베더 ↔ LLM 동시 적재 시 OOM 발생 → 사이에 강제 해제 + 대기 삽입.
+
+    Args:
+        node_name: 로그용 노드 이름
+        seconds: 해제 후 대기 시간 (실제 GPU 메모리 release 보장)
+        release_embedders: True 면 검색 임베더 4개 (SigLIP2/BGE-M3/DINOv2/Reranker) 해제
+        release_ollama_model: 모델 이름 주면 Ollama keep_alive=0 요청으로 unload
+        empty_cache: torch.cuda.empty_cache() + synchronize 호출
+    """
+    actions = []
+
+    # 1) 임베더 해제 (Python 프로세스 GPU 메모리)
+    if release_embedders:
+        try:
+            free_before = _get_free_vram_mb()
+            _release_search_embedders()
+            actions.append(f"임베더 해제 ({free_before}MB)")
+        except Exception as e:
+            logger.debug(f"[release_and_wait] {node_name}: 임베더 해제 실패: {e}")
+
+    # 2) Ollama 모델 unload (별도 프로세스)
+    if release_ollama_model:
+        try:
+            _req.post(
+                f"{OLLAMA_URL}/api/generate",
+                json={"model": release_ollama_model, "keep_alive": 0,
+                      "prompt": "", "stream": False},
+                timeout=5,
+            )
+            actions.append(f"Ollama({release_ollama_model}) unload")
+        except Exception as e:
+            logger.debug(f"[release_and_wait] {node_name}: Ollama unload 실패: {e}")
+
+    # 3) torch cache 비우기 + 동기화 (실제 GPU 메모리 release)
+    if empty_cache:
+        try:
+            import torch as _t
+            if _t.cuda.is_available():
+                _t.cuda.empty_cache()
+                _t.cuda.synchronize()
+                actions.append("cuda cache 비움")
+        except Exception:
+            pass
+
+    # 4) 안정화 대기 — GPU 메모리 실제 release 가 비동기라 시간 필요
+    if seconds > 0:
+        time.sleep(seconds)
+        actions.append(f"{seconds}s 대기")
+
+    if actions:
+        free_after = _get_free_vram_mb()
+        logger.info(f"[release_and_wait] {node_name}: {' + '.join(actions)} → 여유 VRAM {free_after}MB")
+
+
 # ── RAG 의도 추출 ──────────────────────────────────────────────────
 _STOPWORDS = frozenset((
     "문서에서", "문서", "이미지에서", "이미지", "영상에서", "영상", "음원에서", "음원",
@@ -1495,7 +1562,11 @@ def intent_node(state: dict) -> dict:
         "detail_keywords": detail_kws,
         "mode":            mode,
     })
-    time.sleep(0.05)  # [v3.2 speed] 0.3 → 0.05
+
+    # [v3.3] 노드 종료: intent LLM oneshot 끝났으니 GPU 캐시 비우고 대기
+    # 다음 노드는 search (임베더 사용) — LLM 안 쓰니까 cache 만 비우면 충분
+    _emit({"type": "node_done", "node": "intent", "next": "search/fulltext_search"})
+    _release_and_wait("intent_node", seconds=2.0, release_embedders=False)
 
     return {
         "intent_message":  intent_msg,
@@ -1517,25 +1588,11 @@ def search_node(state: dict) -> dict:
         candidates = _do_search(question, topk=topk)
 
     _emit({"type": "candidates", "items": candidates})
-    time.sleep(0.05)  # [v3.2 speed] 0.3 → 0.05
 
-    # [v3.2 speed] 검색 완료 직후 임베더 선제적 해제 — generate_node 의 VRAM 스왑 대기 시간 제거.
-    # 백그라운드 스레드에서 비차단으로 해제 (사용자가 답변 대기 중에 영향 X).
-    try:
-        import threading as _th
-        def _bg_release():
-            try:
-                import torch as _t
-                if _t.cuda.is_available():
-                    _free_mb = int(_t.cuda.mem_get_info()[0] / 1024 / 1024)
-                    if _free_mb < 4500:
-                        _release_search_embedders()
-                        logger.info(f"[search_node] 임베더 백그라운드 해제 완료 (사전 여유 {_free_mb}MB)")
-            except Exception as _ex:
-                logger.debug(f"[search_node] 백그라운드 임베더 해제 실패: {_ex}")
-        _th.Thread(target=_bg_release, daemon=True, name="aimode-bg-vram-release").start()
-    except Exception:
-        pass
+    # [v3.3] 노드 종료: 검색 임베더 해제 + 2초 안정화 대기
+    # 검색 끝났으니 임베더는 더 이상 필요 없음. LLM 이 GPU 자리 잡을 수 있게 비움.
+    _emit({"type": "node_done", "node": "search", "next": "scan"})
+    _release_and_wait("search_node", seconds=2.0, release_embedders=True)
 
     return {"candidates": candidates}
 
@@ -1671,6 +1728,11 @@ def scan_node(state: dict) -> dict:
             })
             time.sleep(SCAN_DELAY)
 
+    # [v3.3] 노드 종료: scan 은 CPU(fitz) 만 쓰지만 다음 select→extract→generate 로 LLM 들어감.
+    # GPU 정리 + 안정화.
+    _emit({"type": "node_done", "node": "scan", "next": "select"})
+    _release_and_wait("scan_node", seconds=2.0, release_embedders=True)
+
     return {"scan_results": scan_results}
 
 
@@ -1724,7 +1786,10 @@ def select_node(state: dict) -> dict:
                     "matched_chunks": [best.get("snippet") or ""]}]
 
     _emit({"type": "selected", "sources": matched})
-    # [v3.2 speed] 0.2 → 0
+
+    # [v3.3] 노드 종료: VRAM 정리 + 2초 대기
+    _emit({"type": "node_done", "node": "select", "next": "extract"})
+    _release_and_wait("select_node", seconds=2.0, release_embedders=False)
 
     return {"matched_sources": matched}
 
@@ -1809,7 +1874,10 @@ def followup_intent_node(state: dict) -> dict:
         "detail_keywords": keywords,
         "mode":            "followup",
     })
-    time.sleep(0.05)  # [v3.2 speed] 0.2 → 0.05
+
+    # [v3.3] 노드 종료: followup_intent oneshot 끝 — GPU 정리 + 2초 대기
+    _emit({"type": "node_done", "node": "followup_intent", "next": "followup_search"})
+    _release_and_wait("followup_intent_node", seconds=2.0)
 
     return {
         "intent_message":  intent_msg,
@@ -1892,7 +1960,11 @@ def followup_search_node(state: dict) -> dict:
     })
     if matched:
         _emit({"type": "selected", "sources": matched})
-    # [v3.2 speed] 0.2 → 0
+
+    # [v3.3] followup_search 노드 종료: 임베더 해제 + 2초 대기
+    _emit({"type": "node_done", "node": "followup_search", "next": "extract" if matched else "fallback"})
+    _release_and_wait("followup_search_node", seconds=2.0, release_embedders=True)
+
     return {"matched_sources": matched}
 
 
@@ -2095,26 +2167,12 @@ def fulltext_search_node(state: dict) -> dict:
     )
 
     _emit({"type": "candidates", "items": candidates})
-    # [v3.2 speed] 0.2 → 0
     if candidates:
         _emit({"type": "selected", "sources": candidates})
-    # [v3.2 speed] 0.1 → 0
 
-    # [v3.2 speed] open 모드도 검색 끝나면 임베더 선제적 해제 (백그라운드)
-    try:
-        import threading as _th2
-        def _bg_release2():
-            try:
-                import torch as _t2
-                if _t2.cuda.is_available():
-                    _free_mb2 = int(_t2.cuda.mem_get_info()[0] / 1024 / 1024)
-                    if _free_mb2 < 4500:
-                        _release_search_embedders()
-            except Exception:
-                pass
-        _th2.Thread(target=_bg_release2, daemon=True, name="aimode-bg-vram-release-open").start()
-    except Exception:
-        pass
+    # [v3.3] open 모드 노드 종료: 임베더 해제 + 2초 대기
+    _emit({"type": "node_done", "node": "fulltext_search", "next": "extract"})
+    _release_and_wait("fulltext_search_node", seconds=2.0, release_embedders=True)
 
     return {
         "candidates":      candidates,
@@ -2212,7 +2270,11 @@ def extract_node(state: dict) -> dict:
         "count":       len(references),
         "skipped_toc": skipped_toc,
     })
-    # [v3.2 speed] 0.1 → 0
+
+    # [v3.3] 노드 종료: generate 들어가기 직전 GPU 정리. 임베더 잔여분 마지막으로 비움.
+    _emit({"type": "node_done", "node": "extract", "next": "generate"})
+    _release_and_wait("extract_node", seconds=2.0, release_embedders=True)
+
     return {"references": references}
 
 
@@ -2748,9 +2810,9 @@ def generate_node(state: dict) -> dict:
     # [v3.2 speed] 간결 마크다운 답변 — 토큰 상한 더 낮춤 (350→250 / 250→200)
     np_limit = 200 if has_av else 250
 
-    # ── [v3.2 fix] VRAM 보장 — 항상 동작 (CPU 임베더 모드면 자연스럽게 skip) ──
-    # 임베더(6GB)+LLM(4.2GB) > 8GB → 임베더 해제 후 Ollama 강제 언로드해서 GPU 재로드 보장.
-    # 디버그 emit 추가 — 어디서 멈추는지 frontend 콘솔에 보임.
+    # ── [v3.3] generate 시작 전 — 임베더 완전 해제 + 2초 안정화 ──
+    # 직전 노드들 (extract / followup_search) 에서 이미 해제 시도했지만, 마지막으로 강제 확인.
+    # GPU 가 LLM 만 전유하게 만들고 2초 대기로 메모리 release 보장.
     _gen_vram_swapped = False
     _emit({"type": "debug", "stage": "before_vram_check"})
     try:
@@ -2759,21 +2821,14 @@ def generate_node(state: dict) -> dict:
             _free_mb = int(_t.cuda.mem_get_info()[0] / 1024 / 1024)
             _emit({"type": "debug", "stage": "vram_check_done", "free_mb": _free_mb})
             if _free_mb < 4500:
-                logger.info(f"[generate_node] 여유 VRAM {_free_mb} MB < 4500 → 임베더 해제 + Ollama 재로드")
+                logger.info(f"[generate_node] 여유 VRAM {_free_mb} MB < 4500 → 강제 정리")
                 _emit({"type": "info", "message": f"GPU 메모리 확보 중... (현재 {_free_mb}MB)", "free_mb": _free_mb})
-                _release_search_embedders()
+                _release_and_wait("generate_node_pre",
+                                   seconds=2.0,
+                                   release_embedders=True,
+                                   release_ollama_model=gen_model)
                 _gen_vram_swapped = True
-                # Ollama가 이미 CPU 로 fallback 됐을 가능성 → 강제 언로드 후 재로드 시 GPU 확보
-                try:
-                    _emit({"type": "debug", "stage": "ollama_force_unload"})
-                    _req.post(f"{OLLAMA_URL}/api/generate",
-                              json={"model": gen_model, "prompt": "",
-                                    "keep_alive": 0, "stream": False},
-                              timeout=15)
-                except Exception as _ue:
-                    logger.warning(f"[generate_node] Ollama force unload 실패: {_ue}")
                 _free_after = int(_t.cuda.mem_get_info()[0] / 1024 / 1024)
-                logger.info(f"[generate_node] 해제 후 여유 VRAM: {_free_after} MB")
                 _emit({"type": "debug", "stage": "vram_after_swap", "free_mb": _free_after})
     except Exception as _ve:
         logger.warning(f"[generate_node] VRAM 처리 실패: {_ve}")
@@ -2825,6 +2880,10 @@ def generate_node(state: dict) -> dict:
         "sources_count": len(matched_sources),
         "error":         stream_error,
     })
+
+    # [v3.3] generate_node 종료: torch cache 정리만 (Ollama 모델은 keep_alive 로 유지)
+    _emit({"type": "node_done", "node": "generate", "next": "END"})
+    _release_and_wait("generate_node_post", seconds=0.5, release_embedders=False)
 
     return {"answer": full_answer}
 
