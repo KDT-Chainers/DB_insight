@@ -878,12 +878,11 @@ function ResultCard({
 
   return (
     <div
-      onClick={isAV ? undefined : onClick}
+      onClick={onClick}
       style={{
         animationDelay: `${Math.min(Math.max(rank - 1, 0), 14) * 58}ms`,
       }}
-      className={`result-card-enter bg-[#1e293b] border border-[#334155] rounded-[10px] overflow-hidden flex flex-col relative transition-transform duration-150
-        ${isAV ? "" : "cursor-pointer hover:-translate-y-0.5 hover:border-[#6366f1]"}`}
+      className={`result-card-enter bg-[#1e293b] border border-[#334155] rounded-[10px] overflow-hidden flex flex-col relative transition-transform duration-150 cursor-pointer hover:-translate-y-0.5 hover:border-[#6366f1]`}
     >
       {/* 랭크 배지 */}
       <div className="absolute top-2 left-2 z-20 bg-gradient-to-r from-[#1c253e] via-[#243357] to-[#2b3f6e] border border-[#5c78b8]/45 text-[#dbe7ff] min-w-[32px] h-7 px-2 rounded-full flex items-center justify-center font-bold text-xs shadow-[0_0_10px_rgba(92,120,184,0.22)]">
