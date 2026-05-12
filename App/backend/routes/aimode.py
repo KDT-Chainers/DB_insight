@@ -501,7 +501,8 @@ def _ollama_oneshot(prompt: str, model: str, num_predict: int = 150,
             f"{OLLAMA_URL}/api/generate",
             json={"model": model, "prompt": prompt, "stream": False,
                   "keep_alive": keep_alive,
-                  "options": {"temperature": 0.1, "num_predict": num_predict}},
+                  # [v3.2 fix] num_ctx=8192 — 기본 4096 으로는 긴 프롬프트 silent hang
+                  "options": {"temperature": 0.1, "num_predict": num_predict, "num_ctx": 8192}},
             timeout=30,
         )
         r.raise_for_status()
@@ -551,7 +552,9 @@ def _ollama_stream(messages: list[dict], model: str,
                 "model":      model,
                 "messages":   messages,
                 "stream":     True,
-                "options":    {"temperature": temperature, "num_predict": num_predict},
+                # [v3.2 fix] num_ctx 명시 — Ollama 기본 4096 토큰으로는 system prompt+history+
+                # PDF 본문 합치면 초과 → silent hang. 8192 로 늘려서 여유 확보.
+                "options":    {"temperature": temperature, "num_predict": num_predict, "num_ctx": 8192},
                 "keep_alive": keep_alive,
             },
             stream=True, timeout=600,
@@ -1559,22 +1562,52 @@ def _scan_one(src: dict, detail_kws: list[str]) -> tuple[bool, list[dict]]:
         found, chunk_texts = _scan_file_for_keywords(src, detail_kws)
         return found, [{"text": t, "page": None, "score": 1} for t in chunk_texts]
 
-    # ── video/audio: STT segments 활용 (벡터 검색이 이미 검증했다고 가정) ──
+    # ── video/audio: STT segments 에서 detail_kws 실제 매칭만 found=True ──
+    # [v3.2 fix] 이전엔 segments 있기만 하면 무조건 True → 무관 AV 가 references 오염.
+    # 이제 키워드 1개라도 segment·snippet·file_name 에 등장해야 found=True.
     _av_types = ("video", "movie", "audio", "music")
     if file_type in _av_types:
+        kws_lower = [k.lower() for k in (detail_kws or []) if k and len(k) >= 2]
+        if not kws_lower:
+            return False, []
+
         av_chunks: list[dict] = []
-        for seg in (src.get("segments") or [])[:5]:
+        # 1) STT segments 안에서 키워드 매칭
+        for seg in (src.get("segments") or [])[:30]:  # 5 → 30 (더 많은 segment 검사)
             text = (seg.get("text") or seg.get("preview") or "").strip()
             if not text:
                 continue
+            tl = text.lower()
+            hits = sum(1 for kw in kws_lower if kw in tl)
+            if hits == 0:
+                continue  # 키워드 없는 segment 건너뜀
             ts_sec = seg.get("start")
             ts = _fmt_seg_ts(ts_sec) if ts_sec is not None else None
-            av_chunks.append({"text": text, "timestamp": ts, "score": 1})
+            av_chunks.append({"text": text, "timestamp": ts, "score": hits})
+
+        # 2) segments 매칭 0개면 snippet 도 확인 (rare fallback)
         if not av_chunks:
-            snip = src.get("snippet") or ""
+            snip = (src.get("snippet") or "").strip()
             if snip:
-                av_chunks.append({"text": snip, "timestamp": None, "score": 1})
-        return True, av_chunks if av_chunks else [{"text": src.get("file_name", ""), "timestamp": None, "score": 0}]
+                sl = snip.lower()
+                hits = sum(1 for kw in kws_lower if kw in sl)
+                if hits > 0:
+                    av_chunks.append({"text": snip, "timestamp": None, "score": hits})
+
+        # 3) 그래도 매칭 없으면 file_name 만 (제목 매칭만 있는 경우 — 약한 매칭)
+        if not av_chunks:
+            fname = (src.get("file_name") or "").lower()
+            name_hits = sum(1 for kw in kws_lower if kw in fname)
+            if name_hits >= 1:
+                # 파일명만 매칭 → 낮은 score 로만 (1순위에서 밀려나기 좋게)
+                av_chunks.append({"text": src.get("file_name", ""), "timestamp": None, "score": name_hits * 0.3})
+
+        # 매칭 없으면 found=False
+        if not av_chunks:
+            return False, []
+        # score 내림차순 top 5
+        av_chunks.sort(key=lambda c: -c.get("score", 0))
+        return True, av_chunks[:5]
 
     # ── image: snippet (캡션) 매칭 ─────────────────────────────────
     snip = src.get("snippet") or ""
@@ -1659,6 +1692,28 @@ def select_node(state: dict) -> dict:
         return True
 
     matched = [r for r in scan_results if r.get("found") and _passes_rerank(r)]
+
+    # [v3.2 fix] 문서 매칭이 강하면 약한 AV 매칭 컷 — references 오염 방지.
+    # 시나리오: PDF 가 페이지 단위 매칭(score 8+)인데 AV 가 파일명만 매칭(score 0.3)이면
+    # AV 는 무관한 출처. doc score 가 top AV score 의 3배 이상이면 AV 컷.
+    def _src_top_score(r: dict) -> float:
+        chs = r.get("chunks_meta") or []
+        if not chs:
+            return 0.0
+        return float(max(c.get("score", 0) for c in chs) or 0)
+
+    doc_scores = [_src_top_score(r) for r in matched if r.get("file_type") == "doc"]
+    av_types = {"video", "movie", "audio", "music", "bgm"}
+    if doc_scores and max(doc_scores) >= 3.0:
+        top_doc = max(doc_scores)
+        before = len(matched)
+        matched = [
+            r for r in matched
+            if r.get("file_type") not in av_types
+            or _src_top_score(r) >= top_doc / 3.0
+        ]
+        if before != len(matched):
+            logger.info(f"[select_node] AV 약한 매칭 컷: {before} → {len(matched)} (top_doc={top_doc:.1f})")
 
     # 매칭 파일 없으면 → rerank 통과한 후보 중 1위 강제 선택 (fallback)
     if not matched and candidates:
@@ -2593,18 +2648,18 @@ def generate_node(state: dict) -> dict:
         file_type = src.get("file_type", "")
         file_id   = src.get("file_id", src.get("file_name", ""))
         if file_type == "doc":
+            # [v3.2 speed] prompt 길이 단축 — 8000 tok prefill → 3000 tok prefill (5~10s 절약)
             # A) scan_node 청크 (이미 keyword-targeted)
             scan_chunks = src.get("matched_chunks") or []
-            scan_text = "\n\n".join(c.strip() for c in scan_chunks if c.strip())
+            scan_text = "\n\n".join(c.strip() for c in scan_chunks if c.strip())[:3000]
 
-            # B) fitz 전체 PDF → 앞 5000자 + 키워드 주변 추가
-            full_text = _read_source_full_text(src, max_chars=800000)
+            # B) fitz 전체 PDF → 앞 2000자 + 키워드 주변 2000자
+            full_text = _read_source_full_text(src, max_chars=200000)  # 800K → 200K (fitz I/O 단축)
             if full_text:
-                head = full_text[:5000]
-                # fitz 원문 앞 3000자 별도 보관 (key_facts 전용, combined와 독립)
+                head = full_text[:2000]                            # 5000 → 2000
                 fitz_heads[file_id] = full_text[:3000]
                 extra = _keyword_target_paragraphs(
-                    full_text[5000:], question, all_keywords, max_chars=5000
+                    full_text[2000:], question, all_keywords, max_chars=2000  # 5000 → 2000
                 )
                 combined = "\n\n===\n\n".join(
                     p for p in [scan_text, head, extra] if p.strip()
@@ -2613,7 +2668,7 @@ def generate_node(state: dict) -> dict:
                 combined = scan_text
 
             logger.info(f"[generate_node] {src.get('file_name','?')}: combined={len(combined)}ch")
-            full_sources.append({**src, "matched_chunks": [combined[:15000]]})
+            full_sources.append({**src, "matched_chunks": [combined[:6000]]})  # 15000 → 6000
         elif file_type in ("video", "movie", "audio", "music", "bgm"):
             # 비디오/오디오: segments 를 [MM:SS] 형식으로 직렬화 → matched_chunks 주입
             # LLM 이 forced-quote 에서 timestamp 와 STT 를 함께 인용할 수 있게.
@@ -2693,29 +2748,67 @@ def generate_node(state: dict) -> dict:
     # [v3.2 speed] 간결 마크다운 답변 — 토큰 상한 더 낮춤 (350→250 / 250→200)
     np_limit = 200 if has_av else 250
 
-    # ── [v3.2 speed] VRAM 보장 (간소화) ─────────────────────────────────
-    # search_node 가 이미 백그라운드에서 임베더 해제 시도함 → 여기서는 확인만.
-    # 여전히 부족하면 동기 해제 (Ollama 강제 언로드는 생략 — keep_alive 신뢰).
+    # ── [v3.2 fix] VRAM 보장 — 항상 동작 (CPU 임베더 모드면 자연스럽게 skip) ──
+    # 임베더(6GB)+LLM(4.2GB) > 8GB → 임베더 해제 후 Ollama 강제 언로드해서 GPU 재로드 보장.
+    # 디버그 emit 추가 — 어디서 멈추는지 frontend 콘솔에 보임.
+    _gen_vram_swapped = False
+    _emit({"type": "debug", "stage": "before_vram_check"})
     try:
         import torch as _t
         if _t.cuda.is_available():
             _free_mb = int(_t.cuda.mem_get_info()[0] / 1024 / 1024)
-            if _free_mb < 3500:
-                logger.info(f"[generate_node] 여유 VRAM {_free_mb} MB < 3500 → 동기 해제")
+            _emit({"type": "debug", "stage": "vram_check_done", "free_mb": _free_mb})
+            if _free_mb < 4500:
+                logger.info(f"[generate_node] 여유 VRAM {_free_mb} MB < 4500 → 임베더 해제 + Ollama 재로드")
+                _emit({"type": "info", "message": f"GPU 메모리 확보 중... (현재 {_free_mb}MB)", "free_mb": _free_mb})
                 _release_search_embedders()
+                _gen_vram_swapped = True
+                # Ollama가 이미 CPU 로 fallback 됐을 가능성 → 강제 언로드 후 재로드 시 GPU 확보
+                try:
+                    _emit({"type": "debug", "stage": "ollama_force_unload"})
+                    _req.post(f"{OLLAMA_URL}/api/generate",
+                              json={"model": gen_model, "prompt": "",
+                                    "keep_alive": 0, "stream": False},
+                              timeout=15)
+                except Exception as _ue:
+                    logger.warning(f"[generate_node] Ollama force unload 실패: {_ue}")
+                _free_after = int(_t.cuda.mem_get_info()[0] / 1024 / 1024)
+                logger.info(f"[generate_node] 해제 후 여유 VRAM: {_free_after} MB")
+                _emit({"type": "debug", "stage": "vram_after_swap", "free_mb": _free_after})
     except Exception as _ve:
-        logger.debug(f"[generate_node] VRAM 확인 스킵: {_ve}")
+        logger.warning(f"[generate_node] VRAM 처리 실패: {_ve}")
+        _emit({"type": "debug", "stage": "vram_error", "error": str(_ve)})
+
+    # 총 prompt 길이 측정 → 사용자에게 prefill 예상시간 알림
+    _total_chars = sum(len(m.get("content", "")) for m in messages)
+    _emit({"type": "debug", "stage": "ollama_stream_start",
+           "model": gen_model, "msg_count": len(messages),
+           "prompt_chars": _total_chars})
+    _emit({"type": "info",
+           "message": f"AI 답변 생성 중... (prompt {_total_chars}자, prefill 약 5~10초)"})
 
     try:
-        # [v3.1] chunk_size=0 → 토큰 받는 즉시 yield (타이핑 효과)
-        # [v3.2 speed] keep_alive=-1 유지 — 모델 다음 turn 까지 GPU 상주
+        _keepalive = 0 if _gen_vram_swapped else -1
+        _first_tok_sent = False
+        _stream_t0 = time.time()
         for tok in _ollama_stream(messages, gen_model, num_predict=np_limit,
-                                  chunk_size=0, keep_alive=-1):
+                                  chunk_size=0, keep_alive=_keepalive):
+            if not _first_tok_sent:
+                _ttft = time.time() - _stream_t0
+                _emit({"type": "debug", "stage": "first_token_received",
+                       "ttft_sec": round(_ttft, 2)})
+                logger.info(f"[generate_node] TTFT (첫 토큰까지): {_ttft:.2f}s")
+                _first_tok_sent = True
             full_answer += tok
             _emit({"type": "token", "text": tok})
+        if not _first_tok_sent:
+            _emit({"type": "debug", "stage": "stream_ended_no_tokens",
+                   "elapsed_sec": round(time.time() - _stream_t0, 2)})
+            logger.warning(f"[generate_node] 스트림 끝났는데 토큰 0개. 경과={time.time()-_stream_t0:.1f}s")
     except Exception as e:
         stream_error = str(e)
         logger.warning(f"[generate_node] stream 중단: {e}")
+        _emit({"type": "debug", "stage": "stream_exception", "error": str(e)})
 
     if full_answer and len(full_answer.strip()) >= 10 and not stream_error:
         _save_history(thread_id, question, full_answer)

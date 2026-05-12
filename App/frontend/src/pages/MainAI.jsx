@@ -2359,14 +2359,15 @@ export default function MainAI() {
         const items = ev.items || [];
         const mapped = items.map(mapItem);
         setAimodeSources(mapped);
-        // [v3 chat] 마지막 streaming turn 의 sources 도 즉시 동기화 (stale state 방지)
+        // [v3 chat] 마지막 streaming turn 의 sources + candidates 도 즉시 동기화
+        // candidates 필드도 채워야 selected 이벤트 후에도 우측 패널에 후보 전체 표시됨
         setTurns((prev) => {
           if (prev.length === 0) return prev;
           const last = prev[prev.length - 1];
           if (!last.streaming) return prev;
           return [
             ...prev.slice(0, -1),
-            { ...last, sources: [...mapped] },
+            { ...last, sources: [...mapped], candidates: [...mapped] },
           ];
         });
         // ★ 동일 데이터를 큰 카드 그리드로도 렌더 (MainSearch 와 동일한 UX)
@@ -2443,12 +2444,25 @@ export default function MainAI() {
         break;
 
       case "selected": {
-        // 백엔드 select_node — found:true 인 파일들만 추려서 sources 로 송출
+        // 백엔드 select_node — found:true 인 파일들만 추려서 sources 로 송출.
+        // [v3.2 fix] 우측 후보 목록을 덮어쓰지 않음 — 매칭은 sources(turn.sources) 에만 반영,
+        // 우측 패널의 rightCandidates 는 candidates 이벤트가 채운 전체 목록 그대로 유지.
+        // 사용자는 우측에서 후보 카드 + 매칭 여부(scanStates) 둘 다 볼 수 있음.
         const items = ev.sources || [];
         if (items.length > 0) {
           const mapped = items.map(mapItem);
-          setAimodeSources(mapped);
-          setResults(mapped);
+          setAimodeSources(mapped);   // 매칭된 sources (답변에서 인용할 것)
+          // setResults 와 turn.candidates 는 건드리지 않음 (전체 후보 유지)
+          // 마지막 turn 의 sources 만 update — 매칭된 1~N개만
+          setTurns((prev) => {
+            if (prev.length === 0) return prev;
+            const last = prev[prev.length - 1];
+            if (!last.streaming) return prev;
+            return [
+              ...prev.slice(0, -1),
+              { ...last, sources: [...mapped] },
+            ];
+          });
         }
         break;
       }
