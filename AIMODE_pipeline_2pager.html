@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>AIMODE · 2-Slide 비교 (A/B/C)</title>
+<style>
+  :root {
+    --bg-0:#05050a; --bg-1:#0a0814;
+    --card:rgba(10,6,24,0.78);
+    --border:rgba(139,92,246,0.22);
+    --border-strong:rgba(167,139,250,0.45);
+    --text:#f1f5f9; --text-soft:#e5e7eb; --muted:rgba(196,181,253,0.65);
+    --accent:#a78bfa; --accent-light:#c4b5fd; --accent-deep:#7c3aed;
+    --fuchsia:#d946ef; --emerald:#10b981; --rose:#f87171; --amber:#fbbf24;
+    --code-bg:rgba(0,0,0,0.45); --code-border:rgba(139,92,246,0.18);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;height:100vh;width:100vw;overflow:hidden;
+    background:radial-gradient(ellipse at 20% 10%,#1a0f3a 0%,var(--bg-0) 55%,#03020a 100%);
+    color:var(--text);font-family:"Pretendard","Segoe UI","Malgun Gothic",sans-serif;
+    letter-spacing:-0.01em}
+  .deck{position:relative;width:100vw;height:100vh}
+  .slide{position:absolute;inset:0;padding:36px 48px 56px;display:none;flex-direction:column;
+    animation:fadein .32s ease-out;overflow:hidden}
+  .slide.active{display:flex}
+  @keyframes fadein{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+  /* 상단 옵션 탭 */
+  .tabs{position:absolute;top:14px;left:48px;right:48px;display:flex;gap:6px;z-index:50}
+  .tab{padding:5px 14px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:0.16em;
+    text-transform:uppercase;cursor:pointer;
+    background:rgba(15,9,32,0.7);border:1px solid var(--border);color:var(--muted)}
+  .tab.active{background:linear-gradient(135deg,var(--accent-deep),var(--fuchsia));color:#fff;border-color:transparent;
+    box-shadow:0 6px 18px rgba(124,58,237,0.45)}
+
+  .head{display:flex;align-items:center;gap:14px;margin:8px 0 14px}
+  .kicker{display:inline-flex;align-items:center;gap:8px;font-size:10px;font-weight:700;
+    letter-spacing:0.2em;text-transform:uppercase;color:var(--accent-light);
+    padding:4px 10px;border-radius:999px;background:rgba(139,92,246,0.10);border:1px solid var(--border)}
+  .kicker .dot{width:5px;height:5px;border-radius:50%;background:var(--accent)}
+  h1.t{margin:0;font-size:30px;font-weight:800;line-height:1.1;letter-spacing:-0.02em;
+    background:linear-gradient(135deg,#f5f3ff 0%,var(--accent-light) 60%,var(--fuchsia) 100%);
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .sub{font-size:12.5px;color:var(--muted);margin-left:auto;font-family:monospace}
+
+  /* 그리드 */
+  .row{display:grid;gap:12px;margin-bottom:10px}
+  .row.r-2{grid-template-columns:1fr 1fr}
+  .row.r-3{grid-template-columns:1fr 1fr 1fr}
+  .row.r-4{grid-template-columns:repeat(4,1fr)}
+  .row.r-6{grid-template-columns:repeat(6,1fr)}
+  .body{flex:1;display:grid;gap:12px;min-height:0;overflow:hidden}
+
+  /* 카드 */
+  .c{background:var(--card);border:1px solid var(--border);border-radius:11px;padding:12px 14px;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,0.04),0 8px 22px rgba(6,3,15,0.36);min-height:0;overflow:auto}
+  .c.acc{border-color:var(--border-strong);background:linear-gradient(135deg,rgba(139,92,246,0.10),rgba(217,70,239,0.06))}
+  .c.bad{border-color:rgba(248,113,113,0.35);background:rgba(248,113,113,0.05)}
+  .c.ok{border-color:rgba(16,185,129,0.32);background:rgba(16,185,129,0.04)}
+  .c.warn{border-color:rgba(251,191,36,0.32);background:rgba(251,191,36,0.04)}
+  .c h3{margin:0 0 8px;font-size:13px;font-weight:700;color:var(--accent-light);
+    display:flex;align-items:center;gap:6px}
+  .c h3.bad{color:var(--rose)} .c h3.ok{color:var(--emerald)} .c h3.warn{color:var(--amber)}
+  .c h3 .n{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;
+    border-radius:5px;background:linear-gradient(135deg,var(--accent-deep),var(--fuchsia));color:#fff;
+    font-size:10px;font-weight:800}
+  .c p{margin:0;font-size:11.5px;line-height:1.55;color:var(--text-soft)}
+  .c ul{margin:2px 0 0;padding-left:16px}
+  .c li{font-size:11.5px;line-height:1.55;color:var(--text-soft);margin-bottom:2px}
+  .c li strong{color:#f5f3ff}
+
+  /* 미니 카드 (한계 6개) */
+  .mini{padding:9px 11px;border-radius:9px;font-size:11px;line-height:1.5;
+    background:rgba(248,113,113,0.06);border:1px solid rgba(248,113,113,0.32)}
+  .mini .h{font-weight:800;color:var(--rose);font-size:11.5px;display:block;margin-bottom:2px}
+  .mini.ok{background:rgba(16,185,129,0.05);border-color:rgba(16,185,129,0.32)}
+  .mini.ok .h{color:var(--emerald)}
+
+  /* 코드 */
+  pre.code{background:var(--code-bg);border:1px solid var(--code-border);border-radius:8px;
+    padding:8px 11px;margin:4px 0 0;font-family:"Consolas","Cascadia Code",monospace;
+    font-size:10.5px;line-height:1.55;color:#e5d4ff;overflow:auto}
+  pre.code .kw{color:#c084fc;font-weight:700} pre.code .str{color:#fcd34d}
+  pre.code .com{color:#6b7280;font-style:italic} pre.code .fn{color:#93c5fd}
+  pre.code .num{color:#fda4af}
+
+  /* state 박스 */
+  .state{font-family:"Consolas",monospace;font-size:10.5px;line-height:1.55;
+    background:var(--code-bg);border:1px solid var(--code-border);border-radius:8px;padding:8px 11px}
+  .state .k{color:var(--accent-light);font-weight:700;display:inline-block;min-width:88px}
+  .state .v{color:#fef9c3} .state .v.s{color:#fcd34d}
+  .state .row2{display:flex;gap:6px;align-items:baseline;padding:1px 0}
+
+  /* SSE */
+  .sse{margin-top:6px;padding:5px 10px;border-left:2px solid var(--emerald);
+    background:rgba(16,185,129,0.06);font-family:monospace;font-size:10.5px;color:#a7f3d0;border-radius:0 6px 6px 0}
+  .sse-l{color:var(--emerald);font-weight:800;letter-spacing:0.12em;text-transform:uppercase;font-size:9px;display:block;margin-bottom:2px}
+
+  /* pill */
+  .pill{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;
+    background:rgba(139,92,246,0.15);border:1px solid var(--border);
+    font-size:10.5px;font-weight:700;color:var(--accent-light);margin-right:3px}
+  .pill.fu{background:rgba(217,70,239,0.12);border-color:rgba(217,70,239,0.35);color:#f0abfc}
+  .pill.am{background:rgba(251,191,36,0.10);border-color:rgba(251,191,36,0.30);color:var(--amber)}
+  .pill.em{background:rgba(16,185,129,0.10);border-color:rgba(16,185,129,0.32);color:var(--emerald)}
+  .pill.r{background:rgba(248,113,113,0.10);border-color:rgba(248,113,113,0.32);color:var(--rose)}
+
+  /* 노드 흐름 stripe */
+  .stripe{display:flex;gap:6px;align-items:center;overflow:auto;padding:4px 0;flex-wrap:wrap}
+  .nx{display:inline-flex;flex-direction:column;align-items:flex-start;padding:7px 10px;border-radius:8px;
+    background:rgba(15,9,32,0.85);border:1px solid var(--border);min-width:118px;max-width:160px}
+  .nx .num{font-size:9px;font-weight:800;color:var(--accent);letter-spacing:0.16em;text-transform:uppercase}
+  .nx .nm{font-size:11.5px;font-weight:800;color:#f5f3ff;font-family:monospace;margin-top:1px}
+  .nx .dd{font-size:10px;color:var(--muted);margin-top:2px;line-height:1.4}
+  .nx.fu{border-color:rgba(217,70,239,0.4)}
+  .nx.ok{border-color:rgba(16,185,129,0.4)}
+  .nx.r{border-color:rgba(248,113,113,0.4)}
+  .ar{color:var(--accent);font-size:14px}
+
+  /* SVG 그래프 nodes */
+  .gn{fill:rgba(15,9,32,0.92);stroke:var(--accent);stroke-width:1.2}
+  .gn.rag{stroke:var(--accent-light)} .gn.fu{stroke:var(--fuchsia)}
+  .gn.term{stroke:var(--emerald);fill:rgba(16,185,129,0.10)}
+  .gn.fb{stroke:rgba(248,113,113,0.6);fill:rgba(248,113,113,0.06)}
+  .gl{fill:#f5f3ff;font-family:monospace;font-size:10.5px;font-weight:700;text-anchor:middle}
+  .gs{fill:rgba(196,181,253,0.65);font-size:9px;text-anchor:middle}
+  .ge{stroke:rgba(167,139,250,0.55);stroke-width:1.2;fill:none;marker-end:url(#arr)}
+  .ge.st{stroke:rgba(96,165,250,0.7)}
+  .ge.op{stroke:rgba(251,191,36,0.7)}
+  .ge.fu{stroke:rgba(217,70,239,0.7)}
+  .ge.fb{stroke:rgba(248,113,113,0.7);stroke-dasharray:4 3}
+  .gel{fill:var(--accent-light);font-size:9.5px;font-weight:700;text-anchor:middle;font-family:monospace}
+
+  /* 유저 버블 */
+  .uq{display:inline-block;background:linear-gradient(135deg,rgba(91,33,182,0.58),rgba(124,58,237,0.56));
+    border:1px solid rgba(196,181,253,0.32);border-radius:14px 14px 5px 14px;
+    padding:8px 14px;font-size:13px;font-weight:600;color:#f5f3ff;
+    box-shadow:0 6px 16px rgba(76,29,149,0.3)}
+  .uq small{display:block;font-size:9px;font-weight:800;letter-spacing:0.14em;color:var(--accent-light);
+    margin-bottom:2px;text-transform:uppercase}
+
+  /* 노드 목록 표 */
+  table.nodelist{width:100%;border-collapse:collapse;font-size:11.5px}
+  table.nodelist td{padding:5px 8px;border-bottom:1px solid var(--border)}
+  table.nodelist td.idx{width:30px;color:var(--accent);font-weight:800;font-family:monospace}
+  table.nodelist td.nm{font-family:monospace;font-weight:700;color:#f5f3ff;width:160px}
+  table.nodelist td.desc{color:var(--text-soft)}
+  table.nodelist tr.fu td.nm{color:#f0abfc}
+  table.nodelist tr.fb td.nm{color:#fecaca}
+
+  /* 푸터 */
+  .footer{position:absolute;left:0;right:0;bottom:0;padding:12px 48px;display:flex;
+    align-items:center;gap:14px;color:var(--muted);font-size:11px;pointer-events:none}
+  .progress{flex:1;height:2px;background:rgba(139,92,246,0.10);border-radius:999px;overflow:hidden}
+  .progress .bar{height:100%;background:linear-gradient(90deg,var(--accent-deep),var(--fuchsia));transition:width .3s}
+  .counter{font-family:monospace;font-weight:700;color:var(--accent-light)}
+  .nav-zone{position:absolute;top:60px;bottom:30px;width:14%;cursor:pointer;z-index:5}
+  .nav-zone.prev{left:0} .nav-zone.next{right:0}
+
+  /* 작은 헤더 */
+  .mh{font-size:11px;font-weight:800;letter-spacing:0.14em;text-transform:uppercase;
+    color:var(--muted);margin:0 0 6px;display:flex;align-items:center;gap:6px}
+  .mh .b{width:3px;height:11px;background:linear-gradient(180deg,var(--accent),var(--fuchsia));border-radius:2px}
+</style>
+</head>
+<body>
+<div class="deck">
+
+<!-- ════════════════ 옵션 A · Slide 1 ════════════════ -->
+<section class="slide active">
+  <div class="tabs">
+    <div class="tab active" onclick="jump(0)">옵션 A · 1/2</div>
+    <div class="tab" onclick="jump(1)">옵션 A · 2/2</div>
+    <div class="tab" onclick="jump(2)">옵션 B · 1/2</div>
+    <div class="tab" onclick="jump(3)">옵션 B · 2/2</div>
+    <div class="tab" onclick="jump(4)">옵션 C · 1/2</div>
+    <div class="tab" onclick="jump(5)">옵션 C · 2/2</div>
+  </div>
+  <div class="head" style="margin-top:18px;">
+    <div class="kicker"><span class="dot"></span>옵션 A · 슬라이드 1/2</div>
+    <h1 class="t">왜 LangGraph 인가</h1>
+    <div class="sub">Why</div>
+  </div>
+
+  <div class="body" style="grid-template-columns: 1fr 1.4fr 1fr;">
+    <!-- 좌: 문제정의 -->
+    <div class="c" style="display:flex; flex-direction:column;">
+      <div class="mh"><span class="b"></span>01 · 문제정의</div>
+      <h3 style="color:#93c5fd; margin-top:4px;">일반모드</h3>
+      <p style="margin-bottom:8px;"><strong>"이 파일 어디?"</strong> 위치 찾기 · 결과 = 파일 카드</p>
+      <h3 style="margin-top:auto;">AIMODE</h3>
+      <p><strong>"결론이 뭐야?"</strong> 문서 내용 합성 · 결과 = 완성된 한국어 답변 + 인용</p>
+      <p style="margin-top:12px; color:var(--muted); font-size:11px;">
+        → AIMODE 는 검색이 아니라 <strong style="color:var(--accent-light)">합성</strong>.
+        단순 함수 한 줄로 안 풀림.
+      </p>
+    </div>
+
+    <!-- 중: Naive RAG 한계 6 -->
+    <div style="display:flex; flex-direction:column;">
+      <div class="mh"><span class="b"></span>02 · Naive RAG 한계</div>
+      <div style="text-align:center; padding:8px; background:rgba(248,113,113,0.05); border:1px solid rgba(248,113,113,0.25); border-radius:8px; margin-bottom:8px;">
+        <span style="font-family:monospace; font-size:11px; color:#fca5a5;">
+          질문 → 벡터검색 → concat → LLM → 답
+        </span>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; flex:1;">
+        <div class="mini"><span class="h">✕ 분기 없음</span>잡담·인용·후속 다 같은 경로</div>
+        <div class="mini"><span class="h">✕ 후속 불가</span>"전년 대비?" 도 처음부터 재검색</div>
+        <div class="mini"><span class="h">✕ 페이지 인용 X</span>"40페이지" 식 정확 위치 못 줌</div>
+        <div class="mini"><span class="h">✕ 진행 표시 X</span>스피너만 도는 깜깜이 UX</div>
+        <div class="mini"><span class="h">✕ 폴백 없음</span>매칭 약해도 강제 환각 답</div>
+        <div class="mini"><span class="h">✕ 상태 보관 어려움</span>인자 폭발, 시그니처 더러움</div>
+      </div>
+    </div>
+
+    <!-- 우: LangGraph 4 도구 -->
+    <div style="display:flex; flex-direction:column;">
+      <div class="mh"><span class="b"></span>03 · LangGraph 4 도구</div>
+      <div style="display:flex; flex-direction:column; gap:6px; flex:1;">
+        <div class="mini ok"><span class="h">① StateGraph</span>RAGState dict 자동 공유 → 인자 0개</div>
+        <div class="mini ok"><span class="h">② 조건부 엣지</span>add_conditional_edges 한 줄로 분기</div>
+        <div class="mini ok"><span class="h">③ MemorySaver</span>thread_id 만 같으면 state 자동 복원 → 후속 자연</div>
+        <div class="mini ok"><span class="h">④ 노드 단위 SSE</span>_emit() 으로 단계별 진행 표시</div>
+      </div>
+      <pre class="code" style="margin-top:8px;">builder.<span class="fn">add_conditional_edges</span>(
+  <span class="str">"router"</span>, _route_edge,
+  {<span class="str">"rag"</span>:<span class="str">"intent"</span>, <span class="str">"followup"</span>:<span class="str">"followup_intent"</span>})</pre>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════ 옵션 A · Slide 2 ════════════════ -->
+<section class="slide">
+  <div class="tabs">
+    <div class="tab" onclick="jump(0)">옵션 A · 1/2</div>
+    <div class="tab active" onclick="jump(1)">옵션 A · 2/2</div>
+    <div class="tab" onclick="jump(2)">옵션 B · 1/2</div>
+    <div class="tab" onclick="jump(3)">옵션 B · 2/2</div>
+    <div class="tab" onclick="jump(4)">옵션 C · 1/2</div>
+    <div class="tab" onclick="jump(5)">옵션 C · 2/2</div>
+  </div>
+  <div class="head" style="margin-top:18px;">
+    <div class="kicker"><span class="dot"></span>옵션 A · 슬라이드 2/2</div>
+    <h1 class="t">그래프가 작동하는 법</h1>
+    <div class="sub">How</div>
+  </div>
+
+  <div class="body" style="grid-template-columns: 1.3fr 1fr; grid-template-rows: 1fr 1fr;">
+    <!-- 좌상: 그래프 SVG -->
+    <div class="c" style="grid-row: span 2;">
+      <div class="mh"><span class="b"></span>전체 그래프 (10 노드 + 폴백)</div>
+      <svg viewBox="0 0 580 480" style="width:100%; height:calc(100% - 24px);">
+        <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="rgba(167,139,250,0.85)"/></marker></defs>
+        <rect class="gn term" x="245" y="6" width="90" height="26" rx="13"/><text class="gl" x="290" y="23">START</text>
+        <rect class="gn" x="235" y="60" width="110" height="34" rx="8"/><text class="gl" x="290" y="76">router</text><text class="gs" x="290" y="88">rag/followup</text>
+        <rect class="gn rag" x="120" y="130" width="110" height="34" rx="8"/><text class="gl" x="175" y="146">intent</text><text class="gs" x="175" y="158">struct/open+kw</text>
+        <rect class="gn fu" x="360" y="130" width="130" height="34" rx="8"/><text class="gl" x="425" y="146">followup_intent</text><text class="gs" x="425" y="158">이전 sources 회수</text>
+        <rect class="gn" x="20" y="200" width="100" height="30" rx="7"/><text class="gl" x="70" y="219">search</text>
+        <rect class="gn" x="160" y="200" width="120" height="30" rx="7"/><text class="gl" x="220" y="219">fulltext_search</text>
+        <rect class="gn fu" x="360" y="200" width="150" height="30" rx="7"/><text class="gl" x="435" y="219">followup_search</text>
+        <rect class="gn" x="20" y="252" width="100" height="28" rx="7"/><text class="gl" x="70" y="270">scan</text>
+        <rect class="gn" x="20" y="298" width="100" height="28" rx="7"/><text class="gl" x="70" y="316">select</text>
+        <rect class="gn fb" x="490" y="252" width="80" height="30" rx="7"/><text class="gl" x="530" y="271" style="fill:#fecaca">fallback</text>
+        <rect class="gn" x="230" y="356" width="110" height="32" rx="7"/><text class="gl" x="285" y="375">extract</text>
+        <rect class="gn" x="360" y="356" width="110" height="32" rx="7"/><text class="gl" x="415" y="375">generate</text>
+        <rect class="gn term" x="490" y="358" width="70" height="28" rx="14"/><text class="gl" x="525" y="375">END</text>
+        <path class="ge" d="M290,32 L290,60"/>
+        <path class="ge" d="M260,94 Q210,115 175,130"/><text class="gel" x="222" y="116">rag</text>
+        <path class="ge fu" d="M320,94 Q380,115 425,130"/><text class="gel" x="380" y="116">followup</text>
+        <path class="ge st" d="M150,164 Q100,185 70,200"/><text class="gel" x="100" y="184" style="fill:#93c5fd">struct</text>
+        <path class="ge op" d="M205,164 Q215,185 220,200"/><text class="gel" x="245" y="183" style="fill:#fcd34d">open</text>
+        <path class="ge st" d="M70,230 L70,252"/><path class="ge st" d="M70,280 L70,298"/>
+        <path class="ge st" d="M120,316 Q190,350 230,360"/>
+        <path class="ge op" d="M220,230 Q230,300 240,356"/>
+        <path class="ge fu" d="M425,164 L425,200"/>
+        <path class="ge fu" d="M395,230 Q345,310 285,360"/><text class="gel" x="333" y="305" style="fill:#f0abfc">exist</text>
+        <path class="ge fb" d="M475,230 Q500,242 510,252"/><text class="gel" x="515" y="245" style="fill:#fecaca">none</text>
+        <path class="ge fb" d="M490,268 C200,200 100,80 130,140" /><text class="gel" x="240" y="60" style="fill:#fecaca">↺ intent (RAG 사이클)</text>
+        <path class="ge" d="M340,372 L360,372"/><path class="ge" d="M470,372 L490,372"/>
+      </svg>
+    </div>
+
+    <!-- 우상: 1턴 트레이스 -->
+    <div class="c">
+      <div class="mh"><span class="b"></span>1턴 · structured 경로</div>
+      <div class="uq" style="margin-bottom:6px;"><small>USER</small>DBMS 시장 규모 얼마야?</div>
+      <div class="stripe" style="font-size:10px;">
+        <div class="nx"><span class="num">1</span><span class="nm">router</span><span class="dd">→ rag</span></div>
+        <span class="ar">→</span>
+        <div class="nx"><span class="num">2</span><span class="nm">intent</span><span class="dd">→ structured + kw</span></div>
+        <span class="ar">→</span>
+        <div class="nx"><span class="num">3</span><span class="nm">search</span><span class="dd">top-5 후보</span></div>
+        <span class="ar">→</span>
+        <div class="nx"><span class="num">4</span><span class="nm">scan</span><span class="dd">page 40 매칭</span></div>
+        <span class="ar">→</span>
+        <div class="nx"><span class="num">5</span><span class="nm">select</span><span class="dd">confidence gate</span></div>
+        <span class="ar">→</span>
+        <div class="nx"><span class="num">6</span><span class="nm">extract</span><span class="dd">snippet+page</span></div>
+        <span class="ar">→</span>
+        <div class="nx ok"><span class="num">7</span><span class="nm">generate</span><span class="dd">streaming 답변</span></div>
+      </div>
+    </div>
+
+    <!-- 우하: 2턴 + 폴백 + PDF -->
+    <div class="c">
+      <div class="mh"><span class="b"></span>2턴 · followup 경로</div>
+      <div class="uq" style="margin-bottom:6px;"><small>USER</small>전년 대비는?</div>
+      <div class="stripe" style="font-size:10px; margin-bottom:8px;">
+        <div class="nx fu"><span class="num">1</span><span class="nm">router</span><span class="dd">history ↑ → followup</span></div>
+        <span class="ar">→</span>
+        <div class="nx fu"><span class="num">2</span><span class="nm">followup_intent</span><span class="dd">이전 sources 회수</span></div>
+        <span class="ar">→</span>
+        <div class="nx fu"><span class="num">3</span><span class="nm">followup_search</span><span class="dd">페이지 캐시 재스캔</span></div>
+        <span class="ar">→</span>
+        <div class="nx ok"><span class="num">+</span><span class="nm">extract→generate</span><span class="dd">재사용</span></div>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:6px;">
+        <div class="mini" style="background:rgba(248,113,113,0.06);">
+          <span class="h" style="color:var(--rose);">↺ 폴백 (none 분기)</span>
+          매칭 0 → fallback_marker → intent (RAG 사이클). flag 로 무한루프 차단.
+        </div>
+        <div class="mini" style="background:rgba(139,92,246,0.10); border-color:var(--border-strong);">
+          <span class="h" style="color:var(--accent-light);">📄 PDF 부록</span>
+          입력창 PDF 버튼 → LLM 요약 → reportlab 매거진 PDF.
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════ 옵션 B · Slide 1 ════════════════ -->
+<section class="slide">
+  <div class="tabs">
+    <div class="tab" onclick="jump(0)">옵션 A · 1/2</div>
+    <div class="tab" onclick="jump(1)">옵션 A · 2/2</div>
+    <div class="tab active" onclick="jump(2)">옵션 B · 1/2</div>
+    <div class="tab" onclick="jump(3)">옵션 B · 2/2</div>
+    <div class="tab" onclick="jump(4)">옵션 C · 1/2</div>
+    <div class="tab" onclick="jump(5)">옵션 C · 2/2</div>
+  </div>
+  <div class="head" style="margin-top:18px;">
+    <div class="kicker"><span class="dot"></span>옵션 B · 슬라이드 1/2</div>
+    <h1 class="t">문제 · 해결 · 전체 그래프</h1>
+    <div class="sub">Problem → Solution</div>
+  </div>
+
+  <div class="body" style="grid-template-columns: 1fr 1.2fr; grid-template-rows: 1fr 1fr;">
+    <!-- 좌상: 검색 vs 합성 -->
+    <div class="c">
+      <div class="mh"><span class="b"></span>일반모드 vs AIMODE</div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; height:calc(100% - 24px);">
+        <div style="padding:10px; border-radius:8px; background:rgba(59,130,246,0.06); border:1px solid rgba(59,130,246,0.25);">
+          <strong style="color:#93c5fd; font-size:12px;">일반모드</strong>
+          <p style="font-size:11px; margin-top:4px;">"이 파일 어디?"<br>
+          파일 위치 찾기 · 결과 = 파일 카드 리스트</p>
+        </div>
+        <div style="padding:10px; border-radius:8px; background:linear-gradient(135deg,rgba(139,92,246,0.12),rgba(217,70,239,0.08)); border:1px solid var(--border-strong);">
+          <strong style="color:var(--accent-light); font-size:12px;">AIMODE</strong>
+          <p style="font-size:11px; margin-top:4px;">"결론이 뭐야?"<br>
+          문서 내용 합성 · 결과 = 한국어 답변 + 인용</p>
+        </div>
+      </div>
+      <p style="font-size:10.5px; color:var(--muted); margin-top:6px; text-align:center;">
+        → AIMODE = <strong style="color:var(--accent-light)">합성</strong>. 단순 함수 한 줄로 안 풀림.
+      </p>
+    </div>
+
+    <!-- 우상: LangGraph 4 도구 -->
+    <div class="c ok">
+      <div class="mh"><span class="b"></span>LangGraph 4 도구</div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+        <div class="mini ok"><span class="h">① StateGraph</span>RAGState dict 자동 공유</div>
+        <div class="mini ok"><span class="h">② 조건부 엣지</span>한 줄로 분기 정의</div>
+        <div class="mini ok"><span class="h">③ MemorySaver</span>thread_id 로 state 복원</div>
+        <div class="mini ok"><span class="h">④ 노드 단위 SSE</span>단계별 진행 표시</div>
+      </div>
+      <pre class="code" style="margin-top:6px;">builder.<span class="fn">add_conditional_edges</span>(<span class="str">"router"</span>, _route_edge,
+  {<span class="str">"rag"</span>: <span class="str">"intent"</span>, <span class="str">"followup"</span>: <span class="str">"followup_intent"</span>})</pre>
+    </div>
+
+    <!-- 좌하: Naive RAG 한계 -->
+    <div class="c bad">
+      <div class="mh"><span class="b"></span>Naive RAG 의 한계</div>
+      <div style="text-align:center; padding:6px; background:rgba(248,113,113,0.06); border:1px solid rgba(248,113,113,0.25); border-radius:7px; margin-bottom:8px; font-family:monospace; font-size:10px; color:#fca5a5;">
+        질문 → 벡터검색 → concat → LLM → 답
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+        <div class="mini"><span class="h">✕ 분기 없음</span>모든 입력이 같은 경로</div>
+        <div class="mini"><span class="h">✕ 후속 불가</span>"전년 대비?" 도 재검색</div>
+        <div class="mini"><span class="h">✕ 페이지 인용 X</span>"40페이지" 위치 못 줌</div>
+        <div class="mini"><span class="h">✕ 폴백 없음</span>강제 환각 답</div>
+      </div>
+    </div>
+
+    <!-- 우하: 그래프 SVG (메인 비주얼) -->
+    <div class="c acc">
+      <div class="mh"><span class="b"></span>전체 그래프</div>
+      <svg viewBox="0 0 580 360" style="width:100%; height:calc(100% - 26px);">
+        <defs><marker id="arr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="rgba(167,139,250,0.85)"/></marker></defs>
+        <rect class="gn term" x="245" y="4" width="90" height="22" rx="11"/><text class="gl" x="290" y="20">START</text>
+        <rect class="gn" x="235" y="46" width="110" height="30" rx="7"/><text class="gl" x="290" y="60">router</text><text class="gs" x="290" y="71">rag / followup</text>
+        <rect class="gn rag" x="120" y="100" width="110" height="30" rx="7"/><text class="gl" x="175" y="119">intent</text>
+        <rect class="gn fu" x="360" y="100" width="130" height="30" rx="7"/><text class="gl" x="425" y="119">followup_intent</text>
+        <rect class="gn" x="20" y="158" width="100" height="26" rx="6"/><text class="gl" x="70" y="175">search</text>
+        <rect class="gn" x="160" y="158" width="120" height="26" rx="6"/><text class="gl" x="220" y="175">fulltext_search</text>
+        <rect class="gn fu" x="360" y="158" width="150" height="26" rx="6"/><text class="gl" x="435" y="175">followup_search</text>
+        <rect class="gn" x="20" y="200" width="100" height="24" rx="6"/><text class="gl" x="70" y="216">scan</text>
+        <rect class="gn" x="20" y="238" width="100" height="24" rx="6"/><text class="gl" x="70" y="254">select</text>
+        <rect class="gn fb" x="490" y="200" width="80" height="26" rx="6" style="marker-end: url(#arr2)"/><text class="gl" x="530" y="217" style="fill:#fecaca">fallback</text>
+        <rect class="gn" x="220" y="280" width="100" height="28" rx="6"/><text class="gl" x="270" y="298">extract</text>
+        <rect class="gn" x="340" y="280" width="110" height="28" rx="6"/><text class="gl" x="395" y="298">generate</text>
+        <rect class="gn term" x="470" y="282" width="60" height="24" rx="12"/><text class="gl" x="500" y="298">END</text>
+        <path class="ge" d="M290,26 L290,46" marker-end="url(#arr2)"/>
+        <path class="ge" d="M260,76 Q210,90 175,100" marker-end="url(#arr2)"/><text class="gel" x="220" y="86">rag</text>
+        <path class="ge fu" d="M320,76 Q380,90 425,100" marker-end="url(#arr2)"/><text class="gel" x="380" y="86">followup</text>
+        <path class="ge st" d="M150,130 Q100,148 70,158" marker-end="url(#arr2)"/><text class="gel" x="100" y="146" style="fill:#93c5fd">struct</text>
+        <path class="ge op" d="M205,130 Q215,148 220,158" marker-end="url(#arr2)"/><text class="gel" x="245" y="146" style="fill:#fcd34d">open</text>
+        <path class="ge st" d="M70,184 L70,200" marker-end="url(#arr2)"/>
+        <path class="ge st" d="M70,224 L70,238" marker-end="url(#arr2)"/>
+        <path class="ge st" d="M120,250 Q180,280 220,288" marker-end="url(#arr2)"/>
+        <path class="ge op" d="M220,184 Q230,240 250,280" marker-end="url(#arr2)"/>
+        <path class="ge fu" d="M425,130 L425,158" marker-end="url(#arr2)"/>
+        <path class="ge fu" d="M395,184 Q340,240 290,283" marker-end="url(#arr2)"/><text class="gel" x="335" y="236" style="fill:#f0abfc">exist</text>
+        <path class="ge fb" d="M475,184 Q500,192 510,200" marker-end="url(#arr2)"/><text class="gel" x="515" y="195" style="fill:#fecaca">none</text>
+        <path class="ge fb" d="M490,215 C 200,165 90,60 130,110" marker-end="url(#arr2)"/><text class="gel" x="240" y="44" style="fill:#fecaca">↺ RAG 사이클</text>
+        <path class="ge" d="M320,294 L340,294" marker-end="url(#arr2)"/>
+        <path class="ge" d="M450,294 L470,294" marker-end="url(#arr2)"/>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════ 옵션 B · Slide 2 ════════════════ -->
+<section class="slide">
+  <div class="tabs">
+    <div class="tab" onclick="jump(0)">옵션 A · 1/2</div>
+    <div class="tab" onclick="jump(1)">옵션 A · 2/2</div>
+    <div class="tab" onclick="jump(2)">옵션 B · 1/2</div>
+    <div class="tab active" onclick="jump(3)">옵션 B · 2/2</div>
+    <div class="tab" onclick="jump(4)">옵션 C · 1/2</div>
+    <div class="tab" onclick="jump(5)">옵션 C · 2/2</div>
+  </div>
+  <div class="head" style="margin-top:18px;">
+    <div class="kicker"><span class="dot"></span>옵션 B · 슬라이드 2/2</div>
+    <h1 class="t">실제 흐름 트레이스</h1>
+    <div class="sub">시나리오 · 1턴 + 2턴</div>
+  </div>
+
+  <div class="body" style="grid-template-columns: 1fr 1fr;">
+    <!-- 좌: 1턴 시나리오 -->
+    <div class="c">
+      <div class="mh"><span class="b"></span>1턴 · structured 경로</div>
+      <div class="uq" style="margin-bottom:8px;"><small>USER · 1턴</small>DBMS 시장 규모 얼마야?</div>
+
+      <div class="state" style="margin-bottom:8px;">
+        <div class="row2"><span class="k">question</span><span class="v s">"DBMS 시장 규모..."</span></div>
+        <div class="row2"><span class="k">history</span><span class="v">[]&nbsp;<span style="color:var(--muted)"># empty</span></span></div>
+      </div>
+
+      <div style="display:grid; grid-template-columns:1fr; gap:4px; font-size:10.5px;">
+        <div style="padding:5px 9px; border-left:3px solid var(--accent); background:rgba(15,9,32,0.6); border-radius:0 6px 6px 0;">
+          <strong style="color:#f5f3ff;">router</strong> · history empty → <span class="pill em" style="margin:0;">rag</span>
+        </div>
+        <div style="padding:5px 9px; border-left:3px solid var(--accent); background:rgba(15,9,32,0.6); border-radius:0 6px 6px 0;">
+          <strong style="color:#f5f3ff;">intent</strong> · mode=<span class="pill" style="margin:0;">structured</span> kw=["DBMS","시장 규모"]
+        </div>
+        <div style="padding:5px 9px; border-left:3px solid var(--accent); background:rgba(15,9,32,0.6); border-radius:0 6px 6px 0;">
+          <strong style="color:#f5f3ff;">search</strong> · BGE-M3 → 후보 5개 (top: 2016 IT 백서 0.847)
+        </div>
+        <div style="padding:5px 9px; border-left:3px solid var(--accent); background:rgba(15,9,32,0.6); border-radius:0 6px 6px 0;">
+          <strong style="color:#f5f3ff;">scan</strong> · page 40 매칭 (score 8.4) · 목차 페이지 감점
+        </div>
+        <div style="padding:5px 9px; border-left:3px solid var(--accent); background:rgba(15,9,32,0.6); border-radius:0 6px 6px 0;">
+          <strong style="color:#f5f3ff;">select</strong> · confidence gate 통과 → matched_sources=[p.40]
+        </div>
+        <div style="padding:5px 9px; border-left:3px solid var(--accent); background:rgba(15,9,32,0.6); border-radius:0 6px 6px 0;">
+          <strong style="color:#f5f3ff;">extract</strong> · references=[{page:40, snippet:"…317억 달러…"}]
+        </div>
+        <div style="padding:5px 9px; border-left:3px solid var(--emerald); background:rgba(16,185,129,0.06); border-radius:0 6px 6px 0;">
+          <strong style="color:#f5f3ff;">generate</strong> · Ollama streaming → 마크다운 답변 + SQLite 영속
+        </div>
+      </div>
+
+      <div class="sse" style="margin-top:8px;">
+        <span class="sse-l">SSE 이벤트 흐름</span>
+        route → intent → candidates → scanning ×N → selected → extract → token ×N → done
+      </div>
+    </div>
+
+    <!-- 우: 2턴 + open + 폴백 + PDF -->
+    <div style="display:flex; flex-direction:column; gap:10px;">
+      <div class="c" style="border-color:rgba(217,70,239,0.4);">
+        <div class="mh"><span class="b"></span>2턴 · followup 경로</div>
+        <div class="uq" style="margin-bottom:6px;"><small>USER · 2턴</small>전년 대비는?</div>
+        <div style="display:grid; gap:4px; font-size:10.5px;">
+          <div style="padding:4px 9px; border-left:3px solid var(--fuchsia); background:rgba(15,9,32,0.6);">
+            <strong style="color:#f5f3ff;">router</strong> · history ↑ + 비교어 → <span class="pill fu" style="margin:0;">followup</span>
+          </div>
+          <div style="padding:4px 9px; border-left:3px solid var(--fuchsia); background:rgba(15,9,32,0.6);">
+            <strong style="color:#f5f3ff;">followup_intent</strong> · 이전 sources (p.40) 회수
+          </div>
+          <div style="padding:4px 9px; border-left:3px solid var(--fuchsia); background:rgba(15,9,32,0.6);">
+            <strong style="color:#f5f3ff;">followup_search</strong> · 페이지 캐시 재스캔 → "전년 0.1%→6.4%"
+          </div>
+          <div style="padding:4px 9px; border-left:3px solid var(--emerald); background:rgba(16,185,129,0.05);">
+            <strong style="color:#f5f3ff;">extract → generate</strong> · 1턴 노드 재사용
+          </div>
+        </div>
+      </div>
+
+      <div class="c bad">
+        <div class="mh"><span class="b"></span>↺ 폴백 (followup 실패 시)</div>
+        <p style="font-size:11px;">매칭 0 → <strong>_followup_fallback_marker</strong> → intent (RAG 사이클 처음부터).<br>
+          <code style="font-size:10.5px;">fallback_from_followup=True</code> flag 로 무한루프 차단.</p>
+      </div>
+
+      <div class="c" style="border-color:rgba(251,191,36,0.32); background:rgba(251,191,36,0.04);">
+        <div class="mh"><span class="b"></span>open 분기 (광범위 질문)</div>
+        <p style="font-size:11px;">"트렌드 알려줘" 같은 질문 → search/scan/select 우회 → <strong>fulltext_search</strong> 한 노드가 모든 페이지 직접 스캔.</p>
+      </div>
+
+      <div class="c acc">
+        <div class="mh"><span class="b"></span>📄 PDF 부록</div>
+        <p style="font-size:11px;">입력창 PDF 버튼 → SQLite 대화 로드 → LLM JSON 요약 → reportlab 매거진 PDF. LangGraph 와 독립된 downstream.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════ 옵션 C · Slide 1 ════════════════ -->
+<section class="slide">
+  <div class="tabs">
+    <div class="tab" onclick="jump(0)">옵션 A · 1/2</div>
+    <div class="tab" onclick="jump(1)">옵션 A · 2/2</div>
+    <div class="tab" onclick="jump(2)">옵션 B · 1/2</div>
+    <div class="tab" onclick="jump(3)">옵션 B · 2/2</div>
+    <div class="tab active" onclick="jump(4)">옵션 C · 1/2</div>
+    <div class="tab" onclick="jump(5)">옵션 C · 2/2</div>
+  </div>
+  <div class="head" style="margin-top:18px;">
+    <div class="kicker"><span class="dot"></span>옵션 C · 슬라이드 1/2</div>
+    <h1 class="t">셋업 (정적 구조)</h1>
+    <div class="sub">Setup</div>
+  </div>
+
+  <div class="body" style="grid-template-columns: 1.1fr 1fr; grid-template-rows: 0.4fr 1.2fr 0.8fr;">
+    <!-- 상: 문제정의 + Naive vs LangGraph -->
+    <div class="c" style="grid-column: span 2;">
+      <div class="mh"><span class="b"></span>왜 AIMODE 는 단순 함수가 아닌가</div>
+      <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;">
+        <div>
+          <strong style="color:#93c5fd; font-size:12px;">문제정의</strong>
+          <p style="font-size:11px; margin-top:4px;">AIMODE = <strong>합성(synthesis)</strong>. 로컬 DB 위에서 사용자 질문에 답을 만드는 일. 단순 파일 찾기와 다름.</p>
+        </div>
+        <div>
+          <strong style="color:var(--rose); font-size:12px;">Naive RAG (비교군)</strong>
+          <p style="font-size:11px; margin-top:4px;">질문→벡터검색→LLM 단방향. <strong>분기·후속·페이지인용·진행표시·폴백 모두 부재</strong>.</p>
+        </div>
+        <div>
+          <strong style="color:var(--emerald); font-size:12px;">LangGraph 4 도구</strong>
+          <p style="font-size:11px; margin-top:4px;"><strong>StateGraph · 조건부 엣지 · MemorySaver · 노드 단위 SSE</strong>. Naive 가 못 풀던 6가지를 정확히 풀어줌.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 중: 그래프 SVG -->
+    <div class="c acc">
+      <div class="mh"><span class="b"></span>전체 그래프 (10 노드 + 폴백 마커)</div>
+      <svg viewBox="0 0 580 380" style="width:100%; height:calc(100% - 26px);">
+        <defs><marker id="arr3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="rgba(167,139,250,0.85)"/></marker></defs>
+        <rect class="gn term" x="245" y="4" width="90" height="22" rx="11"/><text class="gl" x="290" y="20">START</text>
+        <rect class="gn" x="235" y="46" width="110" height="30" rx="7"/><text class="gl" x="290" y="60">router</text><text class="gs" x="290" y="71">rag / followup</text>
+        <rect class="gn rag" x="120" y="100" width="110" height="30" rx="7"/><text class="gl" x="175" y="119">intent</text>
+        <rect class="gn fu" x="360" y="100" width="130" height="30" rx="7"/><text class="gl" x="425" y="119">followup_intent</text>
+        <rect class="gn" x="20" y="158" width="100" height="26" rx="6"/><text class="gl" x="70" y="175">search</text>
+        <rect class="gn" x="160" y="158" width="120" height="26" rx="6"/><text class="gl" x="220" y="175">fulltext_search</text>
+        <rect class="gn fu" x="360" y="158" width="150" height="26" rx="6"/><text class="gl" x="435" y="175">followup_search</text>
+        <rect class="gn" x="20" y="200" width="100" height="24" rx="6"/><text class="gl" x="70" y="216">scan</text>
+        <rect class="gn" x="20" y="238" width="100" height="24" rx="6"/><text class="gl" x="70" y="254">select</text>
+        <rect class="gn fb" x="490" y="200" width="80" height="26" rx="6"/><text class="gl" x="530" y="217" style="fill:#fecaca">fallback</text>
+        <rect class="gn" x="220" y="290" width="100" height="28" rx="6"/><text class="gl" x="270" y="309">extract</text>
+        <rect class="gn" x="340" y="290" width="110" height="28" rx="6"/><text class="gl" x="395" y="309">generate</text>
+        <rect class="gn term" x="470" y="292" width="60" height="24" rx="12"/><text class="gl" x="500" y="308">END</text>
+        <path class="ge" d="M290,26 L290,46" marker-end="url(#arr3)"/>
+        <path class="ge" d="M260,76 Q210,90 175,100" marker-end="url(#arr3)"/><text class="gel" x="220" y="86">rag</text>
+        <path class="ge fu" d="M320,76 Q380,90 425,100" marker-end="url(#arr3)"/><text class="gel" x="380" y="86">followup</text>
+        <path class="ge st" d="M150,130 Q100,148 70,158" marker-end="url(#arr3)"/><text class="gel" x="100" y="146" style="fill:#93c5fd">struct</text>
+        <path class="ge op" d="M205,130 Q215,148 220,158" marker-end="url(#arr3)"/><text class="gel" x="245" y="146" style="fill:#fcd34d">open</text>
+        <path class="ge st" d="M70,184 L70,200" marker-end="url(#arr3)"/>
+        <path class="ge st" d="M70,224 L70,238" marker-end="url(#arr3)"/>
+        <path class="ge st" d="M120,250 Q180,290 220,298" marker-end="url(#arr3)"/>
+        <path class="ge op" d="M220,184 Q230,250 250,290" marker-end="url(#arr3)"/>
+        <path class="ge fu" d="M425,130 L425,158" marker-end="url(#arr3)"/>
+        <path class="ge fu" d="M395,184 Q340,250 290,293" marker-end="url(#arr3)"/><text class="gel" x="335" y="240" style="fill:#f0abfc">exist</text>
+        <path class="ge fb" d="M475,184 Q500,192 510,200" marker-end="url(#arr3)"/><text class="gel" x="515" y="195" style="fill:#fecaca">none</text>
+        <path class="ge fb" d="M490,215 C 200,165 90,60 130,110" marker-end="url(#arr3)"/><text class="gel" x="240" y="44" style="fill:#fecaca">↺ RAG 사이클</text>
+        <path class="ge" d="M320,304 L340,304" marker-end="url(#arr3)"/>
+        <path class="ge" d="M450,304 L470,304" marker-end="url(#arr3)"/>
+      </svg>
+    </div>
+
+    <!-- 우중: 노드 목록 표 -->
+    <div class="c">
+      <div class="mh"><span class="b"></span>노드 명세 (10 + 1 폴백)</div>
+      <table class="nodelist">
+        <tr><td class="idx">1</td><td class="nm">router</td><td class="desc">rag/followup 분기 판단</td></tr>
+        <tr><td class="idx">2</td><td class="nm">intent</td><td class="desc">structured/open 모드 + 키워드 추출</td></tr>
+        <tr><td class="idx">3</td><td class="nm">search</td><td class="desc">BGE-M3 벡터 검색 top-K</td></tr>
+        <tr><td class="idx">4</td><td class="nm">scan</td><td class="desc">페이지 단위 substring + phrase 매칭</td></tr>
+        <tr><td class="idx">5</td><td class="nm">select</td><td class="desc">confidence gate (점수 컷·목차 페널티)</td></tr>
+        <tr><td class="idx">6</td><td class="nm">fulltext_search</td><td class="desc">open 모드 — 전 페이지 직접 스캔</td></tr>
+        <tr class="fu"><td class="idx">7</td><td class="nm">followup_intent</td><td class="desc">이전 sources 회수 + 후속 kw</td></tr>
+        <tr class="fu"><td class="idx">8</td><td class="nm">followup_search</td><td class="desc">이전 페이지 캐시 재스캔</td></tr>
+        <tr><td class="idx">9</td><td class="nm">extract</td><td class="desc">references (page·snippet) 정규화</td></tr>
+        <tr><td class="idx">10</td><td class="nm">generate</td><td class="desc">Ollama 스트리밍 + SQLite 영속</td></tr>
+        <tr class="fb"><td class="idx">ⓕ</td><td class="nm">_fallback_marker</td><td class="desc">followup 실패 → RAG 사이클 점프</td></tr>
+      </table>
+    </div>
+
+    <!-- 하: RAGState -->
+    <div class="c" style="grid-column: span 2;">
+      <div class="mh"><span class="b"></span>RAGState — 모든 노드가 공유하는 상태</div>
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+        <pre class="code"><span class="kw">class</span> <span class="fn">RAGState</span>(TypedDict):
+  question: <span class="kw">str</span>          <span class="com"># 사용자 질문</span>
+  thread_id: <span class="kw">str</span>         <span class="com"># 채팅방 ID</span>
+  history: <span class="kw">list</span>[<span class="kw">dict</span>]   <span class="com"># 이전 turn</span>
+  route: <span class="kw">str</span>             <span class="com"># "rag" | "followup"</span></pre>
+        <pre class="code">  mode: <span class="kw">str</span>              <span class="com"># "structured" | "open"</span>
+  file_keywords: <span class="kw">list</span>     <span class="com"># 파일 매칭용</span>
+  detail_keywords: <span class="kw">list</span>   <span class="com"># 페이지 매칭용</span>
+  candidates: <span class="kw">list</span>[<span class="kw">dict</span>]   <span class="com"># 벡터검색 후보</span>
+  matched_sources: <span class="kw">list</span>   <span class="com"># select 통과</span>
+  references: <span class="kw">list</span>[<span class="kw">dict</span>]  <span class="com"># 인용 청크</span>
+  answer: <span class="kw">str</span>            <span class="com"># streaming 누적</span></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════ 옵션 C · Slide 2 ════════════════ -->
+<section class="slide">
+  <div class="tabs">
+    <div class="tab" onclick="jump(0)">옵션 A · 1/2</div>
+    <div class="tab" onclick="jump(1)">옵션 A · 2/2</div>
+    <div class="tab" onclick="jump(2)">옵션 B · 1/2</div>
+    <div class="tab" onclick="jump(3)">옵션 B · 2/2</div>
+    <div class="tab" onclick="jump(4)">옵션 C · 1/2</div>
+    <div class="tab active" onclick="jump(5)">옵션 C · 2/2</div>
+  </div>
+  <div class="head" style="margin-top:18px;">
+    <div class="kicker"><span class="dot"></span>옵션 C · 슬라이드 2/2</div>
+    <h1 class="t">런타임 (동적 실행)</h1>
+    <div class="sub">Run · 시나리오 트레이스</div>
+  </div>
+
+  <div class="body" style="grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 0.7fr;">
+    <!-- 좌상: 1턴 -->
+    <div class="c">
+      <div class="mh"><span class="b"></span>1턴 · structured</div>
+      <div class="uq" style="margin-bottom:6px;"><small>USER · 1턴</small>DBMS 시장 규모 얼마야?</div>
+      <div class="stripe">
+        <div class="nx"><span class="num">1</span><span class="nm">router</span><span class="dd">→ rag</span></div>
+        <span class="ar">→</span>
+        <div class="nx"><span class="num">2</span><span class="nm">intent</span><span class="dd">structured + kw</span></div>
+        <span class="ar">→</span>
+        <div class="nx"><span class="num">3</span><span class="nm">search</span><span class="dd">top-5 후보</span></div>
+        <span class="ar">→</span>
+        <div class="nx"><span class="num">4</span><span class="nm">scan</span><span class="dd">p.40 매칭</span></div>
+      </div>
+      <div class="stripe" style="margin-top:4px;">
+        <div class="nx"><span class="num">5</span><span class="nm">select</span><span class="dd">conf gate</span></div>
+        <span class="ar">→</span>
+        <div class="nx"><span class="num">6</span><span class="nm">extract</span><span class="dd">snippet</span></div>
+        <span class="ar">→</span>
+        <div class="nx ok"><span class="num">7</span><span class="nm">generate</span><span class="dd">streaming</span></div>
+      </div>
+      <div class="sse" style="margin-top:8px;">
+        <span class="sse-l">SSE 이벤트</span>
+        route · intent · candidates · scanning×N · selected · extract · token×N · done
+      </div>
+      <div style="margin-top:8px; padding:8px 11px; background:rgba(16,185,129,0.05); border:1px solid rgba(16,185,129,0.25); border-radius:8px; font-size:11px;">
+        <strong style="color:var(--emerald);">답변</strong> · 2016년 DBMS 시장 <strong>317억$</strong> (전년 대비 <strong>6.4%↑</strong>) <span class="pill" style="font-size:9px; padding:1px 5px;">40p</span>
+      </div>
+    </div>
+
+    <!-- 우상: 2턴 -->
+    <div class="c" style="border-color:rgba(217,70,239,0.4);">
+      <div class="mh"><span class="b"></span>2턴 · followup</div>
+      <div class="uq" style="margin-bottom:6px;"><small>USER · 2턴</small>전년 대비는?</div>
+      <div class="stripe">
+        <div class="nx fu"><span class="num">1</span><span class="nm">router</span><span class="dd">→ followup</span></div>
+        <span class="ar">→</span>
+        <div class="nx fu"><span class="num">2</span><span class="nm">followup_intent</span><span class="dd">이전 회수</span></div>
+        <span class="ar">→</span>
+        <div class="nx fu"><span class="num">3</span><span class="nm">followup_search</span><span class="dd">재스캔</span></div>
+        <span class="ar">→</span>
+        <div class="nx ok"><span class="num">+</span><span class="nm">extract+generate</span><span class="dd">재사용</span></div>
+      </div>
+      <p style="font-size:11px; margin-top:8px; color:var(--muted);">
+        history 가 있어서 router 는 LLM 분류 → <strong style="color:#f0abfc">followup</strong>.
+        벡터검색 안 돌리고 직전 sources 안에서만 매칭 → 더 빠르고 맥락 일관.
+      </p>
+      <div style="margin-top:8px; padding:8px 11px; background:rgba(16,185,129,0.05); border:1px solid rgba(16,185,129,0.25); border-radius:8px; font-size:11px;">
+        <strong style="color:var(--emerald);">답변</strong> · 전년(0.1%) 대비 <strong>+6.3%p</strong> 가속 <span class="pill" style="font-size:9px; padding:1px 5px;">40p</span>
+      </div>
+    </div>
+
+    <!-- 좌하: 폴백 -->
+    <div class="c bad">
+      <div class="mh"><span class="b"></span>↺ 폴백 (none 분기)</div>
+      <div class="stripe">
+        <div class="nx r"><span class="num">3</span><span class="nm">followup_search</span><span class="dd">매칭 0</span></div>
+        <span class="ar" style="color:#fca5a5;">→</span>
+        <div class="nx r"><span class="num">ⓕ</span><span class="nm">fallback_marker</span><span class="dd">flag + SSE</span></div>
+        <span class="ar" style="color:#fca5a5;">↺</span>
+        <div class="nx"><span class="num">2</span><span class="nm">intent</span><span class="dd">RAG 처음부터</span></div>
+      </div>
+      <p style="font-size:11px; margin-top:8px;">
+        <code style="font-size:10.5px;">fallback_from_followup=True</code> flag 가 state 에 박힘.
+        다음 router 가 또 followup 으로 잘못 분류해도 강제 rag.
+      </p>
+    </div>
+
+    <!-- 우하: PDF -->
+    <div class="c acc">
+      <div class="mh"><span class="b"></span>📄 PDF 부록 (downstream)</div>
+      <p style="font-size:11px;">
+        입력창 PDF 버튼 → <code>POST /api/aimode/export-pdf</code> → SQLite 에서 thread 메시지 로드 → LLM JSON 요약 → <strong>reportlab 매거진 PDF</strong> 다운로드.
+      </p>
+      <p style="font-size:10.5px; color:var(--muted); margin-top:6px;">
+        Cover / Key Points / Q&amp;A / Conclusion 4섹션. 한글 폰트(Malgun) 자동 등록.
+        LangGraph 그래프 자체와는 독립 — 그래프가 만든 영속 데이터를 재활용하는 downstream 기능.
+      </p>
+    </div>
+  </div>
+</section>
+
+</div>
+
+<div class="footer">
+  <span class="counter"><span id="cur">01</span> / 06</span>
+  <div class="progress"><div class="bar" id="bar"></div></div>
+  <span style="font-family:monospace; opacity:0.7;">AIMODE · 2-Slide 비교 (A/B/C)</span>
+</div>
+
+<div class="nav-zone prev" onclick="go(-1)"></div>
+<div class="nav-zone next" onclick="go(1)"></div>
+
+<script>
+  const slides = document.querySelectorAll(".slide");
+  const total = slides.length;
+  let idx = 0;
+  const $cur = document.getElementById("cur");
+  const $bar = document.getElementById("bar");
+
+  function show(n) {
+    n = Math.max(0, Math.min(total - 1, n));
+    slides[idx].classList.remove("active");
+    slides[n].classList.add("active");
+    idx = n;
+    $cur.textContent = String(idx + 1).padStart(2, "0");
+    $bar.style.width = ((idx + 1) / total * 100) + "%";
+  }
+  function go(d) { show(idx + d); }
+  function jump(n) { show(n); }
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowRight" || e.key === " " || e.key === "PageDown") { e.preventDefault(); go(1); }
+    else if (e.key === "ArrowLeft" || e.key === "PageUp") { e.preventDefault(); go(-1); }
+    else if (e.key === "Home") { e.preventDefault(); show(0); }
+    else if (e.key === "End") { e.preventDefault(); show(total - 1); }
+    else if (e.key >= "1" && e.key <= "6") { e.preventDefault(); show(parseInt(e.key,10) - 1); }
+  });
+
+  show(0);
+</script>
+</body>
+</html>
