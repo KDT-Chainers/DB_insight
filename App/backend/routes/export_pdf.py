@@ -518,16 +518,21 @@ def _render_row(pdf, item: dict, ry: float, ft: str,
     pdf.set_text_color(220, 228, 255)
     pdf.cell(text_w, 5, _trunc(fname, 55))
 
-    # 경로
+    # 경로 — 전체 경로 표시 (길면 자동 줄바꿈, 축약 없음)
     fpath = (item.get("file_path") or "").strip()
     pdf.set_xy(text_x, ry + pad + 5.5)
     pdf._sf(6)
     pdf.set_text_color(110, 120, 150)
-    pdf.cell(text_w, 4, _trunc(fpath, 75))
+    _path_y0 = pdf.get_y()
+    # Windows 경로는 공백이 없어서 wrapmode="WORD"(기본)로는 줄바꿈이 안 되고
+    # 한 줄이 셀 너비를 넘으면 fpdf2가 자동으로 "…" 축약함. CHAR 모드로 문자 단위 줄바꿈.
+    pdf.multi_cell(text_w, 3, fpath, wrapmode="CHAR")
+    # 경로가 줄바꿈된 만큼 후속 요소를 아래로 밀어냄
+    path_extra = max(0.0, (pdf.get_y() - _path_y0) - 4.0)
 
     # 점수
     sim_s, acc_s, conf_s = _score_strs(item)
-    pdf.set_xy(text_x, ry + pad + 10.5)
+    pdf.set_xy(text_x, ry + pad + 10.5 + path_extra)
     pdf._sf(6)
     pdf.set_text_color(140, 160, 200)
     pdf.cell(text_w, 4, f"유사도 {sim_s}   정확도 {acc_s}   신뢰도 {conf_s}")
@@ -535,7 +540,7 @@ def _render_row(pdf, item: dict, ry: float, ft: str,
     # 스니펫
     snippet = _snippet_text(item)
     if snippet:
-        pdf.set_xy(text_x, ry + pad + 16)
+        pdf.set_xy(text_x, ry + pad + 16 + path_extra)
         pdf._sf(6)
         pdf.set_text_color(120, 130, 158)
         pdf.cell(text_w, 4, _trunc(snippet, 80))
