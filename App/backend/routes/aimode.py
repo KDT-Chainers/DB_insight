@@ -40,7 +40,7 @@ aimode_bp = Blueprint("aimode", __name__, url_prefix="/api/aimode")
 
 OLLAMA_URL  = "http://localhost:11434"
 SUPPORTED_GEMMA_MODELS = ("gemma3:12b", "gemma3:4b", "gemma3:4b-it-qat")
-SCAN_DELAY  = 0.25   # 파일 스캔 간 UI 애니메이션 딜레이 (초)
+SCAN_DELAY  = 0.05   # [v3.2 speed] 파일 스캔 간 UI 애니메이션 딜레이 — 0.25 → 0.05 (-1s/turn)
 
 
 # ── LangGraph 통합 ────────────────────────────────────────────────
@@ -1492,7 +1492,7 @@ def intent_node(state: dict) -> dict:
         "detail_keywords": detail_kws,
         "mode":            mode,
     })
-    time.sleep(0.3)
+    time.sleep(0.05)  # [v3.2 speed] 0.3 → 0.05
 
     return {
         "intent_message":  intent_msg,
@@ -1514,7 +1514,25 @@ def search_node(state: dict) -> dict:
         candidates = _do_search(question, topk=topk)
 
     _emit({"type": "candidates", "items": candidates})
-    time.sleep(0.3)
+    time.sleep(0.05)  # [v3.2 speed] 0.3 → 0.05
+
+    # [v3.2 speed] 검색 완료 직후 임베더 선제적 해제 — generate_node 의 VRAM 스왑 대기 시간 제거.
+    # 백그라운드 스레드에서 비차단으로 해제 (사용자가 답변 대기 중에 영향 X).
+    try:
+        import threading as _th
+        def _bg_release():
+            try:
+                import torch as _t
+                if _t.cuda.is_available():
+                    _free_mb = int(_t.cuda.mem_get_info()[0] / 1024 / 1024)
+                    if _free_mb < 4500:
+                        _release_search_embedders()
+                        logger.info(f"[search_node] 임베더 백그라운드 해제 완료 (사전 여유 {_free_mb}MB)")
+            except Exception as _ex:
+                logger.debug(f"[search_node] 백그라운드 임베더 해제 실패: {_ex}")
+        _th.Thread(target=_bg_release, daemon=True, name="aimode-bg-vram-release").start()
+    except Exception:
+        pass
 
     return {"candidates": candidates}
 
@@ -1651,7 +1669,7 @@ def select_node(state: dict) -> dict:
                     "matched_chunks": [best.get("snippet") or ""]}]
 
     _emit({"type": "selected", "sources": matched})
-    time.sleep(0.2)
+    # [v3.2 speed] 0.2 → 0
 
     return {"matched_sources": matched}
 
@@ -1662,7 +1680,7 @@ def followup_select_node(state: dict) -> dict:
     """이전 턴의 파일을 그대로 matched_sources 로 사용."""
     prev = state.get("prev_sources") or []
     _emit({"type": "selected", "sources": prev})
-    time.sleep(0.1)
+    # [v3.2 speed] 0.1 → 0
     return {"matched_sources": prev}
 
 
@@ -1736,7 +1754,7 @@ def followup_intent_node(state: dict) -> dict:
         "detail_keywords": keywords,
         "mode":            "followup",
     })
-    time.sleep(0.2)
+    time.sleep(0.05)  # [v3.2 speed] 0.2 → 0.05
 
     return {
         "intent_message":  intent_msg,
@@ -1819,7 +1837,7 @@ def followup_search_node(state: dict) -> dict:
     })
     if matched:
         _emit({"type": "selected", "sources": matched})
-    time.sleep(0.2)
+    # [v3.2 speed] 0.2 → 0
     return {"matched_sources": matched}
 
 
@@ -2022,10 +2040,26 @@ def fulltext_search_node(state: dict) -> dict:
     )
 
     _emit({"type": "candidates", "items": candidates})
-    time.sleep(0.2)
+    # [v3.2 speed] 0.2 → 0
     if candidates:
         _emit({"type": "selected", "sources": candidates})
-    time.sleep(0.1)
+    # [v3.2 speed] 0.1 → 0
+
+    # [v3.2 speed] open 모드도 검색 끝나면 임베더 선제적 해제 (백그라운드)
+    try:
+        import threading as _th2
+        def _bg_release2():
+            try:
+                import torch as _t2
+                if _t2.cuda.is_available():
+                    _free_mb2 = int(_t2.cuda.mem_get_info()[0] / 1024 / 1024)
+                    if _free_mb2 < 4500:
+                        _release_search_embedders()
+            except Exception:
+                pass
+        _th2.Thread(target=_bg_release2, daemon=True, name="aimode-bg-vram-release-open").start()
+    except Exception:
+        pass
 
     return {
         "candidates":      candidates,
@@ -2123,7 +2157,7 @@ def extract_node(state: dict) -> dict:
         "count":       len(references),
         "skipped_toc": skipped_toc,
     })
-    time.sleep(0.1)
+    # [v3.2 speed] 0.1 → 0
     return {"references": references}
 
 
@@ -2656,42 +2690,27 @@ def generate_node(state: dict) -> dict:
         s.get("file_type", "") in ("video", "movie", "audio", "music", "bgm")
         for s in matched_sources
     )
-    # [v3.2] 간결 마크다운 답변 — 문서는 ~350 tok, AV 는 ~250 tok 으로 캡
-    np_limit = 250 if has_av else 350
+    # [v3.2 speed] 간결 마크다운 답변 — 토큰 상한 더 낮춤 (350→250 / 250→200)
+    np_limit = 200 if has_av else 250
 
-    # ── VRAM 스왑: 검색 임베더 해제 → LLM GPU 배치 보장 ─────────────────
-    # 검색 엔진(SigLIP2+BGE-M3+DINOv2+Reranker ≈ 6~7 GB)이 VRAM 점유 시
-    # gemma3:4b(≈3.3 GB)가 GPU에 올라가지 못해 CPU 추론(10~20× 느림) 발생.
-    # 여유 VRAM < 4000 MB 이면 임베더를 해제하여 LLM이 GPU를 사용하게 함.
-    _gen_vram_swapped = False
+    # ── [v3.2 speed] VRAM 보장 (간소화) ─────────────────────────────────
+    # search_node 가 이미 백그라운드에서 임베더 해제 시도함 → 여기서는 확인만.
+    # 여전히 부족하면 동기 해제 (Ollama 강제 언로드는 생략 — keep_alive 신뢰).
     try:
         import torch as _t
         if _t.cuda.is_available():
             _free_mb = int(_t.cuda.mem_get_info()[0] / 1024 / 1024)
-            if _free_mb < 4000:
-                logger.info(f"[generate_node] 여유 VRAM {_free_mb} MB < 4000 → 임베더 해제")
-                _emit({"type": "info", "message": "GPU 메모리 확보 중...", "free_mb": _free_mb})
+            if _free_mb < 3500:
+                logger.info(f"[generate_node] 여유 VRAM {_free_mb} MB < 3500 → 동기 해제")
                 _release_search_embedders()
-                _gen_vram_swapped = True
-                # Ollama가 이미 CPU로 로드했다면 강제 언로드 → 재로드 시 GPU 사용
-                try:
-                    _req.post(f"{OLLAMA_URL}/api/generate",
-                              json={"model": gen_model, "prompt": "",
-                                    "messages": [{"role": "user", "content": ""}],
-                                    "keep_alive": 0, "stream": False},
-                              timeout=10)
-                except Exception:
-                    pass
-                _free_after = int(_t.cuda.mem_get_info()[0] / 1024 / 1024)
-                logger.info(f"[generate_node] 임베더 해제 후 여유 VRAM: {_free_after} MB")
     except Exception as _ve:
-        logger.warning(f"[generate_node] VRAM 확인 실패: {_ve}")
+        logger.debug(f"[generate_node] VRAM 확인 스킵: {_ve}")
 
     try:
         # [v3.1] chunk_size=0 → 토큰 받는 즉시 yield (타이핑 효과)
+        # [v3.2 speed] keep_alive=-1 유지 — 모델 다음 turn 까지 GPU 상주
         for tok in _ollama_stream(messages, gen_model, num_predict=np_limit,
-                                  chunk_size=0,
-                                  keep_alive=0 if _gen_vram_swapped else -1):
+                                  chunk_size=0, keep_alive=-1):
             full_answer += tok
             _emit({"type": "token", "text": tok})
     except Exception as e:
