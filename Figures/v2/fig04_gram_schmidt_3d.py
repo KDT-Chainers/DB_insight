@@ -25,14 +25,20 @@ def gram_schmidt_3(re, im, z):
 
 
 def draw_arrow_3d(ax, origin, vec, color, label=None, lw=2.6, alpha=1.0,
-                  ls="-", labelpad=0.06):
-    a = np.array(origin); b = np.array(origin) + np.array(vec)
-    ax.quiver(a[0], a[1], a[2], vec[0], vec[1], vec[2],
+                  ls="-", labelpad=0.13):
+    a = np.array(origin, dtype=float)
+    v = np.array(vec, dtype=float)
+    b = a + v
+    ax.quiver(a[0], a[1], a[2], v[0], v[1], v[2],
               color=color, linewidth=lw, arrow_length_ratio=0.12,
               alpha=alpha, linestyle=ls)
     if label:
-        ax.text(b[0] + labelpad, b[1] + labelpad, b[2] + labelpad,
-                label, fontsize=11, fontweight="bold", color=color)
+        # 벡터 방향으로 오프셋 → 화살표 팁과 겹치지 않음
+        direction = v / np.linalg.norm(v)
+        tip = b + direction * labelpad
+        ax.text(tip[0], tip[1], tip[2],
+                label, fontsize=11, fontweight="bold", color=color,
+                ha="center", va="center")
 
 
 def panel_before(ax):
@@ -97,11 +103,12 @@ def _setup_axes(ax):
     ax.set_ylabel("Axis-2", fontsize=9, labelpad=2)
     ax.set_zlabel("Axis-3", fontsize=9, labelpad=2)
     ax.tick_params(labelsize=8)
-    ax.view_init(elev=18, azim=35)
-    # 가벼운 그리드 스타일
-    ax.xaxis.pane.fill = False
-    ax.yaxis.pane.fill = False
-    ax.zaxis.pane.fill = False
+    ax.view_init(elev=25, azim=40)
+    # 면 완전 투명 — 화살표가 pane 뒤에 숨지 않도록
+    for pane in (ax.xaxis.pane, ax.yaxis.pane, ax.zaxis.pane):
+        pane.fill = False
+        pane.set_facecolor((0.0, 0.0, 0.0, 0.0))
+        pane.set_edgecolor("lightgray")
 
 
 def panel_dot(ax):
