@@ -252,7 +252,7 @@ ax_3d.set_xlabel("\nHermitian score  $s(q,d)$", fontsize=16, fontweight="bold", 
 ax_3d.set_ylabel("\n$\\sigma_{\\mathrm{null}}$  $(\\times 10^{-2})$", fontsize=16, fontweight="bold", labelpad=12)
 ax_3d.set_zlabel("Prob. density", fontsize=16, fontweight="bold", labelpad=8)
 ax_3d.text2D(
-    0.0, 0.90,
+    0.0, 0.86,
     "그림 A. 도메인별 Null Score 분포와 보정 임계값 타우\n"
     "(실측 $\\mu$, $\\sigma$ 기반 가우시안 피팅; 각 도메인을 $\\sigma_{null}$ 깊이에 배치)",
     transform=ax_3d.transAxes,
@@ -267,18 +267,12 @@ sigma_values = [CAL[d]["sigma"] * 100 for d in CALIBRATED]  # ×10⁻² 단위
 
 legend_handles = []
 
-# Rec ↔ BGM Y축(σ_null 깊이) 위치 교환
-Y_POS_SWAP = {
-    "Rec": CAL["BGM"]["sigma"] * 100,
-    "BGM": CAL["Rec"]["sigma"] * 100,
-}
-
 for d in CALIBRATED:
     c   = CAL[d]
     col = FIG11_COLORS[d]
     marker = DOMAIN_MARKERS[d]
     ls  = DOMAIN_LSTYLES[d]
-    y_pos = Y_POS_SWAP.get(d, c["sigma"] * 100)  # σ_null ×10⁻² 단위
+    y_pos = c["sigma"] * 100  # σ_null ×10⁻² 단위 (자연 위치)
 
     # 가우시안 곡선 데이터
     x = np.linspace(c["mu"] - 4.5 * c["sigma"], c["mu"] + 4.5 * c["sigma"], 300)
@@ -318,19 +312,14 @@ for d in CALIBRATED:
     # 막대 본체: 바닥(z=0) → τ 위치의 밀도 높이
     bar_height = max(z_peak * 0.6, z_at_tau * 1.5)  # 시각적으로 충분한 높이
     ax_3d.plot([c["tau"], c["tau"]], [y_pos, y_pos], [0, bar_height],
-               color=col, lw=3.5, alpha=0.45, solid_capstyle="round", zorder=4)
-    # 막대 상단 마름모 캡
-    ax_3d.plot([c["tau"]], [y_pos], [bar_height],
-               marker="d", color=col, ms=6,
-               markerfacecolor=col, markeredgecolor="white",
-               markeredgewidth=0.8, alpha=0.7, zorder=6)
+               color="black", lw=1.5, ls=":", alpha=0.7, zorder=4)
 
     # ── τ 이론값 점선 (capped 도메인만) ──
     if c.get("capped") and "tau_theoretical" in c:
         tau_th = c["tau_theoretical"]
         ax_3d.plot([tau_th, tau_th], [y_pos, y_pos], [0, bar_height * 0.5],
                    color="black", lw=1.5, ls=":", alpha=0.7, zorder=3)
-        ax_3d.text(tau_th, y_pos + 0.15, bar_height * 0.55,
+        ax_3d.text(0.9, 4.0, 1,
                    f"τ_th={tau_th:.2f}", fontsize=12, color="black",
                    fontweight="bold", ha="left")
 
