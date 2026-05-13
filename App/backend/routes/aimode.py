@@ -158,12 +158,15 @@ def _load_history(thread_id: str) -> list[dict]:
     return []
 
 
-def _save_history(thread_id: str, question: str, answer: str):
+def _save_history(thread_id: str, question: str, answer: str,
+                  sources: list[dict] | None = None,
+                  references: list[dict] | None = None):
     """[v3] LangGraph store + fallback dict + SQLite 3중 저장.
 
     - LangGraph: thread state (검증된 path 지만 messages silent drop 가능)
     - fallback dict: in-memory 보강 (즉시 읽기용)
     - SQLite: 영속 (백엔드 재시작 후에도 사이드바 채팅방 목록·history 복원)
+    - [v3.3] sources/references 도 SQLite extra 컬럼에 같이 저장 → 클릭 복원 시 chip·페이지 보존
     """
     # 1) LangGraph store 시도 (실패해도 무시)
     g = _get_history_graph()
@@ -189,7 +192,8 @@ def _save_history(thread_id: str, question: str, answer: str):
 
     # 3) SQLite 영속 저장 — 사이드바 채팅방 목록 / 재시작 후 복원
     try:
-        _persist_chat_turn(thread_id, question, answer)
+        _persist_chat_turn(thread_id, question, answer,
+                           sources=sources, references=references)
     except Exception as e:
         logger.warning(f"[aimode] SQLite 저장 실패: {e}")
 
@@ -243,17 +247,78 @@ def _generate_thread_title(first_question: str, model: str) -> str:
     return (cleaned[:28] + "…") if len(cleaned) > 28 else cleaned
 
 
-def _persist_chat_turn(thread_id: str, question: str, answer: str) -> None:
+def _persist_chat_turn(thread_id: str, question: str, answer: str,
+                       sources: list[dict] | None = None,
+                       references: list[dict] | None = None) -> None:
     """[v3] aimode_threads + aimode_messages 에 한 turn 영속화.
 
     - thread 가 없으면 INSERT (제목 자동 생성)
     - 있으면 updated_at + msg_count UPDATE
     - aimode_messages 에 user/assistant 2개 INSERT
+    - [v3.3] assistant 메시지의 extra 컬럼에 sources + references JSON 저장
+      → 사이드바 클릭 복원 시 출처 chip·페이지 이미지·인용 부분 그대로 보임.
     """
     from db.init_db import get_connection
     from datetime import datetime, timezone
 
     now = datetime.now(timezone.utc).isoformat()
+
+    # 저장할 메타데이터 (assistant turn 의 extra)
+    # [v3.3 fix] numpy float/int 등 비-JSON 타입 안전 변환 — 변환 실패 시 None 반환
+    def _safe(v, default=None):
+        if v is None:
+            return default
+        try:
+            if isinstance(v, (str, int, bool)):
+                return v
+            if isinstance(v, float):
+                return float(v)
+            # numpy scalar / Decimal 등 → float 변환 시도
+            return float(v) if hasattr(v, "__float__") else str(v)
+        except Exception:
+            return default
+
+    def _slim_ref(r: dict) -> dict:
+        return {
+            "src":         str(r.get("src") or "")[:200],
+            "type":        str(r.get("type") or ""),
+            "page":        _safe(r.get("page")),
+            "timestamp":   str(r.get("timestamp")) if r.get("timestamp") else None,
+            "snippet":     str(r.get("snippet") or "")[:400],
+            "score":       _safe(r.get("score"), 0),
+            "trichef_id":  str(r.get("trichef_id") or ""),
+            "file_path":   str(r.get("file_path") or ""),
+        }
+    def _slim_src(s: dict) -> dict:
+        # AV segments — 안에 numpy 값이 있을 수 있으므로 안전 변환
+        segs = []
+        for seg in (s.get("segments") or [])[:5]:
+            if not isinstance(seg, dict):
+                continue
+            segs.append({
+                "text":   str(seg.get("text") or seg.get("preview") or "")[:200],
+                "start":  _safe(seg.get("start"), 0),
+                "end":    _safe(seg.get("end"), 0),
+            })
+        return {
+            "file_name":   str(s.get("file_name") or ""),
+            "file_path":   str(s.get("file_path") or ""),
+            "file_type":   str(s.get("file_type") or ""),
+            "trichef_id":  str(s.get("trichef_id") or ""),
+            "confidence":  _safe(s.get("confidence"), 0),
+            "snippet":     str(s.get("snippet") or "")[:300],
+            "segments":    segs,
+        }
+
+    extra_obj = {
+        "sources":    [_slim_src(s) for s in (sources or []) if isinstance(s, dict)][:10],
+        "references": [_slim_ref(r) for r in (references or []) if isinstance(r, dict)][:15],
+    }
+    try:
+        extra_json = json.dumps(extra_obj, ensure_ascii=False)
+    except Exception as _je:
+        logger.warning(f"[chat_turn] extra JSON 직렬화 실패: {_je}")
+        extra_json = None
 
     with get_connection() as conn:
         # thread 존재 여부 확인
@@ -281,34 +346,61 @@ def _persist_chat_turn(thread_id: str, question: str, answer: str) -> None:
                 (now, thread_id),
             )
 
-        # messages 누적
+        # messages 누적 — user 는 content 만, assistant 는 extra 에 메타 저장
         conn.execute(
             """INSERT INTO aimode_messages (thread_id, role, content, created_at)
                VALUES (?, 'user', ?, ?)""",
             (thread_id, question, now),
         )
-        conn.execute(
-            """INSERT INTO aimode_messages (thread_id, role, content, created_at)
-               VALUES (?, 'assistant', ?, ?)""",
-            (thread_id, answer, now),
-        )
+        # [v3.3 fix] extra 컬럼이 옛 DB 에 없을 수도 있음 → 실패 시 컬럼 없이 재시도
+        try:
+            conn.execute(
+                """INSERT INTO aimode_messages (thread_id, role, content, created_at, extra)
+                   VALUES (?, 'assistant', ?, ?, ?)""",
+                (thread_id, answer, now, extra_json),
+            )
+        except Exception as _ie:
+            logger.warning(f"[chat_turn] extra 컬럼 INSERT 실패 → 컬럼 없이 재시도: {_ie}")
+            conn.execute(
+                """INSERT INTO aimode_messages (thread_id, role, content, created_at)
+                   VALUES (?, 'assistant', ?, ?)""",
+                (thread_id, answer, now),
+            )
         conn.commit()
+        logger.info(f"[chat_turn] 저장 완료: {thread_id[:16]}... extra={'yes' if extra_json else 'no'}")
 
 
 def _load_chat_history_from_db(thread_id: str) -> list[dict]:
-    """[v3] SQLite 에서 thread 메시지 복원 (사이드바 클릭 시 turn 복원용)."""
+    """[v3] SQLite 에서 thread 메시지 복원 (사이드바 클릭 시 turn 복원용).
+
+    [v3.3] assistant 메시지의 extra 컬럼 (sources + references JSON) 도 함께 반환.
+    """
     from db.init_db import get_connection
     try:
         with get_connection() as conn:
             rows = conn.execute(
-                """SELECT role, content, created_at
+                """SELECT role, content, created_at, extra
                    FROM aimode_messages
                    WHERE thread_id = ?
                    ORDER BY id ASC""",
                 (thread_id,),
             ).fetchall()
-        return [{"role": r["role"], "content": r["content"], "created_at": r["created_at"]}
-                for r in rows]
+        out = []
+        for r in rows:
+            item = {
+                "role":       r["role"],
+                "content":    r["content"],
+                "created_at": r["created_at"],
+            }
+            # extra (JSON 문자열) 파싱 → dict 로 변환
+            extra_raw = r["extra"] if "extra" in r.keys() else None
+            if extra_raw:
+                try:
+                    item["extra"] = json.loads(extra_raw)
+                except Exception:
+                    item["extra"] = None
+            out.append(item)
+        return out
     except Exception as e:
         logger.debug(f"[load_chat_history] {e}")
         return []
@@ -2693,6 +2785,9 @@ def generate_node(state: dict) -> dict:
     route = state.get("route", "rag")
     is_followup = route == "followup"
 
+    # [v3.3] 사용자 입력 원본 보존 — SQLite 저장 시 LLM prompt wrap 된 텍스트가 아닌 원본 사용.
+    original_question = question
+
     # followup 모드: 이전 답변을 질문 앞에 명시 (모델이 무엇을 다뤄야 할지 명확히)
     if is_followup and prior_history:
         prev_turns = []
@@ -2706,22 +2801,40 @@ def generate_node(state: dict) -> dict:
     full_sources = []
     fitz_heads: dict[str, str] = {}   # file_id → fitz 원문 앞 3000자 (key_facts용)
 
+    # [v3.3] 매칭 source 수에 따라 per-source 길이 동적 조절 — context 8192 초과 방지.
+    # 총 prompt 예산: ~6000자 (system 5000 + history 1000 + key_facts/refs 1500 = 7500 + chunks)
+    # → chunks 합산 6000자 이하로 캡. 2개 source 면 각 3000자, 3개 이상이면 각 2000자.
+    _doc_srcs = [s for s in matched_sources if s.get("file_type") == "doc"]
+    if len(_doc_srcs) >= 3:
+        _per_src_cap = 2000
+        _scan_cap = 1500
+        _head_cap = 1000
+        _extra_cap = 1000
+    elif len(_doc_srcs) == 2:
+        _per_src_cap = 3000
+        _scan_cap = 2000
+        _head_cap = 1200
+        _extra_cap = 1200
+    else:
+        _per_src_cap = 6000
+        _scan_cap = 3000
+        _head_cap = 2000
+        _extra_cap = 2000
+    logger.info(f"[generate_node] doc sources={len(_doc_srcs)} → per_src_cap={_per_src_cap}자")
+
     for src in matched_sources:
         file_type = src.get("file_type", "")
         file_id   = src.get("file_id", src.get("file_name", ""))
         if file_type == "doc":
-            # [v3.2 speed] prompt 길이 단축 — 8000 tok prefill → 3000 tok prefill (5~10s 절약)
-            # A) scan_node 청크 (이미 keyword-targeted)
             scan_chunks = src.get("matched_chunks") or []
-            scan_text = "\n\n".join(c.strip() for c in scan_chunks if c.strip())[:3000]
+            scan_text = "\n\n".join(c.strip() for c in scan_chunks if c.strip())[:_scan_cap]
 
-            # B) fitz 전체 PDF → 앞 2000자 + 키워드 주변 2000자
-            full_text = _read_source_full_text(src, max_chars=200000)  # 800K → 200K (fitz I/O 단축)
+            full_text = _read_source_full_text(src, max_chars=200000)
             if full_text:
-                head = full_text[:2000]                            # 5000 → 2000
+                head = full_text[:_head_cap]
                 fitz_heads[file_id] = full_text[:3000]
                 extra = _keyword_target_paragraphs(
-                    full_text[2000:], question, all_keywords, max_chars=2000  # 5000 → 2000
+                    full_text[_head_cap:], question, all_keywords, max_chars=_extra_cap
                 )
                 combined = "\n\n===\n\n".join(
                     p for p in [scan_text, head, extra] if p.strip()
@@ -2730,7 +2843,7 @@ def generate_node(state: dict) -> dict:
                 combined = scan_text
 
             logger.info(f"[generate_node] {src.get('file_name','?')}: combined={len(combined)}ch")
-            full_sources.append({**src, "matched_chunks": [combined[:6000]]})  # 15000 → 6000
+            full_sources.append({**src, "matched_chunks": [combined[:_per_src_cap]]})
         elif file_type in ("video", "movie", "audio", "music", "bgm"):
             # 비디오/오디오: segments 를 [MM:SS] 형식으로 직렬화 → matched_chunks 주입
             # LLM 이 forced-quote 에서 timestamp 와 STT 를 함께 인용할 수 있게.
@@ -2807,8 +2920,21 @@ def generate_node(state: dict) -> dict:
         s.get("file_type", "") in ("video", "movie", "audio", "music", "bgm")
         for s in matched_sources
     )
-    # [v3.2 speed] 간결 마크다운 답변 — 토큰 상한 더 낮춤 (350→250 / 250→200)
-    np_limit = 200 if has_av else 250
+    # [v3.3] 토큰 캡 — 답변 잘림 방지를 위해 동적 + 여유분 확보.
+    # 매칭 sources 가 많을수록 답변에서 통합 설명할 양이 늘어남 → 더 큰 캡.
+    # num_ctx=8192 안에 prompt + num_predict 안전 fit (prompt ~5000 + predict ~1000 = 6000 토큰).
+    if has_av:
+        # AV 답변은 타임스탬프 인용 위주라 짧게
+        np_limit = 400
+    else:
+        n_srcs = len(matched_sources)
+        if n_srcs >= 3:
+            np_limit = 700   # 3개+ 통합 설명
+        elif n_srcs == 2:
+            np_limit = 600   # 2개 통합
+        else:
+            np_limit = 500   # 1개 매칭 (이전 250 → 500, 답변 끝까지 보장)
+    logger.info(f"[generate_node] num_predict={np_limit} (sources={len(matched_sources)})")
 
     # ── [v3.3] generate 시작 전 — 임베더 완전 해제 + 2초 안정화 ──
     # 직전 노드들 (extract / followup_search) 에서 이미 해제 시도했지만, 마지막으로 강제 확인.
@@ -2866,7 +2992,11 @@ def generate_node(state: dict) -> dict:
         _emit({"type": "debug", "stage": "stream_exception", "error": str(e)})
 
     if full_answer and len(full_answer.strip()) >= 10 and not stream_error:
-        _save_history(thread_id, question, full_answer)
+        # [v3.3] 원본 질문으로 저장 — followup wrap (`[이전 대화 참고]...`) 텍스트가 그대로 박히는 버그 수정.
+        # sources + references 같이 저장 → 사이드바 클릭 복원 시 chip·페이지 그대로.
+        _save_history(thread_id, original_question, full_answer,
+                      sources=matched_sources,
+                      references=references)
         # followup을 위해 이번 턴 파일 저장
         if matched_sources:
             with _prev_sources_lock:
@@ -3115,9 +3245,10 @@ def _rag_sse(question: str, topk: int, thread_id: str,
 
     while True:
         try:
-            ev = q.get(timeout=180)
+            # [v3.3] 180s → 300s — 다중 PDF 매칭 시 prefill 시간 여유 확보
+            ev = q.get(timeout=300)
         except Empty:
-            yield emit({"type": "error", "message": "타임아웃 (180초)"})
+            yield emit({"type": "error", "message": "타임아웃 (300초)"})
             break
         if ev is None:
             break
@@ -3209,8 +3340,12 @@ def clear_thread(thread_id: str):
 
 @aimode_bp.get("/history/<thread_id>")
 def history(thread_id: str):
-    """대화 이력 조회 (디버깅용)."""
-    h = _load_history(thread_id)
+    """대화 이력 조회 — 사이드바 클릭 시 turn 복원용.
+
+    [v3.3] SQLite 에서 extra (sources + references JSON) 까지 같이 반환.
+    프론트가 chip·페이지 이미지·인용 부분을 복원하는 데 사용.
+    """
+    h = _load_chat_history_from_db(thread_id)
     return jsonify({"thread_id": thread_id, "history": h, "count": len(h),
                     "langgraph": _LANGGRAPH_OK})
 

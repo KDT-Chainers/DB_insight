@@ -2826,16 +2826,28 @@ export default function MainAI() {
     setAimodeStage("idle");
     setStreaming(false);
     setInputValue("");
+    // [v3.3] 우측 페이지 detail 패널도 초기화 (다른 대화방 들어왔는데 이전 페이지 남는 문제)
+    setRightMode("cards");
+    setSelectedFile(null);
+    setSelectedScanChunks({});
+    if (typeof setFileDetail === "function") setFileDetail(null);
     // history fetch → turns 복원
+    // [v3.3] backend 가 extra 컬럼에 sources + references JSON 저장해뒀음.
+    //        파싱해서 turn 의 sources/references 채워줘야 chip·페이지 이미지 복원됨.
     try {
       const r = await fetch(`${API_BASE}/api/aimode/history/${targetTid}`);
       if (r.ok) {
         const d = await r.json();
         const h = d.history || [];
-        // user/assistant 페어를 turn 으로 묶기
         const restored = [];
+        let lastSources = [];
+        let lastReferences = [];
         for (let i = 0; i < h.length - 1; i += 2) {
           if (h[i].role === "user" && h[i + 1].role === "assistant") {
+            // assistant 메시지의 extra 에서 sources/references 복원
+            const extra = h[i + 1].extra || {};
+            const srcs = Array.isArray(extra.sources) ? extra.sources : [];
+            const refs = Array.isArray(extra.references) ? extra.references : [];
             restored.push({
               id:             `restored_${i}_${targetTid.slice(-6)}`,
               query:          h[i].content,
@@ -2844,12 +2856,12 @@ export default function MainAI() {
               intentMessage:  "",
               fileKeywords:   [],
               detailKeywords: [],
-              candidates:     [],
+              candidates:     srcs,   // 후보 패널도 sources 로 채워 visual 동일하게
               scanStates:     {},
               scanChunks:     {},
-              scannedCount:   0,
-              foundCount:     0,
-              sources:        [],
+              scannedCount:   srcs.length,
+              foundCount:     srcs.length,
+              sources:        srcs,      // 출처 chip 용
               streaming:      false,
               done:           true,
               error:          null,
@@ -2857,14 +2869,19 @@ export default function MainAI() {
               generating:     false,
               blocked:        null,
               security:       null,
-              references:     [],
+              references:     refs,      // 페이지·snippet chip 클릭 시 우측에 표시
               mode:           "",
               ts:             Date.parse(h[i + 1].created_at) || Date.now(),
               restored:       true,
             });
+            lastSources    = srcs;
+            lastReferences = refs;
           }
         }
         setTurns(restored);
+        // 마지막 turn 의 sources/references 를 state 에도 반영 → 우측 패널 즉시 표시
+        if (lastSources.length)    setAimodeSources(lastSources);
+        if (lastReferences.length) setAimodeReferences(lastReferences);
       } else {
         setTurns([]);
       }

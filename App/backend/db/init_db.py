@@ -74,3 +74,11 @@ CREATE INDEX IF NOT EXISTS idx_aimode_messages_thread
     ON aimode_messages(thread_id, id);
 """
         )
+
+        # [v3.3] 기존 DB 안전 마이그레이션 — extra 컬럼이 없으면 추가.
+        # CREATE TABLE IF NOT EXISTS 는 기존 테이블 스키마 변경 X.
+        # 옛 DB 사용자는 ALTER TABLE 로 컬럼만 추가.
+        try:
+            conn.execute("ALTER TABLE aimode_messages ADD COLUMN extra TEXT")
+        except sqlite3.OperationalError:
+            pass  # 이미 컬럼이 있으면 OperationalError → 무시
