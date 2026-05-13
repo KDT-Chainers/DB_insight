@@ -4585,8 +4585,10 @@ def _summarize_sse(file_type: str, trichef_id: str, file_path: str,
     try:
         # keep_alive=180 — 모델을 3분간 메모리 유지 (콜드스타트 방지).
         # keep_alive=0이면 매 요청마다 모델 재로드(30~60s)되어 150s 타임아웃 초과.
+        # [v3.3] chunk_size=0 — 토큰 받는 즉시 yield (한 글자씩 타이핑 효과).
+        # 기존 chunk_size=80 (default) 은 80자 모아 한 번에 → 한 줄씩 뚝뚝 나오는 UX.
         for tok in _ollama_stream(messages, model, num_predict=dynamic_np, temperature=0.25,
-                                   keep_alive=180):
+                                   chunk_size=0, keep_alive=180):
             full += tok
             if secure:
                 if len(full) - last_scan_len >= SCAN_INTERVAL:

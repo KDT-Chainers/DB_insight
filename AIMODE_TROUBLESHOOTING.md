@@ -807,3 +807,757 @@ A:  ... 유지류와 설탕 가격이 오른 원인은 다음과 같습니다:
 **해결 후보**: 질문 토큰 → 관련 키워드 확장 로직 (예: "유지류" → "팜유, 대두유, 해바라기유, 유채유"). LLM 기반 query expansion 또는 도메인 사전.
 
 **상태**: 미적용. 이전부터 알려진 문제, v10 에서도 미해결.
+
+---
+
+# 📘 v3 · LangGraph 재설계 + 채팅 영속화 (2026-05-11 ~ 2026-05-13)
+
+이전 섹션 (~v10) 은 **답변 품질 (정확도/환각)** 위주의 단일 노드 튜닝이었고,
+이번 v3 라인은 **그래프 구조 재설계 + 사용자 경험 (사이드바·후속 질문·PDF export) + GPU OOM 안정성** 에 집중.
+
+---
+
+## v3 의 큰 그림 — 무엇이 바뀌었나
+
+```
+[v2 까지]
+START → router → (rag | chat | qa_gen) → ... → END
+                 ───────────────────────
+                 3-route 라우팅, chat / qa_gen 이 모호
+
+[v3]
+START → router → (rag | followup)         ← 2-route 단순화
+              │
+              └─ rag → intent → (structured | open)   ← mode 분기 추가
+                              │
+                              ├─ structured → search → scan → select → extract → generate
+                              │
+                              └─ open       → fulltext_search           → extract → generate
+              │
+              └─ followup → followup_intent → followup_search ─[exist]→ extract → generate
+                                                              └─[none]→ _fallback_marker → intent
+```
+
+**노드 명세 (10 + 1)**
+
+| # | 노드 | 역할 |
+|---|---|---|
+| 1 | `router` | rag / followup 분기 (history+prev_sources 기반 + 짧은 후속 의문문 패턴 강제 followup) |
+| 2 | `intent` | structured / open 분류 + 키워드 추출 |
+| 3 | `search` | BGE-M3 벡터검색 top-K |
+| 4 | `scan` | 페이지 단위 substring + phrase 매칭 |
+| 5 | `select` | confidence gate (점수 컷 + 목차 페널티 + AV 약한 매칭 컷) |
+| 6 | `fulltext_search` | open 모드 — 모든 페이지 캐시 전수 스캔 |
+| 7 | `followup_intent` | 이전 sources 회수 + 후속 키워드 추출 |
+| 8 | `followup_search` | 이전 페이지 캐시 재스캔 (벡터검색 안 함) |
+| 9 | `extract` | matched_sources → references (file_path · page · snippet · trichef_id) |
+| 10 | `generate` | Ollama 스트리밍 + SQLite 영속 |
+| ⓕ | `_followup_fallback_marker` | followup 실패 → state flag + RAG 사이클로 점프 |
+
+---
+
+## 문제 14: `<unused344>` 같은 Gemma3 special token 노출
+
+**증상**: 답변 본문에 `<unused344>`, `<pad>` 같은 vocab 토큰이 문자 그대로 출력.
+
+**원인**: gemma3:4b-it-qat 가 학습 데이터에 포함된 reserved/unused 토큰을 일부 케이스에서 generation 결과로 흘림.
+
+**해결**:
+- 정규식 `_GEMMA_SPECIAL_RE` 정의 — `<unused\d+|pad|eos|bos|start_of_turn|end_of_turn|im_start|im_end>` 패턴
+- `_strip_special_tokens()` 헬퍼로 `_ollama_stream` / `_ollama_oneshot` 출력 모두 필터링
+
+```python
+_GEMMA_SPECIAL_RE = re.compile(
+    r"<(?:unused\d+|pad|eos|bos|/s|s|end_of_turn|start_of_turn|im_start|im_end)>",
+    re.IGNORECASE,
+)
+
+def _strip_special_tokens(text: str) -> str:
+    if not text:
+        return text
+    return _GEMMA_SPECIAL_RE.sub("", text)
+```
+
+**상태**: ✅ 해결.
+
+---
+
+## 문제 15: 후속 질문이 followup 으로 분류 안 됨 (history empty)
+
+**증상**: 1턴 답변 후 "전년 대비는?" 같은 후속 질문에서 LangGraph 가 history 를 못 읽음 → router 가 rag 로 잘못 분류 → 전체 검색 다시.
+
+**원인**: `_save_history` 가 LangGraph store API 만 사용. messages 필드가 비어있으면 silent drop. fallback dict 도 백엔드 재시작 시 휘발.
+
+**해결**: **3중 저장**으로 변경.
+
+```python
+def _save_history(thread_id, question, answer):
+    # 1) LangGraph store (silent fail OK)
+    g = _get_history_graph()
+    if g and _LANGGRAPH_OK:
+        try: g.update_state(cfg, {..., "messages": [HumanMessage, AIMessage]})
+        except: pass
+
+    # 2) in-memory fallback dict (즉시 읽기용)
+    with _fallback_lock:
+        _fallback_history.setdefault(thread_id, []).extend([
+            {"role": "user", "content": question},
+            {"role": "assistant", "content": answer},
+        ])
+
+    # 3) SQLite 영속 (재시작 후에도 살아남음)
+    _persist_chat_turn(thread_id, question, answer)
+```
+
+`_load_history` 도 동일 패턴 — LangGraph → fallback dict → SQLite 순서로 fall through.
+
+**상태**: ✅ 해결.
+
+---
+
+## 문제 16: followup_search 매칭 0건 (phrase 매칭 실패)
+
+**증상**: `followup_intent` 가 `"SW산업 수출액 전년대비"` 같은 multi-word phrase 키워드 생성. 그런데 PDF 본문에 phrase 그대로는 안 나타남 → `_scan_pdf_pages` 가 매칭 0 → fallback 사이클.
+
+**원인**: phrase 매칭만 시도, 단어 분해 안 함.
+
+**해결**: `followup_search_node` 에 **phrase + 단어 분해** 추가.
+
+```python
+# 원본: ["SW산업 수출액 전년대비"]
+# 확장: ["SW산업 수출액 전년대비", "SW산업", "수출액", "전년대비"]
+
+expanded = []
+for kw in detail_kws:
+    expanded.append(kw)  # 원본 phrase
+    if " " in kw:
+        for w in kw.split():
+            if len(w) >= 2 and w not in _STOP_TOKENS:
+                expanded.append(w)
+```
+
+또한 STOP_TOKENS 에 `"정의"`, `"근거"`, `"원인"`, `"변화"` 등 일반 토큰 추가 (이게 단독으로 매칭되면 노이즈).
+
+**상태**: ✅ 해결.
+
+---
+
+## 문제 17: 목차 페이지가 본문보다 높은 점수
+
+**증상**: PDF 의 목차/색인 페이지가 키워드 빈출로 score 가 높아져 1순위 매칭. 답변이 목차 내용을 인용.
+
+**원인**: `_scan_pdf_pages` 가 distinct keyword count 만 점수화. 목차는 키워드 분산 발생 + 점선·페이지번호 패턴.
+
+**해결**:
+1. **목차 감지 강화** — `toc_page_refs ≥ 5 or toc_dots ≥ 30` 이면 목차로 확정
+2. **목차 페이지 강한 감점** — score 1/4 + 추가 차감
+3. **extract_node 에서 자동 제외** — `_looks_like_toc_snippet()` 으로 references 단에서도 컷
+
+```python
+def _looks_like_toc_snippet(text):
+    if text.count("…") >= 5:
+        return True
+    if len(re.findall(r"…+\s*\d{1,3}\b", text)) >= 3:
+        return True
+    # 줄당 평균 길이 짧고 페이지번호로 끝나는 패턴
+    ...
+```
+
+**상태**: ✅ 해결.
+
+---
+
+## 문제 18: AV(영상·오디오) 파일이 항상 found=True 로 매칭 오염
+
+**증상**: "경주 동궁과 월지에서 조사개요" 같은 문서 검색에 무관한 비디오 파일들 (열혈농구단, 박나래, NGC 코스모스) 이 모두 `found: true` → 답변 출처에 11개 chip 노이즈.
+
+**원인**: `_scan_one` 의 AV 분기가 **키워드 매칭 검사 없이** segments 있기만 하면 `True` 반환.
+
+```python
+# 버그
+if file_type in _av_types:
+    for seg in (src.get("segments") or [])[:5]:
+        av_chunks.append({"text": text, ...})
+    return True, av_chunks  # ← 항상 True!
+```
+
+**해결**: AV 도 doc 처럼 **detail_kws 가 segment 텍스트·snippet·파일명 중 실제 매칭** 시에만 found=True.
+
+```python
+if file_type in _av_types:
+    kws_lower = [k.lower() for k in (detail_kws or []) if k and len(k) >= 2]
+    if not kws_lower:
+        return False, []
+
+    av_chunks = []
+    for seg in (src.get("segments") or [])[:30]:
+        text = (seg.get("text") or "").strip()
+        if not text: continue
+        hits = sum(1 for kw in kws_lower if kw in text.lower())
+        if hits == 0: continue  # 매칭 없으면 건너뜀
+        av_chunks.append({"text": text, "timestamp": ts, "score": hits})
+
+    if not av_chunks:  # snippet 도 확인
+        ...
+    if not av_chunks:  # 파일명 매칭만 (낮은 score)
+        ...
+    if not av_chunks:
+        return False, []
+```
+
+또한 `select_node` 에 **강한 doc 매칭 시 약한 AV 컷** 추가:
+- doc top score ≥ 3.0 이면 AV 는 doc_top/3.0 이상 점수만 통과
+
+**상태**: ✅ 해결.
+
+---
+
+## 문제 19: Ollama 가 첫 토큰을 못 보냄 (context_length 4096 초과)
+
+**증상**: AIMODE 답변 생성 시 `generating` 이벤트 후 무한 hang. token 0개. 40~90초 기다려도 done 안 옴.
+
+**원인 진단 (devconsole + `/api/ps`)**:
+- Ollama `/api/ps`: gemma3:4b-it-qat 의 `context_length: 4096`
+- 우리 prompt: 11000자+ (~3700~4500 토큰) + num_predict 250 = **4000~4750 토큰 > 4096**
+- → Ollama 가 silent hang (truncation 도 아니고 응답 자체 멈춤)
+
+**해결**: `_ollama_stream` 과 `_ollama_oneshot` 모두 `num_ctx=8192` 명시.
+
+```python
+"options": {
+    "temperature": temperature,
+    "num_predict": num_predict,
+    "num_ctx": 8192,   # [v3.2 fix] 기본 4096 으로는 긴 prompt silent hang
+}
+```
+
+Ollama 가 새 num_ctx 로 모델 재로드 (5~10초 cold start 1회) 후 정상 동작.
+
+**검증**: `Invoke-RestMethod http://localhost:11434/api/ps` 에서 `context_length: 8192` 확인.
+
+**상태**: ✅ 해결.
+
+---
+
+## 문제 20: prompt 너무 김 — prefill 시간 폭증
+
+**증상**: ollama_stream_start 후 TTFT 36~50초. 사용자 체감 매우 느림.
+
+**원인**: `generate_node` 가 doc 청크 + fitz head 5000 + 키워드 주변 5000 + scan_chunks 합쳐서 **최대 15000자** prompt 빌드. ~5000 토큰 prefill = 10초+.
+
+**해결**: prompt 단축 (cap 절반 이하).
+
+```python
+# [v3.2 speed] before
+combined[:15000]
+full_text = _read_source_full_text(src, max_chars=800000)
+head = full_text[:5000]
+extra = _keyword_target_paragraphs(..., max_chars=5000)
+
+# [v3.2 speed] after
+combined[:6000]                          # 15000 → 6000
+full_text = _read_source_full_text(src, max_chars=200000)   # 800K → 200K (fitz I/O 단축)
+head = full_text[:2000]                  # 5000 → 2000
+extra = _keyword_target_paragraphs(..., max_chars=2000)     # 5000 → 2000
+```
+
+`num_predict` 도 250 → 250 (doc) / 200 (AV) 로 유지. 답변 양식은 간결 마크다운 (도입 1줄 + bullet 3~4개 + 마무리 1줄).
+
+**효과**: prompt 12000자 → ~10000자, prefill 3~5초 단축.
+
+**상태**: ✅ 적용 (TTFT 여전히 큰 prompt 에서는 15~30s — Ollama 자체 한계).
+
+---
+
+## 1. 제목
+
+# 문제 21 — GPU VRAM 핑퐁: 임베더 ↔ LLM 동시 적재 불가 (8GB 환경) ⭐ 핵심 이슈
+
+---
+
+## 2. 문제 정의 및 원인
+
+### 정의
+
+RTX 4060 Laptop 8GB VRAM 환경에서, 검색 단계가 쓰는 **임베더 4개 (~5.8GB)** 와 답변 단계가 쓰는 **LLM gemma3:4b-it-qat (~4.2GB)** 가 합쳐서 **약 10GB** 를 필요로 함. 두 그룹이 동시에 GPU 에 적재되면 OOM. 한쪽이 CPU 로 빠지면 추론 속도 10~20× 저하.
+
+### 원인 — VRAM 산술
+
+```
+RTX 4060 Laptop GPU: 총 VRAM = 8 GB
+
+[검색 단계] 임베더 4개:
+  SigLIP2-SO400M     ~ 1.0 GB
+  BGE-M3             ~ 2.0 GB
+  DINOv2-Large       ~ 1.3 GB
+  Reranker           ~ 1.5 GB
+  ─────────────────────────────
+  소계               ~ 5.8 GB
+
+[답변 단계] LLM:
+  gemma3:4b-it-qat   ~ 4.2 GB (+ KV cache)
+
+────────────────────────────────
+필요한 총 VRAM       ~ 10.0 GB   ❌ > 8 GB 카드 (2GB 초과)
+```
+
+→ **둘 다 동시 GPU 적재 불가**. 누군가는 항상 CPU 거나 swap 돼야 함.
+→ 노드가 그래프 순서대로 진행되면서 GPU 메모리 정리 안 하면 다음 노드가 OOM.
+
+### 2.1 현상 (관찰된 증상 3개)
+
+#### 현상 ① — Generate 노드에서 무한 hang
+```
+[generating] 이벤트 출력 후 token 0개. 30~90초 후 timeout.
+```
+원인: Ollama 가 GPU 자리 못 찾아서 추론 시작 자체를 못 함. 사용자는 그저 스피너만 봄.
+
+#### 현상 ② — Ollama 가 CPU 로 fallback → 1~2 tok/s
+```
+ollama_stream_start 이후 첫 토큰까지 36~60초.
+이후 토큰 생성 속도가 평소 (40 tok/s GPU) 의 1/20 수준.
+```
+원인: VRAM 부족 감지 후 Ollama 가 silent 하게 CPU 로 우회 추론. 답변 양이 늘수록 비례해서 느려짐.
+
+#### 현상 ③ — 검색 ↔ 답변 핑퐁 (매 turn 5~10초 추가)
+```
+턴 1: 검색 (5s) + 답변 (느림)
+턴 2: 검색 또 5~10초 (임베더 재로드)
+턴 3: 답변 또 5~10초 (LLM 재로드)
+...
+```
+원인: GPU 메모리 부족으로 누군가 강제 unload → 다음에 쓸 때 다시 로드. 이게 매 turn 반복.
+
+---
+
+## 3. 해결 전략
+
+세 가지 전략을 순서대로 시도했고, **3번째가 최종 채택**.
+
+### 3.1 시도 ① — search_node 끝 백그라운드 임베더 release
+
+```python
+def _bg_release():
+    if free_vram < 4500:
+        _release_search_embedders()
+threading.Thread(target=_bg_release, daemon=True).start()
+```
+
+**아이디어**: 검색 끝나면 임베더를 비동기로 해제. 사용자는 그동안 답변 보면 되니까 체감 X.
+
+**결과**: ❌ **실패**.
+- 첫 turn 은 빨라짐 — 임베더 해제 후 LLM 적재 OK
+- 다음 turn 에서 임베더 4개 재로드 (5~10초) → 검색 자체가 매번 느려짐
+- 핑퐁이 사라진 게 아니라 **위치가 바뀐 것**
+
+### 3.2 시도 ② — `config.DEVICE='cpu'` (임베더 영구 CPU)
+
+```python
+# config.py
+"DEVICE": "cpu" if os.environ.get("FORCE_CPU", "1") == "1" else "cuda"
+```
+
+**아이디어**: 임베더 4개를 영구 CPU 거주. LLM 만 GPU 전유. 핑퐁 자체 제거.
+
+**결과**: ❌ **롤백**.
+- 핑퐁은 사라짐
+- 하지만 검색 속도 1~2초 → 3~5초로 느려짐 (CPU 임베딩)
+- 사용자가 검색 응답성 저하를 더 크게 느낌 → 원복
+
+### 3.3 시도 ③ (채택) — 노드별 명시적 release + 2초 안정화 대기
+
+**아이디어**: **각 노드가 작업 끝나면 자기가 쓴 GPU 자원을 해제하고 2초 대기**. 다음 노드가 깨끗한 GPU 에서 시작. 동기적이라 핑퐁 없음.
+
+**핵심 헬퍼 — `_release_and_wait()`**:
+
+```python
+def _release_and_wait(
+    node_name: str,
+    seconds: float = 2.0,
+    release_embedders: bool = False,
+    release_ollama_model: str | None = None,
+    empty_cache: bool = True,
+) -> None:
+    """노드 끝에서 GPU 자원 해제 + N초 안정화 대기."""
+
+    # 1) 임베더 해제 (Python 프로세스 GPU)
+    if release_embedders:
+        _release_search_embedders()    # 4개 임베더 .cpu() + None
+
+    # 2) Ollama 모델 unload (별도 프로세스)
+    if release_ollama_model:
+        _req.post(f"{OLLAMA_URL}/api/generate",
+                  json={"model": release_ollama_model, "keep_alive": 0,
+                        "prompt": "", "stream": False}, timeout=5)
+
+    # 3) torch cache 비우기 + 동기화
+    if empty_cache:
+        torch.cuda.empty_cache()
+        torch.cuda.synchronize()
+
+    # 4) ⭐ 2초 안정화 대기 (GPU driver 가 메모리 실제 release 할 시간)
+    if seconds > 0:
+        time.sleep(seconds)
+```
+
+**왜 2초인가**: `torch.cuda.empty_cache()` 와 `synchronize()` 호출 후에도 GPU driver-level release 는 비동기. 1초만 대기하면 가끔 다음 노드가 OOM. **2초가 안전선**.
+
+**노드별 적용 표**:
+
+| 노드 | embedders 해제 | Ollama unload | 대기 | 이유 |
+|---|---|---|---|---|
+| `intent` | ❌ | ❌ | 2s | cache 정리만 |
+| `search` | ✅ | ❌ | 2s | 검색 끝 → 임베더 즉시 해제 |
+| `scan` | ✅ | ❌ | 2s | generate 직전 GPU 정리 |
+| `select` | ❌ | ❌ | 2s | cache 정리 |
+| `fulltext_search` | ✅ | ❌ | 2s | open 모드 — 검색 후 해제 |
+| `followup_intent` | ❌ | ❌ | 2s | cache 정리 |
+| `followup_search` | ✅ | ❌ | 2s | 임베더 정리 |
+| `extract` | ✅ | ❌ | 2s | generate 직전 마지막 정리 |
+| `generate` (시작 전) | ✅ | ✅ (VRAM<4.5GB) | 2s | LLM 자리 확보 + Ollama 재로드 보장 |
+| `generate` (끝) | ❌ | ❌ | 0.5s | LLM 유지 (keep_alive=-1) |
+
+**search_node 적용 예시**:
+```python
+def search_node(state):
+    candidates = _do_search(file_query, topk=topk)
+    _emit({"type": "candidates", "items": candidates})
+
+    # [v3.3] 검색 임베더 해제 + 2초 안정화
+    _emit({"type": "node_done", "node": "search", "next": "scan"})
+    _release_and_wait("search_node", seconds=2.0, release_embedders=True)
+
+    return {"candidates": candidates}
+```
+
+**generate_node 시작 전 (가장 공격적)**:
+```python
+if _free_mb < 4500:
+    _release_and_wait(
+        "generate_node_pre",
+        seconds=2.0,
+        release_embedders=True,
+        release_ollama_model=gen_model,  # Ollama 도 unload → GPU 재로드 보장
+    )
+```
+
+---
+
+## 4. 최종 결과
+
+### 효과 측정
+
+#### 변경 전 (OOM 발생 시)
+```
+[search]  ─ candidates 출력 ─ 0.5s
+[generate] ─ generating 출력 ─ HANG (token 0개, 60s+ timeout)
+```
+
+#### 변경 후 (정상 동작)
+```
+[router]          0.1s
+[intent]          + 2s wait                = 12s (LLM cold start)
+[search]          + 2s wait (임베더 해제) = 40s
+[scan]            + 2s wait                = 43s
+[select]          + 2s wait                = 45s
+[extract]         + 2s wait (임베더 정리) = 47s
+[generate 시작]   + 2s wait (강한 정리)   = 49s
+[ollama stream]   첫 토큰 ~ 36s            = 85s
+[generate 끝]     + 0.5s                   = 85.5s
+```
+
+**추가 대기 시간 합계**: 약 **14.5초 per turn**.
+
+### 트레이드오프
+
+| 항목 | 변경 전 | 변경 후 |
+|---|---|---|
+| OOM 발생 빈도 | 자주 | **0** |
+| 첫 토큰까지 시간 | hang or 60s+ | ~50s |
+| done 까지 시간 | 불안정 | **85s (안정)** |
+| 추가 wait 시간 | 0 | +14.5s |
+| 답변 누락 위험 | 있음 | **없음** |
+
+→ **속도 약간 손해, 안정성 큰 이득**.
+→ OOM 한 번 나면 답변 자체가 안 나오므로 안정성 우선.
+
+### 검증 방법
+
+```powershell
+# Ollama 가 GPU 에 올라갔는지
+Invoke-RestMethod http://localhost:11434/api/ps | Format-List
+# → size_vram > 0 이고 context_length: 8192 면 정상
+
+# 백엔드 로그에 각 노드 release 로그 확인
+[release_and_wait] search_node: 임베더 해제 (1234MB) + cuda cache 비움 + 2.0s 대기 → 여유 VRAM 6789MB
+[release_and_wait] scan_node: ...
+...
+```
+
+devconsole SSE 디버거에서 `node_done` 이벤트가 각 노드 끝마다 나오는지 확인.
+
+### 상태
+
+✅ **OOM 완전 해소. v3.3 안정 버전. 운영 채택.**
+
+---
+
+## 문제 22: 사이드바 채팅방 목록 안 보임
+
+**증상**: AIMODE 답변 완료 후에도 좌측 사이드바에 채팅방이 안 뜸.
+
+**원인 1 (백엔드)**: SQLite 저장 자체는 됨 (`_persist_chat_turn` → `aimode_threads` INSERT). 단, 처음엔 `aimode_threads` / `aimode_messages` 테이블 자체가 없었음 (init_db 에 누락).
+
+**해결 1**: `db/init_db.py` 에 테이블 추가:
+
+```sql
+CREATE TABLE IF NOT EXISTS aimode_threads (
+    thread_id   TEXT PRIMARY KEY,
+    title       TEXT NOT NULL DEFAULT '새 대화',
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL,
+    msg_count   INTEGER NOT NULL DEFAULT 0,
+    first_query TEXT
+);
+
+CREATE TABLE IF NOT EXISTS aimode_messages (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    thread_id  TEXT NOT NULL,
+    role       TEXT NOT NULL,
+    content    TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    extra      TEXT,
+    FOREIGN KEY (thread_id) REFERENCES aimode_threads(thread_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_aimode_threads_updated ON aimode_threads(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_aimode_messages_thread ON aimode_messages(thread_id, id);
+```
+
+**원인 2 (프론트엔드)**: `done` 이벤트 후 사이드바가 자동 새로고침 안 됨. `aiChatRefreshTrigger = turns.length` 였는데 update only 라 length 변화 X.
+
+**해결 2**: 별도 `chatRefreshTrigger` state 추가, `done` 이벤트에서 `setChatRefreshTrigger(t => t+1)`. `SearchSidebar` 가 prop 변경 감지해 threads fetch 재실행.
+
+**상태**: ✅ 해결.
+
+---
+
+## 문제 23: 채팅방 제목 — 그냥 질문 truncate
+
+**증상**: 사이드바 채팅방 이름이 질문 첫 30자 그대로 ("산업 동향 알려줘…" 같은 식).
+
+**해결**: 첫 turn 답변 완료 시 LLM 1회 호출로 짧은 제목 생성.
+
+```python
+def _generate_thread_title(first_question, model):
+    prompt = (
+        "사용자 질문을 보고 짧은 채팅방 제목(한국어, 12자 이내)을 만들어.\n"
+        "규칙: 물음표·따옴표 금지, 핵심 주제 명사만, 동사 제거.\n"
+        "예시:\n"
+        "  SW산업 수출액은? → SW산업 수출액\n"
+        "  산업 동향 알려줘 → 산업 동향\n"
+        ...
+    )
+    raw = _ollama_oneshot(prompt, model, num_predict=20)
+    # 짧고 깨끗한 제목 반환
+```
+
+LLM 실패 시 정규식 fallback (`알려줘|찾아줘` 등 제거 후 truncate).
+
+**상태**: ✅ 해결.
+
+---
+
+## 문제 24: 후속 질문 시 출처 chip 사라짐
+
+**증상**: 2턴 후속 질문 시 1턴에서 잡힌 references chip 이 모두 사라짐.
+
+**원인**: `done` 이벤트 핸들러가 turn 의 references / sources 를 `aimodeReferences` / `aimodeSources` state 로 덮어씀. 이 state 가 후속에서는 빈 값일 수 있음 (stale state).
+
+**해결**: turn 의 last.X 가 비어있을 때만 state fallback 사용.
+
+```javascript
+const lastRefs = (last.references && last.references.length > 0)
+    ? last.references
+    : [...(aimodeReferences || [])];
+const lastSrcs = (last.sources && last.sources.length > 0)
+    ? last.sources
+    : [...(aimodeSources || [])];
+```
+
+또한 `extract` / `selected` / `candidates` 이벤트 핸들러에서 직접 `setTurns` 호출로 즉시 update — done 이벤트 도착 전에 turn 안에 박아둠.
+
+**상태**: ✅ 해결.
+
+---
+
+## 문제 25: 우측 후보 패널 — selected 후 1개만 남음
+
+**증상**: 검색 결과 10개 카드가 뜨다가, `selected` 이벤트 후 매칭된 1개만 남고 나머지 9개 사라짐.
+
+**원인**: `selected` 핸들러가 `setResults(matched)` 로 후보 목록을 덮어씀. `rightCandidates` 가 `results` fallback 사용.
+
+**해결**:
+1. `candidates` 핸들러에서 `setTurns` 로 `last.candidates = [...mapped]` 도 함께 update
+2. `selected` 핸들러에서 `setResults` 호출 제거. `setAimodeSources(matched)` 만 — 매칭 sources 는 답변 인용용으로만 사용.
+3. `rightCandidates = latestTurn?.candidates?.length ? latestTurn.candidates : results` 가 candidates 전체 10개 그대로 유지.
+
+**상태**: ✅ 해결.
+
+---
+
+## 문제 26: 답변에 외국어 환각 (스페인어/한자/일본어)
+
+**증상**: gemma3:4b-it-qat 답변에 `"dólares"`, `"是的"`, `"です"` 같은 외국어 단어가 섞임.
+
+**원인**: gemma3 의 multilingual vocab — 한국어 token 확률이 다른 언어와 박빙일 때 외국어 토큰 선택.
+
+**해결**: system prompt 최상단에 **CRITICAL 언어 규칙** 박음.
+
+```python
+sys_msg = f"""[CRITICAL — 언어 규칙]
+반드시 한국어(한글)로만 답변하세요. **영어·스페인어·일본어·중국어·한자·기타 외국어 절대 금지**.
+숫자와 단위 외 모든 단어는 한글로만 쓸 것. 예: "달러" OK, "dólares" 절대 금지.
+답변 첫 글자부터 마지막 글자까지 한글이어야 합니다.
+...
+"""
+```
+
+또한 user content 끝에도 `"한국어로만 답변 (외국어 단어 절대 금지)"` 반복 강조.
+
+**상태**: ✅ 해결 (대부분). 가끔 누락 발생하면 frontend `stripMarkdown` 단계에서도 한 번 더 필터링 가능.
+
+---
+
+## 문제 27: 답변 너무 김 / 너무 짧음
+
+**시도 1 — 길게**: `[답변 분량]` 섹션에 "최소 12문장 이상, 권장 15~20문장" + 도입·항목·종합 구조 강제.
+- 결과: 길어지긴 했는데 반복적이고 산만함.
+
+**시도 2 — 짧게 + 마크다운 (최종 채택)**:
+```python
+[답변 형식 — 반드시 준수]
+- 간결한 마크다운(Markdown)으로 답변. 총 분량은 짧게 (도입 1줄 + 핵심 3~4 bullet + 마무리 1줄).
+- 답변 길이는 최대 8~10줄 / 약 3~4문장 분량. 장황한 부연·반복 금지.
+- 핵심 키워드는 **굵게**. 항목은 `- ` 불릿. 표·코드블록 금지.
+```
+
+`num_predict` 350 → **250** (doc) / **200** (AV).
+
+**프론트엔드 — 마크다운 렌더**: 기존 `stripMarkdown` 으로 평문화하던 걸 `MarkdownAnswer` 컴포넌트로 교체. `##` 헤딩, `- ` 불릿, `**굵게**`, `[출처N]` chip 동시 렌더.
+
+**상태**: ✅ 해결. 답변이 깔끔하고 빠름.
+
+---
+
+## 문제 28: PDF 정리 기능 — Editorial 매거진 스타일
+
+**요청**: 채팅 후 PDF 버튼 → AI가 대화를 정리해서 매거진 스타일 PDF 다운로드.
+
+**구현** (`/api/aimode/export-pdf`):
+1. SQLite 에서 thread 메시지 로드
+2. LLM 으로 JSON 요약 생성 (`{title, overview, key_points, qa_summaries, conclusion}`)
+3. `reportlab` 으로 PDF 합성 — 4섹션 (Cover / Key Points / Q&A / Conclusion)
+4. Windows Malgun Gothic 자동 등록
+5. 파일명: `{제목}_{날짜}.pdf`
+
+디자인:
+- 섹션 라벨 + 파란 짧은 바 + 큰 번호 타이틀
+- ◆ 다이아몬드 마커 (Key Points)
+- 굵은 진남색 Q + 들여쓰기 A (Q&A)
+- 진남색 풀쿼트 카드 (Conclusion)
+
+프론트엔드: 입력창 내부 우측에 PDF 아이콘 버튼 추가 (`picture_as_pdf`).
+- `turns.length === 0` 또는 streaming 중 → 비활성
+
+**의존성**: `pip install fpdf2` (옛 `fpdf` 1.x 와 충돌하므로 `pip uninstall fpdf` 먼저).
+
+**상태**: ✅ 완성.
+
+---
+
+## 문제 29: `from db.init_db` 가 PyPI `db` 패키지를 import
+
+**증상**: `python app.py` 시 `SyntaxError: Missing parentheses in call to 'print'`.
+
+**원인**: site-packages 의 옛 `db` 패키지 (Python 2 시절 2012년 토이 패키지) 가 로컬 `db/init_db.py` 보다 먼저 import 됨.
+
+**해결**:
+```powershell
+pip uninstall -y db
+```
+
+**상태**: ✅ 해결.
+
+---
+
+## v3 그래프 빌드 코드 (참조)
+
+```python
+def _get_rag_graph():
+    builder = StateGraph(RAGState)
+
+    # 노드 등록
+    builder.add_node("router",            router_node)
+    builder.add_node("intent",            intent_node)
+    builder.add_node("search",            search_node)
+    builder.add_node("scan",              scan_node)
+    builder.add_node("select",            select_node)
+    builder.add_node("fulltext_search",   fulltext_search_node)
+    builder.add_node("followup_intent",   followup_intent_node)
+    builder.add_node("followup_search",   followup_search_node)
+    builder.add_node("extract",           extract_node)
+    builder.add_node("generate",          generate_node)
+
+    # 엣지
+    builder.add_edge(START, "router")
+    builder.add_conditional_edges("router", _route_edge,
+        {"rag": "intent", "followup": "followup_intent"})
+    builder.add_conditional_edges("intent", _after_intent_edge,
+        {"structured": "search", "open": "fulltext_search"})
+
+    builder.add_edge("search",          "scan")
+    builder.add_edge("scan",            "select")
+    builder.add_edge("select",          "extract")
+    builder.add_edge("fulltext_search", "extract")
+    builder.add_edge("followup_intent", "followup_search")
+
+    builder.add_conditional_edges("followup_search", _after_followup_search_edge,
+        {"exist": "extract", "none": "_followup_fallback_marker"})
+
+    # 폴백 마커
+    def _followup_fallback_marker(state):
+        _emit({"type": "followup_fallback", "reason": "이전 파일에서 못 찾음 → 전체 검색 시작"})
+        return {"fallback_from_followup": True, "route": "rag"}
+    builder.add_node("_followup_fallback_marker", _followup_fallback_marker)
+    builder.add_edge("_followup_fallback_marker", "intent")
+
+    builder.add_edge("extract",  "generate")
+    builder.add_edge("generate", END)
+
+    checkpointer = MemorySaver()
+    return builder.compile(checkpointer=checkpointer)
+```
+
+---
+
+## 작업 타임라인 (v3 라인)
+
+| 날짜 | 작업 |
+|---|---|
+| 2026-05-11 | v3 그래프 재설계 — chat·qa_gen 제거, followup 2-route, mode 분기, extract 노드 신규 |
+| 2026-05-11 | SQLite 채팅 영속화 — aimode_threads/messages 테이블, 사이드바 UI |
+| 2026-05-11 | LLM 자동 제목, 채팅방 클릭 시 history 복원 |
+| 2026-05-11 | Special token 필터, 후속 질문 phrase 분해, 목차 페널티 |
+| 2026-05-12 | PDF export 기능 + Editorial 매거진 스타일 (reportlab) |
+| 2026-05-12 | 답변 길이/형식 조정 — 간결 마크다운, num_predict 250 |
+| 2026-05-12 | MarkdownAnswer 프론트엔드 컴포넌트 |
+| 2026-05-12 | AV 키워드 매칭 버그 수정, select_node 약한 AV 컷 |
+| 2026-05-12 | num_ctx=8192 — Ollama silent hang 해소 |
+| 2026-05-12 | prompt 단축 (15K → 6K) |
+| 2026-05-12 | 우측 후보 패널 — selected 후 전체 유지 |
+| 2026-05-13 | 노드별 `_release_and_wait` 2초 안정화 — VRAM OOM 해소 |
+| 2026-05-13 | `fpdf2` 의존성 추가, 옛 `fpdf` / 옛 `db` 패키지 제거 안내 |
+
+---
+

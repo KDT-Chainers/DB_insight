@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>DB_insight · System Architecture</title>
+<style>
+  :root {
+    --bg-0:#05050a; --bg-1:#0a0814;
+    --card:rgba(10,6,24,0.78);
+    --border:rgba(139,92,246,0.22);
+    --border-strong:rgba(167,139,250,0.45);
+    --text:#f1f5f9; --muted:rgba(196,181,253,0.65);
+    --accent:#a78bfa; --accent-light:#c4b5fd; --accent-deep:#7c3aed;
+    --fuchsia:#d946ef; --emerald:#10b981; --amber:#fbbf24;
+    --blue:#60a5fa; --rose:#f87171; --cyan:#22d3ee;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;min-height:100vh;width:100vw;overflow-x:hidden;
+    background:radial-gradient(ellipse at 20% 10%,#1a0f3a 0%,var(--bg-0) 55%,#03020a 100%);
+    color:var(--text);font-family:"Pretendard","Segoe UI","Malgun Gothic",sans-serif;
+    letter-spacing:-0.01em}
+
+  .wrap{max-width:1400px;margin:0 auto;padding:32px 40px 60px}
+
+  .head{display:flex;align-items:baseline;gap:14px;margin:8px 0 24px}
+  .kicker{display:inline-flex;align-items:center;gap:8px;font-size:11px;font-weight:700;
+    letter-spacing:0.22em;text-transform:uppercase;color:var(--accent-light);
+    padding:5px 11px;border-radius:999px;background:rgba(139,92,246,0.10);
+    border:1px solid var(--border)}
+  .kicker .dot{width:5px;height:5px;border-radius:50%;background:var(--accent)}
+  h1{margin:0;font-size:36px;font-weight:800;letter-spacing:-0.025em;
+    background:linear-gradient(135deg,#f5f3ff 0%,var(--accent-light) 60%,var(--fuchsia) 100%);
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .subtitle{font-size:13px;color:var(--muted);margin-left:auto;font-family:monospace}
+
+  /* ── 외곽 Electron Shell ── */
+  .shell{position:relative;border:2px dashed var(--border-strong);border-radius:18px;
+    padding:50px 28px 28px;margin-bottom:24px;
+    background:linear-gradient(180deg,rgba(139,92,246,0.04),rgba(139,92,246,0.01))}
+  .shell::before{
+    content:"⚡ Electron · Desktop Shell (Chromium + Node.js)";
+    position:absolute;top:-12px;left:24px;
+    padding:4px 14px;font-size:11px;font-weight:800;letter-spacing:0.14em;
+    text-transform:uppercase;color:var(--accent-light);
+    background:#05050a;border:1px solid var(--border-strong);border-radius:999px}
+
+  /* ── 컴포넌트 박스 공통 ── */
+  .box{position:relative;border-radius:14px;padding:18px 22px;
+    background:var(--card);border:1.5px solid var(--border);
+    backdrop-filter:blur(10px) saturate(1.04);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,0.04),0 14px 36px rgba(6,3,15,0.4)}
+  .box .label{font-size:10px;font-weight:800;letter-spacing:0.2em;text-transform:uppercase;
+    color:var(--muted);margin-bottom:6px;display:flex;align-items:center;gap:6px}
+  .box .name{font-size:18px;font-weight:800;color:#f5f3ff;margin-bottom:8px}
+  .box .desc{font-size:12.5px;color:var(--muted);line-height:1.65;margin:0}
+  .box .desc strong{color:var(--accent-light);font-weight:700}
+  .box .tech{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+  .box .tech .tag{font-family:monospace;font-size:10.5px;padding:2px 8px;border-radius:5px;
+    background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.22);color:var(--accent-light)}
+
+  .box.frontend{border-color:rgba(96,165,250,0.45)}
+  .box.frontend .name{color:#dbeafe}
+  .box.backend{border-color:rgba(167,139,250,0.55)}
+  .box.backend .name{color:#f5f3ff}
+  .box.sqlite{border-color:rgba(16,185,129,0.45)}
+  .box.sqlite .name{color:#a7f3d0}
+  .box.sqlite .tag{background:rgba(16,185,129,0.12);border-color:rgba(16,185,129,0.3);color:#6ee7b7}
+  .box.embed{border-color:rgba(251,191,36,0.45)}
+  .box.embed .name{color:#fef3c7}
+  .box.embed .tag{background:rgba(251,191,36,0.10);border-color:rgba(251,191,36,0.3);color:#fcd34d}
+  .box.llm{border-color:rgba(217,70,239,0.55)}
+  .box.llm .name{color:#fae8ff}
+  .box.llm .tag{background:rgba(217,70,239,0.12);border-color:rgba(217,70,239,0.3);color:#f0abfc}
+
+  .row{display:grid;gap:24px;margin-bottom:24px}
+  .row.front-back{grid-template-columns:1fr;justify-items:center}
+  .row.backend-row{grid-template-columns:1fr}
+  .row.deps{grid-template-columns:1fr 1fr 1fr}
+
+  .box.center-wide{max-width:560px;width:100%}
+
+  /* ── 화살표 SVG ── */
+  .arrow-block{display:flex;flex-direction:column;align-items:center;margin:0 auto}
+  .arrow-svg{display:block}
+  .arrow-label{font-family:monospace;font-size:11px;font-weight:700;
+    color:var(--accent-light);background:rgba(15,9,32,0.7);padding:3px 10px;
+    border-radius:999px;border:1px solid var(--border);margin-top:-2px;margin-bottom:-2px;
+    box-shadow:0 4px 12px rgba(0,0,0,0.3)}
+  .arrow-label.in{color:var(--emerald);border-color:rgba(16,185,129,0.35)}
+  .arrow-label.out{color:var(--amber);border-color:rgba(251,191,36,0.35)}
+
+  /* ── 백엔드 ↔ 의존성 화살표 영역 ── */
+  .fanout{position:relative;height:60px;margin:0 0 8px}
+  .fanout svg{display:block;width:100%;height:100%}
+
+  /* ── 범례 ── */
+  .legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:18px;font-size:12px;color:var(--muted);
+    justify-content:center}
+  .legend .item{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;
+    border-radius:8px;background:rgba(15,9,32,0.5);border:1px solid var(--border)}
+  .legend .sw{width:18px;height:3px;border-radius:2px}
+
+  .footer{margin-top:30px;text-align:center;color:var(--muted);font-size:11px;font-family:monospace}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="head">
+    <div class="kicker"><span class="dot"></span>System Architecture</div>
+    <h1>DB_insight 시스템 구조</h1>
+    <div class="subtitle">v3 · 2026</div>
+  </div>
+
+  <!-- ══════ Electron Shell ══════ -->
+  <div class="shell">
+
+    <!-- Row 1: Frontend -->
+    <div class="row front-back">
+      <div class="box frontend center-wide">
+        <div class="label">🖥️ UI Layer</div>
+        <div class="name">Frontend (React)</div>
+        <p class="desc">
+          사용자가 직접 보는 화면. 검색 입력, 채팅 UI, 출처 chip, PDF 미리보기, 마크다운 답변 렌더링.
+        </p>
+        <div class="tech">
+          <span class="tag">React 18</span>
+          <span class="tag">Vite</span>
+          <span class="tag">TailwindCSS</span>
+          <span class="tag">SSE Client</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 화살표: Frontend ↔ Backend -->
+    <div class="arrow-block">
+      <svg class="arrow-svg" width="24" height="22"><path d="M12 0 V22" stroke="var(--accent)" stroke-width="2" fill="none"/></svg>
+      <div class="arrow-label">HTTP / SSE · localhost:5001</div>
+      <svg class="arrow-svg" width="24" height="22">
+        <path d="M12 0 V18 M6 14 L12 22 L18 14" stroke="var(--accent)" stroke-width="2" fill="none"/>
+      </svg>
+    </div>
+
+    <!-- Row 2: Backend -->
+    <div class="row backend-row">
+      <div class="box backend">
+        <div class="label">⚙️ API Layer</div>
+        <div class="name">Backend (Flask)</div>
+        <p class="desc">
+          REST 엔드포인트 + <strong>LangGraph RAG 파이프라인</strong>. 검색·스캔·답변 합성·SSE 스트리밍 관리.
+          AIMODE 채팅, 일반 검색, 파일 요약, PDF export 모두 여기서 처리.
+        </p>
+        <div class="tech">
+          <span class="tag">Flask</span>
+          <span class="tag">LangGraph</span>
+          <span class="tag">Python 3.12</span>
+          <span class="tag">fitz · reportlab · fpdf2</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 화살표 fan-out: Backend → 의존성 3개 -->
+    <div class="fanout">
+      <svg viewBox="0 0 1000 60" preserveAspectRatio="none">
+        <defs>
+          <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="rgba(167,139,250,0.8)"/>
+          </marker>
+        </defs>
+        <!-- 가운데 시작점에서 3 갈래로 -->
+        <path d="M500 0 Q500 30 167 60" stroke="rgba(16,185,129,0.6)" stroke-width="2" fill="none" marker-end="url(#ar)"/>
+        <path d="M500 0 V60" stroke="rgba(251,191,36,0.6)" stroke-width="2" fill="none" marker-end="url(#ar)"/>
+        <path d="M500 0 Q500 30 833 60" stroke="rgba(217,70,239,0.6)" stroke-width="2" fill="none" marker-end="url(#ar)"/>
+      </svg>
+    </div>
+
+    <!-- Row 3: 의존성 3개 -->
+    <div class="row deps">
+      <div class="box sqlite">
+        <div class="label">💾 Persistence</div>
+        <div class="name">SQLite</div>
+        <p class="desc">
+          채팅방·메시지 영속화. 백엔드 재시작 후에도 사이드바 채팅 기록 복원.
+        </p>
+        <div class="tech">
+          <span class="tag">app.db</span>
+          <span class="tag">aimode_threads</span>
+          <span class="tag">aimode_messages</span>
+          <span class="tag">search_history</span>
+        </div>
+      </div>
+
+      <div class="box embed">
+        <div class="label">🔍 Semantic Search</div>
+        <div class="name">임베딩 모델</div>
+        <p class="desc">
+          쿼리·문서·이미지를 벡터로 변환해 유사도 검색. <strong>ChromaDB</strong> 에 저장된 벡터와 매칭.
+        </p>
+        <div class="tech">
+          <span class="tag">BGE-M3 (텍스트)</span>
+          <span class="tag">SigLIP2 (이미지)</span>
+          <span class="tag">DINOv2 (시각)</span>
+          <span class="tag">Reranker</span>
+        </div>
+      </div>
+
+      <div class="box llm">
+        <div class="label">🧠 Generation</div>
+        <div class="name">LLM (Ollama)</div>
+        <p class="desc">
+          분류·키워드 추출·답변 생성·요약. 한국어 마크다운 답변을 SSE 토큰 단위로 스트리밍.
+        </p>
+        <div class="tech">
+          <span class="tag">gemma3:4b-it-qat</span>
+          <span class="tag">qwen2.5:3b (fallback)</span>
+          <span class="tag">num_ctx=8192</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 범례 -->
+  <div class="legend">
+    <div class="item"><span class="sw" style="background:rgba(96,165,250,0.7)"></span> UI · Frontend</div>
+    <div class="item"><span class="sw" style="background:rgba(167,139,250,0.7)"></span> API · Backend</div>
+    <div class="item"><span class="sw" style="background:rgba(16,185,129,0.7)"></span> 영속화 · SQLite</div>
+    <div class="item"><span class="sw" style="background:rgba(251,191,36,0.7)"></span> 검색 · 임베딩</div>
+    <div class="item"><span class="sw" style="background:rgba(217,70,239,0.7)"></span> 생성 · LLM</div>
+    <div class="item" style="background:transparent;border:1px dashed var(--border-strong)">⚡ Electron 컨테이너 (외곽)</div>
+  </div>
+
+  <div class="footer">
+    DB_insight · LangGraph RAG · Local-First Multimodal Search
+  </div>
+
+</div>
+</body>
+</html>

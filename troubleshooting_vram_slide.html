@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>Trouble Shooting · VRAM OOM</title>
+<style>
+  :root {
+    --bg-0:#0a0e1a; --bg-1:#111728;
+    --card:rgba(20,24,40,0.85);
+    --border:rgba(99,102,241,0.18);
+    --text:#e2e8f0; --muted:#94a3b8;
+    --pink:#ec4899; --pink-soft:rgba(236,72,153,0.15);
+    --cyan:#22d3ee; --cyan-soft:rgba(34,211,238,0.12);
+    --emerald:#10b981; --emerald-soft:rgba(16,185,129,0.10);
+    --accent:#8b5cf6;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100vh; width: 100vw; overflow: hidden;
+    background: linear-gradient(135deg, #0a0e1a 0%, #1a1f3a 50%, #0f1729 100%);
+    color: var(--text);
+    font-family: "Pretendard", "Segoe UI", "Malgun Gothic", -apple-system, sans-serif;
+    letter-spacing: -0.01em;
+  }
+  .slide {
+    width: 100vw; height: 100vh;
+    padding: 56px 64px;
+    display: flex; flex-direction: column;
+  }
+
+  /* ── 헤더 ── */
+  h1.title {
+    margin: 0 0 6px;
+    font-size: 42px; font-weight: 800;
+    color: #ffffff;
+    letter-spacing: -0.025em;
+  }
+  .title-bar {
+    height: 2px; width: 220px;
+    background: linear-gradient(90deg, var(--pink), var(--accent));
+    margin-bottom: 32px;
+  }
+
+  /* ── 2단 그리드 (문제 + 해결) ── */
+  .top-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 28px 30px;
+    display: flex; flex-direction: column;
+  }
+
+  .card-header {
+    display: flex; align-items: center;
+    gap: 10px;
+    margin-bottom: 22px;
+    font-size: 18px; font-weight: 700;
+  }
+  .card-header .ic {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px;
+    font-size: 18px;
+  }
+  .card-header.problem { color: var(--pink); }
+  .card-header.problem .ic { color: var(--pink); }
+  .card-header.solution { color: var(--cyan); }
+  .card-header.solution .ic { color: var(--cyan); }
+  .card-header .sub {
+    font-size: 14px; font-weight: 600;
+    color: var(--text); margin-left: 4px;
+    opacity: 0.85;
+  }
+
+  /* ── 항목 리스트 ── */
+  ul.items {
+    list-style: none;
+    padding: 0; margin: 0;
+    display: flex; flex-direction: column;
+    gap: 14px;
+  }
+  ul.items li {
+    display: flex; gap: 10px;
+    font-size: 15px; line-height: 1.65;
+    color: var(--text);
+  }
+  ul.items li::before {
+    content: "❯";
+    color: var(--pink);
+    font-weight: 800; font-size: 13px;
+    margin-top: 3px;
+    flex-shrink: 0;
+  }
+  ul.items.solution li::before { color: var(--cyan); }
+
+  ul.items li b {
+    color: #ffffff;
+    font-weight: 700;
+  }
+  ul.items li b.tag-pink {
+    color: var(--pink);
+  }
+  ul.items li b.tag-cyan {
+    color: var(--cyan);
+  }
+
+  /* ── 최종 결과 박스 ── */
+  .result {
+    margin-top: 22px;
+    background: var(--card);
+    border: 1px solid rgba(16,185,129,0.30);
+    border-radius: 14px;
+    padding: 22px 28px;
+  }
+  .result-header {
+    display: flex; align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+    font-size: 17px; font-weight: 700;
+    color: var(--emerald);
+  }
+  .result-body {
+    font-size: 14.5px; line-height: 1.75;
+    color: var(--text);
+    margin-left: 38px;
+  }
+  .result-body b { color: #ffffff; font-weight: 700; }
+
+  /* 좌우 박스 hover 그라데이션 강조 */
+  .card.problem-card {
+    background:
+      linear-gradient(135deg, rgba(236,72,153,0.06), transparent 60%),
+      var(--card);
+    border-color: rgba(236,72,153,0.25);
+  }
+  .card.solution-card {
+    background:
+      linear-gradient(135deg, rgba(34,211,238,0.06), transparent 60%),
+      var(--card);
+    border-color: rgba(34,211,238,0.25);
+  }
+</style>
+</head>
+<body>
+
+<section class="slide">
+
+  <!-- 헤더 -->
+  <h1 class="title">Trouble Shooting : VRAM OOM</h1>
+  <div class="title-bar"></div>
+
+  <!-- 2단 그리드: 문제 + 해결 -->
+  <div class="top-grid">
+
+    <!-- 좌: 문제 정의 및 원인 -->
+    <div class="card problem-card">
+      <div class="card-header problem">
+        <span class="ic">⚠️</span>
+        <span>문제 정의 및 원인</span>
+      </div>
+
+      <ul class="items">
+        <li>
+          <span>답변 첫 글자도 안 나온 채 <b>30초 넘게 멈춰 있다가 타임아웃</b> 으로 끊겼다.</span>
+        </li>
+        <li>
+          <span>Ollama 가 GPU 자리를 못 잡고 CPU 로 떨어져 <b>평소보다 20배 느리게</b> 답변이 나왔다.</span>
+        </li>
+        <li>
+          <span>검색과 LLM 이 GPU 에서 서로를 밀어내며 <b>매 턴마다 5~10초씩 추가로 기다려야</b> 했다.</span>
+        </li>
+      </ul>
+    </div>
+
+    <!-- 우: 해결 전략 -->
+    <div class="card solution-card">
+      <div class="card-header solution">
+        <span class="ic">💡</span>
+        <span>해결 전략 <span class="sub">(Node-level Resource Pivot)</span></span>
+      </div>
+
+      <ul class="items solution">
+        <li>
+          <span>각 노드가 끝나면 <b>임베더를 해제하고 2초 대기</b> 시켜 다음 노드가 깨끗한 GPU 에서 시작하게 했다.</span>
+        </li>
+        <li>
+          <span>답변 노드 진입 직전 <b>Ollama 를 강제로 내렸다가 다시 올려</b> LLM 의 GPU 적재를 보장했다.</span>
+        </li>
+        <li>
+          <span>이 패턴을 <code>_release_and_wait()</code> 한 함수로 묶어 <b>10개 노드 전체에 동일 적용</b> 해 OOM 경로 자체를 차단했다.</span>
+        </li>
+      </ul>
+    </div>
+
+  </div>
+
+  <!-- 최종 결과 -->
+  <div class="result">
+    <div class="result-header">
+      <span>✓</span>
+      <span>최종 결과</span>
+    </div>
+    <div class="result-body">
+      턴당 <b>14.5초</b> 의 추가 대기를 받아들이고 <b>OOM 발생 0·답변 누락 0</b> 을 확보하여 운영을 안정화했다.
+    </div>
+  </div>
+
+</section>
+
+</body>
+</html>
