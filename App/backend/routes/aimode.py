@@ -2585,8 +2585,8 @@ def direct_generate_node(state: dict) -> dict:
     gen_model = _get_ollama_model("generate") or model
     try:
         # [v3.1] chunk_size=0 → 토큰 받는 즉시 yield (타이핑 효과)
-        # [v3.2] direct chat 도 간결 마크다운 — 300 tok 캡
-        for tok in _ollama_stream(messages, gen_model, num_predict=300, chunk_size=0):
+        # [v3.3] 답변 잘림 방지 — 300 → 500 토큰 캡
+        for tok in _ollama_stream(messages, gen_model, num_predict=500, chunk_size=0):
             full_answer += tok
             _emit({"type": "token", "text": tok})
     except Exception as e:
@@ -4661,10 +4661,14 @@ def _summarize_sse(file_type: str, trichef_id: str, file_path: str,
     # 본문 길이 기반 동적 num_predict
     # qwen2.5:3b GPU(RTX 4070 Laptop) 기준 ~40 tok/s → num_predict 600 ≈ 15초.
     # UX 목표: 모델로드(~10s) + prefill(~3s) + 생성(~15s) = 30초 이내.
+    # [v3.3] 6개 섹션 요약은 토큰이 많이 필요. 캡을 늘려 답변 잘림 방지.
+    # 6 섹션 × 평균 150자 = 900자 ≈ 450~600 토큰 필요 + 헤딩·여백 오버헤드.
+    # num_ctx=8192 안에 prompt(~clen 토큰) + dynamic_np 안전 fit.
     clen = len(content)
-    if   clen < 2000:   dynamic_np = 400
-    elif clen < 4000:   dynamic_np = 500
-    else:               dynamic_np = 600
+    if   clen < 2000:   dynamic_np = 700    # 짧은 본문도 6섹션 채우려면
+    elif clen < 4000:   dynamic_np = 900
+    elif clen < 6000:   dynamic_np = 1100
+    else:               dynamic_np = 1300   # 긴 본문은 더 상세 요약 가능
 
     # [VRAM 스왑] LLM 호출 전 여유 VRAM 확인.
     # VRAM 스왑 정책 (모델별 동적 임계값):
