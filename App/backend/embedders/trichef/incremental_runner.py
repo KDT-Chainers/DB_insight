@@ -105,6 +105,28 @@ def _clean_caption(text: str) -> str:
     return result if result else text
 
 
+# [#17] Qwen2-VL 캡션 환각 가드레일.
+# 모델이 이미지 묘사 작업을 벗어나 챗봇처럼 응답("안녕하세요! 저는 AI 모델로서...",
+# "요청하신 내용을 더 명확하게 알려주시면...")하는 경우가 있다. 이런 출력이 Im 축
+# (BGE-M3 캡션 임베딩)에 들어가면 검색 점수가 엉뚱한 방향으로 크게 왜곡된다.
+# (실측: 명백한 고양이 사진이 "음악/노래방" 캡션으로 #318/405 까지 추락)
+_CAPTION_BREAKDOWN_MARKERS = (
+    "안녕하세요", "저는 ai", "ai 모델로", "ai 모델입니다", "ai 어시스턴트",
+    "인공지능 모델", "언어 모델", "죄송합니다", "죄송하지만",
+    "도와드릴", "도와드리", "도움을 드릴",
+    "요청하신", "말씀해 주", "알려주시면", "설명해 주시면", "제공해 주시면",
+    "더 명확하게", "더 자세히 알려", "질문이 있으시",
+)
+
+
+def _is_caption_breakdown(text: str) -> bool:
+    """캡션이 이미지 묘사가 아닌 챗봇 응답으로 붕괴했는지 판정."""
+    if not text:
+        return False
+    low = text.lower()
+    return any(m in low for m in _CAPTION_BREAKDOWN_MARKERS)
+
+
 def _caption_for_im(cap_dir: Path, img_path: Path, key: str | None = None) -> str:
     """캡션 로드/생성 우선순위:
       1) page_text — PDF 원문 텍스트 (100자 이상 한국어 존재 시 우선 사용)
@@ -162,9 +184,25 @@ def _caption_for_im(cap_dir: Path, img_path: Path, key: str | None = None) -> st
         cap = _get_qwen_captioner()
         for stage, prompt in _STAGE_PROMPTS.items():
             try:
-                parts[stage] = (cap.caption(im, prompt=prompt,
-                                             max_new_tokens=_STAGE_MAX[stage],
-                                             max_image_side=896) or "").strip()
+                _raw = (cap.caption(im, prompt=prompt,
+                                     max_new_tokens=_STAGE_MAX[stage],
+                                     max_image_side=896) or "").strip()
+                # [#17] 챗봇 붕괴 출력은 폐기 — Im 축 오염 방지.
+                # 1회 재시도 후에도 붕괴면 해당 stage 는 빈 값으로 둔다.
+                if _is_caption_breakdown(_raw):
+                    logger.warning(
+                        f"[caption] Qwen {stage} 챗봇 붕괴 감지 → 재시도 "
+                        f"{img_path.name}: {_raw[:80]!r}"
+                    )
+                    _raw = (cap.caption(im, prompt=prompt,
+                                         max_new_tokens=_STAGE_MAX[stage],
+                                         max_image_side=896) or "").strip()
+                    if _is_caption_breakdown(_raw):
+                        logger.warning(
+                            f"[caption] Qwen {stage} 재시도도 붕괴 → 폐기 {img_path.name}"
+                        )
+                        _raw = ""
+                parts[stage] = _raw
             except Exception as e:
                 logger.warning(f"[caption] Qwen {stage} 실패 {img_path.name}: {type(e).__name__}: {e}")
                 parts[stage] = ""
@@ -835,7 +873,20 @@ def embed_image_file(file_path: str, progress_cb=None, defer_lexical_rebuild: bo
             logger.warning(f"[embed_image_file] lexical rebuild 실패: {e}")
 
     # [v9 PC 호환] abs 저장 안 함 (rel_key + RAW_DB 동적 결합)
-    registry[key] = {"sha": sha, "staged": str(staged)}
+    # [#16] 원본 입력 경로를 abs_aliases 에 등록 → registry_lookup 이 alias 인덱스로
+    #       indexed=true 판정. 이게 없으면 raw_DB/Img 외부 폴더(예: test/, 공백 포함
+    #       폴더명)에서 인덱싱한 파일이 "완료" 배지가 안 뜨고 영구히 "신규" 로 남는다.
+    #       (staged key 는 rel-key 인덱스에 raw_DB/Img/staged/... 로만 등록되므로
+    #        원본 경로로는 조회 불가)
+    try:
+        _orig_abs = str(p.resolve())
+    except Exception:
+        _orig_abs = str(p)
+    registry[key] = {
+        "sha": sha,
+        "staged": str(staged),
+        "abs_aliases": [_orig_abs],
+    }
     _save_registry(reg_path, registry)
 
     return {"status": "done", "chunks": 1}
