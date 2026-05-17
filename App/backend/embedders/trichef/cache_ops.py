@@ -59,8 +59,15 @@ def replace_by_file(
         try:
             data = json.loads(ids_path.read_text(encoding="utf-8"))
             prev_ids = data.get("ids", []) if isinstance(data, dict) else list(data)
-        except Exception:
-            prev_ids = []
+        except Exception as _e:
+            # [#19] 침묵 데이터 손실 방지 — 기존 ids_file 이 있는데 파싱 실패 시
+            # prev_ids=[] 로 fallback 하면 keep_mask 가 모두 비어 .npy 가 1행짜리로
+            # truncate 되는 침묵 손실 발생. 명시적 에러로 중단해서 사용자가 인지.
+            raise RuntimeError(
+                f"[replace_by_file] {ids_file} 파싱 실패: {type(_e).__name__}: {_e}. "
+                "기존 캐시 무결성 위험 → 작업 중단. ids_file 을 복구하거나 "
+                "백업에서 복원 후 재시도하세요."
+            ) from _e
 
     keep_mask = np.array([rid not in keyset for rid in prev_ids], dtype=bool)
     removed = int((~keep_mask).sum())
@@ -131,6 +138,14 @@ def replace_by_file(
 
     kept_ids = [rid for rid, k in zip(prev_ids, keep_mask) if k]
     all_ids = kept_ids + list(new_ids)
+    # [#19] 정합성 검증 — ids 길이와 .npy 행 수 일치 확인 후 저장.
+    # 불일치 시 침묵 desync 발생 가능성 → 에러로 중단.
+    if final_rows and len(all_ids) != final_rows:
+        raise RuntimeError(
+            f"[replace_by_file] 정합성 불일치: ids={len(all_ids)} vs npy_rows={final_rows} "
+            f"@ {ids_file}. 캐시 손상 위험으로 ids 저장 중단. "
+            f"kept_ids={len(kept_ids)} new_ids={len(list(new_ids))} prev_ids={len(prev_ids)}"
+        )
     ids_path.write_text(
         json.dumps({"ids": all_ids}, ensure_ascii=False, indent=2),
         encoding="utf-8",

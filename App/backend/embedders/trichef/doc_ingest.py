@@ -202,12 +202,20 @@ def converted_pdf_path(src: Path) -> Path | None:
     return None
 
 
-def _virtual_text_pages(text: str, stem: str, chars_per_page: int = 1500) -> list[Path]:
-    """텍스트 → 가상 페이지 (이미지 없음 → 검색 도메인 `doc_text` 전용)."""
+def _virtual_text_pages(text: str, stem: str, chars_per_page: int = 1000,
+                          overlap: int = 200) -> list[Path]:
+    """텍스트 → 가상 페이지 (이미지 없음 → 검색 도메인 `doc_text` 전용).
+
+    [#20] 청킹 정책 통일 — text_chunker 의 1000/200 슬라이딩 청커 사용.
+    이전 1500자 무오버랩은 (a) BGE-M3 토큰 한계 근접 + (b) 청크 경계에서
+    문맥 단절 발생. 슬라이딩 + 문장 경계 우선 청커로 교체.
+    """
+    from embedders.trichef.text_chunker import chunk_text  # 지연 import (순환 회피)
+
     out_dir = Path(PATHS["TRICHEF_DOC_EXTRACT"]) / "text_pages" / doc_page_render._sanitize(stem)
     out_dir.mkdir(parents=True, exist_ok=True)
     pages: list[Path] = []
-    chunks = [text[i:i+chars_per_page] for i in range(0, len(text), chars_per_page)] or [""]
+    chunks = chunk_text(text, chunk_size=chars_per_page, overlap=overlap) or [""]
     for i, chunk in enumerate(chunks):
         p = out_dir / f"p{i:04d}.txt"
         if not p.exists():

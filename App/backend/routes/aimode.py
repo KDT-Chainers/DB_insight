@@ -2785,15 +2785,29 @@ def generate_node(state: dict) -> dict:
     route = state.get("route", "rag")
     is_followup = route == "followup"
 
+    # [#21] 소스 폭주 방지 — 23+ 소스로 prompt 폭증·prefill 타임아웃 발생 사례 대응.
+    # 종합 소스(doc + AV) 상위 N개만 사용. select_node 가 이미 점수 정렬했음을 가정.
+    # (실측: "다른 년도 정리" follow-up 쿼리에서 23개 소스 → prompt 30k+ chars →
+    #  gemma3:4b num_ctx=8192 초과 → 300초 타임아웃)
+    _MAX_TOTAL_SOURCES = 8
+    if len(matched_sources) > _MAX_TOTAL_SOURCES:
+        logger.info(
+            f"[generate_node] sources {len(matched_sources)} → top {_MAX_TOTAL_SOURCES} 로 cap "
+            f"(prompt 폭증 방지)"
+        )
+        matched_sources = matched_sources[:_MAX_TOTAL_SOURCES]
+
     # [v3.3] 사용자 입력 원본 보존 — SQLite 저장 시 LLM prompt wrap 된 텍스트가 아닌 원본 사용.
     original_question = question
 
     # followup 모드: 이전 답변을 질문 앞에 명시 (모델이 무엇을 다뤄야 할지 명확히)
+    # [#21] follow-up 히스토리 4턴 → 2턴 으로 축소 (prompt 폭증 추가 방지).
+    #       각 턴 500자 → 300자.
     if is_followup and prior_history:
         prev_turns = []
-        for m in prior_history[-4:]:
+        for m in prior_history[-2:]:
             role = "사용자" if m.get("role") == "user" else "AI"
-            prev_turns.append(f"[{role}]: {m.get('content','')[:500]}")
+            prev_turns.append(f"[{role}]: {m.get('content','')[:300]}")
         prev_ctx = "\n".join(prev_turns)
         question = f"[이전 대화 참고]\n{prev_ctx}\n\n[현재 요청] {question}"
 
@@ -3243,13 +3257,24 @@ def _rag_sse(question: str, topk: int, thread_id: str,
     blocked_emitted = False
     SCAN_INTERVAL = 200  # 누적 200자마다 스캔
 
+    # [#22] 300s 단일 대기 → 5s 폴링 + heartbeat emit 으로 변경.
+    # 프론트엔드 fetch idle timeout(브라우저 기본 ~5분) 회피 + 사용자에게 진행 중 표시.
+    # 백엔드 자체 최대 타임아웃은 누적 elapsed 기준 300s 유지.
+    _HEARTBEAT_SEC = 5
+    _MAX_TOTAL_SEC = 300
+    _idle = 0.0
     while True:
         try:
-            # [v3.3] 180s → 300s — 다중 PDF 매칭 시 prefill 시간 여유 확보
-            ev = q.get(timeout=300)
+            ev = q.get(timeout=_HEARTBEAT_SEC)
+            _idle = 0.0
         except Empty:
-            yield emit({"type": "error", "message": "타임아웃 (300초)"})
-            break
+            _idle += _HEARTBEAT_SEC
+            if _idle >= _MAX_TOTAL_SEC:
+                yield emit({"type": "error", "message": f"타임아웃 ({_MAX_TOTAL_SEC}초)"})
+                break
+            # heartbeat — 프론트엔드 timeout 갱신용 (실제 토큰 아님)
+            yield emit({"type": "heartbeat", "elapsed_idle": _idle})
+            continue
         if ev is None:
             break
 

@@ -809,6 +809,21 @@ def search():
             # 임계 0.25 미만 → 시각적으로 햄버거와 거의 무관한 사진 → primary 절반 감점.
             if ft == "image" and ds < 0.25:
                 primary *= 0.55
+            # [v23] doc 짧은 페이지 페널티 — <200자 페이지(표지/간지/섹션 시작) 가
+            # top10 에 자주 진입해 노이즈 발생하는 문제 대응.
+            # 실측: "AI 인공지능" top10 의 60%, "경주 동궁 월지" 70% 가 짧은 페이지.
+            # 짧을수록 토큰 농도 ↑ → 코사인 유사도 인위적 상승 → 페널티로 보정.
+            # 환경변수 NO_SHORT_PAGE_PENALTY=1 로 비활성 가능 (회귀 시 즉시 끄기).
+            if ft == "doc":
+                try:
+                    import os
+                    if os.environ.get("NO_SHORT_PAGE_PENALTY", "0") != "1":
+                        from services.short_page_penalty import short_page_penalty
+                        rid = r.get("trichef_id") or ""
+                        if rid:
+                            primary *= short_page_penalty(rid)
+                except Exception:
+                    pass
         return (primary, ds, rs)
 
     results.sort(key=_sort_key, reverse=True)

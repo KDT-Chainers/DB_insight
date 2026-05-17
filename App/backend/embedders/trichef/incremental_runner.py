@@ -107,9 +107,11 @@ def _clean_caption(text: str) -> str:
 
 # [#17] Qwen2-VL 캡션 환각 가드레일.
 # 모델이 이미지 묘사 작업을 벗어나 챗봇처럼 응답("안녕하세요! 저는 AI 모델로서...",
-# "요청하신 내용을 더 명확하게 알려주시면...")하는 경우가 있다. 이런 출력이 Im 축
-# (BGE-M3 캡션 임베딩)에 들어가면 검색 점수가 엉뚱한 방향으로 크게 왜곡된다.
-# (실측: 명백한 고양이 사진이 "음악/노래방" 캡션으로 #318/405 까지 추락)
+# "요청하신 내용을 더 명확하게 알려주시면...")하거나, 한국어 프롬프트를 무시하고
+# 중국어/영어로 응답하는 경우가 있다. 이런 출력이 Im 축(BGE-M3 캡션 임베딩)에
+# 들어가면 검색 점수가 엉뚱한 방향으로 크게 왜곡된다.
+# (실측: 명백한 고양이 사진이 "음악/노래방" 캡션으로 #318/405 까지 추락;
+#  이미지 코퍼스 2401건 중 영어만 15.5%, 중국어 다수 혼입)
 _CAPTION_BREAKDOWN_MARKERS = (
     "안녕하세요", "저는 ai", "ai 모델로", "ai 모델입니다", "ai 어시스턴트",
     "인공지능 모델", "언어 모델", "죄송합니다", "죄송하지만",
@@ -119,12 +121,53 @@ _CAPTION_BREAKDOWN_MARKERS = (
 )
 
 
-def _is_caption_breakdown(text: str) -> bool:
-    """캡션이 이미지 묘사가 아닌 챗봇 응답으로 붕괴했는지 판정."""
+def _ko_char_ratio(text: str) -> float:
+    """한글(가~힣) 비율."""
     if not text:
-        return False
+        return 0.0
+    ko = sum(1 for c in text if '가' <= c <= '힣')
+    return ko / len(text)
+
+
+def _zh_char_ratio(text: str) -> float:
+    """CJK 한자(중국어) 비율 — Qwen-VL 가 한국어 프롬프트 무시하고
+    중국어로 응답하는 경우 탐지용. 한국 한자(인명·지명)는 0~수% 수준이지만
+    Qwen-VL 환각 시 30~80% 까지 나옴."""
+    if not text:
+        return 0.0
+    zh = sum(1 for c in text if '一' <= c <= '鿿')
+    return zh / len(text)
+
+
+def _is_caption_bad(text: str, *, expect_korean: bool = True) -> tuple[bool, str]:
+    """캡션 품질 판정. (is_bad, reason) 반환.
+
+    검사 항목:
+      1) 챗봇 붕괴 마커 ("안녕하세요", "저는 AI 모델로서" 등)
+      2) 중국어 우세 (>10%)        ← Qwen-VL 가 한국어 프롬프트 무시한 케이스
+      3) 한국어 부족 (<10%, 20자+) ← expect_korean=True 인 스테이지만
+                                     (tags_en 같은 영어 전용 스테이지는 제외)
+    """
+    if not text:
+        return False, ""  # 빈 문자열은 "나쁨"이 아닌 "없음" — 상위에서 처리
     low = text.lower()
-    return any(m in low for m in _CAPTION_BREAKDOWN_MARKERS)
+    for m in _CAPTION_BREAKDOWN_MARKERS:
+        if m in low:
+            return True, f"챗봇 붕괴 마커({m!r})"
+    zr = _zh_char_ratio(text)
+    if zr > 0.10:
+        return True, f"중국어 우세({zr*100:.0f}%)"
+    if expect_korean and len(text) >= 20:
+        kr = _ko_char_ratio(text)
+        if kr < 0.10:
+            return True, f"한국어 부족({kr*100:.0f}%)"
+    return False, ""
+
+
+# [후방 호환] 이전 이름 — 신규 _is_caption_bad 로 위임 (한국어 검사 포함)
+def _is_caption_breakdown(text: str) -> bool:
+    bad, _ = _is_caption_bad(text, expect_korean=True)
+    return bad
 
 
 def _caption_for_im(cap_dir: Path, img_path: Path, key: str | None = None) -> str:
@@ -133,7 +176,17 @@ def _caption_for_im(cap_dir: Path, img_path: Path, key: str | None = None) -> st
       2) `<hash_stem>.caption.json` (레거시 BLIP L1/L2/L3, 한국어인 경우)
       3) `<hash_stem>.txt` / `<plain_stem>.txt` (한국어인 경우)
       4) 없으면 Qwen2-VL 로 신규 한국어 캡션 생성 → plain_stem `.txt` 저장
+
+    [#23] 환경변수 FIGURE_CAPTION_SKIP=1 → Qwen-VL 캡션 단계 전체 스킵.
+          파일명 stem 만 빈 캡션으로 즉시 반환. PDF 도표·그래프 대량 인덱싱 시
+          Qwen-VL 가 한국어를 거의 못 만들어 가드레일이 매번 폐기하는 케이스에서
+          시간 단축 (figure당 ~30s → ~1s, 시각 임베딩 Re/Z 만 활용).
     """
+    import os as _os
+    if _os.environ.get("FIGURE_CAPTION_SKIP", "0") == "1":
+        # 파일명을 캡션 대용으로 사용 (텍스트 매칭 폴백)
+        return img_path.stem.replace("_", " ")
+
     # 1) page_text 우선 — 영어 오캡션보다 실제 PDF 텍스트가 Im 축에 훨씬 유효
     _pt_dir = Path(PATHS["TRICHEF_DOC_EXTRACT"]) / "page_text" / img_path.parent.name
     _pt_file = _pt_dir / f"{img_path.stem}.txt"
@@ -182,24 +235,34 @@ def _caption_for_im(cap_dir: Path, img_path: Path, key: str | None = None) -> st
         from PIL import Image
         im = Image.open(img_path).convert("RGB")
         cap = _get_qwen_captioner()
+        # [#18] stage 별 한국어 요구 여부 — tags_en 만 영어 출력이 정상.
+        _STAGE_EXPECT_KO = {
+            "title": True, "tagline": True, "synopsis": True,
+            "tags_kr": True, "tags_en": False,
+        }
+        # 재시도 시 사용할 강화 프롬프트 prefix — 1차 실패 후 더 명확히 지시.
+        _KO_REINFORCE = "반드시 한국어로만 답하세요. 영어와 중국어 사용 금지. 이미지 묘사만 출력하고 다른 말은 하지 마세요. "
         for stage, prompt in _STAGE_PROMPTS.items():
+            expect_ko = _STAGE_EXPECT_KO.get(stage, True)
             try:
                 _raw = (cap.caption(im, prompt=prompt,
                                      max_new_tokens=_STAGE_MAX[stage],
                                      max_image_side=896) or "").strip()
-                # [#17] 챗봇 붕괴 출력은 폐기 — Im 축 오염 방지.
-                # 1회 재시도 후에도 붕괴면 해당 stage 는 빈 값으로 둔다.
-                if _is_caption_breakdown(_raw):
+                # [#17][#18] 챗봇 붕괴/중국어 우세/한국어 부족 → 강화 프롬프트로 1회 재시도.
+                _bad, _reason = _is_caption_bad(_raw, expect_korean=expect_ko)
+                if _bad:
                     logger.warning(
-                        f"[caption] Qwen {stage} 챗봇 붕괴 감지 → 재시도 "
+                        f"[caption] Qwen {stage} 품질 미달({_reason}) → 재시도 "
                         f"{img_path.name}: {_raw[:80]!r}"
                     )
-                    _raw = (cap.caption(im, prompt=prompt,
+                    _retry_prompt = (_KO_REINFORCE + prompt) if expect_ko else prompt
+                    _raw = (cap.caption(im, prompt=_retry_prompt,
                                          max_new_tokens=_STAGE_MAX[stage],
                                          max_image_side=896) or "").strip()
-                    if _is_caption_breakdown(_raw):
+                    _bad2, _reason2 = _is_caption_bad(_raw, expect_korean=expect_ko)
+                    if _bad2:
                         logger.warning(
-                            f"[caption] Qwen {stage} 재시도도 붕괴 → 폐기 {img_path.name}"
+                            f"[caption] Qwen {stage} 재시도도 미달({_reason2}) → 폐기 {img_path.name}"
                         )
                         _raw = ""
                 parts[stage] = _raw
