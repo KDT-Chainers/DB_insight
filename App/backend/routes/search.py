@@ -762,6 +762,53 @@ def search():
         # 한 토큰만 매칭이어도 최소 0.10 → "박태웅 의장" 중 "박태웅"만 들어가도 의미 있게 부각.
         return 0.10 + 0.10 * (hits / len(_q_tokens))
 
+    # [v24] 캡션 키워드 매칭 보너스 ─────────────────────────────────────────
+    # 문제: Qwen-VL 이미지 캡션이 환각(garbled)이라 cross-encoder(정확도)가
+    #   내용이 아닌 문장 유창성에 속아, "햄버거" 검색에 한식/피자/파스타 사진을
+    #   실제 햄버거보다 높게 매기는 회귀 발생.
+    # 해결: 캡션(snippet)에 쿼리 '내용어'가 들어있으면 강한 가산점.
+    #   합성명사 부분일치 지원 — query "햄버거" 가 캡션 단어 "버거" 와 매칭되도록
+    #   양방향 substring(s in cw or cw in s) 사용.
+    _KO_SUFFIXES_S = ("하는", "했던", "하고", "하기", "스러운", "되는", "된",
+                      "하던", "한", "인", "는", "을", "를", "의", "이")
+    # 흔한 토큰 — 단독 매칭으로 무차별 boost 되면 안 되는 비-내용어
+    _CAP_STOPWORDS = {"사람", "모습", "사진", "그림", "이미지", "장면",
+                      "느낌", "관련", "있는", "하는", "풍경", "배경", "정도"}
+
+    def _ko_stem_cands(tok: str) -> list[str]:
+        cands = [tok]
+        for suf in _KO_SUFFIXES_S:
+            if tok.endswith(suf) and len(tok) - len(suf) >= 2:
+                cands.append(tok[: -len(suf)])
+        return cands
+
+    def _caption_match_bonus(r: dict) -> float:
+        """캡션(snippet)에 쿼리 내용어가 매칭된 비율(0~1) 반환.
+        doc 은 snippet="" 이므로 항상 0 (영향 없음)."""
+        if not _q_tokens:
+            return 0.0
+        cap = (r.get("snippet") or "").lower()
+        if not cap:
+            return 0.0
+        content = [t for t in _q_tokens if t not in _CAP_STOPWORDS]
+        if not content:
+            return 0.0
+        hits = 0
+        for t in content:
+            cands = set(_ko_stem_cands(t))
+            # 합성명사 머리명사 대응: 가장 축약된 어간이 3자 이상이면 앞 1글자를
+            # 떼어낸 꼬리("햄버거"→"버거")도 후보에 추가. 캡션이 "버거와"처럼 조사가
+            # 붙은 한 덩어리라도 전체 문자열 substring 검색으로 매칭된다.
+            # 동사 활용형은 어간이 이미 2자라("운동하는"→"운동") 꼬리 추가 안 됨.
+            shortest = min(cands, key=len)
+            if len(shortest) >= 3:
+                tail = shortest[1:]
+                if len(tail) >= 2:
+                    cands.add(tail)
+            if any(len(s) >= 2 and s in cap for s in cands):
+                hits += 1
+        return hits / len(content)
+
     def _sort_key(r):
         # [v18.10] _rank_score 를 primary key 로 사용.
         rank = float(r.get("_rank_score", r.get("confidence", 0)) or 0)
@@ -803,12 +850,19 @@ def search():
         else:
             # Image / Doc / 기타: 정확도 우선 (v20 유지)
             primary = 0.35 * ds + 0.55 * rs_n + 0.10 * cf + fn_bonus
+            # [v24] 캡션 키워드 매칭 보너스 — Qwen-VL 캡션 환각으로 cross-encoder 가
+            # 무관 음식 사진을 오상위시키는 회귀 방어. 캡션에 쿼리 내용어가 들어있으면
+            # 가산. 완전 매칭(cap_bonus==1.0) 이면 아래 dense floor 감점도 면제.
+            cap_bonus = _caption_match_bonus(r)
             # [v22] 이미지 도메인 dense floor — 시각 유사도가 매우 낮은데 rerank만 높은
             # 결과를 방어. "햄버거" 쿼리에서 미트볼·팬케익·와플 등이 캡션의 "맛있는 음식"
             # 일반화로 rerank 점수만 높아져 상위 진입하는 문제 방지.
             # 임계 0.25 미만 → 시각적으로 햄버거와 거의 무관한 사진 → primary 절반 감점.
-            if ft == "image" and ds < 0.25:
+            # 단, 캡션이 쿼리어를 완전 매칭하면 신뢰할 만한 결과이므로 감점 면제.
+            if ft == "image" and ds < 0.25 and cap_bonus < 1.0:
                 primary *= 0.55
+            # 캡션 매칭 가산 — 완전 매칭 +0.45, 부분 매칭은 비례.
+            primary += 0.45 * cap_bonus
             # [v23] doc 짧은 페이지 페널티 — <200자 페이지(표지/간지/섹션 시작) 가
             # top10 에 자주 진입해 노이즈 발생하는 문제 대응.
             # 실측: "AI 인공지능" top10 의 60%, "경주 동궁 월지" 70% 가 짧은 페이지.

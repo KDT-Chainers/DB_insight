@@ -17,12 +17,14 @@
     "method": "random_query_null_v2"
   },
   "image": {
-    "mu_null": 0.28569254527489346,
-    "sigma_null": 0.025669624518335286,
-    "abs_threshold": 0.2992,
+    "mu_null": 0.10226620733737946,
+    "sigma_null": 0.02538985386490822,
+    "abs_threshold": 0.11558065973622363,
     "far": 0.3,
-    "N": 2390,
-    "method": "random_query_null_v2"
+    "N": 14087,
+    "method": "crossmodal_v1",
+    "n_queries": 300,
+    "n_pairs": 2400
   },
   "doc_page": {
     "mu_null": 0.3001,

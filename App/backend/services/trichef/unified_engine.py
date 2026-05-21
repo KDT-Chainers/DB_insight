@@ -182,6 +182,30 @@ class TriChefEngine:
                     logger.warning(f"[engine:doc_page] Im_body shape {Im_body.shape} "
                                    f"!= Im {Im.shape} — fusion 스킵")
 
+        # [v24] substring boost 용 캡션 텍스트 맵 — image/doc 도메인.
+        # Qwen-VL 캡션이 환각이 섞여 Im 임베딩 신뢰도는 낮지만, 음식 종류 같은
+        # 핵심 명사("버거","피자")는 비교적 정확히 담긴다. 검색어 토큰이 캡션
+        # 텍스트에 직접 등장하면 substring boost 를 주어 의미 매칭을 보강.
+        cap_texts: list[str] = []
+        cap_path = dir / "captions_triple.jsonl"
+        if cap_path.exists():
+            key2txt: dict[str, str] = {}
+            try:
+                with cap_path.open("r", encoding="utf-8") as _cf:
+                    for _ln in _cf:
+                        try:
+                            _cd = json.loads(_ln)
+                            key2txt[_cd.get("key", "")] = " ".join([
+                                _cd.get("title", "") or "",
+                                _cd.get("tagline", "") or "",
+                                _cd.get("L3", "") or "",
+                            ]).lower()
+                        except Exception:
+                            pass
+            except Exception as _ce:
+                logger.warning(f"[engine:{domain_label}] caption 로드 실패: {_ce}")
+            cap_texts = [key2txt.get(rid, "") for rid in ids]
+
         return {
             "Re": Re,
             "Im": Im,
@@ -190,6 +214,7 @@ class TriChefEngine:
             "sparse": sparse_mat,
             "vocab": auto_vocab.load_vocab(dir / "auto_vocab.json"),
             "asf_sets": asf_sets,
+            "cap_texts": cap_texts,
         }
 
     def _build_av_entry(self, cache_dir: Path, kind: str) -> dict:
@@ -341,8 +366,21 @@ class TriChefEngine:
                 _expanded2 = query
             q_tokens = [t.lower() for t in _expanded2.split() if len(t) >= 2]
             _orig_tc2 = len([t for t in query.split() if len(t) >= 2])
+            # [v25] 한국어 활용어미 어간 추출 — "운동하는"→"운동" 도 매칭 대상에 추가.
+            # 캡션은 "운동장/운동선수" 처럼 명사형으로 쓰여 활용형 substring 매칭 실패.
+            _KO_SUFFIXES = ("하는", "했던", "하고", "하기", "스러운", "되는", "된",
+                            "하던", "한", "인", "는", "을", "를", "의", "이")
+            q_stems: list[str] = []
+            for _t in q_tokens:
+                q_stems.append(_t)
+                for _suf in _KO_SUFFIXES:
+                    if _t.endswith(_suf) and len(_t) - len(_suf) >= 2:
+                        q_stems.append(_t[:-len(_suf)])
+            q_stems = list(dict.fromkeys(q_stems))  # 중복 제거
+            n_qtok = len([t for t in query.split() if len(t) >= 2])
             if q_tokens:
                 boost = np.zeros(len(d["ids"]), dtype=dense_scores.dtype)
+                _cap_texts = d.get("cap_texts") or []
                 for i, rid in enumerate(d["ids"]):
                     hay = rid.lower()
                     matched = sum(1 for tok in q_tokens if tok in hay)
@@ -350,6 +388,25 @@ class TriChefEngine:
                         boost[i] += 0.05 * matched
                         if matched >= _orig_tc2:
                             boost[i] += 0.10  # 원본 쿼리 전체 매칭 보너스
+                    # [v25] 캡션 텍스트 매칭 — 전체 토큰 매칭 시 강하게, 부분은 약하게.
+                    # "운동하는 사람" 처럼 흔한 토큰("사람")이 섞인 쿼리에서, "사람"
+                    # 단독 매칭으로 인물 사진이 무차별 boost 되던 문제 해소.
+                    # 원본 쿼리 토큰별로 q_stems 중 하나라도 캡션에 있으면 그 토큰을 매칭.
+                    if i < len(_cap_texts) and _cap_texts[i]:
+                        ct = _cap_texts[i]
+                        orig_toks = [t.lower() for t in query.split() if len(t) >= 2]
+                        tok_hit = 0
+                        for ot in orig_toks:
+                            cand = [ot]
+                            for _suf in _KO_SUFFIXES:
+                                if ot.endswith(_suf) and len(ot) - len(_suf) >= 2:
+                                    cand.append(ot[:-len(_suf)])
+                            if any(c in ct for c in cand):
+                                tok_hit += 1
+                        if n_qtok >= 2 and tok_hit >= n_qtok:
+                            boost[i] += 0.12   # 전체 토큰 매칭 — 강한 boost
+                        elif tok_hit >= 1:
+                            boost[i] += 0.03   # 부분 매칭 — 약한 boost (흔한 토큰 억제)
                 dense_scores = dense_scores + boost
         except Exception as _be:
             logger.debug(f"[engine:{domain}] substring boost 실패: {_be}")

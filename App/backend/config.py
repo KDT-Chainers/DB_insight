@@ -134,10 +134,14 @@ TRICHEF_CFG = {
 
     # [Image hermitian alpha] Im(BGE-M3 캡션) 가중치 — sqrt(A² + (alpha·B)²)
     # SigLIP2(Re, A)는 한국어 음식/사물 쿼리에서 A≈0.05~0.14로 낮음.
-    # α=0.45: 햄버거 herm≈0.287~0.299 → abs_thr 간신히 미달/통과 (불안정).
-    # α=0.60: 햄버거 herm≈0.320~0.390 → abs_thr 안정 초과.
-    # 캘리브레이션도 동일 alpha 사용 (calibration.py SEARCH_IM_ALPHA_IMG 참조).
-    "SEARCH_IM_ALPHA_IMG": 0.60,
+    # [v24 회귀 수정] α를 0.60→0.25 로 하향.
+    #   원인: Qwen-VL 캡션이 환각으로 변별력 상실(모든 이미지 Im≈0.44~0.51).
+    #         α=0.60 은 score를 abs_thr 위로 올리지만 Im 노이즈가 Re(시각) 신호를
+    #         압도 → "햄버거" top10 햄버거 2/10 으로 추락.
+    #   검증: alpha 시뮬레이션 — 0.25 에서 "햄버거" top10 햄버거 9/10 회복.
+    #         SigLIP2(Re) cross-modal 단독으로 햄버거 8/10 정확 → Re 신호 보존이 핵심.
+    #   abs_threshold 는 calibrate_image_crossmodal 재실행으로 동반 하향 필수.
+    "SEARCH_IM_ALPHA_IMG": 0.25,
 
     # LangGraph
     "GRAPH_MAX_ITER": 3,
