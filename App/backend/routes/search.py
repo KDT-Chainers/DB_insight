@@ -812,7 +812,15 @@ def search():
     def _sort_key(r):
         # [v18.10] _rank_score 를 primary key 로 사용.
         rank = float(r.get("_rank_score", r.get("confidence", 0)) or 0)
-        ds = float(r.get("dense") or 0)
+        # [v25] display/sort 곡선 분리 — image 는 hermitian_sort_curve(legacy v1)를
+        # raw_dense 에 적용해 v24 순위를 그대로 재현. r["dense"]는 표시 전용(v2 곡선).
+        # AV/doc 등 raw_dense 없는 경우 dense 폴백.
+        _raw = r.get("raw_dense")
+        if _raw is not None and (r.get("file_type") or "").lower() == "image":
+            from services.score_adjust import hermitian_sort_curve as _hsc
+            ds = float(_hsc(float(_raw)))
+        else:
+            ds = float(r.get("dense") or 0)
         rs_raw = r.get("rerank_score")
         rs = float(rs_raw) if rs_raw is not None else -999.0
         cf = float(r.get("confidence") or 0)

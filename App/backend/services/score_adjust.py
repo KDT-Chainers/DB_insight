@@ -85,22 +85,11 @@ def _generous_curve(raw: float) -> float:
         return min(1.0, 0.98 + (x - 0.60) * 0.025)    # 98~99%
 
 
-def hermitian_display_curve(h: float) -> float:
-    """Hermitian 복합 점수 전용 표시 커브 (image 도메인).
+def hermitian_sort_curve(h: float) -> float:
+    """[순위 보존 전용] v1 hermitian curve — _sort_key 에서 ds 계산에만 사용.
 
-    배경:
-      Hermitian score = sqrt(A²+(0.4B)²). 반환된 이미지의 실제 H 범위는 [0.10, 0.50].
-      lexical(캡션 텍스트) 매칭으로 반환된 이미지는 H ≈ 0.10~0.25 (시각 임베딩 약함).
-      dense-only 시각 매칭 이미지는 H ≈ 0.28~0.50 (임계값 0.2992 이상).
-      null 분포 평균 μ = 0.2857 (trichef_calibration.json).
-
-    매핑 (전체 실제 범위 H∈[0.10, 0.50] 커버):
-      H ≤ 0.10            →  5%  (최하한)
-      H = 0.20            → 20%  (lexical 위주 약한 시각 매칭)
-      H = 0.286 (null μ)  → 38%  (무관 이미지 기준선)
-      H = 0.350           → 70%  (유의미한 시각 매칭)
-      H = 0.450           → 92%  (강한 매칭)
-      H ≥ 0.550           → 97%  (상한)
+    표시용 hermitian_display_curve(v2)와 분리되어 곡선 튜닝이 ranking 에 영향
+    주지 않도록 보호한다. v24 검증 시점의 정렬 결과를 그대로 재현.
     """
     x = max(0.0, min(1.0, float(h)))
     if x < 0.10:
@@ -108,13 +97,49 @@ def hermitian_display_curve(h: float) -> float:
     elif x < 0.20:
         return 0.05 + (x - 0.10) * (0.15 / 0.10)    #  5% → 20%
     elif x < 0.286:
-        return 0.20 + (x - 0.20) * (0.18 / 0.086)   # 20% → 38%  (null μ → 38%)
+        return 0.20 + (x - 0.20) * (0.18 / 0.086)   # 20% → 38%
     elif x < 0.350:
         return 0.38 + (x - 0.286) * (0.32 / 0.064)  # 38% → 70%
     elif x < 0.450:
         return 0.70 + (x - 0.350) * (0.22 / 0.10)   # 70% → 92%
     else:
         return min(0.97, 0.92 + (x - 0.450) * 0.10) # 92% → 97%
+
+
+def hermitian_display_curve(h: float) -> float:
+    """Hermitian 복합 점수 전용 표시 커브 (image 도메인).
+
+    [v2 cross-modal 재캘리브레이션 — 2026-05-26]
+    이전 v1 은 image-to-image null 분포(μ=0.286)에 anchor 되어 있어, text→image
+    cross-modal cosine(SigLIP2)가 본질적으로 좁은 분포(0.10~0.30)임에도 양성
+    이미지가 "무관 기준선(38%)"보다 낮게 표시되던 misleading 문제 발생.
+      예: "햄버거" 검색 → 실제 햄버거 raw H≈0.17 → 곡선상 16% 표시
+          (사용자: "유사도 20% 도 안되는데 맞나요?")
+
+    cross-modal raw H 실측 분포 기반 재매핑:
+      H ≤ 0.10  →  10%  (최하한)
+      H = 0.17  →  55%  (cross-modal 양성, "햄버거" 매칭 수준)
+      H = 0.25  →  75%
+      H = 0.35  →  88%  (강한 매칭)
+      H = 0.50  →  96%
+      H ≥ 0.60  →  99%  (상한)
+
+    주의: 본 곡선은 표시(유사도 UI) 전용. 순위 계산(_sort_key)은
+    raw_dense 를 직접 사용하므로 곡선 변경이 ranking 에 영향 없음.
+    """
+    x = max(0.0, min(1.0, float(h)))
+    if x < 0.10:
+        return 0.10
+    elif x < 0.17:
+        return 0.10 + (x - 0.10) * (0.45 / 0.07)    # 10% → 55%
+    elif x < 0.25:
+        return 0.55 + (x - 0.17) * (0.20 / 0.08)    # 55% → 75%
+    elif x < 0.35:
+        return 0.75 + (x - 0.25) * (0.13 / 0.10)    # 75% → 88%
+    elif x < 0.50:
+        return 0.88 + (x - 0.35) * (0.08 / 0.15)    # 88% → 96%
+    else:
+        return min(0.99, 0.96 + (x - 0.50) * 0.06)  # 96% → 99%
 
 
 def adjust_confidence(raw_conf: float, query: str = "") -> float:
