@@ -180,6 +180,8 @@ desktop.ini
 
 
 LibreOffice_26.2.2_Win_x86-64.msi
+대본.md
+양자화트러블슈팅.md
 Docs
 merge
 실행방법.txt
@@ -209,6 +211,7 @@ pipeline_details_260427_1420
 pipeline_details_260427_1420.md
 
 # md/ — 임시 로그/JSON 만 제외, 보고서 .md 는 보존
+md/DB_insight프로젝트정리_ver1-1.md
 md/_*
 md/*.log
 md/*.json
@@ -266,6 +269,7 @@ registry_normalized.zip
 Report/
 
 Figures_Results/
+Figures/
 # 검색 캘리브레이션 / Phase 파이프라인 실험 산출물 (매 실행 재생성, 추적 불필요)
 App/backend/scripts/mplc_sweep_*.json
 App/backend/scripts/phase_*_log.txt
