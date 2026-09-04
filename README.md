@@ -203,7 +203,7 @@ C = Z_q  · Z_d     (DINOv2 시각 구조 코사인 유사도)
 |  |                     |      |                            |  |
 |  |  Three.js AnimatedOrb      |  +----------------------+  |  |
 |  |  Web Speech API     |      |  |   TRI-CHEF Engine    |  |  |
-|  +---------------------+      |  |  SigLIP2 + BGE-M3   |  |  |
+|  +---------------------+      |  |  SigLIP2 + BGE-M3    |  |  |
 |                               |  |  + DINOv2 (Hermitian)|  |  |
 |                               |  +----------------------+  |  |
 |                               |                            |  |
