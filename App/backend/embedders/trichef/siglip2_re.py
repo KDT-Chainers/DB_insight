@@ -74,6 +74,9 @@ def embed_images(paths: list[Path]) -> np.ndarray:
         mdtype = next(_model.parameters()).dtype
         inp = {k: v.to(mdtype) if v.is_floating_point() else v for k, v in inp.items()}
         vec = _model.get_image_features(**inp)
+        # transformers 5.x: get_image_features returns BaseModelOutputWithPooling, not a tensor
+        if not isinstance(vec, torch.Tensor):
+            vec = vec.pooler_output
         vec = torch.nn.functional.normalize(vec, dim=-1)
         out.append(vec.cpu().float().numpy())
         if _DEVICE == "cuda":
@@ -91,6 +94,9 @@ def embed_texts(texts: list[str]) -> np.ndarray:
         inp = _proc(text=texts[i:i+B], padding="max_length",
                     truncation=True, return_tensors="pt").to(_DEVICE)
         vec = _model.get_text_features(**inp)
+        # transformers 5.x: get_text_features returns BaseModelOutputWithPooling, not a tensor
+        if not isinstance(vec, torch.Tensor):
+            vec = vec.pooler_output
         vec = torch.nn.functional.normalize(vec, dim=-1)
         out.append(vec.cpu().float().numpy())
     return np.vstack(out).astype(np.float32)

@@ -2,6 +2,7 @@
 # Node / Vite / React / Electron (App/frontend)
 # ============================================================
 App/frontend/node_modules/
+App/frontend/.vite/
 
 # Vite (`npm run build` → 기본 outDir `dist/`)
 App/frontend/dist/
@@ -62,6 +63,7 @@ Data/
 
 # NumPy 임베딩 벡터
 *.npy
+*.npz
 
 # ChromaDB 파일
 chroma.sqlite3
@@ -177,12 +179,7 @@ desktop.ini
 *.swo
 
 
-.\claude
-admin_ui
 LibreOffice_26.2.2_Win_x86-64.msi
-out2
-out*
-installer
 Docs
 merge
 실행방법.txt
@@ -194,8 +191,6 @@ DRAFT_SUMMARY.txt
 
 # oh-my-claudecode / Claude Code
 .omc/
-.claude/scheduled_tasks.lock
-.claude/settings.local.json
 
 # Bench 임시 산출물 (영구 보관은 DI_TriCHEF/results/, MR_TriCHEF/results/ 사용)
 bench_results/
@@ -209,7 +204,6 @@ App/admin_ui/.venv-admin/
 # pip 실수 산물 (e.g. `pip install … =1.0`)
 App/backend/=*
 
-merge
 기획서
 pipeline_details_260427_1420
 pipeline_details_260427_1420.md
@@ -220,6 +214,9 @@ md/*.log
 md/*.json
 md/*.txt
 md/*.html
+
+# md/자료정리/ — 내부 작업용 정리 파일, git 제외
+md/자료정리/
 
 # 임시 디버깅 스크립트 (1회용 진단/테스트)
 scripts/_diag_*.py
@@ -255,15 +252,11 @@ App/backend/_test_*.py
 *.snm
 *.vrb
 
-# Pandoc conversion intermediates
-publication/paper/main_korean_export.tex
-publication/paper/fig*_ko.tex
-publication/paper/fig*_ko.pdf
-publication/paper/fig*_ko.png
-
 .claude/
 CLAUDE.md
 node_modules
+
+# Pandoc/LaTeX 변환 중간 산출물 — publication/ 내부는 이미 위의 publication/ 로 커버됨
 
 # Data/ 동기화 zip (USB/Teams 별도 공유 — git 에는 포함 X)
 registry_normalized.zip
@@ -332,3 +325,6 @@ App/backend/scripts/caption_food_v2.md
 
 # Calibration 자동 백업
 App/backend/services/calibration.bak_*.json
+
+# 발표자료 폴더
+/정리자료
