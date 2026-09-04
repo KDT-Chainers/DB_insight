@@ -24,6 +24,7 @@ App/installer/node_modules/
 App/installer/out/
 App/installer/dist/
 App/installer/dist2/
+App/installer/release/
 
 # ============================================================
 # Python / Flask
@@ -140,6 +141,10 @@ result.txt
 
 # top-level diagnostic logs (BGM ingest, doc rebuild queue 등)
 logs/
+
+# 점검 보고서 및 빌드 로그
+reports/
+App/backend/build_log.txt
 
 # ============================================================
 # 사용자별 PC 설정 / DB (PC 마다 다름, push 안 함)
@@ -329,6 +334,14 @@ App/backend/scripts/caption_food_v2.md
 
 # Calibration 자동 백업
 App/backend/services/calibration.bak_*.json
+
+# 스크립트 산출물 — 캡션 교정 및 재캡셔닝 작업 결과
+App/backend/scripts/caption_*_v2.json
+App/backend/scripts/caption_*_v2.md
+App/backend/scripts/caption_*_v2_ckpt.json
+App/backend/scripts/repair_image_chinese_captions_ckpt.json
+App/backend/scripts/session_*.md
+App/backend/scripts/sort_opt_summary.md
 
 # 발표자료 폴더
 /정리자료
