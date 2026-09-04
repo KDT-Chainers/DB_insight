@@ -19,7 +19,7 @@ from tqdm import tqdm
 from config import PATHS, TRICHEF_CFG
 from embedders.trichef import siglip2_re, dinov2_z, qwen_caption, doc_page_render
 from embedders.trichef import bgem3_caption_im as im_embedder  # v2 P1: e5→BGE-M3
-from embedders.trichef import blip_caption_triple, doc_ingest  # v2 P1 Phase B (doc_ingest 공용 유지)
+from embedders.trichef import doc_ingest  # v2 P1 Phase B
 from services.trichef import tri_gs
 from services.trichef.prune import prune_domain
 from services.trichef import lexical_rebuild

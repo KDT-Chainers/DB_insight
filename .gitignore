@@ -342,6 +342,7 @@ App/backend/scripts/caption_*_v2_ckpt.json
 App/backend/scripts/repair_image_chinese_captions_ckpt.json
 App/backend/scripts/session_*.md
 App/backend/scripts/sort_opt_summary.md
+App/backend/scripts/sort_opt_report.json
 
 # 발표자료 폴더
 /정리자료

@@ -223,7 +223,7 @@ def _load_npy_with_ids(emb_path: Path, ids_path: Path) -> tuple[np.ndarray, list
 
 def _embed_query_texts_bge(queries: list[str]) -> np.ndarray:
     """BGE-M3 (e5_caption_im) text encoder 로 임베딩 (L2 정규화)."""
-    from embedders.trichef import e5_caption_im
+    from embedders.trichef import bgem3_caption_im as e5_caption_im
     logger.info(f"BGE-M3 쿼리 임베딩 중... ({len(queries)}개)")
     t0 = time.time()
     emb = e5_caption_im.embed_query(queries)

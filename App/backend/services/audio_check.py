@@ -132,7 +132,7 @@ def _ensure_loaded() -> bool:
 
 def _embed_query_text(query: str) -> Optional[np.ndarray]:
     try:
-        from embedders.trichef import e5_caption_im
+        from embedders.trichef import bgem3_caption_im as e5_caption_im
         emb = e5_caption_im.embed_query([query])
         if emb is None or len(emb) == 0:
             return None
