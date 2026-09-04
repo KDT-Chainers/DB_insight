@@ -20,22 +20,22 @@
 - 소속 : Team Chainers, Korea IT Academy (KDT, Ministry of Employment and Labor), Independent Researchers.
 - 저널 : Zenodo, May 2026. https://doi.org/10.5281/zenodo.20034370
 
-| 항목 | 값 |
-| --- | --- |
+| 항목                                        | 값                                                                   |
+| ------------------------------------------- | -------------------------------------------------------------------- |
 | **Concept DOI** (인용 권장, 항상 최신 버전) | [`10.5281/zenodo.20034370`](https://doi.org/10.5281/zenodo.20034370) |
-| **Latest Record URL** | https://zenodo.org/records/20046344 |
-| **현재 라이선스** | CC BY 4.0 (논문) |
+| **Latest Record URL**                       | https://zenodo.org/records/20046344                                  |
+| **현재 라이선스**                           | CC BY 4.0 (논문)                                                     |
 
 ### Versions
 
-| 항목 | **v1.1** (latest) | v1.0 |
-| --- | --- | --- |
+| 항목            | **v1.1** (latest)                                                    | v1.0                                                                 |
+| --------------- | -------------------------------------------------------------------- | -------------------------------------------------------------------- |
 | **Version DOI** | [`10.5281/zenodo.20046344`](https://doi.org/10.5281/zenodo.20046344) | [`10.5281/zenodo.20034371`](https://doi.org/10.5281/zenodo.20034371) |
-| **Record URL** | https://zenodo.org/records/20046344 | https://zenodo.org/records/20034371 |
-| **PDF (영문)** | `Tri-CHEF_paper_v1.1.pdf` (12 pp) | `Tri-CHEF_paper.pdf` (12 pp) |
-| **PDF (국문)** | `Tri-CHEF_paper_Korean_v1.1.pdf` (13 pp) | `Tri-CHEF_paper_Korean.pdf` (13 pp) |
-| **게재일** | 2026-05-06 | 2026-05-06 |
-| **비고** | 모든 페이지 푸터에 DOI/라이선스 표시 | 최초 게재 |
+| **Record URL**  | https://zenodo.org/records/20046344                                  | https://zenodo.org/records/20034371                                  |
+| **PDF (영문)**  | `Tri-CHEF_paper_v1.1.pdf` (12 pp)                                    | `Tri-CHEF_paper.pdf` (12 pp)                                         |
+| **PDF (국문)**  | `Tri-CHEF_paper_Korean_v1.1.pdf` (13 pp)                             | `Tri-CHEF_paper_Korean.pdf` (13 pp)                                  |
+| **게재일**      | 2026-05-06                                                           | 2026-05-06                                                           |
+| **비고**        | 모든 페이지 푸터에 DOI/라이선스 표시                                 | 최초 게재                                                            |
 
 > 본문 콘텐츠와 그림/표 레이아웃, 페이지 분할은 v1.0 = v1.1 바이트 단위로 동일하다 (v1.1은 v1.0 PDF에 페이지 푸터만 오버레이).
 
@@ -77,23 +77,23 @@ DB_insight는 PC에 저장된 문서·이미지·동영상·음원·배경음을
 
 ### 1-1. 기존 파일 탐색기의 한계
 
-| 한계 | 설명 |
-| --- | --- |
-| **파일명 의존** | 정확한 파일명을 알아야 검색 가능 |
+| 한계               | 설명                                                              |
+| ------------------ | ----------------------------------------------------------------- |
+| **파일명 의존**    | 정확한 파일명을 알아야 검색 가능                                  |
 | **내용 검색 불가** | 문서 내부 텍스트 일부만 지원; 이미지·동영상·음악은 내용 검색 불가 |
-| **의미 이해 없음** | 자연어 의미 기반 검색 불가 |
-| **비정형 파일** | 스캔 PDF 및 이미지 내 텍스트 검색 불가 |
+| **의미 이해 없음** | 자연어 의미 기반 검색 불가                                        |
+| **비정형 파일**    | 스캔 PDF 및 이미지 내 텍스트 검색 불가                            |
 
 ### 1-2. 본 시스템의 특징
 
-| 특징 | 설명 |
-| --- | --- |
-| **5개 도메인 통합 검색** | 문서(Doc) / 이미지(Img) / 동영상(Mov) / 음원(Rec) / 배경음(BGM)을 단일 검색창에서 처리 |
-| **자연어 의미 검색** | 파일명·경로 불필요; 내용에 관한 자연어 설명만으로 검색 |
-| **TRI-CHEF 멀티모달 퓨전** | SigLIP2·BGE-M3·DINOv2를 복소 허미션 공간에서 결합하여 단일 모델의 실패 모드 방지 |
-| **완전 로컬 동작** | 인터넷 연결 불필요; 파일이 외부 서버로 전송되지 않음 |
-| **AI 요약** | 검색 결과 파일을 로컬 LLM(Ollama)으로 요약·분석 |
-| **단일 EXE 배포** | 설치 없이 포터블 실행 파일 하나로 동작 |
+| 특징                       | 설명                                                                                   |
+| -------------------------- | -------------------------------------------------------------------------------------- |
+| **5개 도메인 통합 검색**   | 문서(Doc) / 이미지(Img) / 동영상(Mov) / 음원(Rec) / 배경음(BGM)을 단일 검색창에서 처리 |
+| **자연어 의미 검색**       | 파일명·경로 불필요; 내용에 관한 자연어 설명만으로 검색                                 |
+| **TRI-CHEF 멀티모달 퓨전** | SigLIP2·BGE-M3·DINOv2를 복소 허미션 공간에서 결합하여 단일 모델의 실패 모드 방지       |
+| **완전 로컬 동작**         | 인터넷 연결 불필요; 파일이 외부 서버로 전송되지 않음                                   |
+| **AI 요약**                | 검색 결과 파일을 로컬 LLM(Ollama)으로 요약·분석                                        |
+| **단일 EXE 배포**          | 설치 없이 포터블 실행 파일 하나로 동작                                                 |
 
 ---
 
@@ -101,13 +101,13 @@ DB_insight는 PC에 저장된 문서·이미지·동영상·음원·배경음을
 
 각 도메인은 파일 유형에 따라 전용 파이프라인을 통해 전처리·임베딩·인덱싱된다.
 
-| 도메인 | 지원 포맷 | 텍스트 추출 방식 | 임베딩 채널 |
-| --- | --- | --- | --- |
-| **Doc** (문서) | PDF, DOCX, PPTX, XLSX, TXT, HTML | pdfplumber / LibreOffice / BeautifulSoup / PyMuPDF (OCR) | SigLIP2 Re + BGE-M3 Im (캡션 20% + 본문 80%) + BGE-M3 Sparse |
-| **Img** (이미지) | JPG, PNG, WebP, HEIC | Qwen2-VL-2B 5단계 캡셔닝 (title/tagline/synopsis/tags\_kr/tags\_en) | SigLIP2 Re (이미지) + BGE-M3 Im (L1×0.15 + L2×0.25 + L3×0.60) + DINOv2 Z (이미지) |
-| **Mov** (동영상) | MP4, MOV, AVI, MKV, WebM | 0.5fps 프레임 추출 + Whisper large-v3 STT | SigLIP2 Re (프레임) + BGE-M3 Im (STT) + DINOv2 Z (프레임) |
-| **Rec** (음원) | MP3, M4A, WAV, FLAC, OGG | 30초 슬라이딩 윈도우 + Whisper large-v3 STT | SigLIP2 Re (STT 텍스트) + BGE-M3 Im (STT); Z = 0벡터 |
-| **BGM** (배경음) | 위 Rec과 동일 포맷 (RMS 기반 음성 미검출 분기) | 파일명 (STT 미적용) | 파일명 임베딩; 검색 품질 낮음 |
+| 도메인           | 지원 포맷                                      | 텍스트 추출 방식                                                  | 임베딩 채널                                                                       |
+| ---------------- | ---------------------------------------------- | ----------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| **Doc** (문서)   | PDF, DOCX, PPTX, XLSX, TXT, HTML               | pdfplumber / LibreOffice / BeautifulSoup / PyMuPDF (OCR)          | SigLIP2 Re + BGE-M3 Im (캡션 20% + 본문 80%) + BGE-M3 Sparse                      |
+| **Img** (이미지) | JPG, PNG, WebP, HEIC                           | Qwen2-VL-2B 5단계 캡셔닝 (title/tagline/synopsis/tags_kr/tags_en) | SigLIP2 Re (이미지) + BGE-M3 Im (L1×0.15 + L2×0.25 + L3×0.60) + DINOv2 Z (이미지) |
+| **Mov** (동영상) | MP4, MOV, AVI, MKV, WebM                       | 0.5fps 프레임 추출 + Whisper large-v3 STT                         | SigLIP2 Re (프레임) + BGE-M3 Im (STT) + DINOv2 Z (프레임)                         |
+| **Rec** (음원)   | MP3, M4A, WAV, FLAC, OGG                       | 30초 슬라이딩 윈도우 + Whisper large-v3 STT                       | SigLIP2 Re (STT 텍스트) + BGE-M3 Im (STT); Z = 0벡터                              |
+| **BGM** (배경음) | 위 Rec과 동일 포맷 (RMS 기반 음성 미검출 분기) | 파일명 (STT 미적용)                                               | 파일명 임베딩; 검색 품질 낮음                                                     |
 
 인덱싱 결과는 `.npy` / `.npz` 벡터 캐시와 ChromaDB 메타데이터에 저장되며, 파일 추가·삭제 시 해당 항목만 원자적으로 갱신된다.
 
@@ -121,11 +121,11 @@ DB_insight는 PC에 저장된 문서·이미지·동영상·음원·배경음을
 
 세 개의 독립적인 임베딩 모델을 복소 벡터 공간의 세 축에 배정한다.
 
-| 축 | 모델 | 차원 | 역할 | 학습 방식 |
-| --- | --- | --- | --- | --- |
-| **Re** (실수축) | SigLIP2-SO400M | 1152d | 이미지↔텍스트 크로스모달 정렬 | Sigmoid Loss 대조 학습 |
-| **Im** (허수축) | BGE-M3 dense | 1024d | 한국어·영어 다국어 시맨틱 | 다국어 대조 학습 |
-| **Z** (직교축) | DINOv2-Large | 1024d | 언어 독립적 시각 구조 | 자기 지도 학습 (iBOT+DINO) |
+| 축              | 모델           | 차원  | 역할                          | 학습 방식                  |
+| --------------- | -------------- | ----- | ----------------------------- | -------------------------- |
+| **Re** (실수축) | SigLIP2-SO400M | 1152d | 이미지↔텍스트 크로스모달 정렬 | Sigmoid Loss 대조 학습     |
+| **Im** (허수축) | BGE-M3 dense   | 1024d | 한국어·영어 다국어 시맨틱     | 다국어 대조 학습           |
+| **Z** (직교축)  | DINOv2-Large   | 1024d | 언어 독립적 시각 구조         | 자기 지도 학습 (iBOT+DINO) |
 
 단일 모델 방식의 실패 모드(시각 구조 무시, 언어 편향, 채널 간 중복 신호 증폭)를 방지하기 위해, 세 채널을 L2 정규화 후 허미션 내적으로 결합한다.
 
@@ -141,12 +141,12 @@ C = Z_q  · Z_d     (DINOv2 시각 구조 코사인 유사도)
 
 도메인별 Im 감쇠 계수 (alpha) 기본값:
 
-| 도메인 | alpha | 설계 근거 |
-| --- | --- | --- |
-| 이미지 (Img) | 0.45 | 시각(Re)과 시맨틱(Im) 균형 |
-| 동영상 (Mov) | 0.40 | 시각 채널(Re) 우선 |
-| 음원 (Rec) | 0.60 | STT 텍스트 의존도 높음 |
-| 문서 (Doc) | 0.80 | 텍스트 전용 도메인 |
+| 도메인       | alpha | 설계 근거                  |
+| ------------ | ----- | -------------------------- |
+| 이미지 (Img) | 0.45  | 시각(Re)과 시맨틱(Im) 균형 |
+| 동영상 (Mov) | 0.40  | 시각 채널(Re) 우선         |
+| 음원 (Rec)   | 0.60  | STT 텍스트 의존도 높음     |
+| 문서 (Doc)   | 0.80  | 텍스트 전용 도메인         |
 
 ### 3-3. 검색 파이프라인
 
@@ -177,12 +177,12 @@ C = Z_q  · Z_d     (DINOv2 시각 구조 코사인 유사도)
 ⑤ 답변 생성      — 파일 내용을 컨텍스트로 Ollama LLM 스트리밍 응답
 ```
 
-| 항목 | 내용 |
-| --- | --- |
-| **요약 LLM** | gemma3:4b (우선), qwen2.5:3b (폴백) |
-| **멀티턴 대화** | LangGraph MemorySaver + thread\_id 기반 컨텍스트 유지 |
-| **출력 방식** | SSE (Server-Sent Events) 토큰 단위 스트리밍 |
-| **동작 환경** | 완전 로컬 (인터넷 불필요) |
+| 항목            | 내용                                                 |
+| --------------- | ---------------------------------------------------- |
+| **요약 LLM**    | gemma3:4b (우선), qwen2.5:3b (폴백)                  |
+| **멀티턴 대화** | LangGraph MemorySaver + thread_id 기반 컨텍스트 유지 |
+| **출력 방식**   | SSE (Server-Sent Events) 토큰 단위 스트리밍          |
+| **동작 환경**   | 완전 로컬 (인터넷 불필요)                            |
 
 ---
 
@@ -203,7 +203,7 @@ C = Z_q  · Z_d     (DINOv2 시각 구조 코사인 유사도)
 |  |                     |      |                            |  |
 |  |  Three.js AnimatedOrb      |  +----------------------+  |  |
 |  |  Web Speech API     |      |  |   TRI-CHEF Engine    |  |  |
-|  +---------------------+      |  |  SigLIP2 + BGE-M3   |  |  |
+|  +---------------------+      |  |  SigLIP2 + BGE-M3    |  |  |
 |                               |  |  + DINOv2 (Hermitian)|  |  |
 |                               |  +----------------------+  |  |
 |                               |                            |  |
@@ -222,17 +222,17 @@ C = Z_q  · Z_d     (DINOv2 시각 구조 코사인 유사도)
 
 ### 기술 스택
 
-| 레이어 | 기술 |
-| --- | --- |
-| **프론트엔드** | React, Vite, Electron, Tailwind CSS |
-| **백엔드** | Flask, Python 3.12 |
-| **임베딩** | PyTorch, HuggingFace Transformers |
-| **벡터 저장** | .npy / .npz 파일 캐시 + ChromaDB |
-| **이미지 캡셔닝** | Qwen2-VL-2B-Instruct |
-| **음성 인식 (STT)** | OpenAI Whisper large-v3 |
-| **요약 LLM** | Ollama (gemma3:4b / qwen2.5:3b) |
-| **문서 파싱** | pdfplumber, PyMuPDF, LibreOffice |
-| **오디오 분석** | librosa, FFmpeg |
+| 레이어              | 기술                                |
+| ------------------- | ----------------------------------- |
+| **프론트엔드**      | React, Vite, Electron, Tailwind CSS |
+| **백엔드**          | Flask, Python 3.12                  |
+| **임베딩**          | PyTorch, HuggingFace Transformers   |
+| **벡터 저장**       | .npy / .npz 파일 캐시 + ChromaDB    |
+| **이미지 캡셔닝**   | Qwen2-VL-2B-Instruct                |
+| **음성 인식 (STT)** | OpenAI Whisper large-v3             |
+| **요약 LLM**        | Ollama (gemma3:4b / qwen2.5:3b)     |
+| **문서 파싱**       | pdfplumber, PyMuPDF, LibreOffice    |
+| **오디오 분석**     | librosa, FFmpeg                     |
 
 ---
 
@@ -240,13 +240,13 @@ C = Z_q  · Z_d     (DINOv2 시각 구조 코사인 유사도)
 
 ### 6-1. 사전 조건
 
-| 항목 | 버전 | 비고 |
-| --- | --- | --- |
-| **Node.js** | 18+ | https://nodejs.org |
-| **Python** | 3.12 | PATH 등록 필수 |
-| **Git** | 최신 | https://git-scm.com |
-| **Ollama** | 최신 | https://ollama.com — AI 요약 사용 시 필요 |
-| **CUDA** | 12.4 (선택) | GPU 가속 (RTX 30/40 계열 권장) |
+| 항목        | 버전        | 비고                                      |
+| ----------- | ----------- | ----------------------------------------- |
+| **Node.js** | 18+         | https://nodejs.org                        |
+| **Python**  | 3.12        | PATH 등록 필수                            |
+| **Git**     | 최신        | https://git-scm.com                       |
+| **Ollama**  | 최신        | https://ollama.com — AI 요약 사용 시 필요 |
+| **CUDA**    | 12.4 (선택) | GPU 가속 (RTX 30/40 계열 권장)            |
 
 **Ollama 모델 설치 (AI 요약 사용 시):**
 
@@ -280,10 +280,10 @@ npm run dist
 
 빌드 결과물: `App/frontend/out/DB_insight 0.1.0.exe`
 
-| 오류 | 원인 | 해결 |
-| --- | --- | --- |
-| `EBUSY: resource busy or locked` | 앱 실행 중 / Windows Defender 스캔 중 | 앱 종료 후 재시도; 반복 시 `out/` 폴더를 Defender 제외 목록에 추가 |
-| `클라이언트가 필요한 권한을 가지고 있지 않습니다` | Windows 개발자 모드 비활성화 | 설정 → 개인 정보 및 보안 → 개발자용 → 개발자 모드 ON |
+| 오류                                              | 원인                                  | 해결                                                               |
+| ------------------------------------------------- | ------------------------------------- | ------------------------------------------------------------------ |
+| `EBUSY: resource busy or locked`                  | 앱 실행 중 / Windows Defender 스캔 중 | 앱 종료 후 재시도; 반복 시 `out/` 폴더를 Defender 제외 목록에 추가 |
+| `클라이언트가 필요한 권한을 가지고 있지 않습니다` | Windows 개발자 모드 비활성화          | 설정 → 개인 정보 및 보안 → 개발자용 → 개발자 모드 ON               |
 
 ### 6-3. 앱 실행
 
@@ -375,11 +375,11 @@ DB_insight/
 
 Please contact team leader, e-mail : sjowun@gmail.com.
 
-| 역할 | 이름 | 담당 |
-| --- | --- | --- |
-| **Team Leader** | 송영상 (Young-Sang SONG) | Project Manager |
-| Team Member | 이훤 (Hwon LEE) | Technical Master |
-| Team Member | 장주연 (Ju Yeon JANG) | Technical Support & Security |
-| Team Member | 황영진 (Young Jin HWANG) | Technical Support |
-| Team Member | 이태윤 (Tae Yoon LEE) | Technical Support |
-| Team Member | 김정혜 (Jeong Hye GIM) | Technical Support |
+| 역할            | 이름                     | 담당                         |
+| --------------- | ------------------------ | ---------------------------- |
+| **Team Leader** | 송영상 (Young-Sang SONG) | Project Manager              |
+| Team Member     | 이훤 (Hwon LEE)          | Technical Master             |
+| Team Member     | 장주연 (Ju Yeon JANG)    | Technical Support & Security |
+| Team Member     | 황영진 (Young Jin HWANG) | Technical Support            |
+| Team Member     | 이태윤 (Tae Yoon LEE)    | Technical Support            |
+| Team Member     | 김정혜 (Jeong Hye GIM)   | Technical Support            |
